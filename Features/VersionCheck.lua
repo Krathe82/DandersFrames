@@ -183,15 +183,44 @@ end
 -- BROADCAST HELPERS
 -- ============================================================
 
+-- Returns true if the current group contains at least one real player
+-- other than the player themselves. Follower dungeons and NPC-companion
+-- delves report IsInGroup()=true with only NPCs; sending to PARTY in
+-- that state produces a repeating "You aren't in a party." chat error.
+function VC:HasPlayerGroupMembers()
+    if not IsInGroup() then return false end
+    if IsInRaid() then
+        local n = GetNumGroupMembers()
+        for i = 1, n do
+            local token = "raid" .. i
+            if UnitExists(token) and UnitIsPlayer(token) and not UnitIsUnit(token, "player") then
+                return true
+            end
+        end
+        return false
+    end
+    for i = 1, 4 do
+        local token = "party" .. i
+        if UnitExists(token) and UnitIsPlayer(token) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Returns a list of channel strings ({"GUILD", "RAID"}, etc.) currently
--- available to the player. Empty when solo + no guild.
+-- available to the player. Empty when solo + no guild. Skips PARTY/RAID
+-- when the group is NPC-only (follower dungeon / delve companion) to
+-- avoid ERR_NOT_IN_GROUP chat spam.
 function VC:GetAvailableChannels()
     local out = {}
     if IsInGuild() then out[#out+1] = "GUILD" end
-    if IsInRaid() then
-        out[#out+1] = "RAID"
-    elseif IsInGroup() then
-        out[#out+1] = "PARTY"
+    if self:HasPlayerGroupMembers() then
+        if IsInRaid() then
+            out[#out+1] = "RAID"
+        else
+            out[#out+1] = "PARTY"
+        end
     end
     return out
 end
