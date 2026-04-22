@@ -545,9 +545,13 @@ function DF:UpdateRange(frame)
     
     local unit = frame.unit
 
-    -- Player is always in range — skip all checks and cache logic
+    -- Player is always in range — skip all checks and cache logic.
+    -- dfInRange may hold a secret boolean from a previous UnitInRange
+    -- fallback (Midnight+), so check issecretvalue before boolean-testing
+    -- it — `not <secret>` raises "execution tainted" and spams errors.
     if UnitIsUnit(unit, "player") then
-        if not frame.dfInRange then
+        local dfSecret = issecretvalue and issecretvalue(frame.dfInRange)
+        if dfSecret or frame.dfInRange ~= true then
             frame.dfInRange = true
             if DF.UpdateRangeAppearance then
                 DF:UpdateRangeAppearance(frame)
@@ -557,7 +561,8 @@ function DF:UpdateRange(frame)
     end
 
     if not IsInGroup() and not IsInRaid() then
-        if not frame.dfInRange then
+        local dfSecret = issecretvalue and issecretvalue(frame.dfInRange)
+        if dfSecret or frame.dfInRange ~= true then
             frame.dfInRange = true
             if DF.UpdateRangeAppearance then
                 DF:UpdateRangeAppearance(frame)
