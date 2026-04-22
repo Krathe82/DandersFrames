@@ -1182,33 +1182,20 @@ function PinnedFrames:ApplyBossLayout(setIndex)
         pos.point = anchor
     end
 
-    -- Build list of currently visible/friendly boss indices so we can assign
-    -- grid positions by visible index (compacted) rather than by bossIndex.
-    -- LIMITATION: During combat, SetPoint on SecureUnitButtonTemplate frames
-    -- is restricted, so frames that transition visible mid-combat will stay
-    -- at their previous position until the next out-of-combat recomputation.
-    local visibleOrder = {}
-    for i = 1, 8 do
-        local unit = "boss" .. i
-        if UnitExists(unit) and UnitIsFriend("player", unit) then
-            table.insert(visibleOrder, i)
-        end
-    end
-
-    -- Build reverse lookup: bossIndex -> visibleIndex (nil if hidden)
-    local visibleIndexByBoss = {}
-    for vi, bi in ipairs(visibleOrder) do
-        visibleIndexByBoss[bi] = vi
-    end
-
-    -- Layout the 8 boss frames in a grid
+    -- Layout the 8 boss frames in a fixed grid by bossIndex.
+    -- boss1 -> slot 1, boss2 -> slot 2, ..., boss8 -> slot 8.
+    -- This matches ElvUI's boss frame layout. Compacting visible frames
+    -- (1st visible -> slot 1, etc.) was tried but doesn't work during combat:
+    -- SetPoint is restricted on SecureUnitButtonTemplate frames while in
+    -- combat, and bosses appear during combat. With compacting, all frames
+    -- that transition visible mid-combat would stay at slot 0 stacked on
+    -- each other. Fixed-slot positioning means empty gaps can appear (e.g.
+    -- boss1 hostile, boss2 friendly — boss2 shows at slot 2 with slot 1
+    -- empty), but all visible frames are always shown.
     for i = 1, 8 do
         local f = frames[i]
         if f then
-            local visibleIndex = visibleIndexByBoss[i]
-            -- Hidden frames get position 0 so they don't affect container size
-            -- or cause weird layout artifacts if their visibility flips later
-            local slotIndex = visibleIndex and (visibleIndex - 1) or 0
+            local slotIndex = i - 1
 
             local row = math.floor(slotIndex / unitsPerRow)
             local col = slotIndex % unitsPerRow
