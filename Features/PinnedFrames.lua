@@ -459,41 +459,41 @@ end
 -- FRAME CREATION
 -- ============================================================
 
--- Create a SecureHandlerBaseTemplate handler for this set's boss frames.
--- The handler holds frame refs to the 8 boss frames + container, and a
--- reposition snippet that runs compact grid positioning entirely inside
--- the secure/restricted environment. This means frames can be repositioned
--- DURING COMBAT when their visibility changes (e.g. new boss appears,
--- another dies) — which isn't possible from Lua due to SecureUnitButton
--- protection restrictions.
+-- Create a SecureHandlerStateTemplate handler for this set's boss frames.
+-- The handler owns 8 state drivers (one per boss unit), each with an
+-- `_onstate-bossN` secure snippet that shows/hides the corresponding boss
+-- frame AND runs the compact reposition snippet. All positioning work
+-- happens inside the restricted environment, which means `SetPoint` on
+-- SecureUnitButtonTemplate frames is legal even during combat — unlike
+-- Lua-side SetPoint calls.
 --
--- Triggering: each boss frame's state driver ("visibility") sets the
--- `state-visibility` attribute to "show" / "hide". We wrap each frame's
--- OnAttributeChanged via SecureHandlerWrapScript to call the handler's
--- repositionBossFrames snippet whenever visibility toggles.
+-- We don't use SecureHandlerWrapScript on the boss frames themselves
+-- because SecureUnitButtonTemplate doesn't derive from SecureHandler*Template
+-- and therefore doesn't have a restricted-environment setup. The handler
+-- (which IS a SecureHandlerStateTemplate) drives everything instead.
 function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
     if self.bossHandlers[setIndex] then return self.bossHandlers[setIndex] end
     if InCombatLockdown() then return nil end
 
+    -- Parent to UIParent so the handler lifetime is independent of the
+    -- container. Handler itself is never rendered.
     local handler = CreateFrame("Frame",
         "DandersBossPositionHandler" .. setIndex,
-        container,
-        "SecureHandlerBaseTemplate")
-    handler:Hide()  -- not rendered; only holds snippets
+        UIParent,
+        "SecureHandlerStateTemplate")
+    handler:Hide()
 
-    -- Container and boss frames as secure frame refs
+    -- Frame refs: container + each boss frame, addressable from snippets
+    -- via self:GetFrameRef("container") / self:GetFrameRef("bossN")
     SecureHandlerSetFrameRef(handler, "container", container)
     for i = 1, 8 do
         local f = bossFrames[i]
         if f then
             SecureHandlerSetFrameRef(handler, "boss" .. i, f)
-            -- Reverse link so each boss frame can find its handler
-            SecureHandlerSetFrameRef(f, "bossHandler", handler)
         end
     end
 
-    -- The reposition snippet — runs in the restricted environment,
-    -- so frame:SetPoint is legal even during combat.
+    -- Reposition snippet: compacts visible boss frames to the set anchor.
     handler:SetAttribute("repositionBossFrames", [[
         local container = self:GetFrameRef("container")
         if not container then return end
@@ -508,8 +508,7 @@ function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
         local frameAnchor = self:GetAttribute("frameAnchor") or "START"
         local columnAnchor = self:GetAttribute("columnAnchor") or "START"
 
-        -- Walk boss1..boss8 in order; collect the currently-visible ones
-        -- so we can assign them compact slot indices.
+        -- Walk boss1..boss8 in order; collect currently-visible frames
         local visibleFrames = newtable()
         local visibleCount = 0
         for i = 1, 8 do
@@ -542,8 +541,8 @@ function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
             f:SetPoint(anchor, container, anchor, xOff, yOff)
         end
 
-        -- Hidden frames get parked at origin; stops them from occupying
-        -- stale positions if their visibility flips later.
+        -- Hidden frames parked at origin; keeps them from hanging out at
+        -- stale positions if their visibility later flips.
         for i = 1, 8 do
             local f = self:GetFrameRef("boss" .. i)
             if f and not f:IsShown() then
@@ -553,18 +552,24 @@ function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
         end
     ]])
 
-    -- Each boss frame pokes the handler when its state-visibility changes.
-    -- SecureHandlerWrapScript lets this run during combat.
+    -- Per-boss state drivers with _onstate snippets that Show/Hide the
+    -- matching boss frame, then run the reposition snippet. This replaces
+    -- the visibility state driver we used to put on each boss frame.
     for i = 1, 8 do
-        local f = bossFrames[i]
-        if f then
-            SecureHandlerWrapScript(f, "OnAttributeChanged", f, [[
-                if name == "state-visibility" then
-                    local h = self:GetFrameRef("bossHandler")
-                    if h then h:RunAttribute("repositionBossFrames") end
+        local stateName = "boss" .. i
+        local refName = "boss" .. i
+        handler:SetAttribute("_onstate-" .. stateName, [[
+            local f = self:GetFrameRef("]] .. refName .. [[")
+            if f then
+                if newstate == "yes" then
+                    f:Show()
+                else
+                    f:Hide()
                 end
-            ]])
-        end
+            end
+            self:RunAttribute("repositionBossFrames")
+        ]])
+        RegisterStateDriver(handler, stateName, "[@boss" .. i .. ",help]yes;no")
     end
 
     self.bossHandlers[setIndex] = handler
@@ -639,8 +644,10 @@ function PinnedFrames:CreateBossFrames(setIndex, container)
             DF:InitializeHeaderChild(frame)
         end
 
-        -- State driver: show only when bossN exists and is friendly (healable)
-        RegisterStateDriver(frame, "visibility", "[@boss" .. i .. ",help]show;hide")
+        -- Visibility is driven by the set's SecureHandlerStateTemplate handler
+        -- (created via CreateBossSecureHandler after this loop). The handler
+        -- owns 8 state drivers and runs Show/Hide + reposition in secure
+        -- snippets that work during combat. Per-frame state drivers removed.
 
         -- Self-sufficient event system (ElvUI/oUF-style).
         -- Register all unit-specific events directly on the frame with
@@ -1996,6 +2003,10 @@ function PinnedFrames:Reinitialize()
     -- Clean up old frames
     for i = 1, 2 do
         if self.bossHandlers[i] then
+            -- Unregister the handler's per-boss state drivers
+            for j = 1, 8 do
+                UnregisterStateDriver(self.bossHandlers[i], "boss" .. j)
+            end
             self.bossHandlers[i]:Hide()
             self.bossHandlers[i] = nil
         end
@@ -2003,7 +2014,6 @@ function PinnedFrames:Reinitialize()
             for j = 1, 8 do
                 local f = self.bossFrames[i][j]
                 if f then
-                    UnregisterStateDriver(f, "visibility")
                     f:UnregisterAllEvents()
                     f:Hide()
                 end
@@ -2360,28 +2370,25 @@ function PinnedFrames:SetBossTestMode(visibleCount)
     for setIndex = 1, 2 do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
+            local handler = self.bossHandlers[setIndex]
             local frames = self.bossFrames[setIndex]
-            if frames then
-                for i = 1, 8 do
-                    local f = frames[i]
-                    if f then
-                        if visibleCount > 0 then
-                            -- Test mode on: take over visibility manually
-                            UnregisterStateDriver(f, "visibility")
-                            if i <= visibleCount then
-                                f:Show()
-                            else
-                                f:Hide()
-                            end
+            if handler and frames then
+                if visibleCount > 0 then
+                    -- Test mode: swap the handler's state drivers to always
+                    -- yes/no so we can control visibility without a real boss
+                    for i = 1, 8 do
+                        if i <= visibleCount then
+                            RegisterStateDriver(handler, "boss" .. i, "[@player,exists]yes;no")
                         else
-                            -- Test mode off: restore normal state driver
-                            RegisterStateDriver(f, "visibility", "[@boss" .. i .. ",help]show;hide")
+                            RegisterStateDriver(handler, "boss" .. i, "[@nonexistent]yes;no")
                         end
                     end
+                else
+                    -- Test mode off: restore the real conditions
+                    for i = 1, 8 do
+                        RegisterStateDriver(handler, "boss" .. i, "[@boss" .. i .. ",help]yes;no")
+                    end
                 end
-                -- Trigger the secure reposition snippet once so visible
-                -- frames compact to the set anchor immediately
-                self:TriggerBossReposition(setIndex)
                 anyToggled = true
             end
         end
