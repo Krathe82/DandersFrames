@@ -512,6 +512,7 @@ L["Customize resource bar colors per power type. Shared across party and raid fr
 L["Cut"] = true
 L["Damage"] = true
 L["DandersFrames Auto-Profile Overrides:"] = true
+L["DandersFrames Overlay"] = true
 L["Darken Amount"] = true
 L["Darken Behind Gradient"] = true
 L["Darken Effect"] = true

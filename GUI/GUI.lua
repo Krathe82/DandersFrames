@@ -233,11 +233,21 @@ function GUI:CreateHeader(parent, text)
     return container
 end
 
--- Collapsible section for grouping related settings
+-- Collapsible section for grouping related settings.
+-- Collapsed state is persisted in DandersFramesDB_v2.collapsedGroups keyed by
+-- `text` (shared store with CreateSettingsGroup's collapsible header), so the
+-- user's fold preference survives reloads.
 function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
     local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     section:SetSize(width or 500, 28)  -- Header height
-    section.expanded = defaultExpanded ~= false  -- Default to expanded
+    -- Resolve initial expanded state: SavedVariables override the default.
+    local savedStates = GUI:GetCollapsedGroups()
+    if text and savedStates[text] ~= nil then
+        section.expanded = not savedStates[text]
+    else
+        section.expanded = defaultExpanded ~= false
+    end
+    section.sectionTitleText = text
     section.sectionChildren = {}
     section.paddingAfter = 8  -- Padding space after header before first child
     
@@ -293,7 +303,12 @@ function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
         else
             self.arrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\chevron_right")
         end
-        
+        -- Persist collapsed state to SavedVariables (only store true, remove when expanded)
+        if self.sectionTitleText then
+            local saved = GUI:GetCollapsedGroups()
+            saved[self.sectionTitleText] = (not self.expanded) or nil
+        end
+
         -- Trigger layout refresh (RefreshStates handles show/hide based on expanded state)
         if parent.RefreshStates then
             parent:RefreshStates()

@@ -7159,7 +7159,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
         end
 
-        -- ===== SETTINGS GROUP (Column 1) =====
+        -- ===== TOP SOURCE SETTINGS GROUP (Column 1) =====
+        -- Always visible. Holds the Overlay Source dropdown, per-mode
+        -- description, and the unified Show Overlay For dropdown.
         local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
 
@@ -7198,24 +7200,41 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             OnDispelTypeChanged()
         end), 55)
         dispelIndicatorDropdown.hideOn = HideIfSourceOff
-        local showBorder = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "dispelShowBorder", function()
+        Add(settingsGroup, nil, 1)
+
+        -- ===== DANDERSFRAMES COLLAPSIBLE SECTION =====
+        -- Wraps all DandersFrames-overlay SettingsGroups below. Header hides
+        -- entirely when source doesn't include DandersFrames; groups hide
+        -- via their own hideOn + the section's collapsed state.
+        AddSyncPoint()
+        AddSpace(10, "both")
+        local dfSection = GUI:CreateCollapsibleSection(self.child, L["DandersFrames Overlay"], true, 560)
+        dfSection.hideOn = HideIfNotDF
+        Add(dfSection, 36, "both")
+
+        -- Display group (quick toggles) — Column 1
+        local displayGroup = GUI:CreateSettingsGroup(self.child, 280)
+        displayGroup:AddWidget(GUI:CreateHeader(self.child, L["Display"]), 40)
+        local showBorder = displayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "dispelShowBorder", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end), 30)
         showBorder.hideOn = HideDispelOptions
-        local showGradient = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Gradient"], db, "dispelShowGradient", function()
+        local showGradient = displayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Gradient"], db, "dispelShowGradient", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end), 30)
         showGradient.hideOn = HideDispelOptions
-        local animate = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pulse Animation"], db, "dispelAnimate", function()
+        local animate = displayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pulse Animation"], db, "dispelAnimate", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end), 30)
         animate.hideOn = HideDispelOptions
-        local nameTextCheck = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color Name Text"], db, "dispelNameText", function()
+        local nameTextCheck = displayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color Name Text"], db, "dispelNameText", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end), 30)
         nameTextCheck.hideOn = HideDispelOptions
-        Add(settingsGroup, nil, 1)
-        
+        displayGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(displayGroup)
+        Add(displayGroup, nil, 1)
+
         -- ===== ICON GROUP (Column 2) =====
         local iconGroup = GUI:CreateSettingsGroup(self.child, 280)
         iconGroup:AddWidget(GUI:CreateHeader(self.child, L["Dispel Type Icon"]), 40)
@@ -7251,8 +7270,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
         iconOffsetY.hideOn = HideIconOptions
         iconGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(iconGroup)
         Add(iconGroup, nil, 2)
-        
+
         -- ===== BORDER GROUP (Column 1) =====
         local borderGroup = GUI:CreateSettingsGroup(self.child, 280)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
@@ -7269,8 +7289,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
         borderAlpha.hideOn = HideDispelOptions
         borderGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(borderGroup)
         Add(borderGroup, nil, 1)
-        
+
         -- ===== COLORS GROUP (Column 2) =====
         local colorsGroup = GUI:CreateSettingsGroup(self.child, 280)
         colorsGroup:AddWidget(GUI:CreateHeader(self.child, L["Custom Dispel Colors"]), 40)
@@ -7295,8 +7316,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 30)
         resetColors.hideOn = HideDispelOptions
         colorsGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(colorsGroup)
         Add(colorsGroup, nil, 2)
-        
+
         -- ===== GRADIENT GROUP (Column 1) =====
         local gradientGroup = GUI:CreateSettingsGroup(self.child, 280)
         gradientGroup:AddWidget(GUI:CreateHeader(self.child, L["Gradient"]), 40)
@@ -7331,8 +7353,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 55)
         blendDropdown.hideOn = HideDispelOptions
         gradientGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(gradientGroup)
         Add(gradientGroup, nil, 1)
-        
+
         -- ===== DARKEN GROUP (Column 2) =====
         local darkenGroup = GUI:CreateSettingsGroup(self.child, 280)
         darkenGroup:AddWidget(GUI:CreateHeader(self.child, L["Darken Effect"]), 40)
@@ -7346,22 +7369,22 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
         darkenAlpha.hideOn = function(d) return HideIfNotDF(d) or not d.dispelGradientDarkenEnabled end
         darkenGroup.hideOn = HideDispelOptions
+        dfSection:RegisterChild(darkenGroup)
         Add(darkenGroup, nil, 2)
 
-        -- ===== BLIZZARD OVERLAY GROUP (Column 1) =====
-        -- Only relevant for sources "blizzard" and "both". Settings here drive
-        -- Blizzard's native PrivateAuraAnchorContainer overlay, which has
-        -- limited customisation but covers boss debuffs (private auras).
-        -- A sync point + spacer before the group forces a clean horizontal
-        -- break from the DandersFrames groups above (important in Hybrid mode
-        -- where both sets show).
+        -- ===== BLIZZARD OVERLAY COLLAPSIBLE SECTION =====
+        -- Only relevant for sources "blizzard" and "both". Header hides
+        -- entirely when source excludes Blizzard.
         local CLIENT_VERSION = select(4, GetBuildInfo())
         local IS_CONTAINER_SUPPORTED = CLIENT_VERSION >= 120005
         if IS_CONTAINER_SUPPORTED then
             AddSyncPoint()
-            AddSpace(25, "both")
+            AddSpace(15, "both")
+            local blizSection = GUI:CreateCollapsibleSection(self.child, L["Blizzard Overlay"], true, 560)
+            blizSection.hideOn = HideIfNotBlizzard
+            Add(blizSection, 36, "both")
+
             local blizGroup = GUI:CreateSettingsGroup(self.child, 280)
-            blizGroup:AddWidget(GUI:CreateHeader(self.child, L["Blizzard Overlay"]), 40)
             blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["This overlay is rendered by Blizzard and has limited customisation. It is separate from the DandersFrames overlay above."], 260), 60)
 
             local gradientDirOptions = {
@@ -7390,6 +7413,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             blizAlpha.hideOn = HideIfNotBlizzard
 
             blizGroup.hideOn = HideIfNotBlizzard
+            blizSection:RegisterChild(blizGroup)
             Add(blizGroup, nil, 1)
         end
 
