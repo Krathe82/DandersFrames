@@ -703,6 +703,24 @@ end
 -- LIGHTWEIGHT REANCHOR (unit token changed, frames stay)
 -- ============================================================
 
+-- POTENTIAL FUTURE IMPROVEMENT:
+-- Grid2's IndicatorPrivateAurasDispells re-applies "group-type" and
+-- "update-settings" on the wrapper every time the unit token changes,
+-- so Blizzard's PrivateAuraAnchorContainer re-reads its settings on each
+-- unit re-anchor. We currently set "group-type" once in SetupContainerOverlay
+-- based on the initial unit token.
+--
+-- In practice this doesn't matter today because:
+--   * DF keeps party and raid frames in separate secure headers, so a wrapper
+--     created for a party unit never gets re-assigned to a raid unit token.
+--   * Blizzard's IsPartyFrame() returns true for both group-type 4 (Party)
+--     and 5 (Raid), so the value only discriminates party-like vs other.
+--     No aura currently uses hideOnPartyFrames to split 4 vs 5.
+--
+-- If either of those changes, or if we add more dynamic attributes later,
+-- mirroring Grid2's approach (SetAttribute on group-type + update-settings
+-- inside ReanchorPrivateAuras and/or SetupContainerOverlay's reanchor path)
+-- would bulletproof us.
 function DF:ReanchorPrivateAuras(frame)
     if not frame or not frame.unit then return end
     if InCombatLockdown() then
