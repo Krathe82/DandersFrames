@@ -15,7 +15,7 @@ PinnedFrames.containers = {}  -- [setIndex] = container frame
 PinnedFrames.headers = {}     -- [setIndex] = SecureGroupHeaderTemplate
 PinnedFrames.labels = {}      -- [setIndex] = label fontstring
 PinnedFrames.bossFrames = {}  -- [setIndex] = { [1..8] = boss frame }
-PinnedFrames.bossHandlers = {}  -- [setIndex] = SecureHandlerBaseTemplate frame (runs compact reposition snippet)
+PinnedFrames.bossHandlers = {}  -- [setIndex] = SecureHandlerStateTemplate frame (drives fixed-slot allocator for boss frames)
 PinnedFrames.testFrames = {}    -- [setIndex] = { [1..N] = fake non-secure test frame (player-mode Test Mode)}
 PinnedFrames.testContainers = {} -- [setIndex] = non-secure container at the test-mode profile's position for this set
 PinnedFrames.initialized = false
@@ -552,7 +552,7 @@ function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
 
         local slot = allocState.frameSlot[f]
         if slot then
-            allocState.slotUsed[slot] = false
+            allocState.slotUsed[slot] = nil
             allocState.frameSlot[f] = nil
         end
     ]])
@@ -1967,15 +1967,17 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
                     PinnedFrames:ResizeContainer(setIndex)
 
                     -- Re-claim slots for any frames still visible post-reset.
-                    local frames = PinnedFrames.bossFrames[setIndex]
-                    if frames and handler then
-                        for i = 1, 8 do
-                            local f = frames[i]
-                            if f and f:IsShown() then
-                                handler:Execute(format(
-                                    [[ self:RunAttribute("onBossShow", %d) ]], i))
+                    -- Single Execute call runs a loop inside the restricted env
+                    -- rather than 8 separate interpolated snippets.
+                    if handler then
+                        handler:Execute([[
+                            for i = 1, 8 do
+                                local f = self:GetFrameRef("boss" .. i)
+                                if f and f:IsShown() then
+                                    self:RunAttribute("onBossShow", i)
+                                end
                             end
-                        end
+                        ]])
                     end
                 end
             end
