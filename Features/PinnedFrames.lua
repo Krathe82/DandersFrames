@@ -2631,6 +2631,185 @@ function PinnedFrames:UpdateTestFrames()
     end
 end
 
+-- ============================================================
+-- TIMED BOSS SPAWN TEST
+-- Schedules show/hide of individual boss slots over time, for
+-- verifying slot-allocator behaviour without being in an encounter.
+-- Does NOT populate unit data — bossN units still don't exist, so
+-- health/aura rendering stays empty. Purely a layout testbed.
+-- ============================================================
+
+-- Predefined sequence used by `/dfpinned bossspawn demo`.
+-- Format: { { bossIndex, "+"|"-", secondsFromStart }, ... }
+local BOSS_SPAWN_DEMO = {
+    { 1, "+",  0.5 },
+    { 2, "+",  2.0 },
+    { 3, "+",  4.0 },
+    { 2, "-",  6.0 },
+    { 4, "+",  7.5 },
+    { 1, "-",  9.5 },
+    { 5, "+", 11.0 },
+    { 3, "-", 13.0 },
+    { 6, "+", 14.5 },
+    { 4, "-", 16.5 },
+    { 5, "-", 18.5 },
+    { 6, "-", 20.0 },
+}
+
+-- Parse "1+:0,3+:2,1-:5,4+:7" into { { idx, sign, t }, ... }.
+-- Returns nil, errorString on parse error.
+local function ParseBossSpawnScript(script)
+    if type(script) ~= "string" or script == "" then
+        return nil, "empty script"
+    end
+    local steps = {}
+    for chunk in string.gmatch(script, "[^,]+") do
+        local chunkTrim = chunk:match("^%s*(.-)%s*$")
+        local idx, sign, t = chunkTrim:match("^(%d+)([%+%-]):(%-?%d+%.?%d*)$")
+        if not idx then
+            return nil, "bad step '" .. chunkTrim .. "' (expected form '1+:0')"
+        end
+        idx = tonumber(idx)
+        t = tonumber(t)
+        if not idx or idx < 1 or idx > 8 then
+            return nil, "boss index " .. tostring(idx) .. " out of range 1..8"
+        end
+        if not t or t < 0 then
+            return nil, "negative or invalid time in '" .. chunkTrim .. "'"
+        end
+        table.insert(steps, { idx, sign, t })
+    end
+    table.sort(steps, function(a, b) return a[3] < b[3] end)
+    return steps
+end
+
+-- Generation counter lets StopBossSpawn cancel pending timers without
+-- actually cancelling them (C_Timer doesn't expose cancellation); stale
+-- callbacks compare their captured gen to the current one and no-op.
+PinnedFrames.bossSpawnActive = false
+PinnedFrames.bossSpawnGeneration = 0
+
+-- Flip a frame's visibility state driver to a literal show/hide value.
+-- Literal values are NOT combat-restricted; only macro-conditional strings are.
+local function ForceBossFrameVisible(setIndex, bossIndex, show)
+    local frames = PinnedFrames.bossFrames[setIndex]
+    if not frames then return end
+    local f = frames[bossIndex]
+    if not f then return end
+    RegisterStateDriver(f, "visibility", show and "show" or "hide")
+end
+
+-- Restore real `[@bossN,help]show;hide` drivers on all boss-mode sets.
+local function RestoreBossFrameDrivers()
+    for setIndex = 1, 2 do
+        local set = GetSetDB(setIndex)
+        if set and set.enabled and IsBossSet(set) then
+            local frames = PinnedFrames.bossFrames[setIndex]
+            if frames then
+                for i = 1, 8 do
+                    local f = frames[i]
+                    if f then
+                        RegisterStateDriver(f, "visibility",
+                            "[@boss" .. i .. ",help]show;hide")
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Schedule each step via C_Timer.After, keyed to a captured generation.
+function PinnedFrames:RunBossSpawnScript(steps)
+    self.bossSpawnActive = true
+    self.bossSpawnGeneration = self.bossSpawnGeneration + 1
+    local myGen = self.bossSpawnGeneration
+
+    -- Start from a clean slate so the script's sequence is deterministic.
+    for setIndex = 1, 2 do
+        local set = GetSetDB(setIndex)
+        if set and set.enabled and IsBossSet(set) then
+            for i = 1, 8 do
+                ForceBossFrameVisible(setIndex, i, false)
+            end
+        end
+    end
+
+    local maxT = 0
+    for _, step in ipairs(steps) do
+        local bossIndex, sign, t = step[1], step[2], step[3]
+        if t > maxT then maxT = t end
+        C_Timer.After(t, function()
+            if PinnedFrames.bossSpawnGeneration ~= myGen then return end
+            for setIndex = 1, 2 do
+                local set = GetSetDB(setIndex)
+                if set and set.enabled and IsBossSet(set) then
+                    ForceBossFrameVisible(setIndex, bossIndex, sign == "+")
+                end
+            end
+        end)
+    end
+
+    -- Auto-exit 2s after the last step so drivers restore themselves.
+    C_Timer.After(maxT + 2, function()
+        if PinnedFrames.bossSpawnGeneration ~= myGen then return end
+        if PinnedFrames.bossSpawnActive then
+            PinnedFrames:StopBossSpawn(true)
+        end
+    end)
+end
+
+-- Cancel any pending scripted step and restore real drivers.
+function PinnedFrames:StopBossSpawn(auto)
+    self.bossSpawnActive = false
+    self.bossSpawnGeneration = self.bossSpawnGeneration + 1
+    RestoreBossFrameDrivers()
+    if auto then
+        print("|cFF00FFFF[DF Pinned]|r bossspawn script finished; real drivers restored")
+    else
+        print("|cFF00FFFF[DF Pinned]|r bossspawn OFF; real drivers restored")
+    end
+end
+
+-- Public entry point.
+--   nil | "" | "off"      → cancel any running script
+--   "demo"                → run the built-in 20s sequence
+--   custom script string  → parse and run
+function PinnedFrames:SetBossSpawnTest(arg)
+    if not arg or arg == "" or arg == "off" then
+        self:StopBossSpawn(false)
+        return
+    end
+
+    local anyBossSet = false
+    for setIndex = 1, 2 do
+        local set = GetSetDB(setIndex)
+        if set and set.enabled and IsBossSet(set) then
+            anyBossSet = true
+            break
+        end
+    end
+    if not anyBossSet then
+        print("|cFF00FFFF[DF Pinned]|r No enabled boss-mode sets found. Enable a pinned set and set Frame Type to 'Friendly Boss NPCs' first.")
+        return
+    end
+
+    local steps
+    if arg == "demo" then
+        steps = BOSS_SPAWN_DEMO
+    else
+        local parsed, err = ParseBossSpawnScript(arg)
+        if not parsed then
+            print("|cFF00FFFF[DF Pinned]|r bossspawn parse error: " .. err)
+            print("|cFF00FFFF[DF Pinned]|r expected: '1+:0,3+:2,1-:5' (idx <+|->:<seconds>)")
+            return
+        end
+        steps = parsed
+    end
+
+    print(format("|cFF00FFFF[DF Pinned]|r bossspawn running %d steps", #steps))
+    self:RunBossSpawnScript(steps)
+end
+
 -- Test mode for boss frames: force N boss frames visible so the secure
 -- positioning can be verified without being in an encounter. Runs out of
 -- combat only (needs to unregister/re-register state drivers). Passing
@@ -2743,12 +2922,18 @@ SlashCmdList["DFPINNED"] = function(msg)
         else
             PinnedFrames:SetBossTestMode(tonumber(arg) or 0)
         end
+    elseif msg and msg:match("^bossspawn") then
+        local arg = msg:match("^bossspawn%s+(.+)$")
+        PinnedFrames:SetBossSpawnTest(arg)
     else
         print("|cFF00FFFF[DF Pinned]|r Commands:")
         print("  info - Show detailed debug info (one-shot; pinned frame state dump)")
         print("  test - Add player to set 1 and enable")
         print("  bosstest <N> - Show N boss frames to test secure positioning (1-8, 'off' to exit)")
         print("  bosstest dyn - Modifier-driven test: boss1 always, +2,3 SHIFT, +4,5 CTRL, +6,7,8 ALT (works in combat)")
+        print("  bossspawn demo - Run a 20s simulated spawn/despawn sequence for layout testing")
+        print("  bossspawn <script> - Custom timed script, e.g. '1+:0,3+:2,1-:5'")
+        print("  bossspawn off - Cancel any running bossspawn script")
         print("  reinit - Reinitialize frames")
         print("  (Continuous debug output is routed through the Debug Console under the 'PINNED' category — use /df console)")
     end
