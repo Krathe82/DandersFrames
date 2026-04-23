@@ -2,30 +2,33 @@
 
 ## [4.3.3] - 2026-04-21
 
+### New Features
+
+* **Pinned Frames in Test Mode** — Test Mode now fills your enabled pinned sets with fake units so you can design the layout without being in a group. Boss sets show friendly-NPC test units; player-mode sets show party/raid test units. A new **Test Count** slider in the Pinned Frames settings chooses how many frames appear (1–8 boss, 1–10 player).
+
 ### Improvements
 
-* (Private Aura Dispel Overlay) The overlay now renders at the same frame level as the regular Dispel Overlay (frame+6) instead of above the frame border, text, and icons
-* (Private Aura Dispel Overlay) Added an Alpha slider to dim the overlay (default 1.0, range 0.1–1.0)
-* (Private Aura Dispel Overlay) The Blizzard-rendered overlay is now suppressed whenever DF's own Dispel Overlay is already showing, so normal dispellable debuffs no longer trigger both overlays. The Blizzard overlay still fires for private auras (boss debuffs) when DF's has nothing to show, preserving the feature's original intent.
-* **Pinned Frames in Test Mode** — Test Mode now populates all enabled pinned sets with fake data so the layout can be designed without being in a group. Boss NPC sets show fake friendly-NPC data (e.g. "Fiery Treant", "Charred Bramble") through the real secure boss frames — also verifies the compact in-combat positioning. Player-mode sets show fake party/raid roster data in non-secure test frames parented to the set's container. A "Test Count" slider in the Pinned Frames settings panel chooses how many frames appear (1–8 in boss mode, 1–10 in player mode). Disabled sets are untouched.
+* (Private Aura Dispel Overlay) Overlay no longer covers the frame border, text, and icons
+* (Private Aura Dispel Overlay) Added an Alpha slider to dim the overlay
+* (Private Aura Dispel Overlay) No longer doubles up with DF's own Dispel Overlay for normal debuffs — the Blizzard overlay now only shows when DF's has nothing to show (boss debuffs)
 
 ### Changes
 
-* (Private Aura Dispel Overlay) Removed the "Show Dispel Icons" toggle — Blizzard couples the TOPRIGHT icons to the gradient overlay (both run through the same `SetDispelDebuff` path), so the option was never actually toggleable. The icons now always show when the overlay is active.
+* (Private Aura Dispel Overlay) Removed the "Show Dispel Icons" toggle — the top-right icons cannot be hidden separately from the overlay, so the option had no effect
 
 ### Bug Fixes
 
-* Fix `attempt to perform boolean test on field 'dfInRange' (a secret boolean value, while execution tainted by 'DandersFrames')` error spam from Range.lua:550. The player-in-range and solo fast-paths in `UpdateRange` were using `if not frame.dfInRange then` on a field that can legitimately hold a secret boolean from Blizzard's `UnitInRange` combat fallback; the check now tests `issecretvalue` first and only compares equality against `true` when the stored value is safe to test.
-* Fix "You aren't in a party." chat spam in NPC follower dungeons and NPC-companion delves. The update-notification broadcast was targeting the PARTY channel even when the "party" consisted only of NPC followers, and Blizzard's addon-message API produces a chat error in that state. The addon now only broadcasts to PARTY/RAID when the group contains at least one real player.
-* **Friendly Boss NPC Frames** — compact positioning now works in combat via a secure handler that repositions frames in the restricted environment (where `SetPoint` is allowed on secure frames). As friendly boss units appear/die/swap during an encounter, visible frames automatically recompact to the set's anchor with no empty slots. Uses the same SecureHandler pattern DandersFrames already uses for raid group positioning.
-* **Friendly Boss NPC Frames** — Aura Designer indicators now apply correctly when a boss slot is reassigned to a new friendly NPC mid-encounter (previously buffs briefly showed in the standard buff row instead)
-* **Friendly Boss NPC Frames** — out-of-range fading now works on boss frames (boss units don't fire the roster range event, so range is now tracked via the polling loop)
-* **Friendly Boss NPC Frames** — health, power, name, absorb, heal prediction, and aura updates now apply reliably. Boss frames now register their own unit events directly (`UNIT_HEALTH`, `UNIT_POWER_UPDATE`, `UNIT_AURA`, `UNIT_NAME_UPDATE`, `UNIT_FACTION`, `UNIT_ABSORB_AMOUNT_CHANGED`, `UNIT_HEAL_ABSORB_AMOUNT_CHANGED`, `UNIT_HEAL_PREDICTION`, etc.) rather than depending on the roster event dispatcher, which was designed for stable party/raid units and kept missing the ephemeral boss unit tokens. This follows the same pattern ElvUI uses for its boss frames.
-* **Targeted List** — when a cast is interrupted, the bar now snaps to full (yellow) during the interrupted flash instead of continuing to fill. `SetTimerDuration` hands fill animation to the StatusBar engine, which kept ticking even after the cast stopped; the render loop only touched alpha and color for fading bars, so the fill kept growing.
+* (Range) Fix error spam when range fading is active
+* (Update Notification) Fix "You aren't in a party." chat spam in NPC follower dungeons and delves
+* (Friendly Boss NPC Frames) Compact positioning now works in combat — visible frames recompact to the set's anchor with no empty slots as bosses appear, die, or swap
+* (Friendly Boss NPC Frames) Aura Designer indicators now apply correctly when a boss slot swaps to a new NPC mid-encounter
+* (Friendly Boss NPC Frames) Out-of-range fading now works on boss frames
+* (Friendly Boss NPC Frames) Fix health, power, name, absorb, heal prediction, and aura updates not applying reliably
+* (Targeted List) Cast bar now snaps to full yellow on interrupt instead of continuing to fill
 
 ### Internal
 
-* Opt-in debug instrumentation for raid group layout params investigation. Enable with `/run DandersFrames.debugLeakTest = true` to log every `PositionRaidFrameToGroupSlot` call and every rebuild of `SecureSort.raidGroupLayoutParams`, to verify whether test-mode state can leak into the live positioning path.
+* Opt-in debug instrumentation for raid group layout params investigation. Enable with `/run DandersFrames.debugLeakTest = true`.
 
 ## [4.3.2] - 2026-04-21
 
