@@ -439,8 +439,14 @@ SetupContainerOverlay = function(frame, unit, db)
     wrapper:ClearAllPoints()
     wrapper:SetAllPoints(frame)
     wrapper:SetFrameLevel(frame:GetFrameLevel() + 6)
-    wrapper:SetAlpha(db.bossDebuffsContainerOverlayAlpha or 1.0)
+    -- Always keep the wrapper Shown so Blizzard's container eventFrame
+    -- (a descendant, see Blizzard_PrivateAurasUI.lua:699-707) stays
+    -- registered for UNIT_AURA. Visibility is controlled via alpha so
+    -- the container's internal self.dispels stays in sync when we gate
+    -- the overlay on dfDispelOverlay:IsShown().
     wrapper:Show()
+    -- Initial alpha is set by UpdateContainerOverlayVisibility below,
+    -- which multiplies the user-chosen alpha with the dfDispelOverlay gate.
 
     -- Determine group type from unit token
     local groupType
@@ -514,9 +520,17 @@ end
 -- of that would double up visually.
 --
 -- Strategy: gate the Blizzard wrapper on DF's own overlay's shown state.
---   * dfDispelOverlay:IsShown() == true  → hide the wrapper (DF wins)
---   * dfDispelOverlay:IsShown() == false → show the wrapper (Blizzard
---     catches private auras, which DF's overlay can't see)
+--   * dfDispelOverlay:IsShown() == true  → wrapper alpha = 0 (DF wins)
+--   * dfDispelOverlay:IsShown() == false → wrapper alpha = user's chosen
+--     alpha (Blizzard catches private auras DF can't see)
+--
+-- We use alpha (not Show/Hide) so the container's internal eventFrame
+-- (a descendant of the wrapper) stays registered for UNIT_AURA —
+-- Blizzard_PrivateAurasUI.lua:699-707 unregisters on OnHide. Otherwise
+-- the container goes deaf while hidden and self.dispels / DispelOverlay
+-- state stays stale until the next unrelated UNIT_AURA wakes it up,
+-- which produced a visible "stale overlay flashes after debuff drops"
+-- bug.
 --
 -- dfDispelOverlay:IsShown() is secret-safe: DF's show/hide uses plain
 -- Show()/Hide() calls (never SetShownFromBoolean with a secret bool), so
@@ -527,8 +541,10 @@ function DF:UpdateContainerOverlayVisibility(frame)
     if not frame then return end
     local wrapper = frame.containerOverlayFrame
     if not wrapper then return end
+    local db = DF:GetFrameDB(frame)
+    local userAlpha = (db and db.bossDebuffsContainerOverlayAlpha) or 1.0
     local dfOwnShown = frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown()
-    wrapper:SetShown(not dfOwnShown)
+    wrapper:SetAlpha(dfOwnShown and 0 or userAlpha)
 end
 
 function DF:UpdateContainerOverlaySettings(frame)
@@ -567,8 +583,10 @@ function DF:UpdateContainerOverlaySettings(frame)
     wrapper:SetAttribute("dispel-indicator-option", db.bossDebuffsContainerOverlayDispelMode or 2)
     wrapper:SetAttribute("aura-organization-type", db.bossDebuffsContainerOverlayGradientDir)
 
-    -- Alpha cascades to Blizzard's child overlay
-    wrapper:SetAlpha(db.bossDebuffsContainerOverlayAlpha or 1.0)
+    -- Alpha is routed through the visibility gate so a live slider change
+    -- respects the current dfDispelOverlay state (gate wins: wrapper stays
+    -- alpha=0 while DF's overlay is visible, regardless of slider value).
+    DF:UpdateContainerOverlayVisibility(frame)
 
     -- Signal the container to re-read settings
     wrapper:SetAttribute("update-settings", true)
