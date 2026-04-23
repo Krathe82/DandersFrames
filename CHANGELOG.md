@@ -24,6 +24,7 @@
 
 ### Bug Fixes
 
+* (Aura Designer) Fix constant tooltip Lua error spam during raid encounters with secret auras
 * (Range) Fix error spam when range fading is active
 * (Update Notification) Fix "You aren't in a party." chat spam in NPC follower dungeons and delves
 * (Friendly Boss NPC Frames) Compact positioning now works in combat — visible frames recompact to the set's anchor with no empty slots as bosses appear, die, or swap

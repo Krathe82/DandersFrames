@@ -17,6 +17,7 @@ local floor = math.floor
 local strsplit = strsplit
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
+local issecretvalue = issecretvalue or function() return false end
 
 -- Debug throttle: only log once per N seconds to avoid spam
 local debugLastLog = 0
@@ -476,7 +477,7 @@ function Engine:UpdateFrame(frame)
             if auraData then
                 -- Skip blacklisted auras
                 local blTable = DF.db and DF.db.auraBlacklist
-                if blTable and auraData.spellId and DF.AuraBlacklist and DF.AuraBlacklist.IsBlacklisted(blTable.buffs, auraData.spellId) then
+                if blTable and auraData.spellId and not issecretvalue(auraData.spellId) and DF.AuraBlacklist and DF.AuraBlacklist.IsBlacklisted(blTable.buffs, auraData.spellId) then
                     auraData = nil
                     wasBlacklisted = true
                 end

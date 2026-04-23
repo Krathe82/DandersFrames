@@ -1689,7 +1689,7 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
     if not hideIcon then
         if auraData.icon then
             SafeSetTexture(icon, auraData.icon)
-        elseif auraData.spellId and C_Spell and C_Spell.GetSpellTexture then
+        elseif auraData.spellId and not issecretvalue(auraData.spellId) and C_Spell and C_Spell.GetSpellTexture then
             SafeSetTexture(icon, C_Spell.GetSpellTexture(auraData.spellId))
         end
         if icon.texture then icon.texture:Show() end
