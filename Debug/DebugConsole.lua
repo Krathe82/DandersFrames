@@ -51,6 +51,7 @@ local CATEGORY_GROUPS = {
             { key = "VISIBILITY", desc = "Header show/hide and state-driver changes" },
             { key = "FLATRAID",   desc = "Flat raid layout and sorting" },
             { key = "FRAMESORT",  desc = "FrameSort addon integration" },
+            { key = "PINNED",     desc = "Pinned frames init, layout changes, boss handler, test mode" },
         },
     },
     {

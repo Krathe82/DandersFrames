@@ -560,9 +560,7 @@ function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
 
     self.bossHandlers[setIndex] = handler
 
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "created secure position handler")
-    end
+    DF:Debug("PINNED", "Set %d created secure position handler", setIndex)
 
     return handler
 end
@@ -603,9 +601,7 @@ end
 function PinnedFrames:CreateBossFrames(setIndex, container)
     if self.bossFrames[setIndex] then return end
     if InCombatLockdown() then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r CreateBossFrames: In combat, cannot create frames!")
-        end
+        DF:DebugWarn("PINNED", "CreateBossFrames: in combat, cannot create frames")
         return
     end
 
@@ -760,9 +756,7 @@ function PinnedFrames:CreateBossFrames(setIndex, container)
     -- Secure handler that repositions these frames compactly, even in combat
     self:CreateBossSecureHandler(setIndex, container, frames)
 
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "created 8 boss frames")
-    end
+    DF:Debug("PINNED", "Set %d created 8 boss frames", setIndex)
 end
 
 function PinnedFrames:CreateSetFrames(setIndex)
@@ -770,9 +764,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
     
     -- CRITICAL: Cannot create frames during combat
     if InCombatLockdown() then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r CreateSetFrames: In combat, cannot create frames!")
-        end
+        DF:DebugWarn("PINNED", "CreateSetFrames: in combat, cannot create frames")
         return
     end
     
@@ -988,14 +980,12 @@ function PinnedFrames:CreateSetFrames(setIndex)
     -- Initial nameList (may be empty, that's ok now - frames are created)
     self:UpdateHeaderNameList(setIndex)
     
-    if DF.debugPinnedFrames then
-        -- Debug: count created children
-        local count = 0
-        for i = 1, 40 do
-            if header:GetAttribute("child" .. i) then count = count + 1 end
-        end
-        print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "created", count, "child frames")
+    -- Count created children for debug log (fast — 40 attribute lookups)
+    local childCount = 0
+    for i = 1, 40 do
+        if header:GetAttribute("child" .. i) then childCount = childCount + 1 end
     end
+    DF:Debug("PINNED", "Set %d created %d child frames", setIndex, childCount)
     
     -- Show/hide based on enabled state
     if set.enabled then
@@ -1051,16 +1041,9 @@ function PinnedFrames:UpdateHeaderNameList(setIndex)
     
     local nameList = BuildNameList(validRosterNames)
     
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "updating nameList")
-        print("|cFF00FFFF[DF Pinned]|r   Players in set:", #set.players)
-        print("|cFF00FFFF[DF Pinned]|r   Valid (in group):", #validRosterNames)
-        print("|cFF00FFFF[DF Pinned]|r   nameList:", nameList ~= "" and nameList or "(empty)")
-        for i, p in ipairs(set.players) do
-            local rosterName = IsPlayerInGroup(p, roster)
-            print("|cFF00FFFF[DF Pinned]|r     [" .. i .. "]", p, rosterName and ("-> " .. rosterName) or "(NOT in group)")
-        end
-    end
+    DF:Debug("PINNED", "Set %d updating nameList (%d players in set, %d valid, list=%s)",
+        setIndex, #set.players, #validRosterNames,
+        nameList ~= "" and nameList or "(empty)")
     
     -- Only update if not in combat
     if InCombatLockdown() then
@@ -1123,9 +1106,7 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     
     local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
     if not db then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r ApplyLayoutSettings: db is nil!")
-        end
+        DF:DebugError("PINNED", "ApplyLayoutSettings: db is nil")
         return
     end
     
@@ -1236,14 +1217,9 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
         end
     end
     
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r ApplyLayoutSettings set", setIndex)
-        print("|cFF00FFFF[DF Pinned]|r   horizontal:", horizontal)
-        print("|cFF00FFFF[DF Pinned]|r   frameAnchor:", frameAnchor, "columnAnchor:", columnAnchor)
-        print("|cFF00FFFF[DF Pinned]|r   containerAnchor:", containerAnchorPoint)
-        print("|cFF00FFFF[DF Pinned]|r   frameSize:", frameWidth, "x", frameHeight)
-        print("|cFF00FFFF[DF Pinned]|r   spacing:", hSpacing, vSpacing)
-    end
+    DF:Debug("PINNED", "ApplyLayoutSettings set=%d horizontal=%s frameAnchor=%s columnAnchor=%s containerAnchor=%s size=%dx%d spacing=%d,%d",
+        setIndex, tostring(horizontal), tostring(frameAnchor), tostring(columnAnchor),
+        tostring(containerAnchorPoint), frameWidth, frameHeight, hSpacing, vSpacing)
     
     -- ============================================================
     -- CRITICAL: 4-step refresh to force repositioning
@@ -1473,9 +1449,7 @@ function PinnedFrames:RefreshChildFrames(setIndex)
         end
     end
 
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "refreshed all child frames")
-    end
+    DF:Debug("PINNED", "Set %d refreshed all child frames", setIndex)
 end
 
 function PinnedFrames:SetEnabled(setIndex, enabled)
@@ -1546,9 +1520,7 @@ function PinnedFrames:SetLocked(setIndex, locked)
     if not locked and InCombatLockdown() then
         self.pendingUnlock = self.pendingUnlock or {}
         self.pendingUnlock[setIndex] = true
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r Set", setIndex, "unlock queued until after combat")
-        end
+        DF:Debug("PINNED", "Set %d unlock queued until after combat", setIndex)
         return
     end
     
@@ -1586,9 +1558,7 @@ function PinnedFrames:LockAllForCombat()
                 container.mover:Hide()
             end
             
-            if DF.debugPinnedFrames then
-                print("|cFF00FFFF[DF Pinned]|r Set", i, "auto-locked for combat")
-            end
+            DF:Debug("PINNED", "Set %d auto-locked for combat", i)
         end
     end
 end
@@ -1926,38 +1896,29 @@ function PinnedFrames:Initialize()
     
     -- CRITICAL: Cannot create frames during combat
     if InCombatLockdown() then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r Initialize: In combat, deferring...")
-        end
+        DF:DebugWarn("PINNED", "Initialize: in combat, deferring")
         self.pendingInitialize = true
         return
     end
-    
+
     -- Check if DB is ready - if not during ADDON_LOADED, defer to pending
     if not DF.db then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r Initialize: DF.db not ready, setting pendingInitialize")
-        end
+        DF:DebugWarn("PINNED", "Initialize: DF.db not ready, deferring")
         self.pendingInitialize = true
         return
     end
-    
+
     -- Track what mode we're initializing for
     self.currentMode = GetActualMode()
-    
+
     -- Check if pinnedFrames config exists
     local hlDB = GetPinnedDB()
     if not hlDB then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r Initialize: No pinnedFrames config found!")
-        end
+        DF:DebugError("PINNED", "Initialize: no pinnedFrames config found")
         return
     end
-    
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Initializing pinned frames...")
-        print("|cFF00FFFF[DF Pinned]|r   Mode:", self.currentMode)
-    end
+
+    DF:Debug("PINNED", "Initializing pinned frames (mode=%s)", tostring(self.currentMode))
     
     -- Create frames for both sets
     for i = 1, 2 do
@@ -1977,18 +1938,14 @@ function PinnedFrames:Initialize()
         end
     end
     
-    if DF.debugPinnedFrames then
-        print("|cFF00FFFF[DF Pinned]|r Initialized pinned frames")
-    end
+    DF:Debug("PINNED", "Initialized pinned frames")
 end
 
 -- Reinitialize for mode change (party <-> raid)
 function PinnedFrames:Reinitialize()
     -- Cannot reinitialize during combat
     if InCombatLockdown() then
-        if DF.debugPinnedFrames then
-            print("|cFF00FFFF[DF Pinned]|r Reinitialize: In combat, deferring...")
-        end
+        DF:DebugWarn("PINNED", "Reinitialize: in combat, deferring")
         self.pendingReinitialize = true
         return
     end
@@ -2210,9 +2167,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
         -- Check if mode changed (party <-> raid)
         local actualMode = GetActualMode()
         if PinnedFrames.currentMode and actualMode ~= PinnedFrames.currentMode then
-            if DF.debugPinnedFrames then
-                print("|cFF00FFFF[DF Pinned]|r Mode changed from", PinnedFrames.currentMode, "to", actualMode, "- reinitializing")
-            end
+            DF:Debug("PINNED", "Mode changed from %s to %s — reinitializing",
+                tostring(PinnedFrames.currentMode), tostring(actualMode))
             PinnedFrames:Reinitialize()
             return
         end
@@ -2768,10 +2724,7 @@ end
 -- Slash command for debug
 SLASH_DFPINNED1 = "/dfpinned"
 SlashCmdList["DFPINNED"] = function(msg)
-    if msg == "debug" then
-        DF.debugPinnedFrames = not DF.debugPinnedFrames
-        print("|cFF00FFFF[DF Pinned]|r Debug:", DF.debugPinnedFrames and "ON" or "OFF")
-    elseif msg == "info" then
+    if msg == "info" then
         PinnedFrames:DebugPrint()
     elseif msg == "reinit" then
         PinnedFrames:Reinitialize()
@@ -2790,11 +2743,11 @@ SlashCmdList["DFPINNED"] = function(msg)
         end
     else
         print("|cFF00FFFF[DF Pinned]|r Commands:")
-        print("  debug - Toggle debug output")
-        print("  info - Show detailed debug info")
+        print("  info - Show detailed debug info (one-shot; pinned frame state dump)")
         print("  test - Add player to set 1 and enable")
         print("  bosstest <N> - Show N boss frames to test secure positioning (1-8, 'off' to exit)")
         print("  bosstest dyn - Modifier-driven test: boss1 always, +2,3 SHIFT, +4,5 CTRL, +6,7,8 ALT (works in combat)")
         print("  reinit - Reinitialize frames")
+        print("  (Continuous debug output is routed through the Debug Console under the 'PINNED' category — use /df console)")
     end
 end
