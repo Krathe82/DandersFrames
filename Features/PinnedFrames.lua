@@ -463,17 +463,13 @@ end
 -- ============================================================
 
 -- Create a SecureHandlerStateTemplate handler for this set's boss frames.
--- The handler owns 8 state drivers (one per boss unit), each with an
--- `_onstate-bossN` secure snippet that shows/hides the corresponding boss
--- frame AND runs the compact reposition snippet. All positioning work
--- happens inside the restricted environment, which means `SetPoint` on
--- SecureUnitButtonTemplate frames is legal even during combat — unlike
--- Lua-side SetPoint calls.
---
--- We don't use SecureHandlerWrapScript on the boss frames themselves
--- because SecureUnitButtonTemplate doesn't derive from SecureHandler*Template
--- and therefore doesn't have a restricted-environment setup. The handler
--- (which IS a SecureHandlerStateTemplate) drives everything instead.
+-- The handler owns four allocator snippets (initAllocState, onBossShow,
+-- onBossHide, resetAllocState) plus a 0.25s GUID-swap poll. Each boss frame
+-- has its own SecureHandlerShowHideTemplate helper child; when the per-frame
+-- [@bossN,help]show;hide visibility driver flips, the helper's _onshow/_onhide
+-- run onBossShow/onBossHide on this handler via RunFor, passing bossIndex.
+-- Allocation + SetPoint happens inside the restricted environment, so in-combat
+-- repositioning is legal — unlike Lua-side SetPoint on SecureUnitButtonTemplate.
 function PinnedFrames:CreateBossSecureHandler(setIndex, container, bossFrames)
     if self.bossHandlers[setIndex] then return self.bossHandlers[setIndex] end
     if InCombatLockdown() then return nil end
@@ -2764,7 +2760,6 @@ end
 -- Generation counter lets StopBossSpawn cancel pending timers without
 -- actually cancelling them (C_Timer doesn't expose cancellation); stale
 -- callbacks compare their captured gen to the current one and no-op.
-PinnedFrames.bossSpawnActive = false
 PinnedFrames.bossSpawnGeneration = 0
 
 -- Flip a frame's visibility state driver to a literal show/hide value.
@@ -2798,7 +2793,6 @@ end
 
 -- Schedule each step via C_Timer.After, keyed to a captured generation.
 function PinnedFrames:RunBossSpawnScript(steps)
-    self.bossSpawnActive = true
     self.bossSpawnGeneration = self.bossSpawnGeneration + 1
     local myGen = self.bossSpawnGeneration
 
@@ -2836,7 +2830,6 @@ end
 
 -- Cancel any pending scripted step and restore real drivers.
 function PinnedFrames:StopBossSpawn(auto)
-    self.bossSpawnActive = false
     self.bossSpawnGeneration = self.bossSpawnGeneration + 1
     RestoreBossFrameDrivers()
     if auto then
