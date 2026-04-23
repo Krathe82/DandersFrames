@@ -638,7 +638,7 @@ function GUI:CreateLabel(parent, text, width, color)
     return frame
 end
 
--- Themed info callout: dark tinted box with theme-color border and a label
+-- Themed info callout: neutral dark box with a theme-color border and a label
 -- composed of a bold title prefix + body text. Used for settings explanations
 -- that benefit from visual prominence without the red "warning" styling.
 -- SetContent(title, body) updates both parts; SetText(text) remains available
@@ -654,7 +654,10 @@ function GUI:CreateInfoCallout(parent, width, height)
 
     local applyTheme = function()
         local c = GetThemeColor()
-        frame:SetBackdropColor(c.r * 0.18, c.g * 0.18, c.b * 0.22, 0.75)
+        -- Neutral element background with the theme colour only on the border
+        -- and (via SetContent below) on the bolded title prefix. Keeps the box
+        -- from looking like a big coloured panel.
+        frame:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 0.75)
         frame:SetBackdropBorderColor(c.r, c.g, c.b, 0.7)
     end
     applyTheme()
@@ -711,26 +714,53 @@ end
 function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callback, totalWidth)
     local container = CreateFrame("Frame", nil, parent)
     totalWidth = totalWidth or 560
-    local btnHeight = 48  -- enough vertical space for label + subtitle
+    local btnHeight = 38  -- compact modern height: label + subtitle fit snugly
+    local gap = 4
+    local minBtnWidth = 110  -- below this, buttons wrap to next row
     container:SetSize(totalWidth, btnHeight)
 
     local n = #options
-    local gap = 4
 
     local buttons = {}
     container.buttons = buttons
 
-    -- Reposition buttons to evenly fill the container's current width. Called
-    -- on creation and on OnSizeChanged so buttons reflow when the page stretches
-    -- the container via layoutCol="both".
+    -- Reposition buttons to fill the container's current width. Wraps to
+    -- additional rows when per-button width would drop below minBtnWidth.
+    -- Called on creation and on OnSizeChanged so buttons reflow when the
+    -- page stretches or shrinks the container.
     local function Relayout()
         local w = container:GetWidth() or totalWidth
         if w <= 0 then w = totalWidth end
-        local bw = math.floor((w - gap * (n - 1)) / n)
+
+        local perRow = math.max(1, math.min(n, math.floor((w + gap) / (minBtnWidth + gap))))
+        local rows = math.ceil(n / perRow)
+        local bw = math.floor((w - gap * (perRow - 1)) / perRow)
+
         for i, btn in ipairs(buttons) do
+            local rowIdx = math.ceil(i / perRow) - 1
+            local colIdx = (i - 1) % perRow
             btn:SetWidth(bw)
             btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", (i - 1) * (bw + gap), 0)
+            btn:SetPoint("TOPLEFT", colIdx * (bw + gap), -(rowIdx * (btnHeight + gap)))
+        end
+
+        local newHeight = rows * btnHeight + (rows - 1) * gap
+        container:SetHeight(newHeight)
+
+        -- If the row count changed the container's required height, bump
+        -- layoutHeight so the page reserves the right amount of space on
+        -- the next layout pass. Defer the page refresh to the next tick to
+        -- avoid recursing inside OnSizeChanged.
+        local desiredLayoutH = newHeight + 4
+        if container.layoutHeight ~= desiredLayoutH then
+            container.layoutHeight = desiredLayoutH
+            if not container._relayoutPending then
+                container._relayoutPending = true
+                C_Timer.After(0, function()
+                    container._relayoutPending = false
+                    if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+                end)
+            end
         end
     end
     container:SetScript("OnSizeChanged", function() Relayout() end)
@@ -742,7 +772,9 @@ function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callbac
             local selected = (btn.value == currentVal)
             btn.selected = selected
             if selected then
-                btn:SetBackdropColor(theme.r * 0.25, theme.g * 0.25, theme.b * 0.35, 1)
+                -- Border-only selection: same backdrop as unselected, themed
+                -- border, themed label. Subtle but unambiguous.
+                btn:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1)
                 btn:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
                 if btn.Label then btn.Label:SetTextColor(theme.r, theme.g, theme.b, 1) end
                 if btn.Subtitle then btn.Subtitle:SetTextColor(theme.r * 0.85, theme.g * 0.85, theme.b * 0.95, 1) end
@@ -769,13 +801,18 @@ function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callbac
         btn.value = opt.value
 
         btn.Label = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-        btn.Label:SetPoint("TOP", 0, -8)
+        btn.Label:SetPoint("TOP", 0, -5)
         btn.Label:SetText(opt.label or "")
 
         if opt.subtitle and opt.subtitle ~= "" then
             btn.Subtitle = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-            btn.Subtitle:SetPoint("BOTTOM", 0, 8)
+            btn.Subtitle:SetPoint("BOTTOM", 0, 5)
             btn.Subtitle:SetText(opt.subtitle)
+            -- Nudge subtitle down by ~1 pt for a clearer visual hierarchy.
+            local fPath, fSize, fFlags = btn.Subtitle:GetFont()
+            if fPath and fSize and fSize > 9 then
+                btn.Subtitle:SetFont(fPath, fSize - 1, fFlags or "")
+            end
         end
 
         btn:SetScript("OnEnter", function(self)

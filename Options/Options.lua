@@ -7195,7 +7195,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             self:RefreshStates()
             GUI:RefreshCurrentPage()
         end, 560)
-        Add(sourceButtons, 52, "both")
+        Add(sourceButtons, 42, "both")
 
         calloutBox = GUI:CreateInfoCallout(self.child, 560, 60)
         UpdateCalloutForSource()
