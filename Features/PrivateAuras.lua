@@ -422,7 +422,9 @@ end
 
 SetupContainerOverlay = function(frame, unit, db)
     if not IS_CONTAINER_SUPPORTED then return end
-    if not db.bossDebuffsContainerOverlayEnabled then return end
+    -- Only run when the source selector includes Blizzard ("blizzard" or "both").
+    local src = db.dispelOverlaySource or "both"
+    if src ~= "blizzard" and src ~= "both" then return end
 
     -- Parent to the unit frame and match dfDispelOverlay's level (frame+6) so the
     -- native dispel overlay renders at the same depth as DF's own dispel overlay
@@ -471,7 +473,7 @@ SetupContainerOverlay = function(frame, unit, db)
     -- SetDispelDebuff, which always shows the icon first, so there's no way to
     -- hide the icons without also hiding the gradient.
     -- 1 = dispellable by me. 2 = all dispellable.
-    wrapper:SetAttribute("dispel-indicator-option", db.bossDebuffsContainerOverlayDispelMode or 2)
+    wrapper:SetAttribute("dispel-indicator-option", db.dispelOverlayDispelType or 2)
     wrapper:SetAttribute("aura-organization-type", db.bossDebuffsContainerOverlayGradientDir)
     wrapper:SetAttribute("group-type", groupType)
     wrapper:SetAttribute("power-bar-used-height", 0)
@@ -557,8 +559,20 @@ function DF:UpdateContainerOverlayVisibility(frame)
     if not wrapper then return end
     local db = DF:GetFrameDB(frame)
     local userAlpha = (db and db.bossDebuffsContainerOverlayAlpha) or 1.0
-    local dfOwnShown = frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown()
+    local src = (db and db.dispelOverlaySource) or "both"
 
+    -- In "blizzard" (and any non-"both") source, DF's own overlay never runs,
+    -- so the gate is trivial: just show the wrapper at user alpha. No defer
+    -- needed since there's no DF/Blizzard transition race.
+    if src ~= "both" then
+        wrapper:SetAlpha(userAlpha)
+        return
+    end
+
+    -- Hybrid ("both") gate: suppress the Blizzard wrapper while DF's own
+    -- overlay is shown, reveal it otherwise (so Blizzard can still fire for
+    -- private auras DF can't see).
+    local dfOwnShown = frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown()
     if dfOwnShown then
         wrapper:SetAlpha(0)
         return
@@ -585,8 +599,10 @@ function DF:UpdateContainerOverlaySettings(frame)
     local wrapper = frame.containerOverlayFrame
     if not wrapper then return end
 
-    -- If overlay was just disabled, do a full teardown/setup
-    if not db.bossDebuffsContainerOverlayEnabled then
+    -- If the source selector excludes Blizzard, do a full teardown.
+    local src = db.dispelOverlaySource or "both"
+    local blizOn = (src == "blizzard") or (src == "both")
+    if not blizOn then
         local anchorID = containerOverlayAnchors[frame]
         if anchorID then
             pcall(function()
@@ -608,7 +624,7 @@ function DF:UpdateContainerOverlaySettings(frame)
     end
 
     -- Update attributes for live changes
-    wrapper:SetAttribute("dispel-indicator-option", db.bossDebuffsContainerOverlayDispelMode or 2)
+    wrapper:SetAttribute("dispel-indicator-option", db.dispelOverlayDispelType or 2)
     wrapper:SetAttribute("aura-organization-type", db.bossDebuffsContainerOverlayGradientDir)
 
     -- Alpha is routed through the visibility gate so a live slider change

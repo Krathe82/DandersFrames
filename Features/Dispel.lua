@@ -1423,14 +1423,17 @@ function DF:UpdateDispelOverlay(frame)
     local isRaidFrame = frame.isRaidFrame
     local inRelevantTestMode = (isRaidFrame and DF.raidTestMode) or (not isRaidFrame and DF.testMode)
 
-    -- In test mode, check testShowDispelGlow; otherwise check dispelOverlayEnabled
+    -- In test mode, check testShowDispelGlow; otherwise check dispelOverlaySource.
+    -- DF's own overlay runs when source is "dandersframes" or "both" (Hybrid).
+    -- "blizzard" and "off" disable this overlay entirely.
     if inRelevantTestMode then
         if not db or not db.testShowDispelGlow then
             HideDispelAndInvalidate(frame)
             return
         end
     else
-        if not db or not db.dispelOverlayEnabled then
+        local src = db and db.dispelOverlaySource
+        if not db or (src ~= "dandersframes" and src ~= "both") then
             HideDispelAndInvalidate(frame)
             return
         end
@@ -1513,14 +1516,13 @@ function DF:UpdateDispelOverlay(frame)
     local bleedColor = db.dispelBleedColor
     local showBleeds = bleedColor and (bleedColor.r > 0 or bleedColor.g > 0 or bleedColor.b > 0)
 
-    -- Determine dispel mode:
-    -- _blizzDispelIndicator: 1 = All Dispellable, 2 = Dispellable By Me
-    local partyDb = DF.db and DF.db.party
-    local dispelIndicator = partyDb and partyDb._blizzDispelIndicator or 1
+    -- Determine dispel type:
+    -- dispelOverlayDispelType (Blizzard convention): 1 = Dispellable By Me, 2 = All Dispellable
+    local dispelType = db.dispelOverlayDispelType or 2
 
     local cache = DF.BlizzardAuraCache and DF.BlizzardAuraCache[unit]
 
-    if dispelIndicator == 2 then
+    if dispelType == 1 then
         -- "Dispellable By Me": use playerDispellable cache (RAID_PLAYER_DISPELLABLE filtered)
         if cache and cache.playerDispellable then
             local auraInstanceID = next(cache.playerDispellable)
@@ -1731,7 +1733,8 @@ function DF:DebugDispel(unit)
     print("|cff00ff00DandersFrames:|r Dispel Debug for " .. unit)
     
     local db = DF:GetDB()
-    print("  dispelOverlayEnabled: " .. tostring(db and db.dispelOverlayEnabled))
+    print("  dispelOverlaySource: " .. tostring(db and db.dispelOverlaySource))
+    print("  dispelOverlayDispelType: " .. tostring(db and db.dispelOverlayDispelType))
     
     -- Get debuffs sorted by expiration
     local sortRule = Enum.UnitAuraSortRule and Enum.UnitAuraSortRule.Expiration or 3

@@ -3917,6 +3917,58 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- v4.3.4: Dispel Overlay Source migration
+        -- Collapses the two legacy toggles (dispelOverlayEnabled +
+        -- bossDebuffsContainerOverlayEnabled) into a single dispelOverlaySource
+        -- selector with values "off" / "dandersframes" / "blizzard" / "both".
+        -- Also unifies the dispel-type dropdown — _blizzDispelIndicator (party-only,
+        -- 1=All, 2=ByMe) and bossDebuffsContainerOverlayDispelMode (per-mode,
+        -- 1=ByMe, 2=All) are replaced by dispelOverlayDispelType (per-mode,
+        -- Blizzard convention: 1=ByMe, 2=All).
+        local function ComputeDispelSource(modeDb)
+            -- Fresh installs have no legacy keys (removed from defaults in
+            -- v4.3.4). If both are nil there's no legacy state to migrate —
+            -- return nil so the default ("both") is preserved.
+            if modeDb.dispelOverlayEnabled == nil and modeDb.bossDebuffsContainerOverlayEnabled == nil then
+                return nil
+            end
+            local dfOn = modeDb.dispelOverlayEnabled and true or false
+            local blizOn = modeDb.bossDebuffsContainerOverlayEnabled and true or false
+            if dfOn and blizOn then return "both"
+            elseif dfOn then return "dandersframes"
+            elseif blizOn then return "blizzard"
+            else return "off" end
+        end
+        local function MigrateDispelSource(modeDb, partyDb)
+            if modeDb._dispelSourceMigratedV434 then return end
+            local src = ComputeDispelSource(modeDb)
+            if src then modeDb.dispelOverlaySource = src end
+            -- Translate legacy _blizzDispelIndicator (1=All, 2=ByMe) to the new
+            -- Blizzard convention (1=ByMe, 2=All). Reads from party DB since the
+            -- legacy key was party-only. If unset, leave the default untouched.
+            local legacyInd = partyDb and partyDb._blizzDispelIndicator
+            if legacyInd ~= nil then
+                modeDb.dispelOverlayDispelType = (legacyInd == 2) and 1 or 2
+            end
+            modeDb._dispelSourceMigratedV434 = true
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            local modeDb = DF.db[mode]
+            if modeDb then
+                MigrateDispelSource(modeDb, DF.db.party)
+            end
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                local partyDb = profile.party
+                for _, mode in ipairs({"party", "raid"}) do
+                    if profile[mode] then
+                        MigrateDispelSource(profile[mode], partyDb)
+                    end
+                end
+            end
+        end
+
         -- Wrap DF.db with overlay proxy (must happen AFTER all migrations,
         -- BEFORE anything that reads through the proxy)
         DF:WrapDB()

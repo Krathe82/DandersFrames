@@ -865,8 +865,8 @@ DF.PartyDefaults = {
     bossDebuffsOverlayScale = 1.05,
 
     -- Container overlay (12.0.5+ native dispel overlay for private auras)
-    bossDebuffsContainerOverlayEnabled = false,
-    bossDebuffsContainerOverlayDispelMode = 2,
+    -- Enable state + dispel-type are driven by dispelOverlaySource and
+    -- dispelOverlayDispelType (unified across both overlay systems).
     bossDebuffsContainerOverlayGradientDir = 0,
     bossDebuffsContainerOverlayAlpha = 1.0,
 
@@ -1132,7 +1132,6 @@ DF.PartyDefaults = {
     dispelIconSize = 20,
     dispelMagicColor = {r = 0.2, g = 0.6, b = 1},
     dispelOnlyPlayerTypes = false,
-    dispelOverlayEnabled = true,
     dispelOverlayMode = "PLAYER_DISPELLABLE",
     dispelPoisonColor = {r = 0, g = 0.6, b = 0},
     dispelShowBleed = false,
@@ -2181,8 +2180,8 @@ DF.RaidDefaults = {
     bossDebuffsOverlayScale = 1.05,
 
     -- Container overlay (12.0.5+ native dispel overlay for private auras)
-    bossDebuffsContainerOverlayEnabled = false,
-    bossDebuffsContainerOverlayDispelMode = 2,
+    -- Enable state + dispel-type are driven by dispelOverlaySource and
+    -- dispelOverlayDispelType (unified across both overlay systems).
     bossDebuffsContainerOverlayGradientDir = 0,
     bossDebuffsContainerOverlayAlpha = 1.0,
 
@@ -2448,7 +2447,6 @@ DF.RaidDefaults = {
     dispelIconSize = 20,
     dispelMagicColor = {r = 0.2, g = 0.6, b = 1},
     dispelOnlyPlayerTypes = false,
-    dispelOverlayEnabled = true,
     dispelOverlayMode = "PLAYER_DISPELLABLE",
     dispelPoisonColor = {r = 0, g = 0.6, b = 0},
     dispelShowBleed = false,

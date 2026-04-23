@@ -7118,29 +7118,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
         AddSpace(10, "both")
 
-        -- Phase 1 bridge: reflect legacy toggles into the new source selector
-        -- and the unified dispel-type selector, so the UI and stored state
-        -- stay consistent without requiring a backend rewire yet. Dropdown
-        -- onChange callbacks write the translated values back to the legacy
-        -- keys so the rest of the addon continues to work unchanged.
-        do
-            local dfOn = db.dispelOverlayEnabled and true or false
-            local blizOn = db.bossDebuffsContainerOverlayEnabled and true or false
-            if dfOn and blizOn then
-                db.dispelOverlaySource = "both"
-            elseif dfOn then
-                db.dispelOverlaySource = "dandersframes"
-            elseif blizOn then
-                db.dispelOverlaySource = "blizzard"
-            else
-                db.dispelOverlaySource = "off"
-            end
-            -- Reflect dispel-type from legacy _blizzDispelIndicator (1=All, 2=ByMe)
-            -- into the new dispelOverlayDispelType (1=ByMe, 2=All — Blizzard convention).
-            local legacyInd = DF.db.party._blizzDispelIndicator or 1
-            db.dispelOverlayDispelType = (legacyInd == 2) and 1 or 2
-        end
-
         local function HideIfSourceOff(d)
             return d.dispelOverlaySource == "off"
         end
@@ -7152,7 +7129,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             local s = d.dispelOverlaySource
             return s ~= "blizzard" and s ~= "both"
         end
-        -- Kept for back-compat inside this function — now an alias for HideIfNotDF.
+        -- Kept for back-compat inside this function — alias for HideIfNotDF.
         local HideDispelOptions = HideIfNotDF
 
         local function InvalidateCurves()
@@ -7160,18 +7137,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end
 
-        -- Bridge writer: translate dispelOverlaySource to legacy enable toggles.
-        local function ApplySourceBridge()
-            local s = db.dispelOverlaySource or "both"
-            local dfOn = (s == "dandersframes") or (s == "both")
-            local blizOn = (s == "blizzard") or (s == "both")
-            db.dispelOverlayEnabled = dfOn
-            db.bossDebuffsContainerOverlayEnabled = blizOn
+        -- Called when the overlay source changes: refresh DF's overlay and
+        -- rebuild the Blizzard container anchor per the new source value.
+        local function OnSourceChanged()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
-            -- UpdateContainerOverlaySettings is no-op on frames whose wrapper
-            -- doesn't exist yet (first-time enable). PreviewPrivateAuraAnchors
-            -- does a full refresh — creates the wrapper + anchor as needed,
-            -- or tears them down when disabled.
             if DF.PreviewPrivateAuraAnchors then
                 DF:PreviewPrivateAuraAnchors()
             elseif DF.UpdateContainerOverlaySettings and DF.IterateAllFrames then
@@ -7180,12 +7149,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 end)
             end
         end
-        -- Bridge writer: translate dispelOverlayDispelType to legacy keys.
-        local function ApplyDispelTypeBridge()
-            local v = db.dispelOverlayDispelType or 2
-            -- new: 1=ByMe, 2=All → legacy _blizzDispelIndicator: 1=All, 2=ByMe (inverted)
-            DF.db.party._blizzDispelIndicator = (v == 1) and 2 or 1
-            db.bossDebuffsContainerOverlayDispelMode = v
+        local function OnDispelTypeChanged()
             InvalidateCurves()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
             if DF.UpdateContainerOverlaySettings and DF.IterateAllFrames then
@@ -7208,7 +7172,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             _order = { "both", "dandersframes", "blizzard", "off" },
         }
         settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Overlay Source"], sourceOptions, db, "dispelOverlaySource", function()
-            ApplySourceBridge()
+            OnSourceChanged()
             self:RefreshStates()
             GUI:RefreshCurrentPage()
         end), 55)
@@ -7229,7 +7193,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Unified "Show Overlay For" dropdown — shared by DF and Blizzard overlays
         local dispelIndicatorOptions = { [1]= L["Dispellable By Me"], [2]= L["All Dispellable"] }
         local dispelIndicatorDropdown = settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Show Overlay For"], dispelIndicatorOptions, db, "dispelOverlayDispelType", function()
-            ApplyDispelTypeBridge()
+            OnDispelTypeChanged()
         end), 55)
         dispelIndicatorDropdown.hideOn = HideIfSourceOff
         local showBorder = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "dispelShowBorder", function()
