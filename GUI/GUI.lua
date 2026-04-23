@@ -27,6 +27,7 @@ GUI.SelectedMode = "party"
 GUI.NewTabs = {
     ["indicators_targetedlist"] = true,
     ["general_pinnedframes"] = true,
+    ["auras_dispel"] = true,
 }
 
 -- Registry of section headers (inside a tab) that should show a "New" badge
@@ -36,6 +37,7 @@ GUI.NewTabs = {
 -- when the user leaves the owning tab (persisted via seenSections).
 GUI.NewSections = {
     ["general_pinnedframes.frameType"] = true,
+    ["auras_dispel.overlaySource"] = true,
 }
 
 -- Live-tracked badges pending a "seen" mark, keyed by tabName → { key = badge }.
@@ -46,8 +48,12 @@ GUI.pendingSectionBadges = {}
 -- badge FontString, or nil if the section isn't registered in NewSections or
 -- has already been marked seen. The badge clears (and is persisted as seen)
 -- the next time the user navigates away from `tabName`.
-function GUI:AddSectionNewBadge(header, tabName, sectionId)
-    if not header or not header.text or not tabName or not sectionId then return end
+function GUI:AddSectionNewBadge(widget, tabName, sectionId)
+    -- Anchor to whichever label FontString the widget exposes:
+    --   * CreateHeader containers use `.text`
+    --   * CreateDropdown containers use `.label`
+    local anchor = widget and (widget.text or widget.label)
+    if not anchor or not tabName or not sectionId then return end
     local key = tabName .. "." .. sectionId
     if not GUI.NewSections[key] then return end
 
@@ -55,8 +61,8 @@ function GUI:AddSectionNewBadge(header, tabName, sectionId)
                  and DandersFramesDB_v2.seenSections[key]
     if seen then return end
 
-    local badge = header:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    badge:SetPoint("LEFT", header.text, "RIGHT", 6, 0)
+    local badge = widget:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    badge:SetPoint("LEFT", anchor, "RIGHT", 6, 0)
     badge:SetText(L["New"])
     badge:SetTextColor(1, 0.82, 0)
 
@@ -2292,12 +2298,14 @@ end
 function GUI:CreateDropdown(parent, label, options, dbTable, dbKey, callback)
     local container = CreateFrame("Frame", nil, parent)
     container:SetSize(260, 50)
-    
+
     -- Label
     local lbl = container:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     lbl:SetPoint("TOPLEFT", 0, 0)
     lbl:SetText(label)
     lbl:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    -- Expose label so helpers like AddSectionNewBadge can anchor a badge to it.
+    container.label = lbl
     
     -- Add override indicators if dbKey is provided (for auto profiles)
     if dbKey and type(dbKey) == "string" then

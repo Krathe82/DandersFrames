@@ -7171,11 +7171,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             ["off"]           = L["Off"],
             _order = { "both", "dandersframes", "blizzard", "off" },
         }
-        settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Overlay Source"], sourceOptions, db, "dispelOverlaySource", function()
+        local sourceDropdown = GUI:CreateDropdown(self.child, L["Overlay Source"], sourceOptions, db, "dispelOverlaySource", function()
             OnSourceChanged()
             self:RefreshStates()
             GUI:RefreshCurrentPage()
-        end), 55)
+        end)
+        settingsGroup:AddWidget(sourceDropdown, 55)
+        GUI:AddSectionNewBadge(sourceDropdown, "auras_dispel", "overlaySource")
 
         -- Per-mode description label — rendered in yellow for prominence.
         -- One label per source value, toggled via hideOn so only the active
