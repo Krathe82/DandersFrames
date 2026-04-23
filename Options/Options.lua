@@ -2603,22 +2603,22 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             55
         )
 
-        -- Test Count slider: how many test frames show when Test Mode is active.
-        -- Boss-mode only for now. Changes while Test Mode is on refresh the
-        -- boss test frames immediately (exit+re-enter).
-        if IsCurrentBossMode() then
-            local function OnTestCountChanged()
-                if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive
-                    and DF.PinnedFrames:IsTestModeActive() then
-                    DF.PinnedFrames:ExitTestMode()
-                    DF.PinnedFrames:EnterTestMode()
-                end
+        -- Test Count slider: how many test frames show when Test Mode is
+        -- active. Boss mode: 1–8 (hard WoW limit). Player mode: 1–10
+        -- (covers typical pinned set sizes; range kept modest since pinned
+        -- sets rarely need more than that for layout verification).
+        local function OnTestCountChanged()
+            if not DF.PinnedFrames then return end
+            if DF.PinnedFrames.IsTestModeActive and DF.PinnedFrames:IsTestModeActive() then
+                DF.PinnedFrames:ExitTestMode()
+                DF.PinnedFrames:EnterTestMode()
             end
-            frameTypeGroup:AddWidget(
-                CreateRefreshableSlider(self.child, L["Test Count"], 1, 8, 1, "testCount", OnTestCountChanged),
-                55
-            )
         end
+        local testMax = IsCurrentBossMode() and 8 or 10
+        frameTypeGroup:AddWidget(
+            CreateRefreshableSlider(self.child, L["Test Count"], 1, testMax, 1, "testCount", OnTestCountChanged),
+            55
+        )
 
         Add(frameTypeGroup, nil, "both")
         AddSpace(10, "both")
