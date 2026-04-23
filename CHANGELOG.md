@@ -6,6 +6,7 @@
 
 * (Private Aura Dispel Overlay) The overlay now renders at the same frame level as the regular Dispel Overlay (frame+6) instead of above the frame border, text, and icons
 * (Private Aura Dispel Overlay) Added an Alpha slider to dim the overlay (default 1.0, range 0.1–1.0)
+* **Friendly Boss NPC Frames** — Test Mode now populates enabled boss NPC pinned sets with fake friendly-boss data (e.g. "Fiery Treant", "Charred Bramble") so the layout can be designed and the secure positioning verified without being in an encounter. A new "Test Count" slider in the Pinned Frames settings panel (1–8, boss mode only) chooses how many fake frames appear when Test Mode is active.
 
 ### Changes
 

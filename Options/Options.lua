@@ -1885,6 +1885,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 if set.players == nil then set.players = {} end
                 if set.manualPlayers == nil then set.manualPlayers = {} end
                 if set.frameType == nil then set.frameType = "player" end
+                if set.testCount == nil then set.testCount = 3 end
             end
         end
         
@@ -2601,6 +2602,23 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             CreateRefreshableDropdown(self.child, L["Frame Type"], frameTypeOptions, "frameType", OnFrameTypeChanged),
             55
         )
+
+        -- Test Count slider: how many test frames show when Test Mode is active.
+        -- Boss-mode only for now. Changes while Test Mode is on refresh the
+        -- boss test frames immediately (exit+re-enter).
+        if IsCurrentBossMode() then
+            local function OnTestCountChanged()
+                if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive
+                    and DF.PinnedFrames:IsTestModeActive() then
+                    DF.PinnedFrames:ExitTestMode()
+                    DF.PinnedFrames:EnterTestMode()
+                end
+            end
+            frameTypeGroup:AddWidget(
+                CreateRefreshableSlider(self.child, L["Test Count"], 1, 8, 1, "testCount", OnTestCountChanged),
+                55
+            )
+        end
 
         Add(frameTypeGroup, nil, "both")
         AddSpace(10, "both")

@@ -2336,6 +2336,136 @@ function PinnedFrames:Test()
     print("|cFF00FFFF[DF Pinned]|r Run /dfpinned info to see details")
 end
 
+-- ============================================================
+-- TEST MODE INTEGRATION
+-- Hooks called by TestMode/TestMode.lua when the main Test Mode
+-- button is toggled. Populates only ENABLED boss-mode pinned sets
+-- with fake NPC data from DF:GetTestUnitData(i, false, true).
+-- Player-mode pinned sets are untouched in this iteration.
+-- ============================================================
+
+-- Returns true if any pinned set is currently in test mode
+function PinnedFrames:IsTestModeActive()
+    return self.testModeActive == true
+end
+
+-- Called when Test Mode is toggled ON. Force-shows N boss frames per
+-- enabled boss-mode set and marks them as test frames so they get fake data.
+function PinnedFrames:EnterTestMode()
+    if not self.initialized then return end
+    if InCombatLockdown() then return end
+
+    self.testModeActive = true
+
+    for setIndex = 1, 2 do
+        local set = GetSetDB(setIndex)
+        if set and set.enabled and IsBossSet(set) then
+            local frames = self.bossFrames[setIndex]
+            if frames then
+                local n = set.testCount or 3
+                if n < 1 then n = 1 end
+                if n > 8 then n = 8 end
+
+                -- Mark all 8 frames' dfIsTestFrame state. First N are shown
+                -- and flagged true so they receive fake data.
+                for i = 1, 8 do
+                    local f = frames[i]
+                    if f then
+                        if i <= n then
+                            f.dfIsTestFrame = true
+                            f.dfTestIndex = i
+                        else
+                            f.dfIsTestFrame = false
+                            f.dfTestIndex = nil
+                        end
+                    end
+                end
+
+                -- Reuse existing boss-test-mode state driver swap to force
+                -- visibility of the first N frames.
+                self:SetBossTestMode(n)
+
+                -- Schedule a full render shortly after so names/auras populate
+                -- (state drivers need a tick to actually Show the frames, and
+                -- UpdateTestFrame needs frame:IsShown() = true).
+                C_Timer.After(0.15, function()
+                    for i = 1, 8 do
+                        local f = frames[i]
+                        if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
+                            if DF.UpdateTestFrame then
+                                DF:UpdateTestFrame(f, f.dfTestIndex, true)
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- Called when Test Mode is toggled OFF. Restore real state drivers and
+-- clear dfIsTestFrame flags.
+function PinnedFrames:ExitTestMode()
+    if InCombatLockdown() then return end
+    self.testModeActive = false
+
+    for setIndex = 1, 2 do
+        local set = GetSetDB(setIndex)
+        if set and IsBossSet(set) then
+            local frames = self.bossFrames[setIndex]
+            if frames then
+                for i = 1, 8 do
+                    local f = frames[i]
+                    if f then
+                        f.dfIsTestFrame = false
+                        f.dfTestIndex = nil
+                    end
+                end
+            end
+        end
+    end
+
+    -- Restore real state drivers on all enabled boss sets
+    self:SetBossTestMode(0)
+
+    -- Refresh any frames that are still visible (real boss exists) so their
+    -- health/name/etc. come from the live unit again, not stale test data.
+    C_Timer.After(0.15, function()
+        for setIndex = 1, 2 do
+            local frames = self.bossFrames[setIndex]
+            if frames then
+                for i = 1, 8 do
+                    local f = frames[i]
+                    if f and f:IsShown() and f.unit and DF.FullFrameRefresh then
+                        DF:FullFrameRefresh(f)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Apply fake test data to all currently-shown boss test frames. Called by
+-- the Test Mode animation ticker so health bars etc. stay in sync with
+-- DF.TestData.animationPhase when testAnimateHealth is enabled.
+function PinnedFrames:UpdateTestFrames()
+    if not self.testModeActive then return end
+
+    for setIndex = 1, 2 do
+        local frames = self.bossFrames[setIndex]
+        if frames then
+            for i = 1, 8 do
+                local f = frames[i]
+                if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
+                    if DF.UpdateTestFrame then
+                        DF:UpdateTestFrame(f, f.dfTestIndex)
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- Test mode for boss frames: force N boss frames visible so the secure
 -- positioning can be verified without being in an encounter. Runs out of
 -- combat only (needs to unregister/re-register state drivers). Passing

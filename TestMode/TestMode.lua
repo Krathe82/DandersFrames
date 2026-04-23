@@ -57,9 +57,60 @@ DF.TestData = {
 -- Get test unit data for a frame index
 -- For party: index 0 = player, 1-4 = party members
 -- For raid: index 1-40 = raid members
-function DF:GetTestUnitData(index, isRaid)
+function DF:GetTestUnitData(index, isRaid, isBoss)
     local db = isRaid and DF:GetRaidDB() or DF:GetDB()
-    
+
+    -- Friendly Boss NPC test data (for pinned frame boss mode).
+    -- Boss NPCs don't have classes or roles — we return a minimal fake unit
+    -- so the frame renders a health bar with a readable name.
+    if isBoss then
+        local bossNames = {
+            "Fiery Treant", "Charred Bramble", "Smoldering Sapling", "Ember Root",
+            "Blazing Thorn", "Ashen Oak", "Cinder Vine", "Glowing Grove",
+        }
+        local i = index
+        local basePercent = (0.9 - (i - 1) * 0.08)  -- slight descending stagger
+        if basePercent < 0.25 then basePercent = 0.25 end
+
+        local result = {
+            index = index,
+            name = bossNames[i] or ("Friendly Boss " .. i),
+            class = nil,
+            role = nil,
+            specID = 0,
+            healthPercent = basePercent,
+            maxHealth = 500000,
+            currentHealth = math.floor(basePercent * 500000),
+            powerPercent = 0,
+            absorbPercent = 0,
+            healAbsorbPercent = 0,
+            healPredictionPercent = 0,
+            status = nil,
+            outOfRange = false,
+            isLeader = false,
+            raidTarget = nil,
+            dispelType = nil,
+            centerStatus = nil,
+            hasMyBuff = false,
+            isMainTank = false,
+            isMainAssist = false,
+            isAFK = false,
+            isPhased = false,
+            inVehicle = false,
+        }
+
+        -- Animate health if enabled on either DB
+        if db.testAnimateHealth and DF.TestData.animationPhase then
+            local phase = DF.TestData.animationPhase
+            local offset = (i * 0.13) % 1
+            local wave = math.sin((phase + offset) * math.pi * 2)
+            result.healthPercent = math.max(0.1, math.min(1, basePercent + wave * 0.15))
+            result.currentHealth = math.floor(result.healthPercent * result.maxHealth)
+        end
+
+        return result
+    end
+
     -- For raid frames, generate deterministic test data
     if isRaid then
         local testNames = {
@@ -306,15 +357,32 @@ function DF:StartTestAnimation()
                 end
             end
         end
+
+        -- Update boss-mode pinned test frames (lightweight - health only)
+        if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive
+            and DF.PinnedFrames:IsTestModeActive() then
+            for setIndex = 1, 2 do
+                local frames = DF.PinnedFrames.bossFrames[setIndex]
+                if frames then
+                    for i = 1, 8 do
+                        local f = frames[i]
+                        if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
+                            DF:UpdateTestFrameHealthOnly(f, f.dfTestIndex)
+                        end
+                    end
+                end
+            end
+        end
     end)
 end
 
 -- Lightweight animation update - updates health and repositions bars
 function DF:UpdateTestFrameHealthOnly(frame, index)
     if not frame or not frame.healthBar then return end
-    
+
     local isRaid = frame.isRaidFrame
-    local testData = DF:GetTestUnitData(index, isRaid)
+    local isBoss = frame.isPinnedBossFrame
+    local testData = DF:GetTestUnitData(index, isRaid, isBoss)
     if not testData then return end
     
     local db = DF:GetFrameDB(frame)
@@ -481,9 +549,10 @@ end
 -- Update a frame with test data (works for both party and raid)
 function DF:UpdateTestFrame(frame, index, applyLayout)
     if not frame or not frame.healthBar then return end
-    
+
     local isRaid = frame.isRaidFrame
-    local testData = DF:GetTestUnitData(index, isRaid)
+    local isBoss = frame.isPinnedBossFrame
+    local testData = DF:GetTestUnitData(index, isRaid, isBoss)
     if not testData then return end
     
     local db = DF:GetFrameDB(frame)
@@ -3673,6 +3742,11 @@ function DF:ShowTestFrames(silent)
         DF:UpdatePermanentMoverVisibility()
         DF:UpdatePermanentMoverAnchor("party")
     end)
+
+    -- Populate enabled boss-mode pinned sets with fake data
+    if DF.PinnedFrames and DF.PinnedFrames.EnterTestMode then
+        DF.PinnedFrames:EnterTestMode()
+    end
 end
 
 -- Refresh all test frames (call this when settings change in test mode)
@@ -4005,6 +4079,12 @@ function DF:HideTestFrames(silent)
         DF:UpdatePermanentMoverVisibility()
         DF:UpdatePermanentMoverAnchor("party")
     end)
+
+    -- Exit boss-mode pinned test only if raid test isn't still running
+    if DF.PinnedFrames and DF.PinnedFrames.ExitTestMode
+        and not DF.raidTestMode then
+        DF.PinnedFrames:ExitTestMode()
+    end
 end
 
 -- Toggle test mode (mode-aware based on GUI.SelectedMode)
@@ -4147,6 +4227,11 @@ function DF:ShowRaidTestFrames()
         DF:UpdatePermanentMoverVisibility()
         DF:UpdatePermanentMoverAnchor("raid")
     end)
+
+    -- Populate enabled boss-mode pinned sets with fake data
+    if DF.PinnedFrames and DF.PinnedFrames.EnterTestMode then
+        DF.PinnedFrames:EnterTestMode()
+    end
 end
 
 -- Hide raid test frames
@@ -4248,6 +4333,12 @@ function DF:HideRaidTestFrames()
         DF:UpdatePermanentMoverVisibility()
         DF:UpdatePermanentMoverAnchor("party")
     end)
+
+    -- Exit boss-mode pinned test only if party test isn't still running
+    if DF.PinnedFrames and DF.PinnedFrames.ExitTestMode
+        and not DF.testMode then
+        DF.PinnedFrames:ExitTestMode()
+    end
 end
 
 -- Update raid test frames with test data

@@ -960,7 +960,12 @@ end
 function DF:UpdateHealthFast(frame)
     if not frame or not frame.unit then return end
 
-    -- Skip if in test mode
+    -- Skip test frames entirely — their health comes from UpdateTestFrame
+    -- which reads fake data from DF:GetTestUnitData. Includes boss-mode pinned
+    -- frames that Test Mode temporarily marks with dfIsTestFrame.
+    if frame.dfIsTestFrame then return end
+
+    -- Skip if in test mode (blanket skip for real live frames)
     local isRaidHF = DF:IsRaidFrame(frame)
     if isRaidHF and DF.raidTestMode then return end
     if not isRaidHF and DF.testMode then return end

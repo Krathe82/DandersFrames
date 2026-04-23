@@ -1295,6 +1295,7 @@ L["Targeted Spell Click-Through"] = true
 L["Targeted Spells"] = true
 L["Targeted Spells (on frames)"] = true
 L["Test"] = true
+L["Test Count"] = true
 L["Test mode disabled."] = true
 L["Test mode enabled."] = true
 L["Test mode ended — entering combat."] = true
