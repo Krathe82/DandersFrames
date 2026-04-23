@@ -358,25 +358,15 @@ function DF:StartTestAnimation()
             end
         end
 
-        -- Update pinned test frames (boss-mode + player-mode). Lightweight.
+        -- Update pinned test frames (mock non-secure frames — same for
+        -- both player-mode and boss-mode pinned sets). Lightweight.
         if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive
             and DF.PinnedFrames:IsTestModeActive() then
             for setIndex = 1, 2 do
-                -- Boss-mode: real boss frames flagged as test
-                local bossFrames = DF.PinnedFrames.bossFrames[setIndex]
-                if bossFrames then
-                    for i = 1, 8 do
-                        local f = bossFrames[i]
-                        if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
-                            DF:UpdateTestFrameHealthOnly(f, f.dfTestIndex)
-                        end
-                    end
-                end
-                -- Player-mode: non-secure test pool
-                local playerPool = DF.PinnedFrames.testFrames[setIndex]
-                if playerPool then
-                    for i = 1, #playerPool do
-                        local f = playerPool[i]
+                local pool = DF.PinnedFrames.testFrames[setIndex]
+                if pool then
+                    for i = 1, #pool do
+                        local f = pool[i]
                         if f and f:IsShown() and f.dfTestIndex then
                             DF:UpdateTestFrameHealthOnly(f, f.dfTestIndex)
                         end

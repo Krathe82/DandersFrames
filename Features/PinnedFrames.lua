@@ -2364,7 +2364,12 @@ end
 -- Create a single non-secure player-mode test frame parented to a pinned
 -- set's test container. Mirrors the pattern used in TestMode/TestFramePool.lua
 -- CreateTestFrame so the frame renders identically to live frames.
-local function CreatePlayerTestFrame(setIndex, index, container, isRaidMode)
+-- Create a single non-secure "mock" test frame for a pinned set, parented to
+-- the set's test container. Handles both player-mode and boss-mode sets —
+-- when isBossSet is true, the `isPinnedBossFrame` marker causes
+-- DF:UpdateTestFrame to route to boss test data (NPC names via
+-- GetTestUnitData(i, isRaid, true)).
+local function CreatePlayerTestFrame(setIndex, index, container, isRaidMode, isBossSet)
     local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
     local frame = CreateFrame(
         "Button",
@@ -2379,10 +2384,18 @@ local function CreatePlayerTestFrame(setIndex, index, container, isRaidMode)
     frame.dfIsTestFrame = true
     frame.dfIsDandersFrame = true
     frame.dfIsPinnedTestFrame = true  -- distinguish from testPartyFrames/testRaidFrames
+    frame.isPinnedBossFrame = isBossSet or false
     frame.pinnedSetIndex = setIndex
 
-    -- Fake unit token (party/raid name — just for frame.unit sanity)
-    frame.unit = isRaidMode and ("raid" .. index) or (index == 1 and "player" or ("party" .. (index - 1)))
+    -- Fake unit token. For boss-mode test frames we use boss1..boss8 for
+    -- consistency; for player mode we use party/raid tokens. UpdateHealthFast
+    -- early-returns on dfIsTestFrame so the fake token is never actually
+    -- queried via UnitExists/UnitHealth.
+    if isBossSet then
+        frame.unit = "boss" .. index
+    else
+        frame.unit = isRaidMode and ("raid" .. index) or (index == 1 and "player" or ("party" .. (index - 1)))
+    end
 
     frame:EnableMouse(true)
     frame:RegisterForClicks("AnyUp")
@@ -2444,25 +2457,28 @@ end
 -- Make sure the player-mode test frame pool for a set exists and is at least
 -- `count` frames large. Frames are created lazily on demand, parented to the
 -- set's test container (which lives at the test-mode profile's position).
-function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode)
+function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isBossSet)
     local container = self.testContainers[setIndex]
     if not container then return end
     if count < 1 then count = 1 end
-    if count > 40 then count = 40 end
+    -- Boss mode caps at 8 (WoW API limit); player mode caps at 40 (max raid)
+    local cap = isBossSet and 8 or 40
+    if count > cap then count = cap end
 
     self.testFrames[setIndex] = self.testFrames[setIndex] or {}
     local pool = self.testFrames[setIndex]
 
     for i = 1, count do
         if not pool[i] then
-            pool[i] = CreatePlayerTestFrame(setIndex, i, container, isRaidMode)
+            pool[i] = CreatePlayerTestFrame(setIndex, i, container, isRaidMode, isBossSet)
         else
-            -- Reparent + re-apply style in case test mode flipped between
-            -- party and raid since last Enter (e.g. party test → off → raid test).
+            -- Reparent + re-apply state in case test mode or set frameType
+            -- flipped since last Enter.
             pool[i]:SetParent(container)
             local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
             pool[i]:SetSize(db.frameWidth or 120, db.frameHeight or 50)
             pool[i].isRaidFrame = isRaidMode
+            pool[i].isPinnedBossFrame = isBossSet or false
         end
     end
 end
@@ -2551,15 +2567,12 @@ function PinnedFrames:HidePlayerTestFrames(setIndex)
     end
 end
 
--- Called when Test Mode is toggled ON. Iterates each active test mode
--- (party test + raid test can both be on) and, for each enabled pinned set
--- in THAT mode's profile, shows test frames.
---   Boss-mode: only if the test mode matches the current group state, since
---              boss frames are secure and bound to the live container at init.
---              (If they mismatch, we skip — the non-secure test container
---              route can't host SecureUnitButtonTemplate frames.)
---   Player-mode: non-secure test container created at the test-mode profile's
---                position, populated with N fake frames.
+-- Called when Test Mode is toggled ON. Renders fake non-secure test frames
+-- for every enabled pinned set in the TEST MODE's profile. Works uniformly
+-- for player-mode and boss-mode sets — the only difference is the fake
+-- name source (roster names vs NPC names) and the max frame count. Real
+-- secure frames (pinned headers, boss frames) are NEVER touched — they stay
+-- at their live positions, unaffected.
 function PinnedFrames:EnterTestMode()
     if not self.initialized then return end
     if InCombatLockdown() then return end
@@ -2577,68 +2590,26 @@ function PinnedFrames:EnterTestMode()
     end
     local actualModeMatches = (isRaidMode == IsInRaid())
 
-    -- BOSS NPC sets: iterate CURRENT profile (where the real secure
-    -- boss frames actually exist — they're bound to the container from
-    -- CreateBossFrames and can't be re-hosted at runtime).
     for setIndex = 1, 2 do
-        local currentSet = GetSetDB(setIndex)
-        if currentSet and currentSet.enabled and IsBossSet(currentSet) then
-            local frames = self.bossFrames[setIndex]
-            if frames then
-                local n = currentSet.testCount or 3
-                if n < 1 then n = 1 end
-                if n > 8 then n = 8 end
-
-                for i = 1, 8 do
-                    local f = frames[i]
-                    if f then
-                        if i <= n then
-                            f.dfIsTestFrame = true
-                            f.dfTestIndex = i
-                        else
-                            f.dfIsTestFrame = false
-                            f.dfTestIndex = nil
-                        end
-                    end
-                end
-
-                self:SetBossTestMode(n)
-
-                C_Timer.After(0.15, function()
-                    for i = 1, 8 do
-                        local f = frames[i]
-                        if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
-                            if DF.UpdateTestFrame then
-                                DF:UpdateTestFrame(f, f.dfTestIndex, true)
-                            end
-                        end
-                    end
-                end)
-            end
-        end
-    end
-
-    -- PLAYER MODE sets: iterate the TEST MODE's profile. Non-secure test
-    -- container + frames positioned at the test-mode profile's configured
-    -- position for this set. This way raid test mode while in party shows
-    -- test frames at the raid-mode pinned position, not the party-mode one.
-    for setIndex = 1, 2 do
-        local modeSet = GetSetDBForMode(setIndex, isRaidMode)
-        if modeSet and modeSet.enabled and not IsBossSet(modeSet) then
-            local n = modeSet.testCount or 3
+        local set = GetSetDBForMode(setIndex, isRaidMode)
+        if set and set.enabled then
+            local isBossSet = IsBossSet(set)
+            local n = set.testCount or 3
+            local cap = isBossSet and 8 or 40
             if n < 1 then n = 1 end
-            if n > 40 then n = 40 end
+            if n > cap then n = cap end
 
-            -- Hide real header only if it's the same mode — otherwise the
-            -- test container is at a different position and the real header
-            -- can stay put (or is already hidden because no real group).
-            if actualModeMatches and self.headers[setIndex] then
+            -- When the test mode matches the actual group mode, hide the
+            -- real pinned header (if any) so it doesn't render alongside
+            -- fake frames. Header stays untouched in cross-mode (it's
+            -- already at a different position / already hidden).
+            if actualModeMatches and self.headers[setIndex] and not isBossSet then
                 self.headers[setIndex]:Hide()
             end
 
-            self:EnsureTestContainer(setIndex, modeSet, isRaidMode)
-            self:EnsurePlayerTestFramePool(setIndex, n, isRaidMode)
-            self:ApplyPlayerTestLayout(setIndex, modeSet, isRaidMode)
+            self:EnsureTestContainer(setIndex, set, isRaidMode)
+            self:EnsurePlayerTestFramePool(setIndex, n, isRaidMode, isBossSet)
+            self:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
 
             local pool = self.testFrames[setIndex]
             if pool then
@@ -2653,35 +2624,20 @@ function PinnedFrames:EnterTestMode()
 end
 
 -- Called when Test Mode is toggled OFF. Hide all pinned test frames and
--- their separate containers, restore state drivers on boss sets, and show
--- the real player-mode header again (whose visibility is driven by actual
--- group membership).
+-- their containers, and show the real player-mode header again (whose
+-- visibility is driven by actual group membership). No secure frame
+-- manipulation needed — Test Mode never touched them.
 function PinnedFrames:ExitTestMode()
     if InCombatLockdown() then return end
     self.testModeActive = false
 
-    -- Clear boss test flags on real boss frames for the current-mode profile.
-    -- (Boss test only ran when actualModeMatches, so current mode is all we
-    --  need to unflag.)
-    for setIndex = 1, 2 do
-        local frames = self.bossFrames[setIndex]
-        if frames then
-            for i = 1, 8 do
-                local f = frames[i]
-                if f then
-                    f.dfIsTestFrame = false
-                    f.dfTestIndex = nil
-                end
-            end
-        end
-    end
-
-    -- Hide all player-mode test frames + test containers (both modes)
+    -- Hide all test frames + test containers (both mode profiles)
     for setIndex = 1, 2 do
         self:HidePlayerTestFrames(setIndex)
     end
 
-    -- Restore real headers for player-mode sets in the current mode
+    -- Restore real headers for player-mode sets in the current mode (we may
+    -- have hidden them when entering test mode in the same mode).
     for setIndex = 1, 2 do
         local set = GetSetDB(setIndex)
         if set and not IsBossSet(set) and set.enabled and self.headers[setIndex] then
@@ -2689,10 +2645,9 @@ function PinnedFrames:ExitTestMode()
         end
     end
 
-    -- Restore real state drivers on all boss sets
-    self:SetBossTestMode(0)
-
-    -- Refresh any boss frames that are still visible (real boss exists)
+    -- Legacy: no-op in the new design, but other code paths may still have
+    -- cleared flags on real boss frames. Defensively clear to avoid stale
+    -- dfIsTestFrame leaking from an older-session toggle.
     C_Timer.After(0.15, function()
         for setIndex = 1, 2 do
             local frames = self.bossFrames[setIndex]
@@ -2708,31 +2663,17 @@ function PinnedFrames:ExitTestMode()
     end)
 end
 
--- Apply fake test data to all currently-shown pinned test frames (boss and
--- player mode). Called by the Test Mode animation ticker so health bars etc.
--- stay in sync with DF.TestData.animationPhase when testAnimateHealth is on.
+-- Apply fake test data to all currently-shown pinned test frames. Called
+-- by the Test Mode animation ticker so health bars stay in sync with
+-- DF.TestData.animationPhase when testAnimateHealth is on.
 function PinnedFrames:UpdateTestFrames()
     if not self.testModeActive then return end
 
     for setIndex = 1, 2 do
-        -- Boss mode: real boss frames flagged as test
-        local bossFrames = self.bossFrames[setIndex]
-        if bossFrames then
-            for i = 1, 8 do
-                local f = bossFrames[i]
-                if f and f.dfIsTestFrame and f:IsShown() and f.dfTestIndex then
-                    if DF.UpdateTestFrame then
-                        DF:UpdateTestFrame(f, f.dfTestIndex)
-                    end
-                end
-            end
-        end
-
-        -- Player mode: non-secure test pool
-        local playerPool = self.testFrames[setIndex]
-        if playerPool then
-            for i = 1, #playerPool do
-                local f = playerPool[i]
+        local pool = self.testFrames[setIndex]
+        if pool then
+            for i = 1, #pool do
+                local f = pool[i]
                 if f and f:IsShown() and f.dfTestIndex then
                     if DF.UpdateTestFrame then
                         DF:UpdateTestFrame(f, f.dfTestIndex)

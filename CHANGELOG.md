@@ -4,7 +4,7 @@
 
 ### New Features
 
-* **Pinned Frames in Test Mode** — Test Mode now fills your enabled pinned sets with fake units so you can design the layout without being in a group. Boss sets show friendly-NPC test units; player-mode sets show party/raid test units. A new **Test Count** slider in the Pinned Frames settings chooses how many frames appear (1–8 boss, 1–10 player).
+* **Pinned Frames in Test Mode** — Test Mode now fills your enabled pinned sets with fake units so you can design the layout without being in a group. Boss sets show friendly-NPC test units (Fiery Treant, Charred Bramble, etc.); player-mode sets show party/raid test units. A new **Test Count** slider in the Pinned Frames settings chooses how many frames appear (1–8 boss, 1–10 player). Test frames are non-secure mock frames that look identical to live frames — your real pinned setup isn't touched. Raid test mode only shows raid-profile sets, party test mode only shows party-profile sets, and the other mode's frames are never affected.
 
 ### Improvements
 
