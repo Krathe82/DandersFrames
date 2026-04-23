@@ -2363,16 +2363,17 @@ function PinnedFrames:SetBossTestMode(visibleCount)
                 if visibleCount > 0 then
                     -- Test mode: swap BOTH the frame visibility state driver
                     -- AND the handler's reposition-trigger state driver to
-                    -- use always-true/always-false conditions so we can
-                    -- control visibility without a real boss.
+                    -- literal state values. State driver strings that don't
+                    -- start with `[` are used as the literal state value
+                    -- (no macro condition evaluation).
                     for i = 1, 8 do
                         local f = frames[i]
                         if i <= visibleCount then
-                            RegisterStateDriver(f, "visibility", "[@player,exists]show;hide")
-                            RegisterStateDriver(handler, "boss" .. i, "[@player,exists]yes;no")
+                            RegisterStateDriver(f, "visibility", "show")
+                            RegisterStateDriver(handler, "boss" .. i, "yes")
                         else
-                            RegisterStateDriver(f, "visibility", "[@nonexistent]show;hide")
-                            RegisterStateDriver(handler, "boss" .. i, "[@nonexistent]yes;no")
+                            RegisterStateDriver(f, "visibility", "hide")
+                            RegisterStateDriver(handler, "boss" .. i, "no")
                         end
                     end
                 else
