@@ -2752,9 +2752,7 @@ function PinnedFrames:RunBossSpawnScript(steps)
     -- Auto-exit 2s after the last step so drivers restore themselves.
     C_Timer.After(maxT + 2, function()
         if PinnedFrames.bossSpawnGeneration ~= myGen then return end
-        if PinnedFrames.bossSpawnActive then
-            PinnedFrames:StopBossSpawn(true)
-        end
+        PinnedFrames:StopBossSpawn(true)
     end)
 end
 
