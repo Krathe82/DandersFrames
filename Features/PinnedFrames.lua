@@ -2321,6 +2321,16 @@ function PinnedFrames:IsTestModeActive()
     return self.testModeActive == true
 end
 
+-- Returns whether pinned test frames should render with raid-mode sizing
+-- and use raid test data. Checks the active test mode flag first so that
+-- toggling "raid test mode" while solo gives us a raid preview (not a
+-- party one derived from IsInRaid()).
+local function GetTestIsRaidMode()
+    if DF.raidTestMode then return true end
+    if DF.testMode then return false end
+    return IsInRaid()  -- fallback when neither flag is set
+end
+
 -- Create a single non-secure player-mode test frame parented to a pinned
 -- set's container. Mirrors the pattern used in TestMode/TestFramePool.lua
 -- CreateTestFrame so the frame renders identically to live frames.
@@ -2372,13 +2382,14 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count)
 
     self.testFrames[setIndex] = self.testFrames[setIndex] or {}
     local pool = self.testFrames[setIndex]
-    local isRaidMode = IsInRaid()
+    local isRaidMode = GetTestIsRaidMode()
 
     for i = 1, count do
         if not pool[i] then
             pool[i] = CreatePlayerTestFrame(setIndex, i, container, isRaidMode)
         else
-            -- Re-apply frame style in case raid/party mode changed
+            -- Re-apply frame style in case test mode flipped (e.g. user
+            -- toggled raid test mode after party test mode populated the pool).
             local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
             pool[i]:SetSize(db.frameWidth or 120, db.frameHeight or 50)
             pool[i].isRaidFrame = isRaidMode
@@ -2394,7 +2405,8 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex)
     local pool = self.testFrames[setIndex]
     if not set or not container or not pool then return end
 
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local isRaidMode = GetTestIsRaidMode()
+    local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
     local frameWidth = db.frameWidth or 120
     local frameHeight = db.frameHeight or 50
 
@@ -2415,7 +2427,7 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex)
         if f then
             if i <= n then
                 f:SetSize(frameWidth, frameHeight)
-                f.isRaidFrame = IsInRaid()
+                f.isRaidFrame = isRaidMode
 
                 local slotIndex = i - 1
                 local row = math.floor(slotIndex / unitsPerRow)
