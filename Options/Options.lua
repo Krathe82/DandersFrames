@@ -7221,6 +7221,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         AddSpace(10, "both")
         local dfSection = GUI:CreateCollapsibleSection(self.child, L["DandersFrames Overlay"], true, 560)
         dfSection.hideOn = HideIfNotDF
+        -- Tag: DandersFrames only ever handles normal dispellable debuffs,
+        -- never private auras, so the tag is static.
+        dfSection:SetTag("[" .. L["Normal Dispels"] .. "]")
         Add(dfSection, 36, "both")
 
         -- Display group (quick toggles) — Column 1
@@ -7393,6 +7396,24 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             AddSpace(15, "both")
             local blizSection = GUI:CreateCollapsibleSection(self.child, L["Blizzard Overlay"], true, 560)
             blizSection.hideOn = HideIfNotBlizzard
+            -- Tag reflects what the Blizzard overlay actually handles under
+            -- the current source mode:
+            --   Hybrid   → only private auras (DandersFrames handles normals)
+            --   Blizzard → both (Blizzard runs alone for every dispellable)
+            local function UpdateBlizSectionTag()
+                local s = db.dispelOverlaySource or "both"
+                local privateTag = "[" .. L["Private Aura Dispels"] .. "]"
+                local normalTag  = "[" .. L["Normal Dispels"] .. "]"
+                if s == "both" then
+                    blizSection:SetTag(privateTag)
+                elseif s == "blizzard" then
+                    blizSection:SetTag(normalTag .. " " .. privateTag)
+                else
+                    blizSection:SetTag(nil)
+                end
+            end
+            UpdateBlizSectionTag()
+            blizSection.refreshContent = function(self) UpdateBlizSectionTag() end
             Add(blizSection, 36, "both")
 
             local blizGroup = GUI:CreateSettingsGroup(self.child, 280)

@@ -289,7 +289,24 @@ function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
     end
     if not parent.ThemeListeners then parent.ThemeListeners = {} end
     table.insert(parent.ThemeListeners, section.title)
-    
+
+    -- Optional inline tag — small dim text placed after the title. Useful
+    -- for quick status summaries (e.g. "[Normal Dispels]"). Call
+    -- section:SetTag(text) at any time; pass nil or empty string to clear.
+    section.tag = section:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    section.tag:SetPoint("LEFT", section.title, "RIGHT", 8, 0)
+    section.tag:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    section.tag:SetText("")
+    section.SetTag = function(self, text)
+        if text and text ~= "" then
+            self.tag:SetText(text)
+            self.tag:Show()
+        else
+            self.tag:SetText("")
+            self.tag:Hide()
+        end
+    end
+
     -- SEARCH: Track current section
     if DF.Search then
         DF.Search:SetCurrentSection(text)
