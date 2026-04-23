@@ -638,6 +638,175 @@ function GUI:CreateLabel(parent, text, width, color)
     return frame
 end
 
+-- Themed info callout: dark tinted box with theme-color border and a label
+-- composed of a bold title prefix + body text. Used for settings explanations
+-- that benefit from visual prominence without the red "warning" styling.
+-- SetContent(title, body) updates both parts; SetText(text) remains available
+-- for plain single-string use.
+function GUI:CreateInfoCallout(parent, width, height)
+    local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    frame:SetSize(width or 560, height or 60)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+
+    local applyTheme = function()
+        local c = GetThemeColor()
+        frame:SetBackdropColor(c.r * 0.18, c.g * 0.18, c.b * 0.22, 0.75)
+        frame:SetBackdropBorderColor(c.r, c.g, c.b, 0.7)
+    end
+    applyTheme()
+
+    local lbl = frame:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    lbl:SetPoint("TOPLEFT", 10, -10)
+    lbl:SetPoint("BOTTOMRIGHT", -10, 10)
+    lbl:SetJustifyH("LEFT")
+    lbl:SetJustifyV("TOP")
+    lbl:SetWordWrap(true)
+    lbl:SetNonSpaceWrap(true)
+    lbl:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+
+    local currentTitle, currentBody = nil, ""
+    local function render()
+        if currentTitle and currentTitle ~= "" then
+            local c = GetThemeColor()
+            local hex = string.format("ff%02x%02x%02x",
+                math.floor(c.r * 255), math.floor(c.g * 255), math.floor(c.b * 255))
+            lbl:SetText("|c" .. hex .. currentTitle .. ":|r " .. (currentBody or ""))
+        else
+            lbl:SetText(currentBody or "")
+        end
+    end
+
+    frame.SetContent = function(self, title, body)
+        currentTitle, currentBody = title, body
+        render()
+    end
+    frame.SetText = function(self, text)
+        currentTitle, currentBody = nil, text
+        render()
+    end
+
+    frame.UpdateTheme = function()
+        applyTheme()
+        render()
+    end
+    if not parent.ThemeListeners then parent.ThemeListeners = {} end
+    table.insert(parent.ThemeListeners, frame)
+
+    return frame
+end
+
+-- Segmented button group: a row of mutually-exclusive buttons, one selected at
+-- a time. Each option shows a primary label and an optional subtitle on a
+-- second line. Selected button gets a themed border + tinted fill; unselected
+-- buttons use the standard element backdrop.
+--
+--   options: ordered array of { value=, label=, subtitle= }
+--   dbTable/dbKey: reads/writes the selected value
+--   callback: called after a selection change
+--   totalWidth: total container width (buttons divide it evenly with small gaps)
+function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callback, totalWidth)
+    local container = CreateFrame("Frame", nil, parent)
+    totalWidth = totalWidth or 560
+    local btnHeight = 48  -- enough vertical space for label + subtitle
+    container:SetSize(totalWidth, btnHeight)
+
+    local n = #options
+    local gap = 4
+
+    local buttons = {}
+    container.buttons = buttons
+
+    -- Reposition buttons to evenly fill the container's current width. Called
+    -- on creation and on OnSizeChanged so buttons reflow when the page stretches
+    -- the container via layoutCol="both".
+    local function Relayout()
+        local w = container:GetWidth() or totalWidth
+        if w <= 0 then w = totalWidth end
+        local bw = math.floor((w - gap * (n - 1)) / n)
+        for i, btn in ipairs(buttons) do
+            btn:SetWidth(bw)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", (i - 1) * (bw + gap), 0)
+        end
+    end
+    container:SetScript("OnSizeChanged", function() Relayout() end)
+
+    local function Refresh()
+        local currentVal = dbTable and dbTable[dbKey]
+        local theme = GetThemeColor()
+        for _, btn in ipairs(buttons) do
+            local selected = (btn.value == currentVal)
+            btn.selected = selected
+            if selected then
+                btn:SetBackdropColor(theme.r * 0.25, theme.g * 0.25, theme.b * 0.35, 1)
+                btn:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+                if btn.Label then btn.Label:SetTextColor(theme.r, theme.g, theme.b, 1) end
+                if btn.Subtitle then btn.Subtitle:SetTextColor(theme.r * 0.85, theme.g * 0.85, theme.b * 0.95, 1) end
+            else
+                btn:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1)
+                btn:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.6)
+                if btn.Label then btn.Label:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 1) end
+                if btn.Subtitle then btn.Subtitle:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1) end
+            end
+        end
+    end
+    container.Refresh = Refresh
+    -- refreshContent hook used by the page layout so external changes to the
+    -- db value (e.g. profile switches) re-sync the selected button.
+    container.refreshContent = function(self) Refresh() end
+
+    for i, opt in ipairs(options) do
+        local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
+        btn:SetHeight(btnHeight)
+        -- Width and position set by Relayout() below (called at end of setup
+        -- and on every OnSizeChanged).
+        CreateElementBackdrop(btn)
+
+        btn.value = opt.value
+
+        btn.Label = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        btn.Label:SetPoint("TOP", 0, -8)
+        btn.Label:SetText(opt.label or "")
+
+        if opt.subtitle and opt.subtitle ~= "" then
+            btn.Subtitle = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            btn.Subtitle:SetPoint("BOTTOM", 0, 8)
+            btn.Subtitle:SetText(opt.subtitle)
+        end
+
+        btn:SetScript("OnEnter", function(self)
+            if not self.selected then
+                self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1)
+            end
+        end)
+        btn:SetScript("OnLeave", function(self)
+            Refresh()
+        end)
+        btn:SetScript("OnClick", function(self)
+            if dbTable[dbKey] == self.value then return end
+            dbTable[dbKey] = self.value
+            PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            Refresh()
+            if callback then callback() end
+        end)
+
+        buttons[i] = btn
+    end
+
+    Relayout()
+    Refresh()
+
+    container.UpdateTheme = function() Refresh() end
+    if not parent.ThemeListeners then parent.ThemeListeners = {} end
+    table.insert(parent.ThemeListeners, container)
+
+    return container
+end
+
 function GUI:CreateWarningBox(parent, text, width, height)
     local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     frame:SetSize(width or 280, height or 70)

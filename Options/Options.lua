@@ -7159,47 +7159,58 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
         end
 
-        -- ===== TOP SOURCE SETTINGS GROUP (Column 1) =====
-        -- Always visible. Holds the Overlay Source dropdown, per-mode
-        -- description, and the unified Show Overlay For dropdown.
-        local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
-        settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
+        -- ===== OVERLAY SOURCE (full-width, always visible) =====
+        -- Segmented button group + themed callout that explains the selected
+        -- mode. Shared "Show Overlay For" dropdown sits below in a narrow
+        -- column-1 group.
+        local sourceHeader = GUI:CreateHeader(self.child, L["Overlay Source"])
+        Add(sourceHeader, 36, "both")
+        GUI:AddSectionNewBadge(sourceHeader, "auras_dispel", "overlaySource")
 
-        -- Overlay Source dropdown (replaces the Enable checkbox)
+        -- Four options in the user's preferred display order.
         local sourceOptions = {
-            ["both"]          = L["Hybrid"],
-            ["dandersframes"] = "DandersFrames",
-            ["blizzard"]      = L["Blizzard"],
-            ["off"]           = L["Off"],
-            _order = { "both", "dandersframes", "blizzard", "off" },
+            { value = "both",          label = L["Hybrid"],   subtitle = L["Recommended"] },
+            { value = "dandersframes", label = "DandersFrames", subtitle = L["No Boss Debuffs"] },
+            { value = "blizzard",      label = L["Blizzard"], subtitle = L["Limited Options"] },
+            { value = "off",           label = L["Off"],      subtitle = "" },
         }
-        local sourceDropdown = GUI:CreateDropdown(self.child, L["Overlay Source"], sourceOptions, db, "dispelOverlaySource", function()
+
+        local calloutBox  -- forward declaration so the button callback can update it
+        local function UpdateCalloutForSource()
+            local s = db.dispelOverlaySource or "both"
+            if s == "both" then
+                calloutBox:SetContent(L["Hybrid Mode"], L["DandersFrames overlay shows for normal dispellable debuffs. Blizzard overlay activates only when a boss debuff (private aura) is present — private auras are invisible to addons, so only Blizzard can show them."])
+            elseif s == "dandersframes" then
+                calloutBox:SetContent(L["DandersFrames Mode"], L["DandersFrames overlay handles all normal dispellable debuffs with full customisation. Boss debuffs (private auras) are not covered."])
+            elseif s == "blizzard" then
+                calloutBox:SetContent(L["Blizzard Mode"], L["Blizzard's native overlay covers both normal debuffs and boss debuffs (private auras), with limited customisation options."])
+            else
+                calloutBox:SetContent(L["Off Mode"], L["No dispel overlay is displayed."])
+            end
+        end
+
+        local sourceButtons = GUI:CreateSegmentedButtonGroup(self.child, sourceOptions, db, "dispelOverlaySource", function()
             OnSourceChanged()
+            UpdateCalloutForSource()
             self:RefreshStates()
             GUI:RefreshCurrentPage()
-        end)
-        settingsGroup:AddWidget(sourceDropdown, 55)
-        GUI:AddSectionNewBadge(sourceDropdown, "auras_dispel", "overlaySource")
+        end, 560)
+        Add(sourceButtons, 52, "both")
 
-        -- Per-mode description label — rendered in yellow for prominence.
-        -- One label per source value, toggled via hideOn so only the active
-        -- description occupies vertical space.
-        local YELLOW = "|cFFFFD100"
-        local descBoth = settingsGroup:AddWidget(GUI:CreateLabel(self.child, YELLOW .. L["DandersFrames for normal dispels, Blizzard for boss debuffs (private auras). Recommended."] .. "|r", 260), 50)
-        descBoth.hideOn = function(d) return d.dispelOverlaySource ~= "both" end
-        local descDF = settingsGroup:AddWidget(GUI:CreateLabel(self.child, YELLOW .. L["Full customisation. Does not cover boss debuffs (private auras)."] .. "|r", 260), 50)
-        descDF.hideOn = function(d) return d.dispelOverlaySource ~= "dandersframes" end
-        local descBliz = settingsGroup:AddWidget(GUI:CreateLabel(self.child, YELLOW .. L["Covers both normal debuffs and boss debuffs (private auras). Limited customisation."] .. "|r", 260), 50)
-        descBliz.hideOn = function(d) return d.dispelOverlaySource ~= "blizzard" end
-        local descOff = settingsGroup:AddWidget(GUI:CreateLabel(self.child, YELLOW .. L["Nothing is displayed for dispellable debuffs."] .. "|r", 260), 30)
-        descOff.hideOn = function(d) return d.dispelOverlaySource ~= "off" end
+        calloutBox = GUI:CreateInfoCallout(self.child, 560, 60)
+        UpdateCalloutForSource()
+        Add(calloutBox, 66, "both")
 
-        -- Unified "Show Overlay For" dropdown — shared by DF and Blizzard overlays
+        -- Narrow settings group for the shared "Show Overlay For" dropdown.
+        AddSpace(8, "both")
+        local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
+        settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
         local dispelIndicatorOptions = { [1]= L["Dispellable By Me"], [2]= L["All Dispellable"] }
         local dispelIndicatorDropdown = settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Show Overlay For"], dispelIndicatorOptions, db, "dispelOverlayDispelType", function()
             OnDispelTypeChanged()
         end), 55)
         dispelIndicatorDropdown.hideOn = HideIfSourceOff
+        settingsGroup.hideOn = HideIfSourceOff
         Add(settingsGroup, nil, 1)
 
         -- ===== DANDERSFRAMES COLLAPSIBLE SECTION =====
