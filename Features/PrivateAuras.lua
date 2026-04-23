@@ -537,6 +537,20 @@ end
 -- the shown state is a regular boolean.
 -- ============================================================
 
+-- Hide is immediate (DF taking over — no race concern, Blizzard's
+-- overlay is behind alpha=0 either way).
+--
+-- Reveal is deferred one frame via C_Timer.After(0) to avoid a
+-- one-frame stale-flash of Blizzard's DispelOverlay: DF updates
+-- synchronously inside UNIT_AURA, but Blizzard's container uses
+-- MarkDirty → C_Timer.After(0, Clean) to defer its Update (and the
+-- subsequent DispelOverlay:Hide()) by one frame. If we set alpha
+-- synchronously on reveal, the stale overlay is briefly visible
+-- through our userAlpha before Blizzard hides it on the next tick.
+-- Deferring the reveal puts both transitions on the same next-frame
+-- tick so they render together, flicker-free. The re-check inside
+-- the timer handles rapid DF show→hide→show churn by confirming
+-- dfOwnShown is still false before revealing.
 function DF:UpdateContainerOverlayVisibility(frame)
     if not frame then return end
     local wrapper = frame.containerOverlayFrame
@@ -544,7 +558,21 @@ function DF:UpdateContainerOverlayVisibility(frame)
     local db = DF:GetFrameDB(frame)
     local userAlpha = (db and db.bossDebuffsContainerOverlayAlpha) or 1.0
     local dfOwnShown = frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown()
-    wrapper:SetAlpha(dfOwnShown and 0 or userAlpha)
+
+    if dfOwnShown then
+        wrapper:SetAlpha(0)
+        return
+    end
+
+    C_Timer.After(0, function()
+        if not frame or not frame.containerOverlayFrame then return end
+        -- Re-read in case DF took over again during the one-frame wait.
+        local currentDfShown = frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown()
+        if currentDfShown then return end
+        local db2 = DF:GetFrameDB(frame)
+        local alpha = (db2 and db2.bossDebuffsContainerOverlayAlpha) or 1.0
+        frame.containerOverlayFrame:SetAlpha(alpha)
+    end)
 end
 
 function DF:UpdateContainerOverlaySettings(frame)
