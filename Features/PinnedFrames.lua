@@ -2414,8 +2414,13 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     local frameHeight = db.frameHeight or 50
     container:SetSize(frameWidth, frameHeight)
 
-    local anchor = GetContainerAnchorPoint(set)
-    local pos = set.position or { x = 0, y = 0 }
+    -- Use the SAVED anchor point (pos.point) first — that's what the user
+    -- dragged the set to. Only fall back to GetContainerAnchorPoint (derived
+    -- from grow-direction settings) if the set has never been positioned.
+    -- Mismatching these puts the container off-screen: e.g. anchoring at
+    -- TOPLEFT but using (x=0, y=200) that was saved for CENTER.
+    local pos = set.position or {}
+    local anchor = pos.point or GetContainerAnchorPoint(set)
     local scale = set.scale or 1.0
     container:SetScale(scale)
     container:ClearAllPoints()
@@ -2475,6 +2480,22 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     local n = set.testCount or 3
     if n < 1 then n = 1 end
     if n > 40 then n = 40 end
+
+    -- Size container to fit N frames in the set's layout (mirrors
+    -- ResizeContainer for real pinned sets). Frames anchor inside at the
+    -- computed `anchor` corner, so the container needs to be the full grid
+    -- dimension — otherwise the anchor corner sits in the wrong screen spot.
+    local rows = math.ceil(n / unitsPerRow)
+    local cols = math.min(n, unitsPerRow)
+    local containerWidth, containerHeight
+    if horizontal then
+        containerWidth = cols * frameWidth + math.max(0, cols - 1) * hSpacing
+        containerHeight = rows * frameHeight + math.max(0, rows - 1) * vSpacing
+    else
+        containerWidth = rows * frameWidth + math.max(0, rows - 1) * hSpacing
+        containerHeight = cols * frameHeight + math.max(0, cols - 1) * vSpacing
+    end
+    container:SetSize(math.max(containerWidth, 50), math.max(containerHeight, 30))
 
     for i = 1, 40 do
         local f = pool[i]
