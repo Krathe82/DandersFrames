@@ -627,9 +627,9 @@ function PinnedFrames:CreateBossFrames(setIndex, container)
         end
 
         -- Per-frame visibility state driver: shows the frame when bossN
-        -- exists AND is friendly. The SecureHandlerStateTemplate handler
-        -- (created after this loop) runs a parallel state driver that fires
-        -- the compact reposition snippet whenever visibility flips.
+        -- exists AND is friendly. A SecureHandlerShowHideTemplate helper
+        -- child (created below) invokes the shared handler's
+        -- onBossShow/onBossHide snippets whenever this flips.
         RegisterStateDriver(frame, "visibility", "[@boss" .. i .. ",help]show;hide")
 
         -- Self-sufficient event system (ElvUI/oUF-style).
