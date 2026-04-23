@@ -7352,12 +7352,17 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Only relevant for sources "blizzard" and "both". Settings here drive
         -- Blizzard's native PrivateAuraAnchorContainer overlay, which has
         -- limited customisation but covers boss debuffs (private auras).
+        -- A sync point + spacer before the group forces a clean horizontal
+        -- break from the DandersFrames groups above (important in Hybrid mode
+        -- where both sets show).
         local CLIENT_VERSION = select(4, GetBuildInfo())
         local IS_CONTAINER_SUPPORTED = CLIENT_VERSION >= 120005
         if IS_CONTAINER_SUPPORTED then
+            AddSyncPoint()
+            AddSpace(25, "both")
             local blizGroup = GUI:CreateSettingsGroup(self.child, 280)
-            blizGroup:AddWidget(GUI:CreateHeader(self.child, L["Blizzard"]), 40)
-            blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["This overlay is rendered by Blizzard and has limited customisation. It is not the same as the Dispel Overlay tab."], 260), 60)
+            blizGroup:AddWidget(GUI:CreateHeader(self.child, L["Blizzard Overlay"]), 40)
+            blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["This overlay is rendered by Blizzard and has limited customisation. It is separate from the DandersFrames overlay above."], 260), 60)
 
             local gradientDirOptions = {
                 [0] = L["Top Edge"],
