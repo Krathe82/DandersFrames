@@ -1720,6 +1720,9 @@ function PinnedFrames:Reinitialize()
             if self.testContainers[i].testMover then
                 self.testContainers[i].testMover:Hide()
             end
+            if self.testContainers[i].testLabel then
+                self.testContainers[i].testLabel:Hide()
+            end
             self.testContainers[i]:Hide()
             self.testContainers[i] = nil
         end
@@ -2283,6 +2286,30 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     container:Show()
 
     AttachTestMover(container, set, isRaidMode)
+
+    -- Dedicated test label (parented to UIParent for scale independence).
+    -- Anchored to the test container so it follows the test mover when
+    -- dragged. Uses the test-mode profile's set name so it always reflects
+    -- what's on screen (even in cross-mode like "raid test while in party").
+    local testLabel = container.testLabel
+    if not testLabel then
+        testLabel = UIParent:CreateFontString(
+            "DandersPinnedTest" .. setIndex .. "Label",
+            "OVERLAY",
+            "GameFontNormal"
+        )
+        testLabel:SetTextColor(0.8, 0.8, 1.0)
+        container.testLabel = testLabel
+    end
+    testLabel:ClearAllPoints()
+    testLabel:SetPoint("BOTTOM", container, "TOP", 0, 2)
+    local labelText = set.name
+    if not labelText or labelText == "" then
+        labelText = "Pinned " .. setIndex
+    end
+    testLabel:SetText(labelText)
+    testLabel:SetShown(set.showLabel)
+
     return container
 end
 
@@ -2397,6 +2424,7 @@ function PinnedFrames:HidePlayerTestFrames(setIndex)
     local container = self.testContainers[setIndex]
     if container then
         if container.testMover then container.testMover:Hide() end
+        if container.testLabel then container.testLabel:Hide() end
         container:Hide()
     end
 end
@@ -2440,16 +2468,34 @@ function PinnedFrames:EnterTestMode()
             if actualModeMatches and self.headers[setIndex] and not isBossSet then
                 self.headers[setIndex]:Hide()
             end
-            -- Hide the REAL pinned mover when test mode matches — otherwise
-            -- the user sees two movers (real + test) stacked at the same spot.
+            -- Hide the REAL pinned container visuals (mover, bg, border,
+            -- label) when test mode matches — otherwise the user sees stale
+            -- chrome (blue box + label) anchored at the real container's
+            -- position while dragging the test mover. The test container
+            -- has its own dedicated mover + label that follow the test
+            -- frames. In cross-mode we don't touch the real visuals (they
+            -- may be in use by real frames at a different position).
             if actualModeMatches then
                 local realContainer = self.containers[setIndex]
-                if realContainer and realContainer.mover then
-                    realContainer.mover:Hide()
+                if realContainer then
+                    if realContainer.mover then
+                        realContainer.mover:Hide()
+                    end
+                    if realContainer.bg then
+                        realContainer.bg:Hide()
+                    end
+                    if realContainer.border then
+                        realContainer.border:Hide()
+                    end
+                end
+                local realLabel = self.labels[setIndex]
+                if realLabel then
+                    realLabel:Hide()
                 end
             end
 
             self:EnsureTestContainer(setIndex, set, isRaidMode)
+
             self:EnsurePlayerTestFramePool(setIndex, n, isRaidMode, isBossSet)
             self:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
 
@@ -2485,11 +2531,25 @@ function PinnedFrames:ExitTestMode()
         if set and not IsBossSet(set) and set.enabled and self.headers[setIndex] then
             self.headers[setIndex]:Show()
         end
-        -- Restore real pinned mover visibility (matches enabled + unlocked)
-        if set and set.enabled then
+        -- Restore real pinned container visuals (mover, bg, border, label)
+        -- based on current set state. Mover/bg/border follow the unlocked
+        -- state; label follows showLabel. Disabled sets stay hidden.
+        if set then
             local realContainer = self.containers[setIndex]
-            if realContainer and realContainer.mover then
-                realContainer.mover:SetShown(not set.locked)
+            if realContainer then
+                if realContainer.mover then
+                    realContainer.mover:SetShown(set.enabled and not set.locked)
+                end
+                if realContainer.bg then
+                    realContainer.bg:SetShown(set.enabled and not set.locked)
+                end
+                if realContainer.border then
+                    realContainer.border:SetShown(set.enabled and not set.locked)
+                end
+            end
+            local realLabel = self.labels[setIndex]
+            if realLabel then
+                realLabel:SetShown(set.enabled and set.showLabel)
             end
         end
     end
