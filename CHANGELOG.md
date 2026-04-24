@@ -40,10 +40,6 @@
 * (Pinned Frames) The set label now appears above test frames in all cases, including cross-mode previews (e.g. raid test mode while in a party)
 * (Targeted List) Cast bar now snaps to full yellow on interrupt instead of continuing to fill
 
-### Internal
-
-* Opt-in debug instrumentation for raid group layout params investigation. Enable with `/run DandersFrames.debugLeakTest = true`.
-
 ## [4.3.2] - 2026-04-21
 
 ### New Features
