@@ -4,6 +4,8 @@
 
 ### Bug Fixes
 
+* (Buff Bar) Fix buff icons sometimes getting stuck on the bar until reload after a unit went out of range and back
+* (Aura Designer) Fix tracked auras occasionally not being deduped from the buff bar after a unit returns from out of range
 * (Private Aura Dispel Overlay) Overlay now stays on the correct player when roster or sort changes move players between slots, including mid-combat
 
 ## [4.3.3] - 2026-04-21

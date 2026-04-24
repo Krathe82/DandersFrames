@@ -2679,8 +2679,30 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
             end
 
             if not auraInstanceID then break end
+
+            -- Self-clean stale cache entries. Direct mode trusts cache.buffData
+            -- without a live recheck, so a missed UNIT_AURA "removed" event
+            -- (e.g. during an OOR window where the API stops sending updates)
+            -- can leave an icon stuck on the bar until /reload. Mirrors the
+            -- defensive bar's pattern at Frames/Icons.lua.
+            if useDataList and auraData and GetAuraDataByAuraInstanceID then
+                local live = GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+                if not live then
+                    if auraType == "BUFF" then
+                        cache.buffsByID[auraInstanceID] = nil
+                        cache.buffOrderDirty = true
+                    else
+                        cache.debuffsByID[auraInstanceID] = nil
+                        cache.debuffOrderDirty = true
+                    end
+                    UnclassifyAura(cache, auraInstanceID)
+                    auraData = nil
+                end
+            end
+
             if not auraData then
-                -- Blizzard mode: aura may have expired between scan and display, skip it
+                -- Blizzard mode: aura may have expired between scan and display, skip it.
+                -- Also reaches here when the self-clean above evicted a stale entry.
             else
 
             -- Dedup: skip buffs already shown in defensive bar or Aura Designer

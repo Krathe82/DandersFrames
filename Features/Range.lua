@@ -598,11 +598,22 @@ function DF:UpdateRange(frame)
     debugStats.cacheMisses = debugStats.cacheMisses + 1
     rangeCache[unit] = inRange
     DebugPrint("UPDATE", unit, "was:", tostring(cached), "now:", tostring(inRange))
-    
+
     frame.dfInRange = inRange
-    
+
     if DF.UpdateRangeAppearance then
         DF:UpdateRangeAppearance(frame)
+    end
+
+    -- OOR → in-range: rescan the aura cache. While a unit is OOR the
+    -- cache freezes (ScanUnitFull's OOR guard preserves stale data on
+    -- purpose since the API returns nothing for OOR units), so any
+    -- auras that expired during the OOR window stay in the cache and
+    -- render as stuck buff icons until /reload. Force a full rescan
+    -- now that we can read the unit's auras again.
+    if cached == false and inRange == true then
+        if DF.ScanUnitFull then DF:ScanUnitFull(unit) end
+        if DF.TriggerAuraUpdateForUnit then DF:TriggerAuraUpdateForUnit(unit) end
     end
 end
 
