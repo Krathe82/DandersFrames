@@ -1,8 +1,20 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-04-23T21:15:39Z"
+DF.BUILD_DATE = "2026-04-24T22:22:29Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
+
+## [4.3.4] - 2026-04-24
+
+### Improvements
+
+* (Dispel Overlay) Added a Frame Level slider to the Blizzard overlay settings. Raise it above 25 if the overlay gets hidden behind frame text on short/wide frames.
+
+### Bug Fixes
+
+* (Buff Bar) Fix buff icons sometimes getting stuck on the bar until reload after a unit went out of range and back
+* (Aura Designer) Fix tracked auras occasionally not being deduped from the buff bar after a unit returns from out of range
+* (Private Aura Dispel Overlay) Overlay now stays on the correct player when roster or sort changes move players between slots, including mid-combat
 
 ## [4.3.3] - 2026-04-21
 
@@ -23,6 +35,7 @@ DF.CHANGELOG_TEXT = [===[
 * (Private Aura Dispel Overlay) Overlay no longer covers the frame border, text, and icons
 * (Private Aura Dispel Overlay) Added an Alpha slider to dim the overlay
 * (Dispel Overlay) Section headers now show tags indicating which dispel types each section covers under the current Overlay Source mode
+* (Dispel Overlay) Reduced CPU overhead in Blizzard and Off modes during combat
 
 ### Changes
 
@@ -42,10 +55,6 @@ DF.CHANGELOG_TEXT = [===[
 * (Pinned Frames) Fix stale background, border, and label from the real pinned container showing behind test frames when Test Mode matches the current group mode
 * (Pinned Frames) The set label now appears above test frames in all cases, including cross-mode previews (e.g. raid test mode while in a party)
 * (Targeted List) Cast bar now snaps to full yellow on interrupt instead of continuing to fill
-
-### Internal
-
-* Opt-in debug instrumentation for raid group layout params investigation. Enable with `/run DandersFrames.debugLeakTest = true`.
 
 ## [4.3.2] - 2026-04-21
 
