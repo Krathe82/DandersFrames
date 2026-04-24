@@ -1423,20 +1423,31 @@ function DF:UpdateDispelOverlay(frame)
     local isRaidFrame = frame.isRaidFrame
     local inRelevantTestMode = (isRaidFrame and DF.raidTestMode) or (not isRaidFrame and DF.testMode)
 
-    -- In test mode, check testShowDispelGlow; otherwise check dispelOverlaySource.
-    -- DF's own overlay runs when source is "dandersframes" or "both" (Hybrid).
-    -- "blizzard" and "off" disable this overlay entirely.
+    -- Decide whether DF's own overlay path should run. In test mode we
+    -- honour testShowDispelGlow; otherwise DF runs only for sources
+    -- "dandersframes" and "both" (Hybrid).
+    local shouldRun
     if inRelevantTestMode then
-        if not db or not db.testShowDispelGlow then
-            HideDispelAndInvalidate(frame)
-            return
-        end
+        shouldRun = db and db.testShowDispelGlow
     else
         local src = db and db.dispelOverlaySource
-        if not db or (src ~= "dandersframes" and src ~= "both") then
+        shouldRun = db and (src == "dandersframes" or src == "both")
+    end
+
+    if not shouldRun then
+        -- Only run the cleanup path when there's DF overlay state that actually
+        -- needs clearing. On a fresh frame in Blizzard / Off mode, every flag
+        -- below is falsy and we skip HideDispelAndInvalidate entirely (which
+        -- also skips a redundant UpdateContainerOverlayVisibility call). This
+        -- matters in combat where UpdateDispelOverlay fires many times per
+        -- second per frame via TriggerAuraUpdateForUnit.
+        local hasState = (frame.dfDispelOverlay and frame.dfDispelOverlay:IsShown())
+                       or frame.dfDispelNameTextActive
+                       or (frame.dfLastDispelAuraID ~= nil)
+        if hasState then
             HideDispelAndInvalidate(frame)
-            return
         end
+        return
     end
 
     local unit = frame.unit
