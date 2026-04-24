@@ -19,6 +19,7 @@
 * (Private Aura Dispel Overlay) Overlay no longer covers the frame border, text, and icons
 * (Private Aura Dispel Overlay) Added an Alpha slider to dim the overlay
 * (Dispel Overlay) Section headers now show tags indicating which dispel types each section covers under the current Overlay Source mode
+* (Dispel Overlay) Reduced CPU overhead in Blizzard and Off modes during combat
 
 ### Changes
 
