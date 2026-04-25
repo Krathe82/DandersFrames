@@ -226,6 +226,17 @@ function VC:GetAvailableChannels()
 end
 
 function VC:SendMessage(msgType, payload, channel)
+    -- Re-validate the channel at send time. Timer-deferred replies
+    -- (H handler) and any future caller can race a state change such
+    -- as zoning into a follower dungeon / delve, where IsInGroup()
+    -- stays true with NPC companions but PARTY/RAID sends produce
+    -- ERR_NOT_IN_GROUP "You aren't in a party." chat spam.
+    if channel == "PARTY" or channel == "RAID" then
+        if not self:HasPlayerGroupMembers() then return end
+        if (channel == "RAID") ~= IsInRaid() then return end
+    elseif channel == "GUILD" then
+        if not IsInGuild() then return end
+    end
     local body = payload and (msgType .. "\t" .. payload) or msgType
     C_ChatInfo.SendAddonMessage(self.PREFIX, body, channel)
 end
