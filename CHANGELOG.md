@@ -17,6 +17,7 @@
 * (Private Aura Dispel Overlay) Overlay now stays on the correct player when roster or sort changes move players between slots, including mid-combat
 * (Range) Fix Lua error spam from range checks during timewalking dungeons
 * (Update Notification) Fix remaining "You aren't in a party." chat spam in delves and follower dungeons
+* (Boss Debuffs) Fix boss debuff icons occasionally rendering behind the unit frame on some group members
 
 ## [4.3.3] - 2026-04-21
 
