@@ -6,11 +6,17 @@
 
 * (Dispel Overlay) Added a Frame Level slider to the Blizzard overlay settings. Raise it above 25 if the overlay gets hidden behind frame text on short/wide frames.
 
+### Changes
+
+* (Dispel Overlay) DandersFrames-only mode users have been switched to Hybrid mode for this update — Hybrid covers boss debuffs that DandersFrames mode missed. You can switch back under Settings > Dispel Overlay > Overlay Source if you prefer.
+
 ### Bug Fixes
 
 * (Buff Bar) Fix buff icons sometimes getting stuck on the bar until reload after a unit went out of range and back
 * (Aura Designer) Fix tracked auras occasionally not being deduped from the buff bar after a unit returns from out of range
 * (Private Aura Dispel Overlay) Overlay now stays on the correct player when roster or sort changes move players between slots, including mid-combat
+* (Range) Fix Lua error spam from range checks during timewalking dungeons
+* (Update Notification) Fix remaining "You aren't in a party." chat spam in delves and follower dungeons
 
 ## [4.3.3] - 2026-04-21
 
