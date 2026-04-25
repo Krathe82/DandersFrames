@@ -423,8 +423,16 @@ end
 
 local rangeCache = {}
 
+-- OOR → in-range transition latch. Parallel non-secret cache: set true when
+-- we observe a non-secret OOR result for a unit, cleared (with an aura
+-- rescan) when we observe a non-secret in-range result. Survives stretches
+-- of secret-boolean values (UnitInRange fallback in combat) which can't be
+-- compared with `==` without raising "execution tainted" errors.
+local wasOORCache = {}
+
 local function ClearRangeCache()
     wipe(rangeCache)
+    wipe(wasOORCache)
 end
 
 -- ============================================================
@@ -611,9 +619,21 @@ function DF:UpdateRange(frame)
     -- auras that expired during the OOR window stay in the cache and
     -- render as stuck buff icons until /reload. Force a full rescan
     -- now that we can read the unit's auras again.
-    if cached == false and inRange == true then
+    --
+    -- Use the wasOORCache latch instead of comparing `cached`/`inRange`
+    -- directly: those values may be secret booleans (UnitInRange fallback
+    -- in combat) and `==` against a secret raises "execution tainted".
+    -- The latch is set on any non-secret OOR observation and consumed on
+    -- the next non-secret in-range one, so the rescan still fires across
+    -- a stretch of secret-only updates.
+    local nowOOR     = (not isSecret) and inRange == false
+    local nowInRange = (not isSecret) and inRange == true
+    if nowInRange and wasOORCache[unit] then
+        wasOORCache[unit] = nil
         if DF.ScanUnitFull then DF:ScanUnitFull(unit) end
         if DF.TriggerAuraUpdateForUnit then DF:TriggerAuraUpdateForUnit(unit) end
+    elseif nowOOR then
+        wasOORCache[unit] = true
     end
 end
 
@@ -1164,6 +1184,7 @@ function DF:ClearRangeCacheForUnit(unit)
     if unit then
         rangeCache[unit] = nil
         rangeCache["pet_" .. unit] = nil  -- Also clear pet cache for this unit
+        wasOORCache[unit] = nil
     end
 end
 
