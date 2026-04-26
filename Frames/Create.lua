@@ -241,9 +241,21 @@ end)
 -- ============================================================
 local tooltipRefreshTicker = nil
 local tooltipRefreshFrame = nil
+local tooltipRefreshModState = 0
+
+local function GetModifierState()
+    local s = 0
+    if IsShiftKeyDown() then s = s + 1 end
+    if IsControlKeyDown() then s = s + 2 end
+    if IsAltKeyDown() then s = s + 4 end
+    return s
+end
 
 local function StartTooltipRefresh(frame)
     tooltipRefreshFrame = frame
+    -- Tooltip was just freshly set by the caller, so the current modifier
+    -- state is our baseline — only refresh if it changes from this.
+    tooltipRefreshModState = GetModifierState()
     if tooltipRefreshTicker then return end  -- already running
     tooltipRefreshTicker = C_Timer.NewTicker(0.25, function()
         local f = tooltipRefreshFrame
@@ -253,6 +265,12 @@ local function StartTooltipRefresh(frame)
             tooltipRefreshFrame = nil
             return
         end
+        -- Only re-call SetUnit when modifier state changes, so addons like
+        -- RaiderIO can respond to modifier presses without us repeatedly
+        -- overwriting aura tooltips when the cursor lands on a buff/debuff.
+        local mod = GetModifierState()
+        if mod == tooltipRefreshModState then return end
+        tooltipRefreshModState = mod
         GameTooltip:SetUnit(f.unit)
         local _, ttUnit = GameTooltip:GetUnit()
         if (not ttUnit or issecretvalue(ttUnit)) and _G.RaiderIO and _G.RaiderIO.ShowProfile then

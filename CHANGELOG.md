@@ -16,6 +16,7 @@
 * (Buff Bar) Fix buff icons sometimes getting stuck on the bar until reload after a unit went out of range and back
 * (Aura Designer) Fix tracked auras occasionally not being deduped from the buff bar after a unit returns from out of range
 * (Private Aura Dispel Overlay) Overlay now stays on the correct player when roster or sort changes move players between slots, including mid-combat
+* (Tooltips) Fix aura tooltips being overwritten by the unit tooltip when hovering buffs and debuffs
 * (Range) Fix Lua error spam from range checks during timewalking dungeons
 * (Update Notification) Fix remaining "You aren't in a party." chat spam in delves and follower dungeons
 * (Boss Debuffs) Fix boss debuff icons occasionally rendering behind the unit frame on some group members
