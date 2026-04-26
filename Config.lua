@@ -846,7 +846,7 @@ DF.PartyDefaults = {
     bossDebuffsBorderScale = 1,
     bossDebuffsEnabled = true,
     bossDebuffsFrameLevel = 35,
-    bossDebuffsStrata = "MEDIUM",
+    bossDebuffsStrata = "HIGH",
     bossDebuffsGrowth = "RIGHT",
     bossDebuffsHideTooltip = false,
     bossDebuffsIconHeight = 20,
@@ -871,7 +871,7 @@ DF.PartyDefaults = {
     bossDebuffsContainerOverlayGradientDir = 0,
     bossDebuffsContainerOverlayAlpha = 1.0,
     bossDebuffsContainerOverlayFrameLevel = 6,
-    bossDebuffsContainerOverlayStrata = "MEDIUM",
+    bossDebuffsContainerOverlayStrata = "HIGH",
 
     -- Buff settings
     buffAlpha = 1,
@@ -2164,7 +2164,7 @@ DF.RaidDefaults = {
     bossDebuffsBorderScale = 1,
     bossDebuffsEnabled = true,
     bossDebuffsFrameLevel = 35,
-    bossDebuffsStrata = "MEDIUM",
+    bossDebuffsStrata = "HIGH",
     bossDebuffsGrowth = "RIGHT",
     bossDebuffsHideTooltip = false,
     bossDebuffsIconHeight = 20,
@@ -2189,7 +2189,7 @@ DF.RaidDefaults = {
     bossDebuffsContainerOverlayGradientDir = 0,
     bossDebuffsContainerOverlayAlpha = 1.0,
     bossDebuffsContainerOverlayFrameLevel = 6,
-    bossDebuffsContainerOverlayStrata = "MEDIUM",
+    bossDebuffsContainerOverlayStrata = "HIGH",
 
     -- Buff settings
     buffAlpha = 1,

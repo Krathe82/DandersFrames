@@ -3996,6 +3996,33 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- v4.3.4: Force private aura icon + container overlay strata to HIGH
+        -- across all profiles. The 12.0.5 Blizzard refactor calls SetFrameLevel(0)
+        -- on its private aura pool frame; bumping our wrapper/iconFrame strata
+        -- pushes that level-0 child render frame above DF's MEDIUM-strata content
+        -- regardless of frame level. Runs once per profile/mode.
+        local function MigratePAStrataToHigh(modeDb)
+            if modeDb._paStrataHighV434 then return end
+            modeDb.bossDebuffsStrata = "HIGH"
+            modeDb.bossDebuffsContainerOverlayStrata = "HIGH"
+            modeDb._paStrataHighV434 = true
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            local modeDb = DF.db[mode]
+            if modeDb then
+                MigratePAStrataToHigh(modeDb)
+            end
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    if profile[mode] then
+                        MigratePAStrataToHigh(profile[mode])
+                    end
+                end
+            end
+        end
+
         -- Wrap DF.db with overlay proxy (must happen AFTER all migrations,
         -- BEFORE anything that reads through the proxy)
         DF:WrapDB()
