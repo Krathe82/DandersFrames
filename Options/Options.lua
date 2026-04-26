@@ -5216,6 +5216,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             MEDIUM = L["Medium"],
             HIGH = L["High"],
             DIALOG = L["Dialog"],
+            _order = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG" },
         }
         local bossDebuffStrata = sizeGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frame Strata"], bossDebuffStrataOptions, db, "bossDebuffsStrata", function()
             if DF.UpdateAllPrivateAuraStrata then DF:UpdateAllPrivateAuraStrata() end
@@ -7466,6 +7467,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 MEDIUM = L["Medium"],
                 HIGH = L["High"],
                 DIALOG = L["Dialog"],
+                _order = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG" },
             }
             local blizStrata = blizGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frame Strata"], strataOptions, db, "bossDebuffsContainerOverlayStrata", function()
                 if DF.IterateAllFrames then
