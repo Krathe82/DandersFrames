@@ -443,13 +443,38 @@ function CC:CreateClickCastHeader()
     -- Clears bindings when there's no mouseover unit (e.g., a Blizzard panel
     -- opens over the frame, stealing focus without firing WrapScript OnLeave).
     --
-    -- Guard uses GetMousePosition() instead of IsUnderMouse() because:
-    -- IsUnderMouse() returns 1 (not true) when hovering, and nil otherwise.
-    -- During brief [@mouseover, exists] flickers in combat, it returns nil
-    -- even when the mouse IS over the frame, causing false clears.
-    -- GetMousePosition() returns actual x,y coordinates relative to the frame
-    -- (0,0 = bottom-left, 1,1 = top-right) which may be more reliable.
+    -- Guard uses IsUnderMouse() now that Blizzard fixed the API bug where it
+    -- incorrectly returned false for parent frames that were actually under
+    -- the mouse. That bug was the root cause of the false-clears we worked
+    -- around with GetMousePosition() — unit buttons are parents with child
+    -- regions (health bar, name text, icons), so when the cursor was over a
+    -- child texture, IsUnderMouse() on the parent returned nil even though
+    -- the mouse was clearly over the frame.
     self.header:SetAttribute("_onstate-mouseoverstate", [[
+        if newstate == "false" and mouseoverbutton then
+            local underMouse = mouseoverbutton:IsUnderMouse()
+
+            -- Store diagnostics
+            mouseoverbutton:SetAttribute("dfStateDriverCount", (mouseoverbutton:GetAttribute("dfStateDriverCount") or 0) + 1)
+            mouseoverbutton:SetAttribute("dfStateDriverUnderMouse", tostring(underMouse))
+
+            -- If mouse is no longer over the frame, clear bindings
+            if not underMouse then
+                mouseoverbutton:SetAttribute("dfClearedBy", "statedriver")
+                mouseoverbutton:ClearBindings()
+                mouseoverbutton:SetAttribute("dfBindingsActive", nil)
+                mouseoverbutton:SetAttribute("dfIsSecureMouseover", nil)
+                mouseoverbutton = nil
+            end
+        end
+    ]])
+    RegisterStateDriver(self.header, "mouseoverstate", "[@mouseover, exists] true; false")
+
+    --[[ FALLBACK: GetMousePosition() variant — keep around in case Blizzard's
+         IsUnderMouse() fix regresses. Swap the SetAttribute call above for this
+         one and update the OnEnter / diagnostic logs accordingly.
+
+    self.header:SetAttribute("_onstate-mouseoverstate", [=[
         if newstate == "false" and mouseoverbutton then
             local x, y = mouseoverbutton:GetMousePosition()
 
@@ -467,8 +492,8 @@ function CC:CreateClickCastHeader()
                 mouseoverbutton = nil
             end
         end
-    ]])
-    RegisterStateDriver(self.header, "mouseoverstate", "[@mouseover, exists] true; false")
+    ]=])
+    --]]
     
     -- Track registered frames
     self.registeredFrames = {}
@@ -1379,8 +1404,9 @@ function CC:SetupSecureHandlers(frame)
             self:SetAttribute("dfBindingsActive", nil)
             self:SetAttribute("dfClearedBy", nil)
             self:SetAttribute("dfStateDriverCount", nil)
-            self:SetAttribute("dfSDMouseX", nil)
-            self:SetAttribute("dfSDMouseY", nil)
+            self:SetAttribute("dfStateDriverUnderMouse", nil)
+            -- self:SetAttribute("dfSDMouseX", nil)  -- GetMousePosition() fallback
+            -- self:SetAttribute("dfSDMouseY", nil)  -- GetMousePosition() fallback
             self:SetAttribute("dfEnterPhase", 0)
 
             -- Phase 1: increment WrapScript enter counter
@@ -1626,12 +1652,14 @@ function CC:SetupSecureHandlers(frame)
             local postCheck = self:GetAttribute("dfPostCheck") or "?"
             local clearedBy = self:GetAttribute("dfClearedBy") or "nobody"
             local stateDriverCount = self:GetAttribute("dfStateDriverCount") or 0
-            local sdMouseX = self:GetAttribute("dfSDMouseX")
-            local sdMouseY = self:GetAttribute("dfSDMouseY")
+            local stateDriverUnderMouse = self:GetAttribute("dfStateDriverUnderMouse")
+            -- GetMousePosition() fallback diagnostics:
+            -- local sdMouseX = self:GetAttribute("dfSDMouseX")
+            -- local sdMouseY = self:GetAttribute("dfSDMouseY")
             DF:DebugError("CLICK", "BINDINGS STILL ACTIVE after OnLeave %s! wrapLeave=%s mouseoverbutton=%s checkPassed=%s isSecureMO=%s postCheck=%s",
                 frameName, tostring(wrapLeaveFired), mouseoverOnLeave, tostring(leaveCheckPassed), tostring(isSecureMouseover), postCheck)
-            DF:DebugError("CLICK", "  clearedBy=%s stateDriverFired=%d mousePos=%s,%s",
-                clearedBy, stateDriverCount, tostring(sdMouseX), tostring(sdMouseY))
+            DF:DebugError("CLICK", "  clearedBy=%s stateDriverFired=%d underMouse=%s",
+                clearedBy, stateDriverCount, tostring(stateDriverUnderMouse))
         end
     end)
 

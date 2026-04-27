@@ -306,12 +306,28 @@ function CC:SetActiveProfile(profileName)
     self.db.bindings = self.profile.bindings
     self.db.customMacros = self.profile.customMacros
     self.db.options = self.profile.options
+    local wasEnabled = self.db.enabled
     self.db.enabled = self.profile.options.enabled
-    
+
+    -- If this switch flipped click-casting from disabled to enabled and a
+    -- conflicting addon (Clique / Clicked) is loaded, surface the conflict
+    -- popup the same way login does. ShowClickCastConflictPopup respects
+    -- the ignoreConflictWarning opt-out internally.
+    if not wasEnabled and self.db.enabled then
+        self:CheckForConflictingAddons()
+        if self.hasConflictingAddons and self.conflictingAddons then
+            C_Timer.After(0.1, function()
+                if CC.db.enabled and CC.hasConflictingAddons then
+                    CC:ShowClickCastConflictPopup(CC.conflictingAddons, CC.enableCb)
+                end
+            end)
+        end
+    end
+
     if oldProfile ~= profileName then
         print("|cff33cc33DandersFrames:|r Switched to profile: " .. profileName)
     end
-    
+
     return true
 end
 

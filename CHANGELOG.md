@@ -1,5 +1,16 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### Improvements
+
+* (Click Casting) Improved mouseover detection on hovered unit frames after a Blizzard API fix.
+* (Click Casting) The conflict popup for Clique and Clicked now also appears when switching to a click-cast profile that turns click casting on.
+
+### Bug Fixes
+
+* (Update Notification) Fix "You aren't in a party." and "You aren't in a raid." chat spam in LFG dungeons, LFR, scenarios, and battlegrounds.
+
 ## [4.3.5] - 2026-04-26
 
 ### Improvements

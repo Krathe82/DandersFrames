@@ -183,13 +183,15 @@ end
 -- BROADCAST HELPERS
 -- ============================================================
 
--- Returns true if the current group contains at least one real player
--- other than the player themselves. Follower dungeons and NPC-companion
--- delves report IsInGroup()=true with only NPCs; sending to PARTY in
--- that state produces a repeating "You aren't in a party." chat error.
+-- Returns true if the player's HOME party/raid contains at least one real
+-- player other than the player themselves. Follower dungeons and NPC-companion
+-- delves report IsInGroup()=true with only NPCs; sending to PARTY in that
+-- state produces a repeating "You aren't in a party." chat error.
+-- Only meaningful for home PARTY/RAID validation -- INSTANCE_CHAT doesn't
+-- need this check because instance groups can't contain NPC followers.
 function VC:HasPlayerGroupMembers()
-    if not IsInGroup() then return false end
-    if IsInRaid() then
+    if not IsInGroup(LE_PARTY_CATEGORY_HOME) then return false end
+    if IsInRaid(LE_PARTY_CATEGORY_HOME) then
         local n = GetNumGroupMembers()
         for i = 1, n do
             local token = "raid" .. i
@@ -208,35 +210,57 @@ function VC:HasPlayerGroupMembers()
     return false
 end
 
--- Returns a list of channel strings ({"GUILD", "RAID"}, etc.) currently
--- available to the player. Empty when solo + no guild. Skips PARTY/RAID
--- when the group is NPC-only (follower dungeon / delve companion) to
--- avoid ERR_NOT_IN_GROUP chat spam.
+-- Single source of truth for "is this addon-message channel usable right now?"
+-- Used by both GetAvailableChannels (broadcast targeting) and SendMessage
+-- (send-time re-validation). Because every send funnels through SendMessage,
+-- a false return here means C_ChatInfo.SendAddonMessage is never called for
+-- that channel and ERR_NOT_IN_GROUP cannot fire from this addon.
+--
+-- LFG / LFR / scenarios / battlegrounds put the player in an INSTANCE group
+-- (LE_PARTY_CATEGORY_INSTANCE) with no HOME group. PARTY/RAID addon messages
+-- only target the HOME group, so sending PARTY/RAID in that state produces
+-- "You aren't in a party./raid." chat spam. INSTANCE_CHAT is the correct
+-- channel for instance-group comms.
+function VC:IsChannelValid(channel)
+    if channel == "INSTANCE_CHAT" then
+        return IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and IsInInstance()
+    elseif channel == "RAID" then
+        return IsInRaid(LE_PARTY_CATEGORY_HOME) and self:HasPlayerGroupMembers()
+    elseif channel == "PARTY" then
+        return IsInGroup(LE_PARTY_CATEGORY_HOME)
+            and not IsInRaid(LE_PARTY_CATEGORY_HOME)
+            and self:HasPlayerGroupMembers()
+    elseif channel == "GUILD" then
+        return IsInGuild()
+    end
+    return false
+end
+
+-- Returns a list of channel strings ({"GUILD", "INSTANCE_CHAT"}, etc.)
+-- currently available to the player. Empty when solo + no guild.
+-- Prefers INSTANCE_CHAT over home RAID/PARTY when both apply -- instance
+-- group members are reachable via INSTANCE_CHAT, no need to double-send.
 function VC:GetAvailableChannels()
     local out = {}
-    if IsInGuild() then out[#out+1] = "GUILD" end
-    if self:HasPlayerGroupMembers() then
-        if IsInRaid() then
-            out[#out+1] = "RAID"
-        else
-            out[#out+1] = "PARTY"
-        end
+    if self:IsChannelValid("GUILD") then out[#out+1] = "GUILD" end
+    if self:IsChannelValid("INSTANCE_CHAT") then
+        out[#out+1] = "INSTANCE_CHAT"
+    elseif self:IsChannelValid("RAID") then
+        out[#out+1] = "RAID"
+    elseif self:IsChannelValid("PARTY") then
+        out[#out+1] = "PARTY"
     end
     return out
 end
 
 function VC:SendMessage(msgType, payload, channel)
-    -- Re-validate the channel at send time. Timer-deferred replies
-    -- (H handler) and any future caller can race a state change such
-    -- as zoning into a follower dungeon / delve, where IsInGroup()
-    -- stays true with NPC companions but PARTY/RAID sends produce
-    -- ERR_NOT_IN_GROUP "You aren't in a party." chat spam.
-    if channel == "PARTY" or channel == "RAID" then
-        if not self:HasPlayerGroupMembers() then return end
-        if (channel == "RAID") ~= IsInRaid() then return end
-    elseif channel == "GUILD" then
-        if not IsInGuild() then return end
-    end
+    -- Final chokepoint. Timer-deferred replies (H handler's 1-3s jitter)
+    -- and any future caller can race a state change such as zoning into
+    -- an instance, leaving the group, or transitioning between home and
+    -- instance group categories. If the channel isn't valid right now,
+    -- return without ever calling SendAddonMessage so ERR_NOT_IN_GROUP
+    -- cannot fire.
+    if not self:IsChannelValid(channel) then return end
     local body = payload and (msgType .. "\t" .. payload) or msgType
     C_ChatInfo.SendAddonMessage(self.PREFIX, body, channel)
 end
