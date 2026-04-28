@@ -781,9 +781,6 @@ function DF:ReanchorPrivateAuras(frame)
     local borderScale   = db.bossDebuffsBorderScale or 1.0
     local textScale     = db.bossDebuffsTextScale or 1.0
     local frameLevel    = db.bossDebuffsFrameLevel or 35
-    local scaledIconW   = iconWidth  / textScale
-    local scaledIconH   = iconHeight / textScale
-    local scaledBorder  = borderScale / textScale
 
     -- Re-apply icon frame level. The unit button's level can shift across
     -- secure header reshuffles, so a level captured at first SetupPrivateAuraAnchors
@@ -803,18 +800,7 @@ function DF:ReanchorPrivateAuras(frame)
                     parent    = iconFrame,
                     showCountdownFrame   = showCountdown,
                     showCountdownNumbers = showNumbers,
-                    iconInfo = {
-                        iconWidth   = scaledIconW,
-                        iconHeight  = scaledIconH,
-                        borderScale = scaledBorder,
-                        iconAnchor  = {
-                            point         = "CENTER",
-                            relativeTo    = iconFrame,
-                            relativePoint = "CENTER",
-                            offsetX       = 0,
-                            offsetY       = 0,
-                        },
-                    },
+                    iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
                 })
             end)
 
