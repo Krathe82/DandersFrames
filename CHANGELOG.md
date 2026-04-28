@@ -8,6 +8,10 @@
 * (Click Casting) The conflict popup for Clique and Clicked now also appears when switching to a click-cast profile that turns click casting on.
 * (Boss Debuffs) Added a Size Adjust slider for the Blizzard dispel overlay so the gradient can extend past or shrink inside the frame edges.
 
+### Changes
+
+* (Boss Debuffs) Removed the legacy Frame Border Overlay (the container overlay introduced in TWW covers the same case better).
+
 ### Bug Fixes
 
 * (Update Notification) Fix "You aren't in a party." and "You aren't in a raid." chat spam in LFG dungeons, LFR, scenarios, and battlegrounds.
