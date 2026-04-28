@@ -6,12 +6,14 @@
 
 * (Click Casting) Improved mouseover detection on hovered unit frames after a Blizzard API fix.
 * (Click Casting) The conflict popup for Clique and Clicked now also appears when switching to a click-cast profile that turns click casting on.
+* (Boss Debuffs) Added a Size Adjust slider for the Blizzard dispel overlay so the gradient can extend past or shrink inside the frame edges.
 
 ### Bug Fixes
 
 * (Update Notification) Fix "You aren't in a party." and "You aren't in a raid." chat spam in LFG dungeons, LFR, scenarios, and battlegrounds.
 * (Boss Debuffs) Fix icons sometimes staying invisible after a transient registration hiccup until you fully reload.
 * (Boss Debuffs) Fix icons not rendering at certain size combinations.
+* (Boss Debuffs) Skip private aura registration on pet frames — pets can't receive boss debuffs.
 
 ## [4.3.5] - 2026-04-26
 
