@@ -5048,7 +5048,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
             local bdText = bdBanner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
             bdText:SetPoint("LEFT", bdIcon, "RIGHT", 8, 0)
-            bdText:SetText(L["Boss Debuffs cannot trigger"])
+            bdText:SetText(L["Boss Debuffs only trigger"])
             bdText:SetTextColor(0.85, 0.85, 0.85)
 
             local bdLink = CreateFrame("Button", nil, bdBanner)
@@ -5069,7 +5069,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
             local bdSuffix = bdBanner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
             bdSuffix:SetPoint("LEFT", bdLink, "RIGHT", 3, 0)
-            bdSuffix:SetText(L["on frames."])
+            bdSuffix:SetText(L["in Hybrid or Blizzard mode."])
             bdSuffix:SetTextColor(0.85, 0.85, 0.85)
 
             Add(bdBanner, 44, "both")
