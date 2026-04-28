@@ -5229,96 +5229,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         sizeGroup.hideOn = HideBossDebuffOptions
         Add(sizeGroup, nil, 1)
 
-        -- Version detection for container overlay support
-        local CLIENT_VERSION = select(4, GetBuildInfo())
-        local IS_CONTAINER_SUPPORTED = CLIENT_VERSION >= 120005
-
-        if not IS_CONTAINER_SUPPORTED then
-        -- ===== FRAME BORDER OVERLAY GROUP (Column 2) =====
-        local overlayGroup = GUI:CreateSettingsGroup(self.child, 280)
-        overlayGroup:AddWidget(GUI:CreateHeader(self.child, L["Frame Border Overlay"]), 40)
-        overlayGroup:AddWidget(GUI:CreateLabel(self.child, L["Shows a border ring around the entire frame when a boss debuff is active."], 250), 35)
-        overlayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Frame Border Overlay"], db, "bossDebuffsOverlayEnabled", function()
-            -- Show warning wizard on first enable attempt
-            if db.bossDebuffsOverlayEnabled and not DandersFramesDB_v2.seenOverlayWarning then
-                -- Revert the checkbox — the wizard will set the value if confirmed
-                db.bossDebuffsOverlayEnabled = false
-                DandersFramesDB_v2.seenOverlayWarning = true
-                if DF.WizardBuilder and DF.WizardBuilder.RunWizard then
-                    DF.WizardBuilder:RunWizard("private_aura_overlay_setup")
-                end
-                self:RefreshStates()
-                return
-            end
-            self:RefreshStates()
-            -- Auto-fit on first enable
-            if db.bossDebuffsOverlayEnabled and DF.AutoFitOverlayBorder then
-                local newScale, newRatio = DF:AutoFitOverlayBorder()
-                if newScale and ovScale and ovScale.slider then
-                    ovScale.slider:SetValue(newScale)
-                    if ovScale.valueText then ovScale.valueText:SetText(format("%.2f", newScale)) end
-                end
-                if newRatio and ovRatio and ovRatio.slider then
-                    ovRatio.slider:SetValue(newRatio)
-                    if ovRatio.valueText then ovRatio.valueText:SetText(format("%.1f", newRatio)) end
-                end
-            end
-            if DF.RefreshAllPrivateAuraAnchors then DF:RefreshAllPrivateAuraAnchors() end
-        end), 30)
-        local function HideOverlayOptions(d)
-            return not d.bossDebuffsEnabled or not d.bossDebuffsOverlayEnabled
-        end
-        local ovScale = overlayGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Scale"], 0.1, 5.0, 0.05, db, "bossDebuffsOverlayScale", nil, function()
-            if DF.RefreshAllPrivateAuraAnchors then DF:RefreshAllPrivateAuraAnchors() end
-        end, true), 55)
-        ovScale.hideOn = HideOverlayOptions
-        local ovRatio = overlayGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Ratio"], 0.5, 15.0, 0.1, db, "bossDebuffsOverlayIconRatio", nil, function()
-            if DF.RefreshAllPrivateAuraAnchors then DF:RefreshAllPrivateAuraAnchors() end
-        end, true), 55)
-        ovRatio.hideOn = HideOverlayOptions
-        local ovLevel = overlayGroup:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 50, 1, db, "bossDebuffsOverlayFrameLevel", nil, function()
-            if DF.UpdateAllOverlayFrameLevel then DF:UpdateAllOverlayFrameLevel() end
-        end, true), 55)
-        ovLevel.hideOn = HideOverlayOptions
-        local ovSlots = overlayGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Slots"], 1, 5, 1, db, "bossDebuffsOverlayMaxSlots", nil, function()
-            if DF.RefreshAllPrivateAuraAnchors then DF:RefreshAllPrivateAuraAnchors() end
-        end, true), 55)
-        ovSlots.hideOn = HideOverlayOptions
-        local ovClip = overlayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Clip Border to Frame"], db, "bossDebuffsOverlayClipBorder", function()
-            if DF.UpdateAllOverlayClip then DF:UpdateAllOverlayClip() end
-        end), 30)
-        ovClip.hideOn = HideOverlayOptions
-        local ovAutoFit = overlayGroup:AddWidget(GUI:CreateButton(self.child, L["Auto-Fit Border to Frame Size"], 210, 24, function()
-            if DF.AutoFitOverlayBorder then
-                local newScale, newRatio = DF:AutoFitOverlayBorder()
-                if newScale and ovScale.slider then
-                    ovScale.slider:SetValue(newScale)
-                    if ovScale.valueText then ovScale.valueText:SetText(format("%.2f", newScale)) end
-                end
-                if newRatio and ovRatio.slider then
-                    ovRatio.slider:SetValue(newRatio)
-                    if ovRatio.valueText then ovRatio.valueText:SetText(format("%.1f", newRatio)) end
-                end
-            end
-        end), 30)
-        ovAutoFit.hideOn = HideOverlayOptions
-        local ovWizard = overlayGroup:AddWidget(GUI:CreateButton(self.child, L["Run Overlay Setup Wizard"], 210, 24, function()
-            if DF.WizardBuilder then
-                local builtins = DF.WizardBuilder:GetBuiltinWizards()
-                for _, entry in ipairs(builtins) do
-                    if entry.name == "Private Aura Overlay Setup" and entry.build then
-                        local config = entry.build()
-                        if config then DF:ShowPopupWizard(config) end
-                        break
-                    end
-                end
-            end
-        end), 30)
-        ovWizard.hideOn = function(d) return not d.bossDebuffsEnabled end
-        overlayGroup.hideOn = HideBossDebuffOptions
-        Add(overlayGroup, nil, 2)
-        end -- not IS_CONTAINER_SUPPORTED
-
         -- Private Aura Dispel Overlay settings moved to the Dispel Overlay tab
         -- under the "Blizzard" source. The container's enable state and options
         -- are now driven by dispelOverlaySource and the unified dispel-type
@@ -7406,103 +7316,99 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== BLIZZARD OVERLAY COLLAPSIBLE SECTION =====
         -- Only relevant for sources "blizzard" and "both". Header hides
         -- entirely when source excludes Blizzard.
-        local CLIENT_VERSION = select(4, GetBuildInfo())
-        local IS_CONTAINER_SUPPORTED = CLIENT_VERSION >= 120005
-        if IS_CONTAINER_SUPPORTED then
-            AddSyncPoint()
-            AddSpace(15, "both")
-            local blizSection = GUI:CreateCollapsibleSection(self.child, L["Blizzard Overlay"], true, 560)
-            blizSection.hideOn = HideIfNotBlizzard
-            -- Tag reflects what the Blizzard overlay actually handles under
-            -- the current source mode:
-            --   Hybrid   → only private auras (DandersFrames handles normals)
-            --   Blizzard → both (Blizzard runs alone for every dispellable)
-            local function UpdateBlizSectionTag()
-                local s = db.dispelOverlaySource or "both"
-                local privateTag = "[" .. L["Private Aura Dispels"] .. "]"
-                local normalTag  = "[" .. L["Normal Dispels"] .. "]"
-                if s == "both" then
-                    blizSection:SetTag(privateTag)
-                elseif s == "blizzard" then
-                    blizSection:SetTag(normalTag .. " " .. privateTag)
-                else
-                    blizSection:SetTag(nil)
-                end
+        AddSyncPoint()
+        AddSpace(15, "both")
+        local blizSection = GUI:CreateCollapsibleSection(self.child, L["Blizzard Overlay"], true, 560)
+        blizSection.hideOn = HideIfNotBlizzard
+        -- Tag reflects what the Blizzard overlay actually handles under
+        -- the current source mode:
+        --   Hybrid   → only private auras (DandersFrames handles normals)
+        --   Blizzard → both (Blizzard runs alone for every dispellable)
+        local function UpdateBlizSectionTag()
+            local s = db.dispelOverlaySource or "both"
+            local privateTag = "[" .. L["Private Aura Dispels"] .. "]"
+            local normalTag  = "[" .. L["Normal Dispels"] .. "]"
+            if s == "both" then
+                blizSection:SetTag(privateTag)
+            elseif s == "blizzard" then
+                blizSection:SetTag(normalTag .. " " .. privateTag)
+            else
+                blizSection:SetTag(nil)
             end
-            UpdateBlizSectionTag()
-            blizSection.refreshContent = function(self) UpdateBlizSectionTag() end
-            Add(blizSection, 36, "both")
-
-            local blizGroup = GUI:CreateSettingsGroup(self.child, 280)
-            blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["This overlay is rendered by Blizzard and has limited customisation. It is separate from the DandersFrames overlay above."], 260), 60)
-
-            local gradientDirOptions = {
-                [0] = L["Top Edge"],
-                [1] = L["Bottom Edge"],
-                [2] = L["Left Edge"],
-            }
-            local blizGradientDir = blizGroup:AddWidget(GUI:CreateDropdown(self.child, L["Gradient Direction"], gradientDirOptions, db, "bossDebuffsContainerOverlayGradientDir", function()
-                if DF.IterateAllFrames then
-                    DF:IterateAllFrames(function(f)
-                        if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
-                    end)
-                end
-            end), 55)
-            blizGradientDir.hideOn = HideIfNotBlizzard
-            local gradientNote = blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFF888888" .. L["Right Edge is not available in the Blizzard API."] .. "|r", 260), 20)
-            gradientNote.hideOn = HideIfNotBlizzard
-
-            local blizAlpha = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "bossDebuffsContainerOverlayAlpha", function()
-                if DF.IterateAllFrames then
-                    DF:IterateAllFrames(function(f)
-                        if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
-                    end)
-                end
-            end), 40)
-            blizAlpha.hideOn = HideIfNotBlizzard
-
-            local strataOptions = {
-                BACKGROUND = L["Background"],
-                LOW = L["Low"],
-                MEDIUM = L["Medium"],
-                HIGH = L["High"],
-                DIALOG = L["Dialog"],
-                _order = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG" },
-            }
-            local blizStrata = blizGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frame Strata"], strataOptions, db, "bossDebuffsContainerOverlayStrata", function()
-                if DF.IterateAllFrames then
-                    DF:IterateAllFrames(function(f)
-                        if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
-                    end)
-                end
-            end), 55)
-            blizStrata.hideOn = HideIfNotBlizzard
-
-            local blizFrameLevel = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 50, 1, db, "bossDebuffsContainerOverlayFrameLevel", function()
-                if DF.IterateAllFrames then
-                    DF:IterateAllFrames(function(f)
-                        if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
-                    end)
-                end
-            end), 40)
-            blizFrameLevel.hideOn = HideIfNotBlizzard
-
-            local frameLevelNote = blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFF888888" .. L["Raise strata or frame level if the overlay is hidden by frame text on short/wide frames."] .. "|r", 260), 30)
-            frameLevelNote.hideOn = HideIfNotBlizzard
-
-            local blizSizeAdjust = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Size Adjust"], -10, 10, 1, db, "bossDebuffsContainerOverlaySizeAdjust", function()
-                if DF.IterateAllFrames then
-                    DF:IterateAllFrames(function(f)
-                        if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
-                    end)
-                end
-            end), 40)
-            blizSizeAdjust.hideOn = HideIfNotBlizzard
-
-            blizGroup.hideOn = HideIfNotBlizzard
-            blizSection:RegisterChild(blizGroup)
-            Add(blizGroup, nil, 1)
         end
+        UpdateBlizSectionTag()
+        blizSection.refreshContent = function(self) UpdateBlizSectionTag() end
+        Add(blizSection, 36, "both")
+
+        local blizGroup = GUI:CreateSettingsGroup(self.child, 280)
+        blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["This overlay is rendered by Blizzard and has limited customisation. It is separate from the DandersFrames overlay above."], 260), 60)
+
+        local gradientDirOptions = {
+            [0] = L["Top Edge"],
+            [1] = L["Bottom Edge"],
+            [2] = L["Left Edge"],
+        }
+        local blizGradientDir = blizGroup:AddWidget(GUI:CreateDropdown(self.child, L["Gradient Direction"], gradientDirOptions, db, "bossDebuffsContainerOverlayGradientDir", function()
+            if DF.IterateAllFrames then
+                DF:IterateAllFrames(function(f)
+                    if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
+                end)
+            end
+        end), 55)
+        blizGradientDir.hideOn = HideIfNotBlizzard
+        local gradientNote = blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFF888888" .. L["Right Edge is not available in the Blizzard API."] .. "|r", 260), 20)
+        gradientNote.hideOn = HideIfNotBlizzard
+
+        local blizAlpha = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "bossDebuffsContainerOverlayAlpha", function()
+            if DF.IterateAllFrames then
+                DF:IterateAllFrames(function(f)
+                    if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
+                end)
+            end
+        end), 40)
+        blizAlpha.hideOn = HideIfNotBlizzard
+
+        local strataOptions = {
+            BACKGROUND = L["Background"],
+            LOW = L["Low"],
+            MEDIUM = L["Medium"],
+            HIGH = L["High"],
+            DIALOG = L["Dialog"],
+            _order = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG" },
+        }
+        local blizStrata = blizGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frame Strata"], strataOptions, db, "bossDebuffsContainerOverlayStrata", function()
+            if DF.IterateAllFrames then
+                DF:IterateAllFrames(function(f)
+                    if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
+                end)
+            end
+        end), 55)
+        blizStrata.hideOn = HideIfNotBlizzard
+
+        local blizFrameLevel = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 50, 1, db, "bossDebuffsContainerOverlayFrameLevel", function()
+            if DF.IterateAllFrames then
+                DF:IterateAllFrames(function(f)
+                    if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
+                end)
+            end
+        end), 40)
+        blizFrameLevel.hideOn = HideIfNotBlizzard
+
+        local frameLevelNote = blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFF888888" .. L["Raise strata or frame level if the overlay is hidden by frame text on short/wide frames."] .. "|r", 260), 30)
+        frameLevelNote.hideOn = HideIfNotBlizzard
+
+        local blizSizeAdjust = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Size Adjust"], -10, 10, 1, db, "bossDebuffsContainerOverlaySizeAdjust", function()
+            if DF.IterateAllFrames then
+                DF:IterateAllFrames(function(f)
+                    if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
+                end)
+            end
+        end), 40)
+        blizSizeAdjust.hideOn = HideIfNotBlizzard
+
+        blizGroup.hideOn = HideIfNotBlizzard
+        blizSection:RegisterChild(blizGroup)
+        Add(blizGroup, nil, 1)
 
         -- See Also links
         AddSpace(20, "both")
