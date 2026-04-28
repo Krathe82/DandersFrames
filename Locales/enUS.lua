@@ -1261,6 +1261,7 @@ L["Shows the ping wheel & party management menu."] = true
 L["Shows the ping wheel & party management menu when Blizzard frames are disabled."] = true
 L["Size"] = true
 L["Size & Spacing"] = true
+L["Size Adjust"] = true
 L["Skyfury (Shaman)"] = true
 L["Smooth Bar Animation"] = true
 L["Snaps sizes and borders to exact pixels for crisp rendering."] = true
