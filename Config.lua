@@ -858,14 +858,8 @@ DF.PartyDefaults = {
     bossDebuffsShowNumbers = true,
     bossDebuffsSpacing = 5,
     bossDebuffsTextScale = 1.0,
-    bossDebuffsOverlayClipBorder = false,
-    bossDebuffsOverlayEnabled = false,
-    bossDebuffsOverlayFrameLevel = 14,
-    bossDebuffsOverlayIconRatio = 2.6,
-    bossDebuffsOverlayMaxSlots = 3,
-    bossDebuffsOverlayScale = 1.05,
 
-    -- Container overlay (12.0.5+ native dispel overlay for private auras)
+    -- Container overlay (native dispel overlay for private auras)
     -- Enable state + dispel-type are driven by dispelOverlaySource and
     -- dispelOverlayDispelType (unified across both overlay systems).
     bossDebuffsContainerOverlayGradientDir = 0,
@@ -2177,14 +2171,8 @@ DF.RaidDefaults = {
     bossDebuffsShowNumbers = true,
     bossDebuffsSpacing = 5,
     bossDebuffsTextScale = 1.0,
-    bossDebuffsOverlayClipBorder = false,
-    bossDebuffsOverlayEnabled = false,
-    bossDebuffsOverlayFrameLevel = 14,
-    bossDebuffsOverlayIconRatio = 2.6,
-    bossDebuffsOverlayMaxSlots = 3,
-    bossDebuffsOverlayScale = 1.05,
 
-    -- Container overlay (12.0.5+ native dispel overlay for private auras)
+    -- Container overlay (native dispel overlay for private auras)
     -- Enable state + dispel-type are driven by dispelOverlaySource and
     -- dispelOverlayDispelType (unified across both overlay systems).
     bossDebuffsContainerOverlayGradientDir = 0,
