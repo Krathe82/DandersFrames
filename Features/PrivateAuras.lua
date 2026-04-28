@@ -464,7 +464,9 @@ SetupContainerOverlay = function(frame, unit, db)
 
     wrapper:SetParent(frame)
     wrapper:ClearAllPoints()
-    wrapper:SetAllPoints(frame)
+    local sizeAdjust = db.bossDebuffsContainerOverlaySizeAdjust or 0
+    wrapper:SetPoint("TOPLEFT", frame, "TOPLEFT", -sizeAdjust, sizeAdjust)
+    wrapper:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", sizeAdjust, -sizeAdjust)
     wrapper:SetFrameStrata(db.bossDebuffsContainerOverlayStrata or "MEDIUM")
     wrapper:SetFrameLevel(frame:GetFrameLevel() + (db.bossDebuffsContainerOverlayFrameLevel or 6))
     -- Always keep the wrapper Shown so Blizzard's container eventFrame
@@ -664,6 +666,13 @@ function DF:UpdateContainerOverlaySettings(frame)
     local parent = wrapper:GetParent()
     if parent then
         wrapper:SetFrameLevel(parent:GetFrameLevel() + (db.bossDebuffsContainerOverlayFrameLevel or 6))
+    end
+
+    if parent then
+        local sizeAdjust = db.bossDebuffsContainerOverlaySizeAdjust or 0
+        wrapper:ClearAllPoints()
+        wrapper:SetPoint("TOPLEFT", parent, "TOPLEFT", -sizeAdjust, sizeAdjust)
+        wrapper:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", sizeAdjust, -sizeAdjust)
     end
 
     -- Push the user alpha directly so Blizzard-mode slider changes take
