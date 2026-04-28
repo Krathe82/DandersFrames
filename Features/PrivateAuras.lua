@@ -39,12 +39,10 @@ local SetupContainerOverlay
 local function BuildIconInfo(iconW, iconH, borderScale, textScale, parentFrame)
     local sz = math.floor(math.max(iconW, iconH) / textScale + 0.5)
     if sz < 1 then sz = 1 end
-    local bs
-    if borderScale and borderScale ~= 1.0 then
-        bs = borderScale / textScale
-    else
-        bs = nil
-    end
+    -- Always pass borderScale explicitly — Blizzard's "auto-scale" when
+    -- borderScale is omitted produces a much larger ring than 1.0, so the
+    -- user's slider value is the source of truth here.
+    local bs = (borderScale or 1.0) / textScale
     return {
         iconWidth   = sz,
         iconHeight  = sz,
