@@ -666,9 +666,6 @@ function DF:UpdateContainerOverlaySettings(frame)
     local parent = wrapper:GetParent()
     if parent then
         wrapper:SetFrameLevel(parent:GetFrameLevel() + (db.bossDebuffsContainerOverlayFrameLevel or 6))
-    end
-
-    if parent then
         local sizeAdjust = db.bossDebuffsContainerOverlaySizeAdjust or 0
         wrapper:ClearAllPoints()
         wrapper:SetPoint("TOPLEFT", parent, "TOPLEFT", -sizeAdjust, sizeAdjust)
