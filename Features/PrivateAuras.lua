@@ -891,7 +891,12 @@ function DF:ReanchorPrivateAuras(frame)
         end
     end
 
-    frame.bossDebuffAnchoredUnit = newUnit
+    -- Only mark the unit anchored if at least one slot succeeded. Otherwise
+    -- the idempotency guard at the top of this function would lock out all
+    -- future retries even though zero anchors are actually registered.
+    if frameAnchors[frame] and #frameAnchors[frame] > 0 then
+        frame.bossDebuffAnchoredUnit = newUnit
+    end
 
     if DF.bossDebuffDebug then
         DF:Debug("Reanchored " .. #frame.bossDebuffFrames .. " frames to "
