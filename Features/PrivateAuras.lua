@@ -12,7 +12,7 @@ if not C_UnitAuras or not C_UnitAuras.AddPrivateAuraAnchor then
 end
 
 -- Local references
-local pairs, ipairs, pcall = pairs, ipairs, pcall
+local pairs, ipairs = pairs, ipairs
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local UnitExists = UnitExists
@@ -261,26 +261,23 @@ function DF:SetupPrivateAuraAnchors(frame)
         -- Single anchor registration — one call per slot, no second anchor needed.
         -- Timer text and stack count are rendered by Blizzard as children of
         -- iconFrame and inherit its scale, giving us scaled text for free.
-        local success, anchorID = pcall(function()
-            local anchorArgs = {
-                unitToken = unit,
-                auraIndex = i,
-                parent    = iconFrame,
-                showCountdownFrame   = showCountdown,
-                showCountdownNumbers = showNumbers,
-                iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
-            }
-            anchorArgs.isContainer = false
-            return C_UnitAuras.AddPrivateAuraAnchor(anchorArgs)
-        end)
+        local anchorArgs = {
+            unitToken = unit,
+            auraIndex = i,
+            parent    = iconFrame,
+            showCountdownFrame   = showCountdown,
+            showCountdownNumbers = showNumbers,
+            iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
+            isContainer = false,
+        }
+        local anchorID = C_UnitAuras.AddPrivateAuraAnchor(anchorArgs)
 
         if DF.bossDebuffDebug then
             DF:Debug("  [" .. i .. "] AddPrivateAuraAnchor unit=" .. unit
-                .. " success=" .. tostring(success)
                 .. " anchorID=" .. tostring(anchorID))
         end
 
-        if success and anchorID then
+        if anchorID then
             table.insert(frameAnchors[frame], anchorID)
         end
         -- No else branch: leave iconFrame Shown so a future Setup/Reanchor call
@@ -367,26 +364,22 @@ SetupContainerOverlay = function(frame, unit, db)
     wrapper:SetAttribute("set-aura-size-to-icon-size", false)
 
     -- Register the container anchor
-    local success, anchorID = pcall(function()
-        return C_UnitAuras.AddPrivateAuraAnchor({
-            unitToken = unit,
-            parent = wrapper,
-            isContainer = true,
-            auraIndex = 1,
-            showCountdownFrame = false,
-            showCountdownNumbers = false,
-        })
-    end)
+    local anchorID = C_UnitAuras.AddPrivateAuraAnchor({
+        unitToken = unit,
+        parent = wrapper,
+        isContainer = true,
+        auraIndex = 1,
+        showCountdownFrame = false,
+        showCountdownNumbers = false,
+    })
 
-    if success and anchorID then
+    if anchorID then
         containerOverlayAnchors[frame] = anchorID
         if DF.bossDebuffDebug then
             DF:Debug("Container overlay registered for " .. unit .. " anchorID=" .. tostring(anchorID))
         end
-    else
-        if DF.bossDebuffDebug then
-            DF:DebugError("Container overlay registration FAILED for " .. unit .. ": " .. tostring(anchorID))
-        end
+    elseif DF.bossDebuffDebug then
+        DF:DebugError("Container overlay registration FAILED for " .. unit)
     end
 
     -- Initial visibility sync: if DF's own overlay is already shown for a
@@ -491,9 +484,7 @@ function DF:UpdateContainerOverlaySettings(frame)
     if not blizOn then
         local anchorID = containerOverlayAnchors[frame]
         if anchorID then
-            pcall(function()
-                C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
-            end)
+            C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
             containerOverlayAnchors[frame] = nil
         end
         wrapper:Hide()
@@ -551,9 +542,7 @@ function DF:ClearPrivateAuraAnchors(frame)
     local anchors = frameAnchors[frame]
     if anchors then
         for _, anchorID in ipairs(anchors) do
-            pcall(function()
-                C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
-            end)
+            C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
         end
         frameAnchors[frame] = nil
     end
@@ -569,9 +558,7 @@ function DF:ClearPrivateAuraAnchors(frame)
     -- Remove container overlay anchor
     local containerAnchorID = containerOverlayAnchors[frame]
     if containerAnchorID then
-        pcall(function()
-            C_UnitAuras.RemovePrivateAuraAnchor(containerAnchorID)
-        end)
+        C_UnitAuras.RemovePrivateAuraAnchor(containerAnchorID)
         containerOverlayAnchors[frame] = nil
     end
 
@@ -612,9 +599,7 @@ function DF:ReanchorPrivateAuras(frame)
     local oldAnchors = frameAnchors[frame]
     if oldAnchors then
         for _, anchorID in ipairs(oldAnchors) do
-            pcall(function()
-                C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
-            end)
+            C_UnitAuras.RemovePrivateAuraAnchor(anchorID)
         end
     end
     frameAnchors[frame] = {}
@@ -639,18 +624,16 @@ function DF:ReanchorPrivateAuras(frame)
         if iconFrame:IsShown() then
             iconFrame:SetFrameStrata(strata)
             iconFrame:SetFrameLevel(baseLevel + frameLevel)
-            local success, anchorID = pcall(function()
-                return C_UnitAuras.AddPrivateAuraAnchor({
-                    unitToken = newUnit,
-                    auraIndex = i,
-                    parent    = iconFrame,
-                    showCountdownFrame   = showCountdown,
-                    showCountdownNumbers = showNumbers,
-                    iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
-                })
-            end)
+            local anchorID = C_UnitAuras.AddPrivateAuraAnchor({
+                unitToken = newUnit,
+                auraIndex = i,
+                parent    = iconFrame,
+                showCountdownFrame   = showCountdown,
+                showCountdownNumbers = showNumbers,
+                iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
+            })
 
-            if success and anchorID then
+            if anchorID then
                 table.insert(frameAnchors[frame], anchorID)
             end
         end
@@ -661,9 +644,7 @@ function DF:ReanchorPrivateAuras(frame)
     if (src == "blizzard" or src == "both") and frame.containerOverlayFrame then
         local oldContainerAnchor = containerOverlayAnchors[frame]
         if oldContainerAnchor then
-            pcall(function()
-                C_UnitAuras.RemovePrivateAuraAnchor(oldContainerAnchor)
-            end)
+            C_UnitAuras.RemovePrivateAuraAnchor(oldContainerAnchor)
             containerOverlayAnchors[frame] = nil
         end
 
@@ -672,17 +653,15 @@ function DF:ReanchorPrivateAuras(frame)
         wrapper:SetAttribute("group-type", groupType)
         wrapper:SetAttribute("update-settings", true)
 
-        local cSuccess, cAnchorID = pcall(function()
-            return C_UnitAuras.AddPrivateAuraAnchor({
-                unitToken = newUnit,
-                parent = wrapper,
-                isContainer = true,
-                auraIndex = 1,
-                showCountdownFrame = false,
-                showCountdownNumbers = false,
-            })
-        end)
-        if cSuccess and cAnchorID then
+        local cAnchorID = C_UnitAuras.AddPrivateAuraAnchor({
+            unitToken = newUnit,
+            parent = wrapper,
+            isContainer = true,
+            auraIndex = 1,
+            showCountdownFrame = false,
+            showCountdownNumbers = false,
+        })
+        if cAnchorID then
             containerOverlayAnchors[frame] = cAnchorID
         end
     end
