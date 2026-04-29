@@ -5154,18 +5154,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== SIZE GROUP (Column 1) =====
         local sizeGroup = GUI:CreateSettingsGroup(self.child, 280)
         sizeGroup:AddWidget(GUI:CreateHeader(self.child, L["Size & Spacing"]), 40)
-        local iconWidth = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Width"], 10, 60, 1, db, "bossDebuffsIconWidth", nil, function()
+        local iconSize = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Size"], 10, 60, 1, db, "bossDebuffsIconSize", nil, function()
             if DF.PreviewPrivateAuraAnchors then DF:PreviewPrivateAuraAnchors() end
             if DF.UpdateAllTestBossDebuffs then DF:UpdateAllTestBossDebuffs() end
             self:RefreshStates()
         end, true), 55)
-        iconWidth.hideOn = HideBossDebuffOptions
-        local iconHeight = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Height"], 10, 60, 1, db, "bossDebuffsIconHeight", nil, function()
-            if DF.PreviewPrivateAuraAnchors then DF:PreviewPrivateAuraAnchors() end
-            if DF.UpdateAllTestBossDebuffs then DF:UpdateAllTestBossDebuffs() end
-            self:RefreshStates()
-        end, true), 55)
-        iconHeight.hideOn = HideBossDebuffOptions
+        iconSize.hideOn = HideBossDebuffOptions
 
         -- Stack text warning note + "Show me" button container
         local stackNoteContainer = CreateFrame("Frame", nil, self.child)
@@ -5174,7 +5168,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         stackNoteLabel:SetPoint("TOPLEFT", stackNoteContainer, "TOPLEFT", 0, 0)
         stackNoteLabel:SetWidth(250)
         stackNoteLabel:SetJustifyH("LEFT")
-        stackNoteLabel:SetText("|cFFFF4444Note:|r Icons smaller than 30x30 may hide stack text behind duration text. At small sizes, consider disabling duration numbers.")
+        stackNoteLabel:SetText("|cFFFF4444Note:|r Icons smaller than 30 may hide stack text behind duration text. At small sizes, consider disabling duration numbers.")
         local showMeBtn = CreateFrame("Button", nil, stackNoteContainer, "BackdropTemplate")
         showMeBtn:SetSize(55, 18)
         showMeBtn:SetPoint("TOPLEFT", stackNoteLabel, "BOTTOMLEFT", 0, -4)
@@ -5192,7 +5186,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         showMeBtn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.4, 0.4, 0.4, 1) end)
         local stackNote = sizeGroup:AddWidget(stackNoteContainer, 65)
         stackNote.hideOn = function(d)
-            return not d.bossDebuffsEnabled or ((d.bossDebuffsIconWidth or 20) >= 30 and (d.bossDebuffsIconHeight or 20) >= 30)
+            return not d.bossDebuffsEnabled or (d.bossDebuffsIconSize or 20) >= 30
         end
         local borderScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Scale"], 0, 2.0, 0.1, db, "bossDebuffsBorderScale", nil, function()
             if DF.PreviewPrivateAuraAnchors then DF:PreviewPrivateAuraAnchors() end

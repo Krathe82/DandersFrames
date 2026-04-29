@@ -815,7 +815,6 @@ L["How it works"] = true
 L["How often to check range (seconds). Lower = more responsive but higher CPU. Default: 0.5s"] = true
 L["Hunter"] = true
 L["I, II, III..."] = true
-L["Icon Height"] = true
 L["Icon Offset X"] = true
 L["Icon Offset Y"] = true
 L["Icon Opacity"] = true
@@ -823,7 +822,6 @@ L["Icon Position"] = true
 L["Icon Size"] = true
 L["Icon Spacing"] = true
 L["Icon Style"] = true
-L["Icon Width"] = true
 L["Icons"] = true
 L["Icons Alpha"] = true
 L["Icons Per Row"] = true

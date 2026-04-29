@@ -32,16 +32,13 @@ local SetupContainerOverlay
 
 -- Build the iconInfo table for AddPrivateAuraAnchor. Normalises values to
 -- the safest envelope we have empirical evidence Blizzard renders correctly:
---   * iconWidth == iconHeight (square)
---   * both rounded to integers
---   * borderScale = nil at default 1.0 (let Blizzard auto-scale)
--- Caller passes the user's raw width/height/border + the textScale divisor.
-local function BuildIconInfo(iconW, iconH, borderScale, textScale, parentFrame)
-    local sz = math.floor(math.max(iconW, iconH) / textScale + 0.5)
+--   * iconWidth == iconHeight (square — always)
+--   * rounded to an integer
+--   * borderScale always passed explicitly so Blizzard's much-bigger
+--     auto-scale doesn't kick in when the user's slider is at default 1.0
+local function BuildIconInfo(iconSize, borderScale, textScale, parentFrame)
+    local sz = math.floor(iconSize / textScale + 0.5)
     if sz < 1 then sz = 1 end
-    -- Always pass borderScale explicitly — Blizzard's "auto-scale" when
-    -- borderScale is omitted produces a much larger ring than 1.0, so the
-    -- user's slider value is the source of truth here.
     local bs = (borderScale or 1.0) / textScale
     return {
         iconWidth   = sz,
@@ -154,20 +151,18 @@ function DF:SetupPrivateAuraAnchors(frame)
     local frameLevel   = db.bossDebuffsFrameLevel or 35
     local showCountdown = db.bossDebuffsShowCountdown ~= false
     local showNumbers  = db.bossDebuffsShowNumbers ~= false
-    local iconWidth    = db.bossDebuffsIconWidth or 20
-    local iconHeight   = db.bossDebuffsIconHeight or 20
+    local iconSize     = db.bossDebuffsIconSize or 20
     local borderScale  = db.bossDebuffsBorderScale or 1.0
     -- textScale: scales the container frame so Blizzard's rendered text
     -- (timer + stack count) inherits the scale automatically.
-    -- The icon dimensions are divided by textScale so the visible icon
+    -- The icon dimension is divided by textScale so the visible icon
     -- stays at the correct pixel size despite the parent being scaled.
     -- Spacing and offsets are also divided to stay correct in screen space.
     local textScale    = db.bossDebuffsTextScale or 1.0
     local hideTooltip  = db.bossDebuffsHideTooltip or false
 
-    -- Compensated values (all divided by textScale so screen-space size is correct)
-    local scaledIconW  = iconWidth  / textScale
-    local scaledIconH  = iconHeight / textScale
+    -- Compensated value (divided by textScale so screen-space size is correct)
+    local scaledSize   = iconSize / textScale
 
     -- Growth anchoring
     local pointOnCurrent, pointOnPrev, xMult, yMult = GetGrowthAnchors(growth)
@@ -217,13 +212,13 @@ function DF:SetupPrivateAuraAnchors(frame)
         -- EnableMouse(false) alone does NOT work — Blizzard's private aura children
         -- are C-side and bypass the Lua mouse flag on the parent.
         -- The icon still renders at full size because iconInfo specifies the full
-        -- iconWidth/iconHeight regardless of parent size.
+        -- iconSize regardless of parent size.
         -- With textScale active, all SetPoint offsets are in the container's local
         -- coordinate space (divided by textScale = screen pixels).
         if hideTooltip then
             iconFrame:SetSize(0.001, 0.001)
         else
-            iconFrame:SetSize(scaledIconW, scaledIconH)
+            iconFrame:SetSize(scaledSize, scaledSize)
         end
 
         if i == 1 then
@@ -233,8 +228,8 @@ function DF:SetupPrivateAuraAnchors(frame)
                 -- Icon renders centered on the 0.001px frame. Shift by half the
                 -- icon's screen-space size so its edge aligns with the anchor point.
                 -- Divide by textScale to convert screen pixels → local coordinates.
-                adjX = adjX + (iconWidth / 2) * xMult / textScale
-                adjY = adjY + (iconHeight / 2) * yMult / textScale
+                adjX = adjX + (iconSize / 2) * xMult / textScale
+                adjY = adjY + (iconSize / 2) * yMult / textScale
             end
             iconFrame:SetPoint(pointOnCurrent, frame, anchor, adjX, adjY)
         else
@@ -243,12 +238,12 @@ function DF:SetupPrivateAuraAnchors(frame)
             local gapY = spacing * yMult / textScale
             if hideTooltip then
                 -- Frames are 0.001px so chaining loses the icon dimension.
-                -- Add a full icon width/height in screen space (divided by textScale
+                -- Add a full icon size in screen space (divided by textScale
                 -- to convert to local coordinates for SetPoint).
                 -- abs() because xMult/yMult can be negative (LEFT/UP growth) — we
                 -- want to extend the gap, not cancel it.
-                gapX = gapX + iconWidth  * math.abs(xMult) / textScale
-                gapY = gapY + iconHeight * math.abs(yMult) / textScale
+                gapX = gapX + iconSize * math.abs(xMult) / textScale
+                gapY = gapY + iconSize * math.abs(yMult) / textScale
             end
             iconFrame:SetPoint(pointOnCurrent, prevFrame, pointOnPrev, gapX, gapY)
         end
@@ -283,7 +278,7 @@ function DF:SetupPrivateAuraAnchors(frame)
             parent    = iconFrame,
             showCountdownFrame   = showCountdown,
             showCountdownNumbers = showNumbers,
-            iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
+            iconInfo = BuildIconInfo(iconSize, borderScale, textScale, iconFrame),
             isContainer = false,
         }
         local anchorID = C_UnitAuras.AddPrivateAuraAnchor(anchorArgs)
@@ -625,8 +620,7 @@ function DF:ReanchorPrivateAuras(frame)
     -- Re-read settings
     local showCountdown = db.bossDebuffsShowCountdown ~= false
     local showNumbers   = db.bossDebuffsShowNumbers ~= false
-    local iconWidth     = db.bossDebuffsIconWidth or 20
-    local iconHeight    = db.bossDebuffsIconHeight or 20
+    local iconSize      = db.bossDebuffsIconSize or 20
     local borderScale   = db.bossDebuffsBorderScale or 1.0
     local textScale     = db.bossDebuffsTextScale or 1.0
     local frameLevel    = db.bossDebuffsFrameLevel or 35
@@ -648,7 +642,7 @@ function DF:ReanchorPrivateAuras(frame)
                 parent    = iconFrame,
                 showCountdownFrame   = showCountdown,
                 showCountdownNumbers = showNumbers,
-                iconInfo = BuildIconInfo(iconWidth, iconHeight, borderScale, textScale, iconFrame),
+                iconInfo = BuildIconInfo(iconSize, borderScale, textScale, iconFrame),
             })
 
             if anchorID then
@@ -749,8 +743,7 @@ local function UpdateFramePositions(frame)
     local offsetY     = db.bossDebuffsOffsetY or 0
     local textScale   = db.bossDebuffsTextScale or 1.0
     local hideTooltip = db.bossDebuffsHideTooltip or false
-    local iconWidth   = db.bossDebuffsIconWidth or 20
-    local iconHeight  = db.bossDebuffsIconHeight or 20
+    local iconSize    = db.bossDebuffsIconSize or 20
 
     local pointOnCurrent, pointOnPrev, xMult, yMult = GetGrowthAnchors(growth)
 
@@ -760,8 +753,8 @@ local function UpdateFramePositions(frame)
             local adjX = offsetX / textScale
             local adjY = offsetY / textScale
             if hideTooltip then
-                adjX = adjX + (iconWidth / 2)  * xMult / textScale
-                adjY = adjY + (iconHeight / 2) * yMult / textScale
+                adjX = adjX + (iconSize / 2) * xMult / textScale
+                adjY = adjY + (iconSize / 2) * yMult / textScale
             end
             iconFrame:SetPoint(pointOnCurrent, frame, anchor, adjX, adjY)
         else
@@ -769,8 +762,8 @@ local function UpdateFramePositions(frame)
             local gapX = spacing * xMult / textScale
             local gapY = spacing * yMult / textScale
             if hideTooltip then
-                gapX = gapX + iconWidth  * math.abs(xMult) / textScale
-                gapY = gapY + iconHeight * math.abs(yMult) / textScale
+                gapX = gapX + iconSize * math.abs(xMult) / textScale
+                gapY = gapY + iconSize * math.abs(yMult) / textScale
             end
             iconFrame:SetPoint(pointOnCurrent, prevFrame, pointOnPrev, gapX, gapY)
         end

@@ -8,6 +8,7 @@
 * (Click Casting) The conflict popup for Clique and Clicked now also appears when switching to a click-cast profile that turns click casting on.
 * (Boss Debuffs) Updated the info banner to clarify that boss debuffs trigger dispel overlays in Hybrid or Blizzard mode.
 * (Boss Debuffs) Added a Size Adjust slider for the Blizzard dispel overlay so the gradient can extend past or shrink inside the frame edges.
+* (Boss Debuffs) Replaced separate Icon Width and Icon Height sliders with a single Icon Size slider. Existing settings carry over to the larger of your two old values.
 
 ### Changes
 
