@@ -21,6 +21,7 @@
 * (Boss Debuffs) Skip private aura registration on pet frames — pets can't receive boss debuffs.
 * (Click Casting) Fix target click-cast bindings on DandersFrames hitting the /target name range limit.
 * (Boss Debuffs) Surface Blizzard private aura API errors instead of silently swallowing them.
+* (Boss Debuffs) Fix icons sometimes rendering behind the unit frame after a re-register, even with frame level raised.
 
 ## [4.3.5] - 2026-04-26
 

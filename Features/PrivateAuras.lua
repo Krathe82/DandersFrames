@@ -57,6 +57,22 @@ local function BuildIconInfo(iconW, iconH, borderScale, textScale, parentFrame)
     }
 end
 
+-- Force Blizzard's private aura renderer to re-snapshot the parent's frame
+-- level. AddPrivateAuraAnchor caches the parent level on the FIRST register
+-- and ignores it on every subsequent re-register against the same parent —
+-- so after a remove + re-add cycle, the new icons render at the OLD cached
+-- level and can end up painted behind the unit frame even if the parent's
+-- level has been raised since.
+--
+-- Toggling the level to 0 and back to its real value forces the renderer
+-- to re-read on the next paint. Workaround sourced from the Grid2 dev.
+local function ForceFrameLevelRefresh(parent)
+    if not parent then return end
+    local level = parent:GetFrameLevel()
+    parent:SetFrameLevel(0)
+    parent:SetFrameLevel(level)
+end
+
 -- Pending updates queue (for changes made during combat)
 local pendingUpdates = {}
 
@@ -279,6 +295,7 @@ function DF:SetupPrivateAuraAnchors(frame)
 
         if anchorID then
             table.insert(frameAnchors[frame], anchorID)
+            ForceFrameLevelRefresh(iconFrame)
         end
         -- No else branch: leave iconFrame Shown so a future Setup/Reanchor call
         -- can re-register on this slot. Hiding here previously trapped the slot
@@ -375,6 +392,7 @@ SetupContainerOverlay = function(frame, unit, db)
 
     if anchorID then
         containerOverlayAnchors[frame] = anchorID
+        ForceFrameLevelRefresh(wrapper)
         if DF.bossDebuffDebug then
             DF:Debug("Container overlay registered for " .. unit .. " anchorID=" .. tostring(anchorID))
         end
@@ -635,6 +653,7 @@ function DF:ReanchorPrivateAuras(frame)
 
             if anchorID then
                 table.insert(frameAnchors[frame], anchorID)
+                ForceFrameLevelRefresh(iconFrame)
             end
         end
     end
@@ -663,6 +682,7 @@ function DF:ReanchorPrivateAuras(frame)
         })
         if cAnchorID then
             containerOverlayAnchors[frame] = cAnchorID
+            ForceFrameLevelRefresh(wrapper)
         end
     end
 
