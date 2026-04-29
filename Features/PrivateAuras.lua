@@ -643,6 +643,7 @@ function DF:ReanchorPrivateAuras(frame)
                 showCountdownFrame   = showCountdown,
                 showCountdownNumbers = showNumbers,
                 iconInfo = BuildIconInfo(iconSize, borderScale, textScale, iconFrame),
+                isContainer = false,
             })
 
             if anchorID then
