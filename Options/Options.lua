@@ -7391,7 +7391,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local frameLevelNote = blizGroup:AddWidget(GUI:CreateLabel(self.child, "|cFF888888" .. L["Raise strata or frame level if the overlay is hidden by frame text on short/wide frames."] .. "|r", 260), 30)
         frameLevelNote.hideOn = HideIfNotBlizzard
 
-        local blizSizeAdjust = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Size Adjust"], -10, 10, 1, db, "bossDebuffsContainerOverlaySizeAdjust", function()
+        local blizSizeAdjust = blizGroup:AddWidget(GUI:CreateSlider(self.child, L["Inset"], -10, 10, 1, db, "bossDebuffsContainerOverlaySizeAdjust", function()
             if DF.IterateAllFrames then
                 DF:IterateAllFrames(function(f)
                     if DF.UpdateContainerOverlaySettings then DF:UpdateContainerOverlaySettings(f) end
