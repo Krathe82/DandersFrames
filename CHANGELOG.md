@@ -1,6 +1,6 @@
 # DandersFrames Changelog
 
-## [Unreleased]
+## [4.3.6] - 2026-04-30
 
 ### Improvements
 
