@@ -201,9 +201,9 @@ local function ApplyIconSettings(icon, db, prefix)
         local fontSize = db.statusIconFontSize or 12
         local outline = db.statusIconFontOutline or "OUTLINE"
         
-        -- Handle SHADOW outline
+        -- Handle SHADOW and NONE outlines (WoW SetFont rejects "NONE")
         local actualOutline = outline
-        if outline == "SHADOW" then
+        if outline == "SHADOW" or outline == "NONE" then
             actualOutline = ""
         end
         
@@ -240,15 +240,15 @@ local function ApplyIconSettings(icon, db, prefix)
         local outline = db.statusIconFontOutline or "OUTLINE"
         
         local actualOutline = outline
-        if outline == "SHADOW" then
+        if outline == "SHADOW" or outline == "NONE" then
             actualOutline = ""
         end
-        
+
         local fontPath = font
         if DF.GetFont then
             fontPath = DF:GetFont(font) or font
         end
-        
+
         icon.timerText:SetFont(fontPath, fontSize, actualOutline)
         
         if outline == "SHADOW" then
