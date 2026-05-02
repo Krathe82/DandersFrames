@@ -5,6 +5,8 @@
 ### Bug Fixes
 
 * (Raid Frames) Fix raid frames jumping upward when group composition changes with Groups Grow From set to Center. Previously the visible frames could shoot off the top of the screen each time a player joined a new group, requiring a Groups Grow From toggle to recover.
+* (Test Mode) Fix raid test mode showing the wrong layout when Players Grow From is set to End. Test mode now mirrors what live raid frames look like.
+* (Raid Frames) Fix raid groups flipping position on every GUI click when Players Grow From and Groups Grow From are both set to End. The combined setting now produces a stable layout that matches between settings panel and live frames.
 
 ## [4.3.6] - 2026-04-30
 

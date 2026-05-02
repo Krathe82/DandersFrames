@@ -3683,7 +3683,12 @@ function SecureSort:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGr
     -- Apply row/column growth direction (use full 8-group grid so Row 1 never jumps)
     local fullRowsCols = math.ceil(8 / groupsPerRowCol)
     local groupRowGrowth = lp.groupRowGrowth or "START"
-    if groupRowGrowth == "END" then
+    -- XOR with playerAnchor: with TOPLEFT (playerAnchor=START) the row index
+    -- increases downward, so groupRowGrowth=END needs to flip rcIndex. With
+    -- BOTTOMLEFT (playerAnchor=END) y already grows upward, so the flip needs
+    -- to invert direction to avoid double-flipping when both are END. (#876)
+    local needsRowFlip = (groupRowGrowth == "END") ~= ((lp.playerAnchor or "START") == "END")
+    if needsRowFlip then
         rcIndex = fullRowsCols - rcIndex + 1
     end
 
@@ -3868,18 +3873,50 @@ function SecureSort:PositionRaidFrameToGroupSlot(frame, groupNum, posInGroup, pl
     end
     
     local x, y = self:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGroup, activeGroupList, layoutParams)
-    
+
+    -- Test mode + playerAnchor=END: live frames get BOTTOMLEFT-anchored by the
+    -- secure snippet, but this Lua path is the only positioner test mode has,
+    -- so it must mirror that anchor behaviour itself. Convert the TOPLEFT
+    -- offset to its BOTTOMLEFT equivalent so the visible layout matches live.
+    -- (#875)
+    local lp = layoutParams
+    local useBottomLeft = lp and lp.testMode and (lp.playerAnchor or "START") == "END"
+
+    local bx, by = x, y
+    if useBottomLeft then
+        local frameHeight = lp.frameHeight or 40
+        local playerSpacing = lp.playerSpacing or 2
+        local groupsPerRowCol = lp.groupsPerRowCol or 8
+        local rowColSpacing = lp.rowColSpacing or 30
+        local fullRowsCols = math.ceil(8 / groupsPerRowCol)
+        local maxGroupHeight
+        if lp.horizontal then
+            maxGroupHeight = 5 * frameHeight + 4 * playerSpacing
+        else
+            maxGroupHeight = frameHeight
+        end
+        local totalHeight = fullRowsCols * maxGroupHeight + (fullRowsCols - 1) * rowColSpacing
+        -- y is negative (downward from TOPLEFT). Convert to upward from BOTTOMLEFT
+        -- by flipping origin and accounting for the frame's own height.
+        by = totalHeight + y - frameHeight
+    end
+
     -- Optimization: Check if frame is already at this position
     local currentAnchor, currentRelTo, currentRelAnchor, currentX, currentY = frame:GetPoint(1)
-    if currentAnchor == "TOPLEFT" and currentRelAnchor == "TOPLEFT" 
+    local expectedAnchor = useBottomLeft and "BOTTOMLEFT" or "TOPLEFT"
+    if currentAnchor == expectedAnchor and currentRelAnchor == expectedAnchor
        and currentX and currentY
-       and math.abs(currentX - x) < 0.5 and math.abs(currentY - y) < 0.5 then
+       and math.abs(currentX - bx) < 0.5 and math.abs(currentY - by) < 0.5 then
         return false
     end
-    
+
     frame:ClearAllPoints()
-    frame:SetPoint("TOPLEFT", container, "TOPLEFT", x, y)
-    
+    if useBottomLeft then
+        frame:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", bx, by)
+    else
+        frame:SetPoint("TOPLEFT", container, "TOPLEFT", bx, by)
+    end
+
     return true
 end
 

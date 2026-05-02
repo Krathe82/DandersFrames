@@ -4371,11 +4371,14 @@ function DF:LightweightPositionRaidTestFrames(testFrameCount)
     -- Update group layout params from current settings
     SecureSort:UpdateRaidGroupLayoutParams()
     local lp = SecureSort.raidGroupLayoutParams
+    -- Signal to PositionRaidFrameToGroupSlot that this is a test-mode call so it
+    -- mirrors the live secure snippet's BOTTOMLEFT anchor when playerAnchor=END.
+    -- Safe: UpdateRaidGroupLayoutParams replaces the whole table on its next call,
+    -- so the flag does not survive into the live-frame positioning path. (#875)
+    lp.testMode = true
 
-    -- [LEAK-TEST] Simulates the proposed patch's mutation. Only writes when the tester
-    -- opts in with: /run DandersFrames.debugLeakTestSimulate = true
-    -- Purpose: verify whether the flag survives the next UpdateRaidGroupLayoutParams call
-    -- and leaks into the live-frame positioning path.
+    -- [LEAK-TEST] Simulates the proposed patch's mutation. Now redundant since
+    -- the patch is in place above, but kept opt-in for diagnostic continuity.
     if DF.debugLeakTestSimulate then
         lp.testMode = true
         if DF.debugLeakTest then
