@@ -30,3 +30,6 @@ _Reference/*
 
 # Automation (local agent scripts, MCP server, logs)
 _Automation/
+
+# WoW CDN cache (TPR client data)
+cache/
