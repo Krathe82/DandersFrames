@@ -2516,9 +2516,19 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
         end
     end
 
-    -- Refresh test mode frames so they display override values
-    if DF.raidTestMode and DF.RefreshTestFramesWithLayout then
-        DF:RefreshTestFramesWithLayout()
+    -- Refresh test mode frames so they display override values.
+    -- PositionTestRaidContainer MUST run before RefreshTestFramesWithLayout:
+    -- the overrides written above may include a raidAnchorX/Y for this profile,
+    -- and frames are positioned relative to testRaidContainer's BOTTOMLEFT.
+    -- If the container isn't moved first, frames land at the wrong screen position.
+    -- (#906)
+    if DF.raidTestMode then
+        if DF.PositionTestRaidContainer then
+            DF:PositionTestRaidContainer()
+        end
+        if DF.RefreshTestFramesWithLayout then
+            DF:RefreshTestFramesWithLayout()
+        end
     end
 
     -- Refresh the GUI to show editing banner and disable Auto Profiles tab
@@ -2635,8 +2645,18 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
 
     -- Test mode needs a full layout refresh so frames re-read restored global values
     -- UpdateAll() only calls UpdateRaidTestFrames() which skips ApplyTestFrameLayout(),
-    -- so frame sizes, textures, fonts etc. would remain stuck on overridden values
-    if (DF.testMode or DF.raidTestMode) and DF.RefreshTestFramesWithLayout then
+    -- so frame sizes, textures, fonts etc. would remain stuck on overridden values.
+    -- PositionTestRaidContainer MUST run before RefreshTestFramesWithLayout so the
+    -- container is at the restored base anchor before frames are positioned against it.
+    -- (#906)
+    if DF.raidTestMode then
+        if DF.PositionTestRaidContainer then
+            DF:PositionTestRaidContainer()
+        end
+        if DF.RefreshTestFramesWithLayout then
+            DF:RefreshTestFramesWithLayout()
+        end
+    elseif DF.testMode and DF.RefreshTestFramesWithLayout then
         DF:RefreshTestFramesWithLayout()
     end
     
