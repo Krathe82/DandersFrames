@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-05-02T14:26:59Z"
+DF.BUILD_DATE = "2026-05-03T18:31:47Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -11,6 +11,8 @@ DF.CHANGELOG_TEXT = [===[
 * (Raid Frames) Fix raid frames jumping upward when group composition changes with Groups Grow From set to Center. Previously the visible frames could shoot off the top of the screen each time a player joined a new group, requiring a Groups Grow From toggle to recover.
 * (Test Mode) Fix raid test mode showing the wrong layout when Players Grow From is set to End. Test mode now mirrors what live raid frames look like.
 * (Raid Frames) Fix raid groups flipping position on every GUI click when Players Grow From and Groups Grow From are both set to End. The combined setting now produces a stable layout that matches between settings panel and live frames.
+* (Auto Profiles) Fix raid test mode frames landing in the wrong place when entering or exiting an auto-layout override. Test mode now repositions correctly without needing to lock and unlock the frames.
+* (Raid Frames) Fix Group Display Order, My Group First, and group visibility checkboxes not updating live raid frames. Player frames now reposition immediately instead of needing a /reload.
 
 ## [4.3.6] - 2026-04-30
 
