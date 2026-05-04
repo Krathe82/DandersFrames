@@ -2293,74 +2293,12 @@ function DF:UpdateCenterStatusIcon(frame)
     if DF.UpdateVehicleIcon then DF:UpdateVehicleIcon(frame) end
     if DF.UpdateRaidRoleIcon then DF:UpdateRaidRoleIcon(frame) end
     
-    -- DEPRECATED: Legacy centerStatusIcon handling (kept for backward compat)
-    if not frame.centerStatusIcon then return end
-    
-    -- Check if enabled
-    if not db.centerStatusIconEnabled then
-        frame.centerStatusIcon:Hide()
-        return
-    end
-    
-    local unit = frame.unit
-    local showIcon = false
-    local texture = nil
-    
-    -- Check for incoming summon (secret-safe)
-    if C_IncomingSummon and C_IncomingSummon.HasIncomingSummon then
-        local summonStatus = nil
-        pcall(function()
-            summonStatus = C_IncomingSummon.IncomingSummonStatus(unit)
-        end)
-        
-        -- Check if value is accessible
-        if summonStatus ~= nil and not (issecretvalue and issecretvalue(summonStatus)) then
-            if summonStatus == Enum.SummonStatus.Pending then
-                texture = "Interface\\RaidFrame\\Raid-Icon-SummonPending"
-                showIcon = true
-            elseif summonStatus == Enum.SummonStatus.Accepted then
-                texture = "Interface\\RaidFrame\\Raid-Icon-SummonAccepted"
-                showIcon = true
-            elseif summonStatus == Enum.SummonStatus.Declined then
-                texture = "Interface\\RaidFrame\\Raid-Icon-SummonDeclined"
-                showIcon = true
-            end
-        end
-    end
-    
-    -- Check for incoming resurrect (if no summon) - secret-safe
-    if not showIcon then
-        local hasRes = nil
-        pcall(function()
-            hasRes = UnitHasIncomingResurrection(unit)
-        end)
-        
-        if hasRes ~= nil and not (issecretvalue and issecretvalue(hasRes)) and hasRes then
-            texture = "Interface\\RaidFrame\\Raid-Icon-Rez"
-            showIcon = true
-        end
-    end
-    
-    if showIcon and texture then
-        frame.centerStatusIcon.texture:SetTexture(texture)
-        frame.centerStatusIcon:Show()
-        
-        -- Apply positioning
-        local scale = db.centerStatusIconScale or 1.0
-        local anchor = db.centerStatusIconAnchor or "CENTER"
-        local x = db.centerStatusIconX or 0
-        local y = db.centerStatusIconY or 0
-        
-        frame.centerStatusIcon:SetScale(scale)
-        frame.centerStatusIcon:ClearAllPoints()
-        frame.centerStatusIcon:SetPoint(anchor, frame, anchor, x, y)
-        
-        -- Apply frame level
-        local frameLevel = db.centerStatusIconFrameLevel or 0
-        if frameLevel > 0 then
-            frame.centerStatusIcon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
-        end
-    else
+    -- Legacy centerStatusIcon: all cases (summon, resurrection) are now handled
+    -- by the individual icons above (frame.summonIcon, frame.resurrectionIcon).
+    -- This block exists only to defensively hide any centerStatusIcon that may
+    -- still be visible from a prior session or settings export — drawing on it
+    -- here would duplicate the modern icons. (#908)
+    if frame.centerStatusIcon then
         frame.centerStatusIcon:Hide()
     end
 end
