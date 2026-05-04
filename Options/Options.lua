@@ -4909,16 +4909,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         debuffPaddingY.disableOn = function(d) return not d.showDebuffs end
         AddToSection(gridGroup, nil, 1)
         
-        -- Blizzard Settings Group (col2)
-        local blizzGroup = GUI:CreateSettingsGroup(self.child, 260)
-        blizzGroup:AddWidget(GUI:CreateHeader(self.child, L["Blizzard Frame Settings"]), 40)
-        blizzGroup:AddWidget(GUI:CreateLabel(self.child, L["Controls Blizzard's debuff filtering (affects our display too)."], 230), 35)
-        local partyDb = DF.db.party
-        blizzGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Only Dispellable Debuffs"], partyDb, "_blizzOnlyDispellable", function()
-            local newValue = partyDb._blizzOnlyDispellable
-            SetCVar("raidFramesDisplayOnlyDispellableDebuffs", newValue and 1 or 0)
-        end), 30)
-        AddToSection(blizzGroup, nil, 2)
         
         currentSection = nil
         AddSpace(10, "both")

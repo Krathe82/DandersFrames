@@ -2888,16 +2888,9 @@ function DF:ApplySavedCVarSettings()
     end
     SetCVar("raidFramesDispelIndicatorType", dispelIndicator)
     
-    -- Apply only dispellable debuffs setting
-    local onlyDispellable = db._blizzOnlyDispellable
-    if onlyDispellable ~= nil then
-        SetCVar("raidFramesDisplayOnlyDispellableDebuffs", onlyDispellable and 1 or 0)
-    end
-    
     if DF.debugEnabled then
         print("|cff00ff00DandersFrames:|r Applied CVar settings:")
         print("  raidFramesDispelIndicatorType =", dispelIndicator)
-        print("  raidFramesDisplayOnlyDispellableDebuffs =", onlyDispellable and 1 or 0)
     end
 end
 

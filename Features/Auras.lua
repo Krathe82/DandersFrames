@@ -1994,20 +1994,15 @@ local function ApplyBlizzardFrameSettings()
     local db = DF.db.party
     
     local dispelIndicator = db._blizzDispelIndicator
-    local onlyDispellable = db._blizzOnlyDispellable
-    
+
     -- Force dispel indicator to be at least 1 (never disabled)
     if dispelIndicator == nil or dispelIndicator == 0 then
         dispelIndicator = 1
         db._blizzDispelIndicator = 1
     end
-    
+
     -- Set via CVar only - do NOT modify optionTable
     SetCVar("raidFramesDispelIndicatorType", dispelIndicator)
-    
-    if onlyDispellable ~= nil then
-        SetCVar("raidFramesDisplayOnlyDispellableDebuffs", onlyDispellable and 1 or 0)
-    end
 end
 
 -- Export for use elsewhere
