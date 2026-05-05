@@ -2238,9 +2238,11 @@ function DF:LightweightUpdateDefensiveIconColors()
             icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
         end
         
-        -- Update duration text color
-        if icon.nativeCooldownText then
-            icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+        -- Update duration text color (skip when colorByTime is active — RenderDefensiveBarIcon handles it)
+        if not db.defensiveIconDurationColorByTime then
+            if icon.nativeCooldownText then
+                icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+            end
         end
     end
     

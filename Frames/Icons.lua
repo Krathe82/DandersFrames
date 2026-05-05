@@ -257,6 +257,67 @@ function DF:GetOrCreateDefensiveBarIcon(frame, index)
     return GetOrCreateDefensiveBarIcon(frame, index)
 end
 
+-- ============================================================
+-- DEFENSIVE ICON COLOR-BY-TIME TICKER
+-- Keeps duration text colours in sync with remaining time at
+-- ~3 FPS when defensiveIconDurationColorByTime is enabled.
+-- UpdateDefensiveBar is event-driven and only fires on aura
+-- events, so without this ticker the colour would be set once
+-- at application time and then stuck there.
+-- ============================================================
+local defColorFrame = CreateFrame("Frame")
+local defColorElapsed = 0
+defColorFrame:Show()
+
+local function ApplyDefensiveColorByTime(icon, unit)
+    if not icon or not icon:IsShown() then return end
+    if not icon.nativeCooldownText then return end
+    if not icon.auraData or not icon.auraData.auraInstanceID then return end
+
+    pcall(function()
+        if not (C_UnitAuras and C_UnitAuras.GetAuraDuration) then return end
+        local durationObj = C_UnitAuras.GetAuraDuration(unit, icon.auraData.auraInstanceID)
+        if not (durationObj and durationObj.EvaluateRemainingPercent) then return end
+
+        if not DF.durationColorCurve then
+            if not (C_CurveUtil and C_CurveUtil.CreateColorCurve) then return end
+            local curve = C_CurveUtil.CreateColorCurve()
+            curve:SetType(Enum.LuaCurveType.Linear)
+            curve:AddPoint(0,   CreateColor(1, 0,   0, 1))
+            curve:AddPoint(0.3, CreateColor(1, 0.5, 0, 1))
+            curve:AddPoint(0.5, CreateColor(1, 1,   0, 1))
+            curve:AddPoint(1,   CreateColor(0, 1,   0, 1))
+            DF.durationColorCurve = curve
+        end
+
+        local result = durationObj:EvaluateRemainingPercent(DF.durationColorCurve)
+        if result and result.r then
+            icon.nativeCooldownText:SetTextColor(result.r, result.g, result.b, 1)
+        end
+    end)
+end
+
+defColorFrame:SetScript("OnUpdate", function(_, elapsed)
+    defColorElapsed = defColorElapsed + elapsed
+    if defColorElapsed < 0.33 then return end  -- ~3 FPS
+    defColorElapsed = 0
+
+    if not DF.IterateAllFrames then return end
+
+    DF:IterateAllFrames(function(frame)
+        if not frame or not frame.unit then return end
+        local db = DF:GetFrameDB(frame)
+        if not db or not db.defensiveIconDurationColorByTime then return end
+
+        ApplyDefensiveColorByTime(frame.defensiveIcon, frame.unit)
+        if frame.defensiveBarIcons then
+            for i = 2, #frame.defensiveBarIcons do
+                ApplyDefensiveColorByTime(frame.defensiveBarIcons[i], frame.unit)
+            end
+        end
+    end)
+end)
+
 -- Render a single defensive icon at a position in the bar
 local function RenderDefensiveBarIcon(icon, unit, auraInstanceID, db, iconSize, borderSize, borderColor, showBorder, showDuration, durationScale, durationFont, durationOutline, durationX, durationY, durationColor)
     -- Get aura data
@@ -339,7 +400,57 @@ local function RenderDefensiveBarIcon(icon, unit, auraInstanceID, db, iconSize, 
         DF:SafeSetFont(icon.nativeCooldownText, durationFont, dSize, durationOutline)
         icon.nativeCooldownText:ClearAllPoints()
         icon.nativeCooldownText:SetPoint("CENTER", icon, "CENTER", durationX, durationY)
-        icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+
+        if db.defensiveIconDurationColorByTime then
+            -- Color by time remaining (secret-safe API path, matches Indicators.lua pattern)
+            local colorSet = false
+            pcall(function()
+                if unit and auraInstanceID and C_UnitAuras.GetAuraDuration
+                   and C_CurveUtil and C_CurveUtil.CreateColorCurve then
+                    local durationObj = C_UnitAuras.GetAuraDuration(unit, auraInstanceID)
+                    if durationObj and durationObj.EvaluateRemainingPercent then
+                        if not DF.durationColorCurve then
+                            local curve = C_CurveUtil.CreateColorCurve()
+                            curve:SetType(Enum.LuaCurveType.Linear)
+                            curve:AddPoint(0, CreateColor(1, 0, 0, 1))
+                            curve:AddPoint(0.3, CreateColor(1, 0.5, 0, 1))
+                            curve:AddPoint(0.5, CreateColor(1, 1, 0, 1))
+                            curve:AddPoint(1, CreateColor(0, 1, 0, 1))
+                            DF.durationColorCurve = curve
+                        end
+                        local result = durationObj:EvaluateRemainingPercent(DF.durationColorCurve)
+                        if result and result.r then
+                            icon.nativeCooldownText:SetTextColor(result.r, result.g, result.b, 1)
+                            colorSet = true
+                        end
+                    end
+                end
+            end)
+            if not colorSet then
+                -- Fallback: plain math on non-secret values (e.g. out of combat)
+                local exp = auraData.expirationTime
+                local dur = auraData.duration
+                if exp and dur and not issecretvalue(exp) and not issecretvalue(dur) and dur > 0 then
+                    local pct = max(0, min(1, (exp - GetTime()) / dur))
+                    local r, g, b
+                    if pct < 0.3 then
+                        local t = pct / 0.3
+                        r, g, b = 1, 0.5 * t, 0
+                    elseif pct < 0.5 then
+                        local t = (pct - 0.3) / 0.2
+                        r, g, b = 1, 0.5 + 0.5 * t, 0
+                    else
+                        local t = (pct - 0.5) / 0.5
+                        r, g, b = 1 - t, 1, 0
+                    end
+                    icon.nativeCooldownText:SetTextColor(r, g, b, 1)
+                else
+                    icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+                end
+            end
+        else
+            icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+        end
     end
 
     -- Stack count

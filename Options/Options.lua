@@ -5505,36 +5505,36 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end), 55)
         diDurOutline.hideOn = HideDefensiveDurationOptions
-        
-        durationGroup.hideOn = HideDefensiveIconOptions
-        Add(durationGroup, nil, 1)
-        
-        -- ===== DURATION POSITION GROUP (Column 2) =====
-        local durPosGroup = GUI:CreateSettingsGroup(self.child, 280)
-        durPosGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Position"]), 40)
-        
-        local diDurX = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset X"], -20, 20, 1, db, "defensiveIconDurationX", function()
-            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
-        end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
-        diDurX.hideOn = HideDefensiveDurationOptions
-        
-        local diDurY = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset Y"], -20, 20, 1, db, "defensiveIconDurationY", function()
-            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
-        end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
-        diDurY.hideOn = HideDefensiveDurationOptions
-        
-        local diDurColor = durPosGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Duration Color"], db, "defensiveIconDurationColor", false, function()
+
+        local diDurColor = durationGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Duration Color"], db, "defensiveIconDurationColor", false, function()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end, function() DF:LightweightUpdateDefensiveIconColors() end, true), 35)
         diDurColor.hideOn = HideDefensiveDurationOptions
         diDurColor.disableOn = function(d) return d.defensiveIconDurationColorByTime end
-        
-        local diDurColorByTime = durPosGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color by Time Remaining"], db, "defensiveIconDurationColorByTime", function()
+
+        local diDurColorByTime = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color by Time Remaining"], db, "defensiveIconDurationColorByTime", function()
             self:RefreshStates()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end), 30)
         diDurColorByTime.hideOn = HideDefensiveDurationOptions
-        
+
+        durationGroup.hideOn = HideDefensiveIconOptions
+        Add(durationGroup, nil, 1)
+
+        -- ===== DURATION POSITION GROUP (Column 2) =====
+        local durPosGroup = GUI:CreateSettingsGroup(self.child, 280)
+        durPosGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Position"]), 40)
+
+        local diDurX = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset X"], -20, 20, 1, db, "defensiveIconDurationX", function()
+            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
+        end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
+        diDurX.hideOn = HideDefensiveDurationOptions
+
+        local diDurY = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset Y"], -20, 20, 1, db, "defensiveIconDurationY", function()
+            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
+        end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
+        diDurY.hideOn = HideDefensiveDurationOptions
+
         durPosGroup.hideOn = HideDefensiveIconOptions
         Add(durPosGroup, nil, 2)
 
