@@ -470,7 +470,6 @@ L["Container"] = true
 L["Content type filters configured in Party tab."] = true
 L["Content Types"] = true
 L["Content:"] = true
-L["Controls Blizzard's debuff filtering (affects our display too)."] = true
 L["Controls how multiple defensive icons are arranged when using Direct aura mode."] = true
 L["Copied %d settings from %s to %s."] = true
 L["Copied settings from %s to %s."] = true
@@ -983,7 +982,6 @@ L["Covers both normal debuffs and boss debuffs (private auras). Limited customis
 L["DandersFrames for normal dispels, Blizzard for boss debuffs (private auras). Recommended."] = true
 L["Oldest First"] = true
 L["Only changed settings will be saved"] = true
-L["Only Dispellable Debuffs"] = true
 L["Only My Buffs"] = true
 L["Only show buffs that you cast. Applies to all buff filters."] = true
 L["Only show casts from enemies that are in combat. Filters out idle mobs casting nearby."] = true
