@@ -680,8 +680,15 @@ end
 -- Shows when unit is AFK with optional timer
 -- ============================================================
 
--- Cache for AFK start times (unit -> timestamp)
+-- Cache for AFK start times (GUID -> timestamp)
 local afkStartTimes = {}
+
+-- Cache for last confirmed AFK/DND state (GUID -> "AFK"/"DND"/false/nil)
+local afkStateCache = {}
+
+local function GetAFKKey(unit)
+    return UnitGUID(unit) or unit
+end
 
 -- Format seconds as M:SS or H:MM:SS
 local function FormatAFKTime(seconds)
@@ -718,30 +725,37 @@ function DF:UpdateAFKIcon(frame)
     local showIcon = false
     local isDND = false
 
-    -- Check AFK status (secret-safe)
+    -- Check AFK/DND status (secret-safe), keyed by GUID so the timer survives
+    -- transient nil returns (cross-realm latency, instance loading).
+    local afkKey = GetAFKKey(unit)
     local isAFK = nil
-    pcall(function()
-        isAFK = UnitIsAFK(unit)
-    end)
+    pcall(function() isAFK = UnitIsAFK(unit) end)
+    if canaccessvalue(isAFK) then
+        if isAFK then
+            afkStateCache[afkKey] = "AFK"
+        else
+            local dndStatus = nil
+            pcall(function() dndStatus = UnitIsDND(unit) end)
+            if canaccessvalue(dndStatus) and dndStatus then
+                afkStateCache[afkKey] = "DND"
+            else
+                afkStateCache[afkKey] = false
+            end
+        end
+    end
 
-    if canaccessvalue(isAFK) and isAFK then
-        -- Track AFK start time
-        if not afkStartTimes[unit] then
-            afkStartTimes[unit] = GetTime()
+    local cachedState = afkStateCache[afkKey]
+    if cachedState == "AFK" then
+        if not afkStartTimes[afkKey] then
+            afkStartTimes[afkKey] = GetTime()
         end
         showIcon = true
+    elseif cachedState == "DND" then
+        isDND = true
+        afkStartTimes[afkKey] = nil
+        showIcon = true
     else
-        -- Clear AFK start time
-        afkStartTimes[unit] = nil
-        -- AFK and DND are mutually exclusive; only check DND when not AFK
-        local dndStatus = nil
-        pcall(function()
-            dndStatus = UnitIsDND(unit)
-        end)
-        if canaccessvalue(dndStatus) and dndStatus then
-            isDND = true
-            showIcon = true
-        end
+        afkStartTimes[afkKey] = nil
     end
 
     if showIcon then
@@ -761,8 +775,8 @@ function DF:UpdateAFKIcon(frame)
             local showTimer = db.afkIconShowTimer ~= false
 
             -- Calculate timer if enabled
-            if showTimer and afkStartTimes[unit] then
-                local elapsed = math.floor(GetTime() - afkStartTimes[unit])
+            if showTimer and afkStartTimes[afkKey] then
+                local elapsed = math.floor(GetTime() - afkStartTimes[afkKey])
                 local timerStr = FormatAFKTime(elapsed)
 
                 if db.afkIconShowText then
@@ -792,7 +806,9 @@ end
 -- Clear AFK cache for a unit
 function DF:ClearAFKCache(unit)
     if unit then
-        afkStartTimes[unit] = nil
+        local key = GetAFKKey(unit)
+        afkStartTimes[key] = nil
+        afkStateCache[key] = nil
     end
 end
 
@@ -1002,29 +1018,20 @@ afkTickerFrame:SetScript("OnUpdate", function(self, elapsed)
     
     if not partyTimerEnabled and not raidTimerEnabled then return end
     
-    -- Update party frames
-    if partyTimerEnabled and DF.partyHeader then
-        local children = {DF.partyHeader:GetChildren()}
-        for _, frame in pairs(children) do
-            if frame.unit and frame.afkIcon and frame.afkIcon:IsShown() then
+    -- Update all live frames via the proper iterator.
+    -- GetChildren() on SecureGroupHeaderTemplate returns secure-template internals,
+    -- not the unit buttons — IterateAllFrames uses GetAttribute("child"..i) instead.
+    if DF.IterateAllFrames then
+        DF:IterateAllFrames(function(frame)
+            if not frame.unit or not frame.afkIcon then return end
+            if not frame.afkIcon:IsShown() then return end
+            local db = DF:GetFrameDB(frame)
+            if not db then return end
+            local isParty = not frame.isRaidFrame
+            if (isParty and partyTimerEnabled) or (not isParty and raidTimerEnabled) then
                 DF:UpdateAFKIcon(frame)
             end
-        end
-    end
-    
-    -- Update raid frames
-    if raidTimerEnabled then
-        for i = 1, 8 do
-            local header = DF["raidGroup" .. i]
-            if header then
-                local children = {header:GetChildren()}
-                for _, frame in pairs(children) do
-                    if frame.unit and frame.afkIcon and frame.afkIcon:IsShown() then
-                        DF:UpdateAFKIcon(frame)
-                    end
-                end
-            end
-        end
+        end)
     end
     
     -- Update test frames if in test mode
