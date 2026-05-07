@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+* (Aura Designer) Fix indicators appearing above the minimap and other UI panels on first placement. The "Inherit (Frame)" strata setting now correctly uses the unit frame's strata from the start, without needing to toggle the setting once to take effect.
+
 ## [4.3.7] - 2026-05-07
 
 ### Bug Fixes
