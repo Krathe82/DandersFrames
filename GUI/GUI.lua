@@ -1039,8 +1039,8 @@ function GUI:CreateInfoBanner(parent, opts)
         pending = false
         if recomputing then return end
         local h = math.ceil(MeasureContent())
-        -- Padding: 10 top (icon offset) + 6 bottom = 16 px chrome.
-        local newH = math.max(opts.minHeight or 28, h + 16)
+        -- Chrome: 13 px top (icon at -10, text nudged -3) + 9 px bottom = 22 px.
+        local newH = math.max(opts.minHeight or 28, h + 22)
         if cachedH ~= newH then
             cachedH = newH
             recomputing = true
