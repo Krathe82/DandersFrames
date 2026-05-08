@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+* (Targeted List) Fix self-target colour overlay obscuring cast bar text, occasionally appearing on bars not targeting the player, and snapping off instead of fading with the bar.
+
 ## [4.3.7] - 2026-05-07
 
 ### Bug Fixes
