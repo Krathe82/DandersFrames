@@ -281,6 +281,86 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     -- Expose for use by sub-pages (e.g. Aura Designer)
     GUI.CreateCopyButton = CreateCopyButton
 
+    -- Standalone Reset button for pages whose settings aren't mode-specific
+    -- and so don't get the full Sync/Copy trio. Uses the same red palette and
+    -- confirmation popup style as the trio's Reset button.
+    --
+    --   parent:        widget parent (typically self.child inside BuildPage)
+    --   sectionName:   localised page name, used in the popup and tooltip
+    --   onReset:       callback that performs the actual reset; the helper
+    --                  handles the confirmation popup before invoking this
+    --   warningText:   optional extra line below the standard message (string)
+    local function CreateResetOnlyButton(parent, sectionName, onReset, warningText)
+        local resetBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+        resetBtn:SetSize(115, 26)
+        resetBtn.rightAlign = true
+
+        if not resetBtn.SetBackdrop then Mixin(resetBtn, BackdropTemplateMixin) end
+        resetBtn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        resetBtn:SetBackdropColor(0.18, 0.18, 0.18, 1)
+        resetBtn:SetBackdropBorderColor(0.6, 0.25, 0.25, 0.6)
+
+        resetBtn.Icon = resetBtn:CreateTexture(nil, "OVERLAY")
+        resetBtn.Icon:SetPoint("LEFT", 8, 0)
+        resetBtn.Icon:SetSize(14, 14)
+        resetBtn.Icon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+        resetBtn.Icon:SetVertexColor(0.7, 0.4, 0.4)
+
+        resetBtn.Text = resetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        resetBtn.Text:SetPoint("LEFT", resetBtn.Icon, "RIGHT", 4, 0)
+        resetBtn.Text:SetText(L["Reset Page"])
+        resetBtn.Text:SetTextColor(0.7, 0.4, 0.4)
+
+        resetBtn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(0.4, 0.15, 0.15, 1)
+            self:SetBackdropBorderColor(1, 0.4, 0.4, 1)
+            self.Text:SetTextColor(1, 0.7, 0.7)
+            self.Icon:SetVertexColor(1, 0.7, 0.7)
+
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(format(L["Reset: %s"], sectionName))
+            GameTooltip:AddLine(format(L["Reset %s settings to defaults. This cannot be undone."], sectionName), 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+
+        resetBtn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
+            self:SetBackdropBorderColor(0.6, 0.25, 0.25, 0.6)
+            self.Text:SetTextColor(0.7, 0.4, 0.4)
+            self.Icon:SetVertexColor(0.7, 0.4, 0.4)
+            GameTooltip:Hide()
+        end)
+
+        resetBtn:SetScript("OnClick", function()
+            local message = format(L["Reset %s settings to defaults?\n\nThis cannot be undone."], sectionName)
+            if warningText and warningText ~= "" then
+                message = format(L["Reset %s settings to defaults?\n\n%s\n\nThis cannot be undone."], sectionName, warningText)
+            end
+            DF:ShowPopupAlert({
+                title = format(L["Reset: %s"], sectionName),
+                message = message,
+                buttons = {
+                    {
+                        label = L["Reset"],
+                        onClick = function()
+                            if onReset then onReset() end
+                            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+                        end,
+                    },
+                    { label = L["Cancel"] },
+                },
+            })
+        end)
+
+        return resetBtn
+    end
+
+    GUI.CreateResetOnlyButton = CreateResetOnlyButton
+
     -- Define category order (updated structure)
     GUI.CategoryOrder = {"general", "clickcast", "display", "bars", "text", "auras", "indicators", "profiles", "debug"}
     
@@ -1683,6 +1763,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     -- General > Global Fonts
     local pageGlobalFonts = CreateSubTab("general", "general_fonts", L["Global Fonts"])
     BuildPage(pageGlobalFonts, function(self, db, Add, AddSpace, AddSyncPoint)
+        Add(CreateCopyButton(self.child, {"fontShadow"}, L["Global Fonts"], "general_fonts"), 25, 2)
         -- Initialize temp storage for selections (persists during session)
         if not DF.GlobalFontTemp then
             DF.GlobalFontTemp = {
@@ -3070,6 +3151,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     -- General > Integrations
     local pageIntegrations = CreateSubTab("general", "general_integrations", L["Integrations"])
     BuildPage(pageIntegrations, function(self, db, Add, AddSpace, AddSyncPoint)
+        Add(CreateCopyButton(self.child, {"colorPicker", "masque", "buffDisableMouse", "debuffDisableMouse", "defensiveIconDisableMouse", "targetedSpellDisableMouse"}, L["Integrations"], "general_integrations"), 25, 2)
         -- ===== COLOR PICKER GROUP (Column 1) =====
         local colorPickerGroup = GUI:CreateSettingsGroup(self.child, 280)
         colorPickerGroup:AddWidget(GUI:CreateHeader(self.child, L["Color Picker"]), 40)

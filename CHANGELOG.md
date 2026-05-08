@@ -5,7 +5,8 @@
 ### New Features
 
 * **Reset Page button** — every settings page that has a Sync/Copy button now also has a red **Reset Page** button to the left of them. Clicking it resets only that page's settings on the current mode (Party or Raid) back to their built-in defaults, with a confirmation popup. Aura Designer and Click Casting have their own reset systems and are not part of this.
-* **Sync / Copy / Reset trio added to Visibility, Group Labels, and Pinned Frames pages** — these pages were previously missing the Sync-with-Raid/Party and Copy-to-Raid/Party buttons; they now match the rest of the addon's settings pages.
+* **Sync / Copy / Reset trio added to Visibility, Group Labels, Pinned Frames, Integrations, and Global Fonts pages** — these pages were previously missing the Sync-with-Raid/Party and Copy-to-Raid/Party buttons; they now match the rest of the addon's settings pages.
+* **Reset Page button added to the Aura Blacklist page** — clicking it clears all of your custom blacklist toggles, with a confirmation popup. Sync/Copy doesn't apply here since the blacklist is shared across both modes.
 
 ### Improvements
 

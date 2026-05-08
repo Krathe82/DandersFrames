@@ -374,10 +374,24 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
         return container
     end
 
+    -- ========== RESET PAGE BUTTON (top right) ==========
+    if GUI.CreateResetOnlyButton then
+        local resetBtn = GUI.CreateResetOnlyButton(parent, L["Aura Blacklist"], function()
+            if DF.db then
+                DF.db.auraBlacklist = { buffs = {}, debuffs = {} }
+                if pageRef._buffWidget and pageRef._buffWidget.Refresh then pageRef._buffWidget:Refresh() end
+                if pageRef._debuffWidget and pageRef._debuffWidget.Refresh then pageRef._debuffWidget:Refresh() end
+                if DF.RefreshAllVisibleFrames then DF:RefreshAllVisibleFrames() end
+                print("|cff00ff00DandersFrames:|r " .. L["Aura Blacklist reset to defaults."])
+            end
+        end, L["This will clear all of your custom blacklist toggles."])
+        resetBtn:SetPoint("TOPRIGHT", -10, -10)
+    end
+
     -- ========== CURATED LIST NOTICE ==========
     local noticeBanner = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     noticeBanner:SetPoint("TOPLEFT", 10, -10)
-    noticeBanner:SetPoint("RIGHT", -10, 0)
+    noticeBanner:SetPoint("RIGHT", -135, 0)
     noticeBanner:SetHeight(44)
     if not noticeBanner.SetBackdrop then Mixin(noticeBanner, BackdropTemplateMixin) end
     noticeBanner:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
