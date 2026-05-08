@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### Improvements
+
+* (Aura Designer) Sound indicator: "Missing Trigger" can now be toggled off so only the Expire Alert fires. Expire Alert now has its own Loop Interval and a Play Once option. Start Delay and Loop Interval no longer affect the Expire Alert.
+
 ## [4.3.7] - 2026-05-07
 
 ### Bug Fixes
