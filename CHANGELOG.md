@@ -22,7 +22,7 @@
 * (Aura Designer) Fix indicators not firing on the first aura application after joining a group or entering a new zone. (PR #53 by Krathe)
 * (Aura Designer) Fix sound expire alert not re-triggering after a buff is refreshed and decays again. (PR #54 by Krathe)
 * (Targeted List) Fix self-target colour overlay covering the text, sticking on the wrong bar, and snapping off instead of fading. (PR #55 by Krathe)
-* (Aura Filters) Fix info banner links not navigating to the linked page when clicked. (PR by Krathe)
+* (Aura Filters) Info banner text now wraps correctly at narrow window widths instead of overflowing the banner. (PR by Krathe)
 * (Aura Designer) Fix Global Defaults changes not applying to live frames without a /reload.
 * (Aura Designer) Fix the Reset All Aura Configs button not clearing indicators from live frames until /reload.
 * (Aura Designer) Fix Color Duration by Time not transitioning live as a buff ticks down on icon, square, and bar indicators.
