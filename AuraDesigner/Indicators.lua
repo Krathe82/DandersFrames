@@ -1033,12 +1033,29 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
 
     local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
     local mode = string.lower(config.mode or "replace")
-    -- Both modes use the overlay — replace forces full opacity, tint uses blend slider
+    -- Replace: full opacity overlay; Tint: blend slider controls mix strength
     local blend = (mode == "replace") and 1 or (config.blend or 0.5)
+
+    -- Store on state so UpdateAuraDesignerAppearance can access these for OOR handling
+    state.healthbarMode  = mode
+    state.healthbarR     = r
+    state.healthbarG     = g
+    state.healthbarB     = b
+    state.healthbarBlend = blend
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
         overlay:SetStatusBarColor(r, g, b, blend)
+        -- In replace mode, also colour the underlying health bar texture to match the overlay.
+        -- This prevents class-colour bleedthrough when the overlay fades OOR. In tint mode the
+        -- underlying bar colour is intentionally visible through the semi-transparent overlay,
+        -- so we leave it at its normal colour.
+        if mode == "replace" then
+            local hbTex = healthBar:GetStatusBarTexture()
+            if hbTex then
+                hbTex:SetVertexColor(r, g, b)
+            end
+        end
         -- Snap fill to current health before showing so the bar doesn't animate
         -- from near-empty to the correct position (ExponentialEaseOut + the
         -- min/max changing from the creation default of 0-1 to 0-maxHealth

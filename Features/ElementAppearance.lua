@@ -1089,6 +1089,27 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 end
             end
         end
+        -- Tint overlay (health bar "show when missing" indicator)
+        -- Control opacity via SetStatusBarColor rather than SetAlpha.
+        -- SetAlpha compounds with the blend baked into SetStatusBarColor:
+        -- blend × oorAlpha = e.g. 0.5 × 0.2 = 0.1 (nearly invisible OOR).
+        -- Setting SetStatusBarColor directly gives the exact target opacity.
+        local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
+        if tintOverlay and tintOverlay:IsShown() then
+            local adState = frame.dfAD
+            local r, g, b = adState.healthbarR or 1, adState.healthbarG or 1, adState.healthbarB or 1
+            local blend   = adState.healthbarBlend or 0.5
+
+            if issecretvalue and issecretvalue(inRange) then
+                -- Secret boolean fallback — can't branch; leave at configured blend.
+                tintOverlay:SetStatusBarColor(r, g, b, blend)
+            elseif inRange then
+                tintOverlay:SetStatusBarColor(r, g, b, blend)
+            else
+                tintOverlay:SetStatusBarColor(r, g, b, oorAlpha)
+            end
+            tintOverlay:SetAlpha(1.0)
+        end
     else
         -- Frame-level mode: restore each indicator's base alpha
         if frame.dfAD_icons then
@@ -1105,6 +1126,17 @@ function DF:UpdateAuraDesignerAppearance(frame)
             for _, bar in pairs(frame.dfAD_bars) do
                 if bar then bar:SetAlpha(bar.dfBaseAlpha or 1.0) end
             end
+        end
+        -- Tint overlay (health bar "show when missing" indicator)
+        -- Frame-level mode: the frame cascade handles OOR alpha. Restore the overlay's
+        -- own alpha and SetStatusBarColor to their configured values.
+        local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
+        if tintOverlay and tintOverlay:IsShown() then
+            local adState = frame.dfAD
+            local r, g, b = adState.healthbarR or 1, adState.healthbarG or 1, adState.healthbarB or 1
+            local blend   = adState.healthbarBlend or 0.5
+            tintOverlay:SetStatusBarColor(r, g, b, blend)
+            tintOverlay:SetAlpha(1.0)
         end
     end
 end
