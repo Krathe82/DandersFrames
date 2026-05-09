@@ -7423,11 +7423,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         gradSize.hideOn = HideDispelOptions
         local gradAlpha = gradientGroup:AddWidget(GUI:CreateSlider(self.child, L["Gradient Opacity"], 0.1, 1.0, 0.1, db, "dispelGradientAlpha", function()
             InvalidateCurves()
-        end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
+        end, function() DF:InvalidateDispelColorCurve(); DF:LightweightUpdateDispelOverlay() end, true), 55)
         gradAlpha.hideOn = HideDispelOptions
         local gradIntensity = gradientGroup:AddWidget(GUI:CreateSlider(self.child, L["Gradient Intensity"], 0.5, 3.0, 0.1, db, "dispelGradientIntensity", function()
             InvalidateCurves()
-        end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
+        end, function() DF:InvalidateDispelColorCurve(); DF:LightweightUpdateDispelOverlay() end, true), 55)
         gradIntensity.hideOn = HideDispelOptions
         local blendModes = { ["ADD"]= L["Glow (ADD)"], ["BLEND"]= L["Solid (BLEND)"] }
         local blendDropdown = gradientGroup:AddWidget(GUI:CreateDropdown(self.child, L["Blend Mode"], blendModes, db, "dispelGradientBlendMode", function()

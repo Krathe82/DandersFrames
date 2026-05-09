@@ -1002,15 +1002,19 @@ local function ShowOverlayWithSecretColor(overlay, db, unit, auraInstanceID, fra
                     local texturePath = GRADIENT_TEXTURES[gradientStyle] or GRADIENT_TEXTURES.FULL
                     overlay.gradient:SetStatusBarTexture(texturePath)
                     
-                    -- Apply the color with baked-in alpha from curve
+                    -- Apply the color from the curve. GetRGBA() returns a secret alpha
+                    -- (the ColorMixin from GetAuraDispelTypeColor is secret-tainted) which
+                    -- SetVertexColor cannot handle in the alpha position — it silently renders
+                    -- at full opacity. Use GetRGB() for the secret-safe colour and apply the
+                    -- base opacity via the frame's own alpha instead, folding OOR in together.
+                    local gradientAlpha = math.min((db.dispelGradientAlpha or 0.5) * (db.dispelGradientIntensity or 1.0), 1.0)
                     local tex = overlay.gradient:GetStatusBarTexture()
-                    tex:SetVertexColor(gradientColor:GetRGBA())
+                    tex:SetVertexColor(gradientColor:GetRGB())
                     tex:SetBlendMode(blendMode)
-                    -- Apply OOR alpha via SetAlphaFromBoolean
                     if overlay.gradient.SetAlphaFromBoolean then
-                        overlay.gradient:SetAlphaFromBoolean(inRange, 1.0, oorDispelAlpha)
+                        overlay.gradient:SetAlphaFromBoolean(inRange, gradientAlpha, gradientAlpha * oorDispelAlpha)
                     else
-                        overlay.gradient:SetAlpha(1)
+                        overlay.gradient:SetAlpha(gradientAlpha)
                     end
                     
                     overlay.gradient:Show()
