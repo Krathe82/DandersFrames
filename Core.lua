@@ -4065,6 +4065,44 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- Migrate personal targeted spells container centre to icon-block midpoint (bug 880).
+        -- Previously the saved (x, y) was the position of icon 1 (container centre).
+        -- Now (x, y) is the visual centre of the icon block; the container is offset so
+        -- the block is centred there.  Shift existing positions by halfBlock in the growth
+        -- direction so icon 1 stays at its old screen location for existing users.
+        local function MigratePersonalContainerPosition(partyDb)
+            if not partyDb or partyDb._personalContainerCenterMigrated then return end
+            local iconSize = partyDb.personalTargetedSpellSize or 40
+            local scale = partyDb.personalTargetedSpellScale or 1.0
+            local maxIcons = partyDb.personalTargetedSpellMaxIcons or 5
+            local spacing = partyDb.personalTargetedSpellSpacing or 4
+            local growthDirection = partyDb.personalTargetedSpellGrowth or "RIGHT"
+            local x = partyDb.personalTargetedSpellX or 0
+            local y = partyDb.personalTargetedSpellY or -150
+
+            local scaledSize = iconSize * scale
+            local scaledSpacing = spacing * scale
+            local halfBlock = (maxIcons - 1) / 2 * (scaledSize + scaledSpacing)
+
+            if growthDirection == "RIGHT" then
+                partyDb.personalTargetedSpellX = x + halfBlock
+            elseif growthDirection == "LEFT" then
+                partyDb.personalTargetedSpellX = x - halfBlock
+            elseif growthDirection == "UP" then
+                partyDb.personalTargetedSpellY = y + halfBlock
+            elseif growthDirection == "DOWN" then
+                partyDb.personalTargetedSpellY = y - halfBlock
+            -- CENTER_H / CENTER_V: no shift needed
+            end
+            partyDb._personalContainerCenterMigrated = true
+        end
+        MigratePersonalContainerPosition(DF.db.party)
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                MigratePersonalContainerPosition(profile.party)
+            end
+        end
+
         -- Wrap DF.db with overlay proxy (must happen AFTER all migrations,
         -- BEFORE anything that reads through the proxy)
         DF:WrapDB()
