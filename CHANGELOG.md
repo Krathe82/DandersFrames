@@ -11,8 +11,9 @@
 ### Improvements
 
 * Reset, Copy, and Sync confirmation popups now use the addon's themed popup style.
-* Info and warning banners across all settings pages now have consistent styling with tone-coloured icons (info, warning, caution). (PR by Krathe)
+* Info and warning banners across all settings pages now have consistent styling with tone-coloured icons (info, warning, caution). (PR #57 by Krathe)
 * (Aura Designer) Reworked sound indicator: Missing Trigger and Expire Alert can now be toggled independently, with separate loop intervals and a new Play Once option. (PR #54 by Krathe)
+* (Aura Designer) Tint mode for health bar indicators now updates live when switching from replace mode, without needing to toggle the aura. (PR #62 by Krathe)
 
 ### Bug Fixes
 
@@ -22,7 +23,14 @@
 * (Aura Designer) Fix indicators not firing on the first aura application after joining a group or entering a new zone. (PR #53 by Krathe)
 * (Aura Designer) Fix sound expire alert not re-triggering after a buff is refreshed and decays again. (PR #54 by Krathe)
 * (Targeted List) Fix self-target colour overlay covering the text, sticking on the wrong bar, and snapping off instead of fading. (PR #55 by Krathe)
-* (Aura Filters) Info banner text now wraps correctly at narrow window widths instead of overflowing the banner. (PR by Krathe)
+* (Aura Filters) Info banner text now wraps correctly at narrow window widths instead of overflowing the banner. (PR #57 by Krathe)
+* (Aura Designer) Fix health bar tint indicator showing the wrong colour on newly-joined party members out of combat. (PR #62 by Krathe)
+* (Dispel Overlay) Fix absorb shields being hidden behind the dispel gradient on live frames. (PR #65 by Krathe)
+* (Dispel Overlay) Fix the gradient opacity and intensity sliders not previewing live on group frames. (PR #65 by Krathe)
+* (Personal Targeted Spells) Fix the move-mode highlight box not aligning with where icons actually appear. The saved position is now the visual centre of the icon block, with a one-time migration to preserve existing placements. (PR #69 by Krathe)
+* (Aura Blacklist) Fix wrong icon shown next to Skyfury in the Shaman buff blacklist. (PR #70 by Krathe)
+* (Pet Frames) Fix grouped pet container misalignment when anchored to the right of the party. Users with custom Offset X on the right anchor may need to retune the slider — positive now means "more gap", matching the left anchor. (PR #71 by Krathe)
+* (Pet Frames) Fix Lua error spam from pet name updates in delves and other instanced content. (PR #72 by Krathe)
 * (Aura Designer) Fix Global Defaults changes not applying to live frames without a /reload.
 * (Aura Designer) Fix the Reset All Aura Configs button not clearing indicators from live frames until /reload.
 * (Aura Designer) Fix Color Duration by Time not transitioning live as a buff ticks down on icon, square, and bar indicators.
