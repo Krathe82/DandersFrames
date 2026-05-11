@@ -5846,7 +5846,7 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     enableBanner.UpdateSpecText()
 
     if GUI.CreateCopyButton then
-        local copyBtn = GUI.CreateCopyButton(enableBanner, {"auraDesigner"}, "Aura Designer", "auras_auradesigner")
+        local copyBtn = GUI.CreateCopyButton(enableBanner, {"auraDesigner"}, "Aura Designer", "auras_auradesigner", true)
         copyBtn:ClearAllPoints()
         copyBtn:SetPoint("RIGHT", enableBanner, "RIGHT", -5, 0)
         enableBanner.specBtn:SetSize(135, 22)
