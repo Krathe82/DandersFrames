@@ -701,7 +701,7 @@ function DF:PositionPetFrame(frame)
     elseif anchor == "LEFT" then
         frame:SetPoint("RIGHT", frame.ownerFrame, "LEFT", offsetX, offsetY)
     elseif anchor == "RIGHT" then
-        frame:SetPoint("LEFT", frame.ownerFrame, "RIGHT", -offsetX, offsetY)
+        frame:SetPoint("LEFT", frame.ownerFrame, "RIGHT", offsetX, offsetY)
     end
 end
 
@@ -883,9 +883,9 @@ function DF:UpdatePetGroupLayout()
                 end
             elseif anchor == "RIGHT" then
                 if partyGrowth == "HORIZONTAL" then
-                    container:SetPoint("LEFT", rightmostFrame, "RIGHT", -offsetX, offsetY)
+                    container:SetPoint("LEFT", rightmostFrame, "RIGHT", offsetX, offsetY)
                 else
-                    container:SetPoint("TOPLEFT", bottommostFrame, "TOPRIGHT", -offsetX, -centerOffsetY + offsetY)
+                    container:SetPoint("TOPLEFT", topmostFrame, "TOPRIGHT", offsetX, -centerOffsetY + offsetY)
                 end
             end
             
