@@ -2903,26 +2903,12 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                 topSpacer:SetHeight(4)
                 g:AddWidget(topSpacer, 4)
 
-                local banner = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-                banner:SetHeight(36)
+                local banner = GUI:CreateInfoBanner(parent, {
+                    tone = "warning",
+                    text = L["Sound alerts only work when you are in a group."],
+                })
                 banner:SetWidth(contentWidth - 10)
-                banner:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
-                banner:SetBackdropColor(0.25, 0.22, 0.10, 1)
-                banner:SetBackdropBorderColor(0.6, 0.55, 0.2, 0.6)
-
-                local icon = banner:CreateTexture(nil, "OVERLAY")
-                icon:SetPoint("LEFT", 8, 0)
-                icon:SetSize(18, 18)
-                icon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\warning")
-
-                local text = banner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-                text:SetPoint("LEFT", icon, "RIGHT", 7, 0)
-                text:SetPoint("RIGHT", banner, "RIGHT", -8, 0)
-                text:SetJustifyH("LEFT")
-                text:SetText(L["Sound alerts only work when you are in a group."])
-                text:SetTextColor(1, 0.82, 0)
-
-                g:AddWidget(banner, 36)
+                g:AddWidget(banner, banner.layoutHeight)
 
                 local spacer = CreateFrame("Frame", nil, parent)
                 spacer:SetHeight(6)
