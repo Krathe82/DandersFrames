@@ -1033,8 +1033,16 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
 
     local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
     local mode = string.lower(config.mode or "replace")
-    -- Both modes use the overlay — replace forces full opacity, tint uses blend slider
+    -- Replace: full opacity overlay; Tint: blend slider controls mix strength
     local blend = (mode == "replace") and 1 or (config.blend or 0.5)
+
+    -- Store on state so UpdateAuraDesignerAppearance / UpdateHealthBarAppearance
+    -- can access these for OOR handling and the replace/tint mode gate.
+    state.healthbarMode  = mode
+    state.healthbarR     = r
+    state.healthbarG     = g
+    state.healthbarB     = b
+    state.healthbarBlend = blend
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
