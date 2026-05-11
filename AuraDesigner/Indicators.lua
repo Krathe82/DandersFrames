@@ -1038,7 +1038,31 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
+        -- Re-sync texture in case the health bar's texture changed since the overlay
+        -- was first created (frame recycled to a different unit can swap textures).
+        local currentTex = healthBar:GetStatusBarTexture()
+        overlay:SetStatusBarTexture(currentTex and currentTex:GetTexture() or "Interface\\Buttons\\WHITE8x8")
         overlay:SetStatusBarColor(r, g, b, blend)
+        -- In replace mode, also colour the underlying health bar texture to match the overlay.
+        -- This prevents class-colour bleedthrough when the overlay fades OOR. In tint mode the
+        -- underlying bar colour is intentionally visible through the semi-transparent overlay,
+        -- so we restore it to the normal class/custom colour instead.
+        if mode == "replace" then
+            local hbTex = healthBar:GetStatusBarTexture()
+            if hbTex then
+                hbTex:SetVertexColor(r, g, b)
+            end
+        else
+            -- Tint mode: the underlying bar must show its normal colour through the overlay.
+            -- A previous replace-mode apply may have left a stale AD vertex colour on hbTex.
+            -- Briefly release the AD lock so UpdateHealthBarAppearance restores the normal
+            -- class/custom colour before we re-claim the bar.
+            state.healthbar = false
+            if DF.UpdateHealthBarAppearance then
+                DF:UpdateHealthBarAppearance(frame)
+            end
+            state.healthbar = true
+        end
         -- Snap fill to current health before showing so the bar doesn't animate
         -- from near-empty to the correct position (ExponentialEaseOut + the
         -- min/max changing from the creation default of 0-1 to 0-maxHealth
@@ -1105,6 +1129,7 @@ function Indicators:RevertHealthBar(frame)
             state.tintOverlay:SetAlpha(1)
         end
         state.tintOverlay:Hide()
+        state.tintOverlay:SetStatusBarColor(1, 1, 1, 1)
     end
 
     -- Refresh health bar color so the bar shows the correct color

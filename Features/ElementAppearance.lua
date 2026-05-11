@@ -190,9 +190,13 @@ function DF:UpdateHealthBarAppearance(frame)
     -- overwrite it.  Alpha is still applied below so OOR/dead fade
     -- continues to work.
     -- ========================================
+    -- In replace mode AD owns the bar colour entirely — skip normal colour updates.
+    -- In tint mode the underlying bar shows through the overlay, so normal colour
+    -- logic (class / percent / custom) must still run.
     local adHealthBarActive = frame.dfAD and frame.dfAD.healthbar
+    local adHealthBarMode   = adHealthBarActive and frame.dfAD.healthbarMode
 
-    if adHealthBarActive then
+    if adHealthBarMode == "replace" then
         -- AD owns the color — don't touch it
     elseif aggroActive then
         -- Priority 1: Aggro override
