@@ -1670,6 +1670,34 @@ end
 -- ============================================================
 
 function DF:UpdateAllDispelOverlays()
+    -- In test mode, only update test frames.  Live frames are hidden behind the
+    -- test container and must not receive overlay state derived from test data —
+    -- if they do, the overlay appears "stuck" on live frames after test mode
+    -- closes.  When test mode exits, DF.testMode is set to false *before* the
+    -- cleanup C_Timer fires, so the live-frame cleanup pass still runs correctly.
+    if DF.testMode or DF.raidTestMode then
+        if DF.testMode and DF.testPartyFrames then
+            local db = DF:GetDB()
+            local count = db and db.testFrameCount or 5
+            for i = 0, count - 1 do
+                local frame = DF.testPartyFrames[i]
+                if frame and frame:IsShown() then
+                    DF:UpdateDispelOverlay(frame)
+                end
+            end
+        end
+        if DF.raidTestMode and DF.testRaidFrames then
+            local raidDb = DF:GetRaidDB()
+            local count = raidDb and raidDb.raidTestFrameCount or 10
+            for i = 1, count do
+                local frame = DF.testRaidFrames[i]
+                if frame and frame:IsShown() then
+                    DF:UpdateDispelOverlay(frame)
+                end
+            end
+        end
+        return
+    end
     DF:IterateAllFrames(function(frame)
         if frame then
             DF:UpdateDispelOverlay(frame)
