@@ -536,11 +536,15 @@ function DF:UpdatePetName(frame)
     
     local name = GetUnitName(frame.unit, true)
     if name then
-        -- Truncate long names
+        -- Truncate long names. Use secret-value-safe UTF-8 helpers — GetUnitName
+        -- can return a secret string in instanced content (delves, encounters).
+        -- DF:UTF8Len returns 0 for secret values so the truncation branch
+        -- no-ops, and SetText receives the secret string directly (FontStrings
+        -- accept secret values; only Lua string ops on them cause errors).
         local db = DF:GetFrameDB(frame)
         local maxLen = db.petNameMaxLength or 12
-        if #name > maxLen then
-            name = name:sub(1, maxLen) .. "..."
+        if maxLen > 0 and DF:UTF8Len(name) > maxLen then
+            name = DF:UTF8Sub(name, 1, maxLen) .. "..."
         end
         frame.nameText:SetText(name)
     end
