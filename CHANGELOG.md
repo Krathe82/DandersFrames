@@ -11,6 +11,7 @@
 ### Improvements
 
 * Reset, Copy, and Sync confirmation popups now use the addon's themed popup style.
+* (In-game Changelog) Renamed the "Back" button on the changelog overlay to "Close" for clarity. (PR #58 by Krathe)
 * Info and warning banners across all settings pages now have consistent styling with tone-coloured icons (info, warning, caution). (PR #57 by Krathe)
 * (Aura Designer) Reworked sound indicator: Missing Trigger and Expire Alert can now be toggled independently, with separate loop intervals and a new Play Once option. (PR #54 by Krathe)
 * (Aura Designer) Tint mode for health bar indicators now updates live when switching from replace mode, without needing to toggle the aura. (PR #62 by Krathe)
@@ -18,6 +19,7 @@
 ### Bug Fixes
 
 * (Arena/Solo Shuffle) Fix teammate frames not updating between rounds when FrameSort is active. (PR #50 by Krathe)
+* (Arena/Solo Shuffle) Fix frame ordering changing between Solo Shuffle rounds when FrameSort is active. (PR #73 by Krathe)
 * (Aura Designer) Fix new indicators briefly appearing above the minimap until the strata setting was toggled. (PR #51 by Krathe)
 * (Pinned Frames) Fix auras not showing on pinned frames when the unit isn't on your main party or raid frames. (PR #52 by Krathe)
 * (Aura Designer) Fix indicators not firing on the first aura application after joining a group or entering a new zone. (PR #53 by Krathe)
@@ -25,7 +27,9 @@
 * (Targeted List) Fix self-target colour overlay covering the text, sticking on the wrong bar, and snapping off instead of fading. (PR #55 by Krathe)
 * (Aura Filters) Info banner text now wraps correctly at narrow window widths instead of overflowing the banner. (PR #57 by Krathe)
 * (Aura Designer) Fix health bar tint indicator showing the wrong colour on newly-joined party members out of combat. (PR #62 by Krathe)
+* (Aura Designer) Fix health bar tint indicators not fading when out of range with element-specific OOR enabled. (PR #60 by Krathe)
 * (Dispel Overlay) Fix absorb shields being hidden behind the dispel gradient on live frames. (PR #65 by Krathe)
+* (Dispel Overlay) Fix overlay leaking onto live frames after adjusting settings while in test mode. (PR #66 by Krathe)
 * (Dispel Overlay) Fix the gradient opacity and intensity sliders not previewing live on group frames. (PR #65 by Krathe)
 * (Personal Targeted Spells) Fix the move-mode highlight box not aligning with where icons actually appear. The saved position is now the visual centre of the icon block, with a one-time migration to preserve existing placements. (PR #69 by Krathe)
 * (Aura Blacklist) Fix wrong icon shown next to Skyfury in the Shaman buff blacklist. (PR #70 by Krathe)
