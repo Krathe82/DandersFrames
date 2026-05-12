@@ -5609,6 +5609,7 @@ local function TargetedList_SpawnTestCast()
         -- Alternate self-targeting: every 3rd cast targets the player
         testIsTargetingPlayer = (targetedListTestNextId % 3 == 1),
     }
+
     -- NOTE: caller is responsible for calling TargetedList_Render()
     -- after all spawns/modifications are done. This avoids premature
     -- bar acquisition before static-mode record modifications.
