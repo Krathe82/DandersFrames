@@ -1,6 +1,6 @@
 # DandersFrames Changelog
 
-## [4.3.8] - 2026-05-08
+## [4.3.8] - 2026-05-12
 
 ### New Features
 
