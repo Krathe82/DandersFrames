@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [4.3.9]
+
+### Bug Fixes
+
+* (Aura Designer) Fix health bar colour flashing between active and expiring colours when an aura is past its expiring threshold, and the flash persisting while out of range. (PR #74 by Krathe)
+
 ## [4.3.8] - 2026-05-12
 
 ### New Features
