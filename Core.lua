@@ -4575,10 +4575,24 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if DF.RosterDebugEvent then DF:RosterDebugEvent("Core.lua:GROUP_ROSTER_UPDATE") end
-        
-        -- Skip completely - Headers.lua handles roster updates via ProcessRosterUpdate
-        -- which manages container visibility and sorting. Frame updates happen via
-        -- OnAttributeChanged (unit changes) and PLAYER_ROLES_ASSIGNED (role changes).
+
+        -- Headers.lua handles roster updates via ProcessRosterUpdate (container
+        -- visibility, sorting). Frame updates happen via OnAttributeChanged (unit
+        -- changes) and PLAYER_ROLES_ASSIGNED (role changes).
+        --
+        -- Missing buff icons are not cleared by OnAttributeChanged when a slot
+        -- empties (unit → nil skips the refresh), and UNIT_AURA stops firing for
+        -- units that left the group. Frames that remain visible (player frame,
+        -- remaining group members) can be left with stale indicators. Sweep after
+        -- the roster settles. The 0.1s throttle inside UpdateAllMissingBuffIcons
+        -- prevents spam from rapid GRU bursts on group transitions.
+        if DF.UpdateAllMissingBuffIcons then
+            C_Timer.After(0.3, function()
+                if not InCombatLockdown() then
+                    DF:UpdateAllMissingBuffIcons()
+                end
+            end)
+        end
         return
         
     elseif event == "PLAYER_ROLES_ASSIGNED" then
