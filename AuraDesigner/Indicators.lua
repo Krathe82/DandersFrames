@@ -1050,6 +1050,12 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     state.healthbarCurrentR = r
     state.healthbarCurrentG = g
     state.healthbarCurrentB = b
+    -- healthbarEffectiveBlend: the alpha last written to the overlay by
+    -- UpdateAuraDesignerAppearance (blend in-range, oorAlpha OOR). Expiring
+    -- callbacks read this so they don't override the OOR fade back to full
+    -- blend between UpdateAuraDesignerAppearance calls. Not reset here so
+    -- OOR state is preserved across UNIT_AURA events; nil on first use falls
+    -- back to entry.blend in the callbacks.
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
@@ -1057,7 +1063,9 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
         -- was first created (frame recycled to a different unit can swap textures).
         local currentTex = healthBar:GetStatusBarTexture()
         overlay:SetStatusBarTexture(currentTex and currentTex:GetTexture() or "Interface\\Buttons\\WHITE8x8")
-        overlay:SetStatusBarColor(r, g, b, blend)
+        -- Use OOR-aware blend if already established (preserves OOR fade on UNIT_AURA).
+        local initialBlend = state.healthbarEffectiveBlend or blend
+        overlay:SetStatusBarColor(r, g, b, initialBlend)
         -- In replace mode, also colour the underlying health bar texture to match the overlay.
         -- This prevents class-colour bleedthrough when the overlay fades OOR. In tint mode the
         -- underlying bar colour is intentionally visible through the semi-transparent overlay,
@@ -1112,12 +1120,14 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
             thresholdMode = config.expiringThresholdMode,
             color = ec, originalColor = oc,
             applyResult = function(el, result, entry)
-                el:SetStatusBarColor(result.r, result.g, result.b, entry.blend)
+                local adState = frame.dfAD
+                -- Use OOR-aware blend if UpdateAuraDesignerAppearance has set one.
+                local effectiveBlend = (adState and adState.healthbarEffectiveBlend) or entry.blend
+                el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
                 local oc2 = entry.originalColor
                 local isExp = IsColorExpiring(result, oc2)
                 -- Keep current-color in sync so UpdateAuraDesignerAppearance
                 -- (OOR handler) uses the expiring color rather than the active one.
-                local adState = frame.dfAD
                 if adState then
                     adState.healthbarCurrentR = result.r
                     adState.healthbarCurrentG = result.g
@@ -1128,10 +1138,12 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
             applyManual = function(el, isExp, entry)
                 local c = isExp and entry.color or entry.originalColor
                 local cr, cg, cb = c.r or 1, c.g or 1, c.b or 1
-                el:SetStatusBarColor(cr, cg, cb, entry.blend)
+                local adState = frame.dfAD
+                -- Use OOR-aware blend if UpdateAuraDesignerAppearance has set one.
+                local effectiveBlend = (adState and adState.healthbarEffectiveBlend) or entry.blend
+                el:SetStatusBarColor(cr, cg, cb, effectiveBlend)
                 -- Keep current-color in sync so UpdateAuraDesignerAppearance
                 -- (OOR handler) uses the expiring color rather than the active one.
-                local adState = frame.dfAD
                 if adState then
                     adState.healthbarCurrentR = cr
                     adState.healthbarCurrentG = cg
@@ -1163,6 +1175,13 @@ function Indicators:RevertHealthBar(frame)
         state.tintOverlay:Hide()
         state.tintOverlay:SetStatusBarColor(1, 1, 1, 1)
     end
+
+    -- Clear tracked color and blend so stale values don't affect the next
+    -- aura that claims this frame's health bar indicator.
+    state.healthbarCurrentR      = nil
+    state.healthbarCurrentG      = nil
+    state.healthbarCurrentB      = nil
+    state.healthbarEffectiveBlend = nil
 
     -- Refresh health bar color so the bar shows the correct color
     -- (class color, custom color, etc.) after the overlay is removed.

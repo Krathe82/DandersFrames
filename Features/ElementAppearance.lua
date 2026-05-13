@@ -1110,15 +1110,20 @@ function DF:UpdateAuraDesignerAppearance(frame)
             local b = adState.healthbarCurrentB or adState.healthbarB or 1
             local blend   = adState.healthbarBlend or 0.5
 
+            local effectiveBlend
             if issecretvalue and issecretvalue(inRange) then
                 -- Secret boolean fallback — can't branch; leave at configured blend.
-                tintOverlay:SetStatusBarColor(r, g, b, blend)
+                effectiveBlend = blend
             elseif inRange then
-                tintOverlay:SetStatusBarColor(r, g, b, blend)
+                effectiveBlend = blend
             else
-                tintOverlay:SetStatusBarColor(r, g, b, oorAlpha)
+                effectiveBlend = oorAlpha
             end
+            tintOverlay:SetStatusBarColor(r, g, b, effectiveBlend)
             tintOverlay:SetAlpha(1.0)
+            -- Record the alpha used so expiring callbacks (ticker) can match it
+            -- rather than resetting to full blend when the unit is OOR.
+            adState.healthbarEffectiveBlend = effectiveBlend
         end
     else
         -- Frame-level mode: restore each indicator's base alpha
@@ -1148,9 +1153,12 @@ function DF:UpdateAuraDesignerAppearance(frame)
             local r = adState.healthbarCurrentR or adState.healthbarR or 1
             local g = adState.healthbarCurrentG or adState.healthbarG or 1
             local b = adState.healthbarCurrentB or adState.healthbarB or 1
-            local blend   = adState.healthbarBlend or 0.5
+            local blend = adState.healthbarBlend or 0.5
             tintOverlay:SetStatusBarColor(r, g, b, blend)
             tintOverlay:SetAlpha(1.0)
+            -- In frame-level mode the frame cascade handles OOR alpha, so the
+            -- effective blend for this overlay is always the configured blend.
+            adState.healthbarEffectiveBlend = blend
         end
     end
 end
