@@ -1038,11 +1038,18 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
 
     -- Store on state so UpdateAuraDesignerAppearance / UpdateHealthBarAppearance
     -- can access these for OOR handling and the replace/tint mode gate.
-    state.healthbarMode  = mode
-    state.healthbarR     = r
-    state.healthbarG     = g
-    state.healthbarB     = b
-    state.healthbarBlend = blend
+    state.healthbarMode     = mode
+    state.healthbarR        = r
+    state.healthbarG        = g
+    state.healthbarB        = b
+    state.healthbarBlend    = blend
+    -- Track the currently displayed color (may differ from healthbarR/G/B when
+    -- the expiring ticker has switched the overlay to the expiring color).
+    -- UpdateAuraDesignerAppearance reads this so it doesn't reset the expiring
+    -- color back to the active color on every UNIT_AURA event.
+    state.healthbarCurrentR = r
+    state.healthbarCurrentG = g
+    state.healthbarCurrentB = b
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
@@ -1108,11 +1115,28 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                 el:SetStatusBarColor(result.r, result.g, result.b, entry.blend)
                 local oc2 = entry.originalColor
                 local isExp = IsColorExpiring(result, oc2)
+                -- Keep current-color in sync so UpdateAuraDesignerAppearance
+                -- (OOR handler) uses the expiring color rather than the active one.
+                local adState = frame.dfAD
+                if adState then
+                    adState.healthbarCurrentR = result.r
+                    adState.healthbarCurrentG = result.g
+                    adState.healthbarCurrentB = result.b
+                end
                 UpdatePulseState(el, isExp)
             end,
             applyManual = function(el, isExp, entry)
                 local c = isExp and entry.color or entry.originalColor
-                el:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1, entry.blend)
+                local cr, cg, cb = c.r or 1, c.g or 1, c.b or 1
+                el:SetStatusBarColor(cr, cg, cb, entry.blend)
+                -- Keep current-color in sync so UpdateAuraDesignerAppearance
+                -- (OOR handler) uses the expiring color rather than the active one.
+                local adState = frame.dfAD
+                if adState then
+                    adState.healthbarCurrentR = cr
+                    adState.healthbarCurrentG = cg
+                    adState.healthbarCurrentB = cb
+                end
                 UpdatePulseState(el, isExp)
             end,
         })

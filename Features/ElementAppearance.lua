@@ -1101,7 +1101,13 @@ function DF:UpdateAuraDesignerAppearance(frame)
         local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
         if tintOverlay and tintOverlay:IsShown() then
             local adState = frame.dfAD
-            local r, g, b = adState.healthbarR or 1, adState.healthbarG or 1, adState.healthbarB or 1
+            -- Use the current displayed color (healthbarCurrent*), which the expiring
+            -- ticker updates to the expiring color when past the threshold. Falling back
+            -- to healthbarR/G/B (the configured active color) covers the non-expiring
+            -- case and initial setup before any ticker callback has fired.
+            local r = adState.healthbarCurrentR or adState.healthbarR or 1
+            local g = adState.healthbarCurrentG or adState.healthbarG or 1
+            local b = adState.healthbarCurrentB or adState.healthbarB or 1
             local blend   = adState.healthbarBlend or 0.5
 
             if issecretvalue and issecretvalue(inRange) then
@@ -1137,7 +1143,11 @@ function DF:UpdateAuraDesignerAppearance(frame)
         local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
         if tintOverlay and tintOverlay:IsShown() then
             local adState = frame.dfAD
-            local r, g, b = adState.healthbarR or 1, adState.healthbarG or 1, adState.healthbarB or 1
+            -- Use the current displayed color (healthbarCurrent*) so the expiring
+            -- color is preserved rather than reset to the active configured color.
+            local r = adState.healthbarCurrentR or adState.healthbarR or 1
+            local g = adState.healthbarCurrentG or adState.healthbarG or 1
+            local b = adState.healthbarCurrentB or adState.healthbarB or 1
             local blend   = adState.healthbarBlend or 0.5
             tintOverlay:SetStatusBarColor(r, g, b, blend)
             tintOverlay:SetAlpha(1.0)
