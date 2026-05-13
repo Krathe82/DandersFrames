@@ -1,10 +1,16 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-05-11T14:42:15Z"
+DF.BUILD_DATE = "2026-05-13T10:55:23Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
 
-## [4.3.8] - 2026-05-08
+## [4.3.9]
+
+### Bug Fixes
+
+* (Aura Designer) Fix health bar colour flashing between active and expiring colours when an aura is past its expiring threshold, and the flash persisting while out of range. (PR #74 by Krathe)
+
+## [4.3.8] - 2026-05-12
 
 ### New Features
 
@@ -16,6 +22,7 @@ DF.CHANGELOG_TEXT = [===[
 
 * Reset, Copy, and Sync confirmation popups now use the addon's themed popup style.
 * (In-game Changelog) Renamed the "Back" button on the changelog overlay to "Close" for clarity. (PR #58 by Krathe)
+* Removed the ElvUI compatibility popup. DandersFrames no longer relies on Blizzard's party/raid frames, so ElvUI disabling them is harmless.
 * Info and warning banners across all settings pages now have consistent styling with tone-coloured icons (info, warning, caution). (PR #57 by Krathe)
 * (Aura Designer) Reworked sound indicator: Missing Trigger and Expire Alert can now be toggled independently, with separate loop intervals and a new Play Once option. (PR #54 by Krathe)
 * (Aura Designer) Tint mode for health bar indicators now updates live when switching from replace mode, without needing to toggle the aura. (PR #62 by Krathe)
