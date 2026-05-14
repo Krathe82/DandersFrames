@@ -8399,6 +8399,7 @@ function DF:CreateGUI()
                 spacer.layoutHeight = h
                 spacer.layoutCol = col or "both"
                 table.insert(self.children, spacer)
+                return spacer
             end
             
             -- Sync point: forces both columns to align to the same Y position

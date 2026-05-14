@@ -3735,8 +3735,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             return not d.classPowerEnabled
         end
         
-        AddSpace(10, 1)
-        Add(GUI:CreateHeader(self.child, L["Size"]), 40, 1)
+        local cpSizeSpace = AddSpace(10, 1)
+        if cpSizeSpace then cpSizeSpace.hideOn = HideClassPower end
+        local cpSizeHeader = Add(GUI:CreateHeader(self.child, L["Size"]), 40, 1)
+        cpSizeHeader.hideOn = HideClassPower
         
         local cpHeight = Add(GUI:CreateSlider(self.child, L["Pip Height"], 1, 12, 1, db, "classPowerHeight", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 1)
         cpHeight.hideOn = HideClassPower
@@ -3749,8 +3751,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 25, 1)
         cpIgnoreFade.hideOn = HideClassPower
 
-        AddSpace(10, 1)
-        Add(GUI:CreateHeader(self.child, L["Colors"]), 40, 1)
+        local cpColorsSpace = AddSpace(10, 1)
+        if cpColorsSpace then cpColorsSpace.hideOn = HideClassPower end
+        local cpColorsHeader = Add(GUI:CreateHeader(self.child, L["Colors"]), 40, 1)
+        cpColorsHeader.hideOn = HideClassPower
 
         local cpUseCustomColor = Add(GUI:CreateCheckbox(self.child, L["Use Custom Pip Color"], db, "classPowerUseCustomColor", function()
             self:RefreshStates()
@@ -3775,7 +3779,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         cpBgColor.hideOn = HideClassPower
         cpBgColor.tooltip = L["Color and opacity of the empty/inactive pips."]
 
-        Add(GUI:CreateHeader(self.child, L["Position"]), 40, 2)
+        local cpPositionHeader = Add(GUI:CreateHeader(self.child, L["Position"]), 40, 2)
+        cpPositionHeader.hideOn = HideClassPower
         local anchorOptions = {
             INSIDE_BOTTOM = L["Inside (Bottom)"],
             INSIDE_TOP = L["Inside (Top)"],
@@ -3794,8 +3799,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local cpY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -20, 20, 1, db, "classPowerY", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 2)
         cpY.hideOn = HideClassPower
 
-        AddSpace(10, 2)
-        Add(GUI:CreateHeader(self.child, L["Show for Roles"]), 40, 2)
+        local cpRolesSpace = AddSpace(10, 2)
+        if cpRolesSpace then cpRolesSpace.hideOn = HideClassPower end
+        local cpRolesHeader = Add(GUI:CreateHeader(self.child, L["Show for Roles"]), 40, 2)
+        cpRolesHeader.hideOn = HideClassPower
 
         local cpShowTank = Add(GUI:CreateCheckbox(self.child, L["Tank"], db, "classPowerShowTank", function()
             if DF.RefreshClassPower then DF.RefreshClassPower() end
