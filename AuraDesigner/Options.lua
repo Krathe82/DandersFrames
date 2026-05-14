@@ -3333,8 +3333,8 @@ local function RefreshRightPanel() end
 
 local function CreateEnableBanner(parent)
     local banner = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    -- Two-row layout: row 1 (36px) has Enable toggle + Sound Alerts;
-    -- row 2 (32px) has Spec dropdown + Sync/Copy buttons.
+    -- Two-row layout: row 1 (36px) has Enable toggle (left) + Sync/Copy buttons (right);
+    -- row 2 (32px) has Sound Alerts (left) + Spec dropdown (right).
     banner:SetHeight(68)
     banner:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     banner:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
