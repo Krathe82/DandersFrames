@@ -1,8 +1,25 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-05-13T10:55:23Z"
+DF.BUILD_DATE = "2026-05-14T21:55:29Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
+
+## [4.3.10]
+
+### New Features
+
+* **Reduced Max Health bar** — a new sub-bar appears on the right edge of party and raid frames when a unit's maximum health has been temporarily reduced (e.g. by certain Mythic+ affixes or boss debuffs), showing exactly how much of the bar is locked out. Customise it under **Health Bar → Reduced Max Health**: enable/disable, choose a texture and colour, set a blend mode, and toggle whether the health bar visually shrinks to fit (Clip Health Bar) or the reduced section overlays it.
+
+### Bug Fixes
+
+* (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
+* (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
+* (Defensive Icons) Fix icon borders missing on one or more sides when Pixel Perfect is enabled. (PR #79 by Krathe)
+* (Export Settings) Fix the "All" preset unchecking Pinned Frames, Aura Designer, and Auto Layouts. (PR #78 by Krathe)
+* (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
+* (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
+* (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
+* (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
 
 ## [4.3.9]
 
