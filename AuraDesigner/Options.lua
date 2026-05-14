@@ -3333,15 +3333,26 @@ local function RefreshRightPanel() end
 
 local function CreateEnableBanner(parent)
     local banner = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    banner:SetHeight(36)
+    -- Two-row layout: row 1 (36px) has Enable toggle + Sound Alerts;
+    -- row 2 (32px) has Spec dropdown + Sync/Copy buttons.
+    banner:SetHeight(68)
     banner:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     banner:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
     ApplyBackdrop(banner, {r = 0.14, g = 0.14, b = 0.14, a = 1}, {r = 0.30, g = 0.30, b = 0.30, a = 0.5})
 
+    -- Subtle divider between the two rows
+    local rowDivider = banner:CreateTexture(nil, "BACKGROUND")
+    rowDivider:SetHeight(1)
+    rowDivider:SetPoint("TOPLEFT", banner, "TOPLEFT", 0, -36)
+    rowDivider:SetPoint("TOPRIGHT", banner, "TOPRIGHT", 0, -36)
+    rowDivider:SetColorTexture(0.25, 0.25, 0.25, 1)
+
     -- Themed checkbox (matches GUI:CreateCheckbox style)
+    -- Row 1 centre = 18px from top. Banner centre = 34px from top.
+    -- Offset from banner centre to row 1 centre = +16.
     local cb = CreateFrame("CheckButton", nil, banner, "BackdropTemplate")
     cb:SetSize(18, 18)
-    cb:SetPoint("LEFT", 10, 0)
+    cb:SetPoint("LEFT", banner, "LEFT", 10, 16)
     ApplyBackdrop(cb, C_ELEMENT, {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.5})
 
     cb.Check = cb:CreateTexture(nil, "OVERLAY")
@@ -3386,8 +3397,9 @@ local function CreateEnableBanner(parent)
     cbSubLabel:SetText(L["Custom buff and frame effect indicators"])
     cbSubLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
+    -- Row 2 centre = 52px from top = 18px below banner centre → y offset -18.
     local specLabel = banner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    specLabel:SetPoint("RIGHT", banner, "RIGHT", -145, 0)
+    specLabel:SetPoint("RIGHT", banner, "RIGHT", -145, -18)
     specLabel:SetText(L["Spec:"])
     specLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
@@ -3505,10 +3517,10 @@ local function CreateEnableBanner(parent)
         end
     end)
 
-    -- Mute Sound Alerts checkbox
+    -- Mute Sound Alerts checkbox — row 1 right side, decoupled from specLabel.
     local muteCb = CreateFrame("CheckButton", nil, banner)
     muteCb:SetSize(16, 16)
-    muteCb:SetPoint("RIGHT", specLabel, "LEFT", -20, 0)
+    muteCb:SetPoint("RIGHT", banner, "RIGHT", -10, 16)
 
     local muteBg = muteCb:CreateTexture(nil, "BACKGROUND")
     muteBg:SetAllPoints()
@@ -5811,7 +5823,7 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     spellPickerType = nil
 
     -- Layout constants
-    local BANNER_H = 36
+    local BANNER_H = 68
     local SECTION_GAP = 8
 
     -- ========================================
@@ -5848,10 +5860,11 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     if GUI.CreateCopyButton then
         local copyBtn = GUI.CreateCopyButton(enableBanner, {"auraDesigner"}, "Aura Designer", "auras_auradesigner", true)
         copyBtn:ClearAllPoints()
-        copyBtn:SetPoint("RIGHT", enableBanner, "RIGHT", -5, 0)
+        -- Row 2 centre is 18px below banner centre, so y = -18.
+        copyBtn:SetPoint("RIGHT", enableBanner, "RIGHT", -5, -18)
         enableBanner.specBtn:SetSize(135, 22)
         enableBanner.specBtn:ClearAllPoints()
-        enableBanner.specBtn:SetPoint("RIGHT", enableBanner, "RIGHT", -256, 0)
+        enableBanner.specBtn:SetPoint("RIGHT", enableBanner, "RIGHT", -256, -18)
         enableBanner.specLabel:ClearAllPoints()
         enableBanner.specLabel:SetPoint("RIGHT", enableBanner.specBtn, "LEFT", -4, 0)
     end
