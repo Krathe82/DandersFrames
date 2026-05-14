@@ -75,6 +75,7 @@ Frames\Create.lua
 Frames\Headers.lua
 Frames\Update.lua
 Frames\Bars.lua
+Frames\ReducedMaxHealth.lua
 Frames\Icons.lua
 Frames\StatusIcons.lua
 Frames\Init.lua

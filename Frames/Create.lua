@@ -1164,7 +1164,14 @@ function DF:CreateFrameElementsExtended(frame, db)
     healAbsorbBorder:SetBackdropBorderColor(0, 0, 0, 1)
     healAbsorbBorder:Hide()
     frame.dfHealAbsorbBar.border = healAbsorbBorder
-    
+
+    -- ========================================
+    -- REDUCED MAX HEALTH BAR
+    -- ========================================
+    if DF.CreateReducedMaxHealthBar then
+        DF:CreateReducedMaxHealthBar(frame, db)
+    end
+
     -- ========================================
     -- AURA CONTAINER AND ICONS
     -- ========================================
@@ -1888,7 +1895,14 @@ function DF:CreateUnitFrame(unit, index, isRaid)
     healAbsorbBorder:SetBackdropBorderColor(0, 0, 0, 1)
     healAbsorbBorder:Hide()
     frame.dfHealAbsorbBar.border = healAbsorbBorder
-    
+
+    -- ========================================
+    -- REDUCED MAX HEALTH BAR
+    -- ========================================
+    if DF.CreateReducedMaxHealthBar then
+        DF:CreateReducedMaxHealthBar(frame, db)
+    end
+
     -- ========================================
     -- AURA CONTAINER AND ICONS
     -- ========================================

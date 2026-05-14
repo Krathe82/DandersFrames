@@ -442,6 +442,7 @@ L["Click %sEdit Settings%s on a profile to customise it. This takes you to the s
 L["Click %sExit Editing%s when done. Your overrides are saved to the profile. If you change a setting back to match global, the override is automatically removed."] = true
 L["Click-cast profile: %s"] = true
 L["Click-Through Icons"] = true
+L["Clip Health Bar"] = true
 L["Close"] = true
 L["Color"] = true
 L["Color and opacity of the empty/inactive pips."] = true
@@ -1094,6 +1095,7 @@ L["Ready Check Icon"] = true
 L["Ready to copy"] = true
 L["Recommended: enable 'All Debuffs' to see all relevant debuffs, especially for healers."] = true
 L["Recovered %d raid settings from interrupted auto layout editing session."] = true
+L["Reduced Max Health"] = true
 L["Refresh"] = true
 L["Reload & Disable Blizzard Party"] = true
 L["Reload & Disable Blizzard Raid"] = true

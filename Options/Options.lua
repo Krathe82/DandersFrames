@@ -3317,7 +3317,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     local pageHealthBar = CreateSubTab("bars", "bars_health", L["Health Bar"])
     BuildPage(pageHealthBar, function(self, db, Add, AddSpace, AddSyncPoint)
         -- Copy button at top
-        Add(CreateCopyButton(self.child, {"healthColor", "healthOrientation", "healthTexture", "classColor", "smoothBars", "background", "missingHealth"}, L["Health Bar"], "bars_health"), 25, 2)
+        Add(CreateCopyButton(self.child, {"healthColor", "healthOrientation", "healthTexture", "classColor", "smoothBars", "background", "missingHealth", "reducedMaxHealth"}, L["Health Bar"], "bars_health"), 25, 2)
         
         local currentSection = nil
         local function AddToSection(widget, height, col)
@@ -3497,9 +3497,32 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         mhLowGroup:AddWidget(GUI:CreateSlider(self.child, L["Weight"], 1, 5, 1, db, "missingHealthColorLowWeight", function() if mhGradBar.UpdatePreview then mhGradBar.UpdatePreview() end DF:UpdateColorCurve() DF:RefreshAllVisibleFrames() end, function() DF:UpdateColorCurve() DF:RefreshAllVisibleFrames() if mhGradBar.UpdatePreview then mhGradBar.UpdatePreview() end end, true), 55)
         mhLowGroup.hideOn = function(d) return d.backgroundMode == "BACKGROUND" or d.missingHealthColorMode ~= "PERCENT" end
         AddToSection(mhLowGroup, nil, 1)
-        
+
         currentSection = nil
-        
+
+        AddSpace(10, "both")
+
+        -- ===== REDUCED MAX HEALTH SECTION =====
+        local reducedSection = Add(GUI:CreateCollapsibleSection(self.child, L["Reduced Max Health"], true), 36, "both")
+        currentSection = reducedSection
+
+        -- ===== REDUCED MAX HEALTH SETTINGS GROUP (Column 1) =====
+        local reducedGroup = GUI:CreateSettingsGroup(self.child, 280)
+        reducedGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
+        reducedGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable"], db, "reducedMaxHealthEnabled", function() DF:UpdateAllFrames() end), 30)
+        local reducedClip = reducedGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Clip Health Bar"], db, "reducedMaxHealthClipHealthBar", function() DF:UpdateAllFrames() end), 30)
+        reducedClip.hideOn = function(d) return not d.reducedMaxHealthEnabled end
+        local reducedTex = reducedGroup:AddWidget(GUI:CreateTextureDropdown(self.child, L["Texture"], db, "reducedMaxHealthTexture", function() DF:UpdateAllFrames() end), 55)
+        reducedTex.hideOn = function(d) return not d.reducedMaxHealthEnabled end
+        local reducedColor = reducedGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Bar Color"], db, "reducedMaxHealthColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
+        reducedColor.hideOn = function(d) return not d.reducedMaxHealthEnabled end
+        local reducedBlendOpts = { BLEND = L["Blend"], ADD = L["Add"], MOD = L["Modulate"] }
+        local reducedBlend = reducedGroup:AddWidget(GUI:CreateDropdown(self.child, L["Blend Mode"], reducedBlendOpts, db, "reducedMaxHealthBlendMode", function() DF:UpdateAllFrames() end), 55)
+        reducedBlend.hideOn = function(d) return not d.reducedMaxHealthEnabled end
+        AddToSection(reducedGroup, nil, 1)
+
+        currentSection = nil
+
         -- See Also links
         AddSpace(20, "both")
         Add(GUI:CreateSeeAlso(self.child, {
