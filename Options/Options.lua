@@ -7865,7 +7865,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         presetRow:SetSize(240, 24)
         
         local presets = {
-            {name = "All", x = 0, cats = {"position", "layout", "bars", "auras", "text", "icons", "other"}},
+            {name = "All", x = 0, cats = {"position", "layout", "bars", "auras", "text", "icons", "other", "pinnedFrames", "auraDesigner", "autoLayout"}},
             {name = "Look", x = 60, cats = {"bars", "auras", "text", "icons", "other"}},
             {name = "Layout", x = 120, cats = {"position", "layout"}},
             {name = "None", x = 180, cats = {}},
