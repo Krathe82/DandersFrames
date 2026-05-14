@@ -8116,6 +8116,18 @@ function DF:CreateGUI()
                 end
             end
         end
+        -- Aura Designer needs the same minimum width as Click Casting to
+        -- prevent the two-row banner controls from overlapping.
+        local adMinWidth = 760
+        if name == "auras_auradesigner" then
+            frame:SetResizeBounds(adMinWidth, minHeight, maxWidth, maxHeight)
+            if frame:GetWidth() < adMinWidth then
+                frame:SetWidth(adMinWidth)
+            end
+        else
+            frame:SetResizeBounds(normalMinWidth, minHeight, maxWidth, maxHeight)
+        end
+
         GUI.CurrentPageName = name
         UpdateThemeColors()
     end
