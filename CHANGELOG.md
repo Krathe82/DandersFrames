@@ -8,12 +8,12 @@
 
 ### Bug Fixes
 
-* (Dispel Overlay) Fix gradient snapping to full brightness after a unit goes out of range and back in range while they have a dispellable debuff. (PR #89 by Krathe)
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
-* Fix debuff icons remaining visible on frames after a unit dies. (PR #85 by Krathe)
+* (Debuffs) Fix debuff icons remaining visible on frames after a unit dies. (PR #85 by Krathe)
 * (Defensive Icons) Fix icon borders missing on one or more sides when Pixel Perfect is enabled. (PR #79 by Krathe)
+* (Dispel Overlay) Fix gradient snapping to full brightness after a unit goes out of range and back in range while they have a dispellable debuff. (PR #89 by Krathe)
 * (Export Settings) Fix the "All" preset unchecking Pinned Frames, Aura Designer, and Auto Layouts. (PR #78 by Krathe)
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
