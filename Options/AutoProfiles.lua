@@ -2494,12 +2494,21 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
         snapshotKeys = recoveryKeys,
     }
 
-    -- Apply existing overrides to db.raid for live preview
+    -- Apply existing overrides to db.raid for live preview.
+    -- Skip "pinnedFrames" as a direct key — it is a stale artifact from an older
+    -- bug where dragging a pinned frame during editing caused the entire pinnedFrames
+    -- table (including position) to be saved as a profile override. Pinned frame
+    -- settings are managed via "pinned.N.setting" keys; applying the raw table would
+    -- overwrite _realRaidDB.pinnedFrames and move the frame to the stored position.
     local overrideCount = 0
     if self.editingProfile.overrides then
         for key, value in pairs(self.editingProfile.overrides) do
-            SetRaidValue(key, DeepCopyValue(value))
-            overrideCount = overrideCount + 1
+            if key == "pinnedFrames" then
+                DF:DebugWarn("LAYOUT", "EnterEditing: skipping stale pinnedFrames direct override key")
+            else
+                SetRaidValue(key, DeepCopyValue(value))
+                overrideCount = overrideCount + 1
+            end
         end
     end
     DF:Debug("LAYOUT", "EnterEditing: applied %d overrides for live preview", overrideCount)
@@ -2578,18 +2587,32 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         local autoStored, autoCleaned = 0, 0
 
         for key, snapshotVal in pairs(self.globalSnapshot) do
-            local currentVal = GetRaidValue(key)
-            local matches = DeepCompare(snapshotVal, currentVal)
-
-            if not matches then
-                -- Only deep-copy when override is new or has actually changed
-                if overrides[key] == nil or not DeepCompare(overrides[key], currentVal) then
-                    overrides[key] = DeepCopyValue(currentVal)
-                    autoStored = autoStored + 1
+            -- Skip "pinnedFrames" as a direct key. Pinned frame settings are tracked
+            -- via "pinned.N.setting" keys (PINNED_OVERRIDABLE). Comparing the whole
+            -- pinnedFrames table would cause position changes (from dragging during
+            -- editing) to be stored as a top-level profile override, which then
+            -- overwrites _realRaidDB.pinnedFrames and moves the frame on next activation.
+            if key == "pinnedFrames" then
+                -- Clean up any stale pinnedFrames override that may already exist
+                if overrides[key] ~= nil then
+                    overrides[key] = nil
+                    autoCleaned = autoCleaned + 1
+                    DF:DebugWarn("LAYOUT", "ExitEditing: removed stale pinnedFrames direct override key")
                 end
-            elseif matches and overrides[key] ~= nil then
-                overrides[key] = nil
-                autoCleaned = autoCleaned + 1
+            else
+                local currentVal = GetRaidValue(key)
+                local matches = DeepCompare(snapshotVal, currentVal)
+
+                if not matches then
+                    -- Only deep-copy when override is new or has actually changed
+                    if overrides[key] == nil or not DeepCompare(overrides[key], currentVal) then
+                        overrides[key] = DeepCopyValue(currentVal)
+                        autoStored = autoStored + 1
+                    end
+                elseif matches and overrides[key] ~= nil then
+                    overrides[key] = nil
+                    autoCleaned = autoCleaned + 1
+                end
             end
         end
 
@@ -3543,6 +3566,43 @@ function AutoProfilesUI:GetRuntimeGlobalValue(key)
     return DF._realRaidDB[key]
 end
 
+-- One-shot migration: strip stale "pinnedFrames" direct keys from all profile overrides.
+-- These were incorrectly written by the ExitEditing diff scan when a pinned frame was
+-- dragged during editing. The key causes the entire pinnedFrames table (including
+-- position) to overwrite _realRaidDB on the next EnterEditing, moving the frame.
+local dfAutoProfilesMigrated = false
+local function MigrateAutoProfileOverrides()
+    if dfAutoProfilesMigrated then return end
+    dfAutoProfilesMigrated = true
+
+    local autoDb = DF.db and DF.db.raidAutoProfiles
+    if not autoDb then return end
+
+    local cleaned = 0
+    local contentTypes = { "mythic", "instanced", "openWorld" }
+    for _, ct in ipairs(contentTypes) do
+        local profiles = autoDb[ct] and autoDb[ct].profiles
+        if profiles then
+            for _, profile in ipairs(profiles) do
+                if profile.overrides and profile.overrides.pinnedFrames ~= nil then
+                    profile.overrides.pinnedFrames = nil
+                    cleaned = cleaned + 1
+                end
+            end
+        end
+        -- Also check single-profile (mythic uses .profile not .profiles)
+        local single = autoDb[ct] and autoDb[ct].profile
+        if single and single.overrides and single.overrides.pinnedFrames ~= nil then
+            single.overrides.pinnedFrames = nil
+            cleaned = cleaned + 1
+        end
+    end
+
+    if cleaned > 0 then
+        DF:Debug("LAYOUT", "MigrateAutoProfileOverrides: removed stale pinnedFrames key from %d profile(s)", cleaned)
+    end
+end
+
 -- Evaluate current content/raid state and apply/remove profiles as needed
 function AutoProfilesUI:EvaluateAndApply()
     if not DF.initialized then return end
@@ -3550,6 +3610,8 @@ function AutoProfilesUI:EvaluateAndApply()
         DF:Debug("LAYOUT", "EvaluateAndApply: skipped (editing mode)")
         return
     end
+
+    MigrateAutoProfileOverrides()
 
     -- Cannot modify secure frames during combat — queue for later
     if InCombatLockdown() then
