@@ -16,7 +16,11 @@
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
+* (Pinned Frames) Fix pinned frame position being lost when an Auto Layout is active and the layout rebuilds, or resetting when clicking Edit on an active Auto Layout. (PR #90 by Krathe)
+* (Range Fading) Fix out-of-range members briefly flashing at full alpha when joining a group or when the roster reshuffles. (PR #84 by Krathe)
+* (Reset Page) Fix Buffs and Debuffs Enable toggles not resetting, plus name truncation and the minimap button now refresh live after a profile reset. (PR #83 by Krathe)
 * (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
+* (Test Mode) Fix locking frames turning off test mode when it was already active. (PR #87 by Krathe)
 
 ## [4.3.9]
 
