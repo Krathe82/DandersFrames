@@ -798,35 +798,49 @@ function DF:UpdateDispelOverlayAppearance(frame)
     local deadOrOffline = IsDeadOrOffline(frame)
     local inRange = GetInRange(frame)
     local overlay = frame.dfDispelOverlay
-    local alpha = 1.0
+
+    -- Dead/offline fade multiplier (1.0 when alive)
+    local deadAlpha = 1.0
     if deadOrOffline and db.fadeDeadFrames then
-        alpha = db.fadeDeadBackground or 1
+        deadAlpha = db.fadeDeadBackground or 1
     end
-    
+
+    -- Gradient alpha reads the configured value — this was the bug: using 1.0 here
+    -- caused the gradient to snap back to full brightness after OOR->in-range
+    -- transitions because UpdateDispelOverlayAppearance overwrote the value that
+    -- ShowOverlayWithSecretColor had applied.
+    -- Borders and icons stay at 1.0 to match what ShowOverlayWithSecretColor
+    -- hardcodes. Until that function is updated to read the user settings, using
+    -- db.dispelBorderAlpha/db.dispelIconAlpha here would cause ~5Hz flicker
+    -- (ShowOverlayWithSecretColor sets 1.0, range ticker dims them back).
+    local gradAlpha = math.min((db.dispelGradientAlpha or 0.5) * (db.dispelGradientIntensity or 1.0), 1.0) * deadAlpha
+    local brdAlpha  = 1.0 * deadAlpha
+    local icnAlpha  = 1.0 * deadAlpha
+
     if db.oorEnabled then
         local oorAlpha = db.oorDispelOverlayAlpha or 0.2
-        ApplyOORAlpha(overlay.gradient, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(overlay.borderTop, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(overlay.borderBottom, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(overlay.borderLeft, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(overlay.borderRight, inRange, alpha, oorAlpha)
+        ApplyOORAlpha(overlay.gradient,     inRange, gradAlpha, gradAlpha * oorAlpha)
+        ApplyOORAlpha(overlay.borderTop,    inRange, brdAlpha,  brdAlpha  * oorAlpha)
+        ApplyOORAlpha(overlay.borderBottom, inRange, brdAlpha,  brdAlpha  * oorAlpha)
+        ApplyOORAlpha(overlay.borderLeft,   inRange, brdAlpha,  brdAlpha  * oorAlpha)
+        ApplyOORAlpha(overlay.borderRight,  inRange, brdAlpha,  brdAlpha  * oorAlpha)
         if overlay.icons then
             for _, icon in pairs(overlay.icons) do
-                ApplyOORAlpha(icon, inRange, alpha, oorAlpha)
+                ApplyOORAlpha(icon, inRange, icnAlpha, icnAlpha * oorAlpha)
             end
         end
         if DF.ApplyDispelOverlayAppearance then
             DF:ApplyDispelOverlayAppearance(frame)
         end
     else
-        if overlay.gradient then overlay.gradient:SetAlpha(alpha) end
-        if overlay.borderTop then overlay.borderTop:SetAlpha(alpha) end
-        if overlay.borderBottom then overlay.borderBottom:SetAlpha(alpha) end
-        if overlay.borderLeft then overlay.borderLeft:SetAlpha(alpha) end
-        if overlay.borderRight then overlay.borderRight:SetAlpha(alpha) end
+        if overlay.gradient     then overlay.gradient:SetAlpha(gradAlpha) end
+        if overlay.borderTop    then overlay.borderTop:SetAlpha(brdAlpha) end
+        if overlay.borderBottom then overlay.borderBottom:SetAlpha(brdAlpha) end
+        if overlay.borderLeft   then overlay.borderLeft:SetAlpha(brdAlpha) end
+        if overlay.borderRight  then overlay.borderRight:SetAlpha(brdAlpha) end
         if overlay.icons then
             for _, icon in pairs(overlay.icons) do
-                icon:SetAlpha(alpha)
+                icon:SetAlpha(icnAlpha)
             end
         end
     end

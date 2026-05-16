@@ -8,6 +8,7 @@
 
 ### Bug Fixes
 
+* (Dispel Overlay) Fix gradient snapping to full brightness after a unit goes out of range and back in range while they have a dispellable debuff. (PR #89 by Krathe)
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
