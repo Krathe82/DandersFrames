@@ -10,6 +10,7 @@
 
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
+* Fix orange and blue bounding boxes (raidMoverFrame / DandersFramesMover) rendering above the settings GUI when frames are unlocked; fix orange box position offset when clicking Edit on an Auto Layout while already unlocked; fix position panel X/Y inputs not updating when clicking Edit while the panel is already open. (PR #93 by Krathe)
 * (Defensive Icons) Fix icon borders missing on one or more sides when Pixel Perfect is enabled. (PR #79 by Krathe)
 * (Export Settings) Fix the "All" preset unchecking Pinned Frames, Aura Designer, and Auto Layouts. (PR #78 by Krathe)
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
