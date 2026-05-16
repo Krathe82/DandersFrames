@@ -1062,11 +1062,20 @@ function DF:UpdateHealthFast(frame)
             if DF.RestoreHealthBarFromReducedMax then DF:RestoreHealthBarFromReducedMax(frame) end
         end
         DF:ApplyDeadFade(frame, "Dead")
+        -- Clear aura icons on the first dead tick only. WoW doesn't fire
+        -- UNIT_AURA on death so the cache stays stale; flushing once is enough.
+        -- The edge-detect flag prevents re-running the full AD engine on every
+        -- subsequent UNIT_HEALTH tick while the unit stays dead (e.g. wipe spam).
+        if not frame.dfLastKnownDead then
+            frame.dfLastKnownDead = true
+            if DF.UpdateAuras_Enhanced then DF:UpdateAuras_Enhanced(frame) end
+        end
         return
     end
 
     -- Unit is alive and connected - reset dead fade if it was applied
     DF:ResetDeadFade(frame)
+    frame.dfLastKnownDead = nil
     frame.dfLastKnownConnected = true
 
     -- Clear resurrection icon if unit was pending a res and is now alive
