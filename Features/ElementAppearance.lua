@@ -805,13 +805,17 @@ function DF:UpdateDispelOverlayAppearance(frame)
         deadAlpha = db.fadeDeadBackground or 1
     end
 
-    -- Element-specific base alphas, matching what ShowOverlayWithSecretColor sets.
-    -- Using 1.0 here (as before PR #65) caused the gradient to snap back to full
-    -- opacity after OOR->in-range transitions, because UpdateDispelOverlayAppearance
-    -- overwrote the configured alpha that ShowOverlayWithSecretColor had applied.
+    -- Gradient alpha reads the configured value — this was the bug: using 1.0 here
+    -- caused the gradient to snap back to full brightness after OOR->in-range
+    -- transitions because UpdateDispelOverlayAppearance overwrote the value that
+    -- ShowOverlayWithSecretColor had applied.
+    -- Borders and icons stay at 1.0 to match what ShowOverlayWithSecretColor
+    -- hardcodes. Until that function is updated to read the user settings, using
+    -- db.dispelBorderAlpha/db.dispelIconAlpha here would cause ~5Hz flicker
+    -- (ShowOverlayWithSecretColor sets 1.0, range ticker dims them back).
     local gradAlpha = math.min((db.dispelGradientAlpha or 0.5) * (db.dispelGradientIntensity or 1.0), 1.0) * deadAlpha
-    local brdAlpha  = (db.dispelBorderAlpha or 0.8) * deadAlpha
-    local icnAlpha  = (db.dispelIconAlpha   or 1.0) * deadAlpha
+    local brdAlpha  = 1.0 * deadAlpha
+    local icnAlpha  = 1.0 * deadAlpha
 
     if db.oorEnabled then
         local oorAlpha = db.oorDispelOverlayAlpha or 0.2
