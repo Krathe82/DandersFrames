@@ -1005,6 +1005,18 @@ function PinnedFrames:CreateSetFrames(setIndex)
         -- Save logical position (unscaled)
         set.position = { point = anchor, x = finalX, y = finalY }
 
+        -- When an auto layout is active, GetSetDB() returns a table from the overlay's
+        -- deep copy of _realRaidDB.pinnedFrames, so the write above goes to that copy
+        -- rather than the real DB. Position is intentionally not auto-layout-overridable,
+        -- so always write it through to _realRaidDB so it survives overlay rebuilds.
+        local realSet = DF._realRaidDB
+            and DF._realRaidDB.pinnedFrames
+            and DF._realRaidDB.pinnedFrames.sets
+            and DF._realRaidDB.pinnedFrames.sets[setIndex]
+        if realSet then
+            realSet.position = { point = anchor, x = finalX, y = finalY }
+        end
+
         -- Divide by scale for SetPoint
         local s = container:GetScale() or 1
         container:ClearAllPoints()
