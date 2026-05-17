@@ -1286,9 +1286,9 @@ DF.PartyDefaults = {
     -- Reduced Max Health Bar
     reducedMaxHealthBlendMode = "BLEND",
     reducedMaxHealthClipHealthBar = true,
-    reducedMaxHealthColor = {r = 0.2, g = 0.2, b = 0.2, a = 0.85},
+    reducedMaxHealthColor = {r = 0, g = 0, b = 0, a = 1},
     reducedMaxHealthEnabled = true,
-    reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist",
+    reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Stripes",
 
     -- Blizzard Frame Hiding
     hideBlizzardFrames = true,
@@ -2604,9 +2604,9 @@ DF.RaidDefaults = {
     -- Reduced Max Health Bar
     reducedMaxHealthBlendMode = "BLEND",
     reducedMaxHealthClipHealthBar = true,
-    reducedMaxHealthColor = {r = 0.2, g = 0.2, b = 0.2, a = 0.85},
+    reducedMaxHealthColor = {r = 0, g = 0, b = 0, a = 1},
     reducedMaxHealthEnabled = true,
-    reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist",
+    reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Stripes",
 
     -- Blizzard Frame Hiding
     hideBlizzardFrames = true,

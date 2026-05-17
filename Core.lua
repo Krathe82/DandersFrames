@@ -2115,6 +2115,21 @@ function DF:LightweightUpdateAbsorbBarColor()
     IterateFramesInMode(mode, UpdateFrame)
 end
 
+function DF:LightweightUpdateReducedMaxHealthColor()
+    local mode = DF.GUI and DF.GUI.SelectedMode or "party"
+    local db = DF.db[mode]
+    if not db or not db.reducedMaxHealthColor then return end
+    local c = db.reducedMaxHealthColor
+
+    local function UpdateFrame(frame)
+        if frame and frame.dfReducedMaxHealthBar then
+            frame.dfReducedMaxHealthBar:SetStatusBarColor(c.r, c.g, c.b, c.a or 1)
+        end
+    end
+
+    IterateFramesInMode(mode, UpdateFrame)
+end
+
 function DF:LightweightUpdateHealAbsorbBarColor()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]

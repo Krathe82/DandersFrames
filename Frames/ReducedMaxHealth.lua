@@ -119,27 +119,6 @@ function DF:UpdateReducedMaxHealth(frame)
     end
 end
 
--- Hot path for live colour-picker drags: only re-apply the bar colour on visible
--- frames, skipping texture resolution, anchoring, and the API/secret-value dance.
-function DF:LightweightUpdateReducedMaxHealthColor()
-    local mode = DF.GUI and DF.GUI.SelectedMode or "party"
-    local db = DF.db and DF.db[mode]
-    if not db or not db.reducedMaxHealthColor then return end
-    local c = db.reducedMaxHealthColor
-
-    local function updateFrame(frame)
-        if frame and frame.dfReducedMaxHealthBar and frame.dfReducedMaxHealthBar:IsShown() then
-            frame.dfReducedMaxHealthBar:SetStatusBarColor(c.r, c.g, c.b, c.a or 1)
-        end
-    end
-
-    if DF.IteratePartyFrames then DF:IteratePartyFrames(updateFrame) end
-    if DF.IterateRaidFrames  then DF:IterateRaidFrames(updateFrame)  end
-    if DF.IterateAllFrames and not (DF.IteratePartyFrames or DF.IterateRaidFrames) then
-        DF:IterateAllFrames(updateFrame)
-    end
-end
-
 function DF:UpdateAllReducedMaxHealth()
     local function updateFrame(frame)
         if frame and frame:IsShown() then
