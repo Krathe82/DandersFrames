@@ -579,7 +579,11 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
         frame.healthBar:SetValue(healthValue)
     end
 
-    frame.dfTestReducedMaxPct = testData.reducedMaxPct or 0
+    if db.testShowReducedMaxHealth ~= false then
+        frame.dfTestReducedMaxPct = testData.reducedMaxPct or 0
+    else
+        frame.dfTestReducedMaxPct = 0
+    end
     if DF.UpdateReducedMaxHealth then DF:UpdateReducedMaxHealth(frame) end
 
     -- Update missing health bar if enabled
@@ -6624,6 +6628,7 @@ function DF:CreateTestPanel()
         end
     end, "bars_classpower")
     panel.showOutOfRangeCheck = secBars:AddCheckbox("Out of Range", "testShowOutOfRange", nil, "display_fading")
+    panel.showReducedMaxCheck = secBars:AddCheckbox("Reduced Max Health", "testShowReducedMaxHealth", nil, "bars_health")
 
     -- --- AURAS ---
     local secAuras = CreateSection(panel, "Auras", "auras")
@@ -6902,6 +6907,7 @@ function DF:CreateTestPanel()
         self.showHealPredictCheck:SetChecked(db.testShowHealPrediction ~= false)
         self.showClassPowerCheck:SetChecked(db.testShowClassPower ~= false)
         self.showOutOfRangeCheck:SetChecked(db.testShowOutOfRange)
+        self.showReducedMaxCheck:SetChecked(db.testShowReducedMaxHealth ~= false)
         self.showAurasCheck:SetChecked(db.testShowAuras)
         self.showBossDebuffsCheck:SetChecked(db.testShowBossDebuffs)
         self.showDispelGlowCheck:SetChecked(db.testShowDispelGlow)

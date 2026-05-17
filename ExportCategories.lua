@@ -1056,6 +1056,7 @@ DF.ExportCategories = {
         "testShowAggro",
         "testShowSelection",
         "testShowOutOfRange",
+        "testShowReducedMaxHealth",
         "testShowDispelGlow",
         "testShowExternalDef",
         "testShowMissingBuff",
