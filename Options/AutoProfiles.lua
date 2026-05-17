@@ -3530,7 +3530,16 @@ function AutoProfilesUI:IsOverriddenByRuntime(key)
 
     local setIndex, setting = ParsePinnedKey(key)
     if setIndex and setting then
-        return DF.raidOverrides.pinnedFrames ~= nil
+        -- Compare the specific setting value in the overlay against _realRaidDB.
+        -- The overlay always has a pinnedFrames copy when any layout is active;
+        -- only per-setting differences indicate an actual override.
+        local overlayPF = DF.raidOverrides.pinnedFrames
+        local realPF = DF._realRaidDB and DF._realRaidDB.pinnedFrames
+        if not overlayPF or not realPF then return false end
+        local overlaySet = overlayPF.sets and overlayPF.sets[setIndex]
+        local realSet = realPF.sets and realPF.sets[setIndex]
+        if not overlaySet or not realSet then return false end
+        return not DeepCompare(overlaySet[setting], realSet[setting])
     end
 
     local tableName, index = ParseTableKey(key)
