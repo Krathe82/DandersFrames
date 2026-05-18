@@ -4,6 +4,8 @@
 
 ### New Features
 
+* (Color Picker) Added a Default button to the DF color picker that resets the colour to its configured default value. Also populates ElvUI's Default button on the native picker for DF settings.
+
 * **Reduced Max Health bar** — a new sub-bar appears on the right edge of party and raid frames when a unit's maximum health has been temporarily reduced (e.g. by certain Mythic+ affixes or boss debuffs), showing exactly how much of the bar is locked out. Customise it under **Health Bar → Reduced Max Health**: enable/disable, choose a texture and colour, set a blend mode, and toggle whether the health bar visually shrinks to fit (Clip Health Bar) or the reduced section overlays it.
 
 ### Bug Fixes
