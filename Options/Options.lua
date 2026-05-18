@@ -3115,11 +3115,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         colorPickerGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use DF Color Picker"], db, "colorPickerOverride", function()
             if db.colorPickerOverride or db.colorPickerGlobalOverride then
-                local success = GUI:InstallColorPickerHook()
-                if success then print("|cff00ff00DandersFrames:|r Color picker override enabled")
-                elseif GUI:IsColorPickerHookInstalled() then print("|cff00ff00DandersFrames:|r Color picker override already active") end
+                GUI:InstallColorPickerHook()
             else
                 GUI:UninstallColorPickerHook()
+            end
+            if db.colorPickerOverride then
+                print("|cff00ff00DandersFrames:|r Color picker override enabled")
+            else
                 print("|cffff9900DandersFrames:|r Color picker override disabled")
             end
         end), 30)
@@ -3127,12 +3129,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         colorPickerGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use DF Color Picker for All Addons"], db, "colorPickerGlobalOverride", function()
             if db.colorPickerOverride or db.colorPickerGlobalOverride then
-                local success = GUI:InstallColorPickerHook()
-                if success then print("|cff00ff00DandersFrames:|r Custom color picker enabled for all addons")
-                elseif GUI:IsColorPickerHookInstalled() then print("|cff00ff00DandersFrames:|r Color picker hook already active") end
+                GUI:InstallColorPickerHook()
             else
                 GUI:UninstallColorPickerHook()
-                print("|cffff9900DandersFrames:|r Color picker hook disabled")
+            end
+            if db.colorPickerGlobalOverride then
+                print("|cff00ff00DandersFrames:|r Custom color picker enabled for all addons")
+            else
+                print("|cffff9900DandersFrames:|r Custom color picker disabled for all addons")
             end
         end), 30)
         colorPickerGroup:AddWidget(GUI:CreateLabel(self.child, L["Show the DF color picker when any addon opens a color picker."], 250), 30)

@@ -1099,7 +1099,7 @@ local function CreateColorPickerTest(hasAlpha)
     -- ============================================================
     
     local tabFrame = CreateFrame("Frame", nil, content)
-    tabFrame:SetSize(300, 22)
+    tabFrame:SetSize(300, 42)
     tabFrame:SetPoint("TOPLEFT", hexFrame, "BOTTOMLEFT", 0, -8)
     
     local tabButtons = {}
@@ -1134,10 +1134,10 @@ local function CreateColorPickerTest(hasAlpha)
     CreateTab("recent", "Recent", 60)
     CreateTab("class", "Class", 120)
     
-    -- Save button in tab row (right-aligned)
+    -- Save button in tab row (top-right)
     local saveBtn = CreateFrame("Button", nil, tabFrame, "BackdropTemplate")
     saveBtn:SetSize(50, 18)
-    saveBtn:SetPoint("RIGHT", 0, 0)
+    saveBtn:SetPoint("TOPRIGHT", 0, 0)
     saveBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1149,12 +1149,38 @@ local function CreateColorPickerTest(hasAlpha)
     saveBtnText:SetPoint("CENTER")
     saveBtnText:SetText("Save")
     saveBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-    saveBtn:SetScript("OnEnter", function(self) 
-        self:SetBackdropBorderColor(C_ACCENT.r, C_ACCENT.g, C_ACCENT.b, 1) 
+    saveBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(C_ACCENT.r, C_ACCENT.g, C_ACCENT.b, 1)
     end)
-    saveBtn:SetScript("OnLeave", function(self) 
-        self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 1) 
+    saveBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 1)
     end)
+
+    -- Default button: stacked below Save, same width
+    local defaultBtn = CreateFrame("Button", nil, tabFrame, "BackdropTemplate")
+    defaultBtn:SetSize(50, 18)
+    defaultBtn:SetPoint("TOP", saveBtn, "BOTTOM", 0, -2)
+    defaultBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    defaultBtn:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1)
+    defaultBtn:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 1)
+    local defaultBtnText = defaultBtn:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
+    defaultBtnText:SetPoint("CENTER")
+    defaultBtnText:SetText("Default")
+    defaultBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    defaultBtn:SetScript("OnClick", function()
+        local d = testFrame.defaultColor
+        if not d then return end
+        -- SetColor triggers UpdateAllColors which fires onChangeCallback for live preview
+        testFrame:SetColor(d.r, d.g, d.b, d.a or 1)
+    end)
+    defaultBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(C_ACCENT.r, C_ACCENT.g, C_ACCENT.b, 1) end)
+    defaultBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 1) end)
+    defaultBtn:Hide()
+    testFrame.defaultBtn = defaultBtn
     
     local classContent = CreateFrame("Frame", nil, tabContent)
     classContent:SetAllPoints()
@@ -1548,7 +1574,7 @@ local function CreateColorPickerTest(hasAlpha)
     cancelBtn:SetScript("OnClick", function() testFrame:Hide() end)
     cancelBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(0.8, 0.4, 0.4, 1) end)
     cancelBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 1) end)
-    
+
     -- ============================================================
     -- API Methods
     -- ============================================================
@@ -1641,22 +1667,32 @@ end
 -- @param hasAlpha: boolean - show alpha slider
 -- @param onAccept: function(newColor) - called with {r, g, b, a} on accept
 -- @param onCancel: function() - called on cancel
-function GUI:OpenColorPicker(initialColor, hasAlpha, onAccept, onCancel, onChange)
+function GUI:OpenColorPicker(initialColor, hasAlpha, onAccept, onCancel, onChange, defaultColor)
     -- Ensure the picker is created
     CreateColorPickerTest(hasAlpha)
-    
+
     -- If picker is already visible, hide it first without triggering cancel callback
     -- This prevents state leakage when quickly switching between color pickers
     if testFrame:IsShown() then
         testFrame.appliedColor = true  -- Prevent OnHide from calling old cancel callback
         testFrame:Hide()
     end
-    
+
     -- Clear any previous callbacks to prevent state leakage
     testFrame:ClearCallbacks()
     testFrame.appliedColor = false
     testFrame.skipOnChange = false
-    
+
+    -- Store default colour and show/hide the Default button accordingly
+    testFrame.defaultColor = defaultColor or nil
+    if testFrame.defaultBtn then
+        if defaultColor then
+            testFrame.defaultBtn:Show()
+        else
+            testFrame.defaultBtn:Hide()
+        end
+    end
+
     -- Set new callbacks
     testFrame:SetCallbacks(onAccept, onCancel, onChange)
     
@@ -1925,7 +1961,7 @@ local function OpenDFColorPickerWithBlizzard(info, useBlizzardAsBackend)
         C_Timer.After(0.01, function()
             HideBlizzardPicker()
         end)
-        
+
         -- Open our picker with callbacks that interact with Blizzard's hidden picker
         GUI:OpenColorPicker(
             { r = r, g = g, b = b, a = a },
@@ -1942,7 +1978,9 @@ local function OpenDFColorPickerWithBlizzard(info, useBlizzardAsBackend)
             -- On Change: sync to Blizzard (triggers live preview callbacks)
             function(newColor)
                 SyncColorToBlizzard(newColor.r, newColor.g, newColor.b, newColor.a)
-            end
+            end,
+            -- Default colour (passed from DF setting defaults)
+            info.dfDefaultColor
         )
     else
         -- Direct mode (DandersFrames internal, no Blizzard backend needed)
@@ -2005,7 +2043,9 @@ local function OpenDFColorPickerWithBlizzard(info, useBlizzardAsBackend)
             -- On Change
             function(newColor)
                 ApplyColor(newColor)
-            end
+            end,
+            -- Default colour (passed from DF setting defaults)
+            info.dfDefaultColor
         )
     end
 end
