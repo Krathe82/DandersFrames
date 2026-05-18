@@ -364,7 +364,8 @@ local GLOBAL_SETTINGS_TEMPLATE = {
     debugBindings = false,
     minimapIcon = { hide = false },
     autoCreateProfiles = true, -- Auto-create profiles when switching talent loadouts
-    disableWhileMounted = false, -- Disable click casting while mounted
+    disableWhileMounted = false, -- Disable click casting while mounted or flying
+    disableWhileFlying = false,  -- Disable click casting only while flying (not ground mounts)
     -- UI positions can go here
 }
 CC.GLOBAL_SETTINGS_TEMPLATE = GLOBAL_SETTINGS_TEMPLATE
