@@ -1913,6 +1913,8 @@ function CC:BuildMacroTextForBinding(binding, forGlobalBinding)
     local mountedStr = ""
     if self.db and self.db.global and self.db.global.disableWhileMounted then
         mountedStr = ",nomounted,noflying"
+    elseif self.db and self.db.global and self.db.global.disableWhileFlying then
+        mountedStr = ",noflying"
     end
     
     -- Build combat condition string
