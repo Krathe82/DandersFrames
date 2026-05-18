@@ -2901,6 +2901,23 @@ function GUI:CreateColorPicker(parent, label, dbTable, dbKey, hasAlpha, callback
             end)
         end
         
+        -- Attach default colour so the picker can offer a Default button
+        local defaultVal = (DF.PartyDefaults and DF.PartyDefaults[dbKey])
+                        or (DF.RaidDefaults  and DF.RaidDefaults[dbKey])
+        -- Fallback: power bar colours use WoW's PowerBarColor table as their default
+        if not defaultVal and PowerBarColor and dbKey then
+            defaultVal = PowerBarColor[dbKey]
+        end
+        if defaultVal and type(defaultVal) == "table" and defaultVal.r then
+            info.dfDefaultColor = {r = defaultVal.r or 1, g = defaultVal.g or 1, b = defaultVal.b or 1, a = defaultVal.a or 1}
+            -- Populate ElvUI's "Default" button (ColorPPDefault) so it enables and
+            -- pastes the DF setting default when the native Blizzard picker is shown
+            local elvDefault = _G["ColorPPDefault"]
+            if elvDefault then
+                elvDefault.colors = info.dfDefaultColor
+            end
+        end
+
         -- Mark this as a DandersFrames color picker call
         GUI:MarkColorPickerCall()
         ColorPickerFrame:SetupColorPickerAndShow(info)
