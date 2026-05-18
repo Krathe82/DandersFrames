@@ -8162,7 +8162,29 @@ function DF:ProcessRosterUpdate()
     if DF.ClearRangeCache then
         DF:ClearRangeCache()
     end
-    
+
+    -- Refresh leader/assist icons on every visible header child + pinned frame.
+    -- WoW has no dedicated event for assist promotion/demotion — only
+    -- GROUP_ROSTER_UPDATE fires. PARTY_LEADER_CHANGED covers most leader
+    -- changes but its dedup + old/new-only update path can miss cases.
+    -- UpdateLeaderIcon is cheap and self-gates on combat.
+    if DF.UpdateLeaderIcon then
+        local function refreshLeader(frame)
+            if frame.dfIsHeaderChild and frame.unit then
+                DF:UpdateLeaderIcon(frame)
+            end
+        end
+        DF:IteratePartyFrames(refreshLeader)
+        DF:IterateRaidFrames(refreshLeader)
+        if IteratePinnedFrames then
+            IteratePinnedFrames(function(frame)
+                if frame.unit then
+                    DF:UpdateLeaderIcon(frame)
+                end
+            end)
+        end
+    end
+
     local raidDb = DF:GetRaidDB()
     
     -- Check for arena first - arena uses arena header, not raid frames

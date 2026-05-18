@@ -16,6 +16,7 @@
 * (Dispel Overlay) Fix gradient snapping to full brightness after a unit goes out of range and back in range while they have a dispellable debuff. (PR #89 by Krathe)
 * (Export Settings) Fix the "All" preset unchecking Pinned Frames, Aura Designer, and Auto Layouts. (PR #78 by Krathe)
 * (Frame Movers) Fix the orange and blue frame mover outlines rendering above the settings GUI, not following the raid frames when clicking Edit on an Auto Layout, and the position panel X/Y values not refreshing on Auto Layout edit. (PR #93 by Krathe)
+* (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
