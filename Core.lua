@@ -5372,6 +5372,49 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("DandersFrames", {
     end,
 })
 
+-- ============================================================
+-- ADDON COMPARTMENT
+-- Registers DandersFrames in Blizzard's addon compartment button
+-- ============================================================
+
+local addonCompartmentRegistered = false
+
+function DF:CreateAddonCompartment()
+    if addonCompartmentRegistered then return end
+    if not AddonCompartmentFrame then return end
+
+    AddonCompartmentFrame:RegisterAddon({
+        text = "DandersFrames",
+        icon = "Interface\\AddOns\\DandersFrames\\Media\\DF_Icon",
+        registerForAnyClick = true,
+        notCheckable = true,
+        func = function(button, menuInputData, menu)
+            if menuInputData.buttonName == "LeftButton" then
+                DF:ToggleGUI()
+            elseif menuInputData.buttonName == "RightButton" then
+                local db = DF:GetDB()
+                if db.soloMode ~= nil then
+                    db.soloMode = not db.soloMode
+                    DF:UpdateAllFrames()
+                    print("|cff00ff00DandersFrames:|r " .. format(L["Solo mode %s"], db.soloMode and L["enabled"] or L["disabled"]))
+                end
+            end
+        end,
+        funcOnEnter = function(button)
+            MenuUtil.ShowTooltip(button, function(tooltip)
+                tooltip:AddLine("DandersFrames")
+                tooltip:AddLine("|cffffffffLeft-Click:|r Open settings", 0.8, 0.8, 0.8)
+                tooltip:AddLine("|cffffffffRight-Click:|r Toggle solo mode", 0.8, 0.8, 0.8)
+            end)
+        end,
+        funcOnLeave = function(button)
+            MenuUtil.HideTooltip(button)
+        end,
+    })
+
+    addonCompartmentRegistered = true
+end
+
 function DF:CreateMinimapButton()
     if minimapButtonRegistered then return end
     if not LibDBIcon then return end
@@ -5452,12 +5495,13 @@ function DF:UpdateDefaultPlayerFrame()
     end
 end
 
--- Initialize minimap button after PLAYER_LOGIN
+-- Initialize minimap button and addon compartment after PLAYER_LOGIN
 C_Timer.After(1, function()
     local db = DF:GetDB()
     if db and db.showMinimapButton then
         DF:CreateMinimapButton()
     end
+    DF:CreateAddonCompartment()
 end)
 
 -- ============================================================
