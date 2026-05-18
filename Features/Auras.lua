@@ -599,7 +599,9 @@ local function TriggerAuraUpdateForUnit(unit)
             DF:UpdateMyBuffIndicator(ourFrame)
         end
         if DF.UpdateMissingBuffIcon then
-            DF:UpdateMissingBuffIcon(ourFrame)
+            -- forceUpdate=true: bypass the cache equality check so a zone-transition
+            -- cache wipe can't leave a stale "missing" icon after rebuffing.
+            DF:UpdateMissingBuffIcon(ourFrame, true)
         end
         if DF.UpdateDispelOverlay then
             DF:UpdateDispelOverlay(ourFrame)
