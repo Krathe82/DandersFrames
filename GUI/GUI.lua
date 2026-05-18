@@ -2044,9 +2044,9 @@ function GUI:CreateCheckbox(parent, label, dbTable, dbKey, callback, customGet, 
     if DF.Search then
         local hasCustomGetSet = (customGet ~= nil or customSet ~= nil)
         if dbKey and type(dbKey) == "string" then
-            container.searchEntry = DF.Search:RegisterCheckbox(label, dbKey, nil, false)
+            container.searchEntry = DF.Search:RegisterCheckbox(label, dbKey, nil, false, callback)
         elseif hasCustomGetSet then
-            container.searchEntry = DF.Search:RegisterCheckbox(label, nil, nil, true)
+            container.searchEntry = DF.Search:RegisterCheckbox(label, nil, nil, true, callback)
         end
     end
     

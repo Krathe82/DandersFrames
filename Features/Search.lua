@@ -562,6 +562,7 @@ function Search:CreateInlineCheckbox(parent, entry)
     
     cb:SetScript("OnClick", function(self)
         db[dbKey] = self:GetChecked()
+        if entry.callback then entry.callback() end
         DF:UpdateAll()
     end)
     
@@ -1240,7 +1241,7 @@ end
 -- REGISTRATION HELPERS
 -- Now store all widget metadata
 -- ============================================================
-function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet)
+function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet, callback)
     return self:Register({
         label = label,
         dbKey = dbKey,
@@ -1248,6 +1249,7 @@ function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet)
         widgetType = "checkbox",
         keywords = keywords,
         isCustom = customGetSet or false,
+        callback = callback,
     })
 end
 
