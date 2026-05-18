@@ -4,7 +4,9 @@
 
 ### New Features
 
-* Added DandersFrames to the Blizzard addon compartment — left-click opens settings, right-click toggles solo mode. Also correctly listed under Unit Frames in the addon list. (Suggested by JPEscher)
+* Added DandersFrames to the Blizzard addon compartment — left-click opens settings, right-click toggles solo mode. Also correctly listed under Unit Frames in the addon list. (PR #97 by Krathe, suggested by JPEscher)
+* (Click Casting) Added a "Disable only while flying" option to the Profiles panel. Disables click-casting only when airborne (including druid flight form), while keeping it active on ground mounts. Mutually exclusive with the existing "Disable while mounted/flying" option. (PR #96 by Krathe, suggested by JPEscher)
+* (Colour Picker) Added a Default button to the DF colour picker that resets the colour to its configured default value. Also populates ElvUI's Default button on the native picker for DF settings. (PR #95 by Krathe)
 * **Reduced Max Health bar** — a new sub-bar appears on the right edge of party and raid frames when a unit's maximum health has been temporarily reduced (e.g. by certain Mythic+ affixes or boss debuffs), showing exactly how much of the bar is locked out. Customise it under **Health Bar → Reduced Max Health**: enable/disable, choose a texture and colour, set a blend mode, and toggle whether the health bar visually shrinks to fit (Clip Health Bar) or the reduced section overlays it.
 
 ### Bug Fixes
