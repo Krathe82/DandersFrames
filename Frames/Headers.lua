@@ -8185,6 +8185,23 @@ function DF:ProcessRosterUpdate()
         end
     end
 
+    -- Refresh names on every visible frame. UNIT_NAME_UPDATE is unreliable
+    -- for cross-realm name resolution and can be silently dropped if
+    -- unitFrameMap is briefly stale during a roster reshuffle — without
+    -- this safety net, names can stay blank/stale (commonly after wipes).
+    if DF.UpdateName then
+        local function refreshName(frame)
+            if frame.unit then
+                DF:UpdateName(frame)
+            end
+        end
+        DF:IteratePartyFrames(refreshName)
+        DF:IterateRaidFrames(refreshName)
+        if IteratePinnedFrames then
+            IteratePinnedFrames(refreshName)
+        end
+    end
+
     local raidDb = DF:GetRaidDB()
     
     -- Check for arena first - arena uses arena header, not raid frames
@@ -8638,6 +8655,23 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
         local unit = arg1
         if unit then
             local frame = unitFrameMap[unit]
+
+            -- SELF-HEALING: If the map lookup fails for a raid/party unit,
+            -- the map may be stale (e.g., after a roster reshuffle where
+            -- OnAttributeChanged's deferred callback hasn't run yet).
+            -- Without this, UNIT_NAME_UPDATE is silently dropped and the
+            -- name stays blank/stale — a common symptom after wipes when
+            -- the secure header reshuffles units. Same throttled rebuild
+            -- pattern as UNIT_HEALTH and UNIT_CONNECTION above.
+            if not frame and (unit:match("^raid%d") or unit:match("^party%d") or unit == "player") then
+                local now = GetTime()
+                if not DF.lastMapRebuild or (now - DF.lastMapRebuild) > 1.0 then
+                    DF.lastMapRebuild = now
+                    DF:RebuildUnitFrameMap()
+                    frame = unitFrameMap[unit]
+                end
+            end
+
             if frame and frame.dfEventsEnabled ~= false then
                 if DF.UpdateName then
                     DF:UpdateName(frame)
