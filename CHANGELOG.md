@@ -12,6 +12,7 @@
 ### Bug Fixes
 
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
+* (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon.
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
 * (Debuffs) Fix debuff icons remaining visible on frames after a unit dies. (PR #85 by Krathe)

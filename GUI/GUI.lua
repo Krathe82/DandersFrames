@@ -2902,7 +2902,11 @@ function GUI:CreateColorPicker(parent, label, dbTable, dbKey, hasAlpha, callback
         end
         
         -- Attach default colour so the picker can offer a Default button
-        local defaultVal = (DF.PartyDefaults and DF.PartyDefaults[dbKey])
+        -- dbTable.__dfDefaults is set by callers (e.g. Aura Designer proxies) that
+        -- store their defaults outside DF.PartyDefaults / DF.RaidDefaults. Read via
+        -- rawget so proxies' __index doesn't see this lookup as a regular setting.
+        local defaultVal = (dbTable and rawget(dbTable, "__dfDefaults") and dbTable.__dfDefaults[dbKey])
+                        or (DF.PartyDefaults and DF.PartyDefaults[dbKey])
                         or (DF.RaidDefaults  and DF.RaidDefaults[dbKey])
         -- Fallback: power bar colours use WoW's PowerBarColor table as their default
         if not defaultVal and PowerBarColor and dbKey then
