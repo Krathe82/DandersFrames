@@ -8342,13 +8342,24 @@ function DF:CreateGUI()
     end
     
     local function BuildPage(page, builderFunc)
-        page.Refresh = function(self)
+        -- Internal: construct all widget frames for the current mode.
+        -- Called on first visit and whenever the cache is invalidated.
+        -- Always finishes by calling RefreshStates() so callers don't need to.
+        local function DoBuild(self)
             local db = DF.db[GUI.SelectedMode]
-            -- Guard against nil db (e.g., when "clicks" mode is selected)
             if not db then return end
 
+            -- Retire old children: hide, detach anchors, and reparent to the
+            -- trash frame so they leave the GUI frame hierarchy entirely.
+            -- WoW cannot GC frames, but a detached subtree is not traversed
+            -- during drag layout recalculation.
             if self.children then
-                for _, child in ipairs(self.children) do child:Hide() end
+                local trash = GUI._trashFrame
+                for _, child in ipairs(self.children) do
+                    child:Hide()
+                    child:ClearAllPoints()
+                    if trash then child:SetParent(trash) end
+                end
             end
             self.children = {}
             self.child.ThemeListeners = {}
@@ -8389,10 +8400,13 @@ function DF:CreateGUI()
                 banner:SetParent(parent)
                 banner.layoutHeight = 60
                 banner.layoutCol = "both"
+                self.builtForMode = GUI.SelectedMode
+                self.builtForDisabled = true
+                self.cacheValid = true
                 self:RefreshStates()
-                return  -- skip builderFunc entirely
+                return
             end
-            
+
             local function AddSpace(h, col)
                 local spacer = CreateFrame("Frame", nil, parent)
                 spacer:SetSize(1, h)
@@ -8401,7 +8415,7 @@ function DF:CreateGUI()
                 table.insert(self.children, spacer)
                 return spacer
             end
-            
+
             -- Sync point: forces both columns to align to the same Y position
             local function AddSyncPoint()
                 local sync = CreateFrame("Frame", nil, parent)
@@ -8411,11 +8425,40 @@ function DF:CreateGUI()
                 sync.layoutCol = "both"
                 table.insert(self.children, sync)
             end
-            
+
             builderFunc(self, db, Add, AddSpace, AddSyncPoint)
+            self.builtForMode = GUI.SelectedMode
+            self.builtForDisabled = false
+            self.cacheValid = true
             self:RefreshStates()
         end
-        
+
+        -- Invalidate this page's cache so the next Refresh() triggers a full rebuild.
+        page.Invalidate = function(self)
+            self.cacheValid = false
+            self.builtForMode = nil
+        end
+
+        page.Refresh = function(self)
+            local db = DF.db[GUI.SelectedMode]
+            -- Guard against nil db (e.g., when "clicks" mode is selected)
+            if not db then return end
+
+            -- Cache hit: mode matches, build is valid, and the tab's
+            -- enabled/disabled banner state hasn't changed since last build.
+            local isDisabled = GUI:IsTabDisabledForCurrentMode(self.tabName)
+            if self.cacheValid
+               and self.builtForMode == GUI.SelectedMode
+               and self.builtForDisabled == isDisabled then
+                self:RefreshStates()
+                return
+            end
+
+            -- Cache miss: build fresh for this mode.
+            -- DoBuild sets cacheValid and calls RefreshStates() before returning.
+            DoBuild(self)
+        end
+
         page.RefreshStates = function(self)
             if not self.children then return end
             local db = DF.db[GUI.SelectedMode]
@@ -8605,6 +8648,26 @@ function DF:CreateGUI()
         end
     end
     
+    -- Trash frame: detached from the GUI hierarchy. Old page children are
+    -- reparented here on rebuild so they don't contribute to the frame
+    -- traversal cost during window drag layout recalculation.
+    GUI._trashFrame = CreateFrame("Frame")
+    GUI._trashFrame:Hide()
+
+    -- Invalidate all page caches (call before profile/mode switches so each
+    -- page rebuilds with a fresh db reference on its next visit).
+    function GUI:InvalidateAllPages()
+        for _, page in pairs(self.Pages) do
+            if page.Invalidate then page:Invalidate() end
+        end
+    end
+
+    -- Invalidate a single page by name.
+    function GUI:InvalidatePage(name)
+        local page = self.Pages[name]
+        if page and page.Invalidate then page:Invalidate() end
+    end
+
     -- Load pages from Options file
     if DF.SetupGUIPages then
         DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)

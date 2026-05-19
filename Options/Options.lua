@@ -2103,7 +2103,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 local newType = newSet and newSet.frameType
                 RefreshTabs()
                 if oldType ~= newType and GUI.RefreshCurrentPage then
-                    -- Frame type differs between tabs — rebuild page to show/hide boss vs player controls
+                    -- Frame type differs between tabs — invalidate cache so the page
+                    -- rebuilds with the correct set of widgets for the new frame type.
+                    if GUI.InvalidatePage then GUI:InvalidatePage(GUI.CurrentPageName) end
                     GUI.RefreshCurrentPage()
                 else
                     RefreshControls()

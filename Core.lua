@@ -5259,6 +5259,11 @@ function DF:FullProfileRefresh()
     DF.GlobalFontTemp = nil
 
     -- === REFRESH GUI IF OPEN ===
+    -- Invalidate all page caches first so each page rebuilds with the new
+    -- profile's db reference rather than reusing stale captured closures.
+    if DF.GUI and DF.GUI.InvalidateAllPages then
+        DF.GUI:InvalidateAllPages()
+    end
     if DF.GUIFrame and DF.GUIFrame:IsShown() then
         if DF.GUI and DF.GUI.RefreshCurrentPage then
             DF.GUI:RefreshCurrentPage()
