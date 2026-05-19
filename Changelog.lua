@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-05-17T19:22:02Z"
+DF.BUILD_DATE = "2026-05-19T15:15:07Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -8,6 +8,9 @@ DF.CHANGELOG_TEXT = [===[
 
 ### New Features
 
+* Added DandersFrames to the Blizzard addon compartment — left-click opens settings, right-click toggles solo mode. Also correctly listed under Unit Frames in the addon list. (PR #97 by Krathe, suggested by JPEscher)
+* (Click Casting) Added a "Disable only while flying" option to the Profiles panel. Disables click-casting only when airborne (including druid flight form), while keeping it active on ground mounts. Mutually exclusive with the existing "Disable while mounted/flying" option. (PR #96 by Krathe, suggested by JPEscher)
+* (Colour Picker) Added a Default button to the DF colour picker that resets the colour to its configured default value. Also populates ElvUI's Default button on the native picker for DF settings. (PR #95 by Krathe)
 * **Reduced Max Health bar** — a new sub-bar appears on the right edge of party and raid frames when a unit's maximum health has been temporarily reduced (e.g. by certain Mythic+ affixes or boss debuffs), showing exactly how much of the bar is locked out. Customise it under **Health Bar → Reduced Max Health**: enable/disable, choose a texture and colour, set a blend mode, and toggle whether the health bar visually shrinks to fit (Clip Health Bar) or the reduced section overlays it.
 
 ### Bug Fixes
@@ -22,12 +25,17 @@ DF.CHANGELOG_TEXT = [===[
 * (Frame Movers) Fix the orange and blue frame mover outlines rendering above the settings GUI, not following the raid frames when clicking Edit on an Auto Layout, and the position panel X/Y values not refreshing on Auto Layout edit. (PR #93 by Krathe)
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
+* (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
+* (Missing Buff Indicators) Fix a missing buff icon staying on your own frame after entering a delve and rebuffing. (PR #99 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
+* (Name Text) Fix names occasionally not appearing on frames, most commonly after a wipe or a roster change.
 * (Pinned Frames) Fix all settings showing as overridden by an Auto Layout when only one setting is actually overridden. (PR #91 by Krathe)
 * (Pinned Frames) Fix pinned frame position being lost when an Auto Layout is active and the layout rebuilds, or resetting when clicking Edit on an active Auto Layout. (PR #90 by Krathe)
 * (Range Fading) Fix out-of-range members briefly flashing at full alpha when joining a group or when the roster reshuffles. (PR #84 by Krathe)
 * (Reset Page) Fix Buffs and Debuffs Enable toggles not resetting, plus name truncation and the minimap button now refresh live after a profile reset. (PR #83 by Krathe)
 * (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
+* (Search) Fix settings edited from search results not firing their setting-specific update for any widget type (checkboxes, sliders, dropdowns, colour pickers, toggle switches) — e.g. the minimap button toggle had no effect when used from search. (PR #98 by Krathe)
+* (Settings) Reduce FPS loss when dragging or scrolling the settings window by caching each settings page after its first build. (PR #101 by Krathe)
 * (Test Mode) Fix locking frames turning off test mode when it was already active. (PR #87 by Krathe)
 
 ## [4.3.9]
