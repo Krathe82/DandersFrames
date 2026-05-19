@@ -22,6 +22,7 @@
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
 * (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
+* (Missing Buff Indicators) Fix a missing buff icon staying on your own frame after entering a delve and rebuffing. (PR #99 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
 * (Name Text) Fix names occasionally not appearing on frames, most commonly after a wipe or a roster change.
 * (Pinned Frames) Fix all settings showing as overridden by an Auto Layout when only one setting is actually overridden. (PR #91 by Krathe)

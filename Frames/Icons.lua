@@ -790,7 +790,7 @@ end
 -- Per-frame throttle tracking for missing buff updates (kept for UpdateAllMissingBuffIcons)
 local missingBuffThrottle = {}
 
-function DF:UpdateMissingBuffIcon(frame)
+function DF:UpdateMissingBuffIcon(frame, forceUpdate)
     if not frame or not frame.unit or not frame.missingBuffFrame then return end
     
     -- PERF TEST: Skip if disabled
@@ -881,9 +881,14 @@ function DF:UpdateMissingBuffIcon(frame)
         end
     end
     
-    -- CACHING: Check if the missing buff state changed
+    -- CACHING: Check if the missing buff state changed.
+    -- Skip when forceUpdate is true (called from a real UNIT_AURA event via
+    -- TriggerAuraUpdateForUnit) — a zone transition can wipe the cache to nil
+    -- while the icon is still showing, leaving cachedMissing == missingSpellID
+    -- (both nil) even though the visual is stale. Forcing the update here
+    -- ensures the visual always matches what UnitHasBuff returns on events.
     local cachedMissing = missingBuffCache[frame]
-    if cachedMissing == missingSpellID then
+    if not forceUpdate and cachedMissing == missingSpellID then
         -- No change - skip all visual updates
         return
     end
@@ -983,10 +988,6 @@ end
 
 -- Update missing buff icons for all frames (called on a timer, out of combat only)
 function DF:UpdateAllMissingBuffIcons()
-    -- Clear caches so display-setting changes (border toggle, color, etc.) re-render
-    wipe(missingBuffCache)
-    wipe(missingBuffThrottle)
-    
     -- Check if in test mode - use test update functions instead
     if DF.testMode or DF.raidTestMode then
         if DF.UpdateAllTestMissingBuff then
@@ -994,13 +995,22 @@ function DF:UpdateAllMissingBuffIcons()
         end
         return
     end
-    
-    -- Throttle updates to avoid spam (0.1 second minimum between updates)
+
+    -- Throttle updates to avoid spam (0.1 second minimum between updates).
+    -- IMPORTANT: This check must come BEFORE the cache wipe below. If we wipe
+    -- the cache and then return early (throttled), the cache becomes desynced
+    -- from the visual state: the icon is still showing but missingBuffCache[frame]
+    -- is now nil. The next UNIT_AURA call then sees nil==nil (buff present, cache
+    -- also nil) and takes the early-return path, leaving a stale icon on screen.
     local now = GetTime()
     if DF.lastMissingBuffUpdate and (now - DF.lastMissingBuffUpdate) < 0.1 then
         return
     end
     DF.lastMissingBuffUpdate = now
+
+    -- Clear caches so display-setting changes (border toggle, color, etc.) re-render
+    wipe(missingBuffCache)
+    wipe(missingBuffThrottle)
     
     local function updateFrame(frame)
         if frame and frame:IsShown() then
