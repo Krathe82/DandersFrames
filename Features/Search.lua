@@ -562,6 +562,7 @@ function Search:CreateInlineCheckbox(parent, entry)
     
     cb:SetScript("OnClick", function(self)
         db[dbKey] = self:GetChecked()
+        if entry.callback then entry.callback() end
         DF:UpdateAll()
     end)
     
@@ -644,9 +645,10 @@ function Search:CreateInlineSlider(parent, entry)
                 input:SetText(string.format("%d", value))
             end
         end
+        if entry.callback then entry.callback() end
         DF:ThrottledUpdateAll()
     end)
-    
+
     input:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
         if val then
@@ -658,6 +660,7 @@ function Search:CreateInlineSlider(parent, entry)
             suppressCallback = false
         end
         self:ClearFocus()
+        if entry.callback then entry.callback() end
         DF:UpdateAll()
     end)
     
@@ -709,6 +712,7 @@ function Search:CreateInlineColorPicker(parent, entry)
                 local a = hasAlpha and ColorPickerFrame:GetColorAlpha() or (c.a or 1)
                 db[dbKey] = {r = r, g = g, b = b, a = a}
                 UpdateSwatch()
+                if entry.callback then entry.callback() end
                 DF:UpdateAll()
             end,
             hasOpacity = hasAlpha,
@@ -717,6 +721,7 @@ function Search:CreateInlineColorPicker(parent, entry)
                 if a and db[dbKey] then
                     db[dbKey].a = a
                     UpdateSwatch()
+                    if entry.callback then entry.callback() end
                     DF:UpdateAll()
                 end
             end,
@@ -724,6 +729,7 @@ function Search:CreateInlineColorPicker(parent, entry)
                 if restore then
                     db[dbKey] = {r = restore.r, g = restore.g, b = restore.b, a = restore.a or restore.opacity or 1}
                     UpdateSwatch()
+                    if entry.callback then entry.callback() end
                     DF:UpdateAll()
                 end
             end,
@@ -787,6 +793,7 @@ function Search:CreateInlineDropdown(parent, entry)
         db[dbKey] = key
         btnText:SetText(display)
         list:Hide()
+        if entry.callback then entry.callback() end
         DF:UpdateAll()
     end
     
@@ -1240,7 +1247,7 @@ end
 -- REGISTRATION HELPERS
 -- Now store all widget metadata
 -- ============================================================
-function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet)
+function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet, callback)
     return self:Register({
         label = label,
         dbKey = dbKey,
@@ -1248,10 +1255,11 @@ function Search:RegisterCheckbox(label, dbKey, keywords, customGetSet)
         widgetType = "checkbox",
         keywords = keywords,
         isCustom = customGetSet or false,
+        callback = callback,
     })
 end
 
-function Search:RegisterSlider(label, dbKey, minVal, maxVal, step, keywords)
+function Search:RegisterSlider(label, dbKey, minVal, maxVal, step, keywords, callback)
     return self:Register({
         label = label,
         dbKey = dbKey,
@@ -1260,25 +1268,28 @@ function Search:RegisterSlider(label, dbKey, minVal, maxVal, step, keywords)
         maxVal = maxVal,
         step = step,
         keywords = keywords,
+        callback = callback,
     })
 end
 
-function Search:RegisterDropdown(label, dbKey, values, keywords)
+function Search:RegisterDropdown(label, dbKey, values, keywords, callback)
     return self:Register({
         label = label,
         dbKey = dbKey,
         widgetType = "dropdown",
         values = values,
         keywords = keywords,
+        callback = callback,
     })
 end
 
-function Search:RegisterColorPicker(label, dbKey, hasAlpha, keywords)
+function Search:RegisterColorPicker(label, dbKey, hasAlpha, keywords, callback)
     return self:Register({
         label = label,
         dbKey = dbKey,
         widgetType = "colorpicker",
         hasAlpha = hasAlpha,
         keywords = keywords,
+        callback = callback,
     })
 end

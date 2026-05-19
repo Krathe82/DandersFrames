@@ -11,6 +11,7 @@
 
 ### Bug Fixes
 
+* (Search) Fix checkbox settings toggled from search results not firing their update — e.g. the minimap button toggle had no effect when used from search.
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
@@ -29,6 +30,7 @@
 * (Range Fading) Fix out-of-range members briefly flashing at full alpha when joining a group or when the roster reshuffles. (PR #84 by Krathe)
 * (Reset Page) Fix Buffs and Debuffs Enable toggles not resetting, plus name truncation and the minimap button now refresh live after a profile reset. (PR #83 by Krathe)
 * (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
+* (Search) Fix sliders, dropdowns, colour pickers, and toggle switches edited from search results not firing their setting-specific update. (PR #100 by Krathe)
 * (Test Mode) Fix locking frames turning off test mode when it was already active. (PR #87 by Krathe)
 
 ## [4.3.9]

@@ -2044,9 +2044,9 @@ function GUI:CreateCheckbox(parent, label, dbTable, dbKey, callback, customGet, 
     if DF.Search then
         local hasCustomGetSet = (customGet ~= nil or customSet ~= nil)
         if dbKey and type(dbKey) == "string" then
-            container.searchEntry = DF.Search:RegisterCheckbox(label, dbKey, nil, false)
+            container.searchEntry = DF.Search:RegisterCheckbox(label, dbKey, nil, false, callback)
         elseif hasCustomGetSet then
-            container.searchEntry = DF.Search:RegisterCheckbox(label, nil, nil, true)
+            container.searchEntry = DF.Search:RegisterCheckbox(label, nil, nil, true, callback)
         end
     end
     
@@ -2231,7 +2231,7 @@ function GUI:CreateToggleSwitch(parent, labelA, labelB, dbTable, dbKey, valueA, 
 
     -- Search registration
     if DF.Search and dbKey and type(dbKey) == "string" then
-        container.searchEntry = DF.Search:RegisterCheckbox(labelA .. " / " .. labelB, dbKey, nil, false)
+        container.searchEntry = DF.Search:RegisterCheckbox(labelA .. " / " .. labelB, dbKey, nil, false, callback)
     end
 
     UpdateVisuals()
@@ -2730,7 +2730,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
     
     -- SEARCH: Register this setting with slider metadata
     if DF.Search and dbKey and type(dbKey) == "string" then
-        container.searchEntry = DF.Search:RegisterSlider(label, dbKey, minVal, maxVal, step, nil)
+        container.searchEntry = DF.Search:RegisterSlider(label, dbKey, minVal, maxVal, step, nil, callback)
     end
     
     -- Expose label for dynamic updates
@@ -2939,7 +2939,7 @@ function GUI:CreateColorPicker(parent, label, dbTable, dbKey, hasAlpha, callback
     
     -- SEARCH: Register this setting
     if DF.Search and dbKey and type(dbKey) == "string" then
-        container.searchEntry = DF.Search:RegisterColorPicker(label, dbKey, hasAlpha, nil)
+        container.searchEntry = DF.Search:RegisterColorPicker(label, dbKey, hasAlpha, nil, callback)
     end
     
     return container
@@ -3147,7 +3147,7 @@ function GUI:CreateDropdown(parent, label, options, dbTable, dbKey, callback)
     
     -- SEARCH: Register this setting
     if DF.Search and dbKey and type(dbKey) == "string" then
-        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, options, nil)
+        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, options, nil, callback)
     end
     
     return container
@@ -3711,7 +3711,7 @@ function GUI:CreateTextureDropdown(parent, label, dbTable, dbKey, callback, cust
     -- SEARCH: Register this setting (use current texture list)
     if DF.Search and dbKey and type(dbKey) == "string" then
         local currentOptions = customOptions or DF:GetTextureList()
-        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, currentOptions, nil)
+        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, currentOptions, nil, callback)
     end
     
     return container
@@ -4017,7 +4017,7 @@ function GUI:CreateFontDropdown(parent, label, dbTable, dbKey, callback)
     
     -- SEARCH: Register this setting (use current font list)
     if DF.Search and dbKey and type(dbKey) == "string" then
-        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, DF:GetFontList(), nil)
+        container.searchEntry = DF.Search:RegisterDropdown(label, dbKey, DF:GetFontList(), nil, callback)
     end
     
     return container
