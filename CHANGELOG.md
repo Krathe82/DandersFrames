@@ -11,7 +11,6 @@
 
 ### Bug Fixes
 
-* (Search) Fix checkbox settings toggled from search results not firing their update — e.g. the minimap button toggle had no effect when used from search.
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
@@ -20,9 +19,9 @@
 * (Dispel Overlay) Fix gradient snapping to full brightness after a unit goes out of range and back in range while they have a dispellable debuff. (PR #89 by Krathe)
 * (Export Settings) Fix the "All" preset unchecking Pinned Frames, Aura Designer, and Auto Layouts. (PR #78 by Krathe)
 * (Frame Movers) Fix the orange and blue frame mover outlines rendering above the settings GUI, not following the raid frames when clicking Edit on an Auto Layout, and the position panel X/Y values not refreshing on Auto Layout edit. (PR #93 by Krathe)
-* (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
+* (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
 * (Name Text) Fix names occasionally not appearing on frames, most commonly after a wipe or a roster change.
 * (Pinned Frames) Fix all settings showing as overridden by an Auto Layout when only one setting is actually overridden. (PR #91 by Krathe)
@@ -30,7 +29,7 @@
 * (Range Fading) Fix out-of-range members briefly flashing at full alpha when joining a group or when the roster reshuffles. (PR #84 by Krathe)
 * (Reset Page) Fix Buffs and Debuffs Enable toggles not resetting, plus name truncation and the minimap button now refresh live after a profile reset. (PR #83 by Krathe)
 * (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
-* (Search) Fix sliders, dropdowns, colour pickers, and toggle switches edited from search results not firing their setting-specific update. (PR #100 by Krathe)
+* (Search) Fix settings edited from search results not firing their setting-specific update for any widget type (checkboxes, sliders, dropdowns, colour pickers, toggle switches) — e.g. the minimap button toggle had no effect when used from search. (PR #98 by Krathe)
 * (Test Mode) Fix locking frames turning off test mode when it was already active. (PR #87 by Krathe)
 
 ## [4.3.9]
