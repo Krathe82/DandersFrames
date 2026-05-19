@@ -632,7 +632,8 @@ local function TriggerAuraUpdateForUnit(unit)
                             DF:UpdateMyBuffIndicator(child)
                         end
                         if DF.UpdateMissingBuffIcon then
-                            DF:UpdateMissingBuffIcon(child)
+                            -- forceUpdate=true: same cache-desync fix as the main fan-out above.
+                            DF:UpdateMissingBuffIcon(child, true)
                         end
                         if DF.UpdateDispelOverlay then
                             DF:UpdateDispelOverlay(child)
