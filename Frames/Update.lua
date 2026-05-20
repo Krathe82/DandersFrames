@@ -1172,6 +1172,15 @@ function DF:UpdateHealthFast(frame)
         DF:UpdateAbsorb(frame)
     end
 
+    -- Heal prediction is health-dependent for the same reason: the calculator
+    -- clamps incoming heals to missing/max health, so the displayed amount
+    -- changes as current health changes even with no new heal event. Refresh
+    -- only when a bar is actively shown so idle frames (the common case — no
+    -- incoming heals) cost just a single IsShown() check, not a full update.
+    if frame.dfHealPredictionBar and frame.dfHealPredictionBar:IsShown() then
+        DF:UpdateHealPrediction(frame)
+    end
+
     -- ========================================
     -- REDUCED MAX HEALTH BAR
     -- ========================================

@@ -21,6 +21,7 @@
 * (Frame Movers) Fix the orange and blue frame mover outlines rendering above the settings GUI, not following the raid frames when clicking Edit on an Auto Layout, and the position panel X/Y values not refreshing on Auto Layout edit. (PR #93 by Krathe)
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
+* (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed.
 * (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
 * (Missing Buff Indicators) Fix a missing buff icon staying on your own frame after entering a delve and rebuffing. (PR #99 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
