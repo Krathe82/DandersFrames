@@ -5280,6 +5280,12 @@ function DF:FullProfileRefresh()
         DF.GUI:InvalidateAllPages()
     end
     if DF.GUIFrame and DF.GUIFrame:IsShown() then
+        -- Re-sync sidebar category expand/collapse state to the new profile
+        -- (categories read their state only at creation, so this is needed to
+        -- reflect the switch without a /reload).
+        if DF.GUI and DF.GUI.RefreshCategoryStates then
+            DF.GUI:RefreshCategoryStates()
+        end
         if DF.GUI and DF.GUI.RefreshCurrentPage then
             DF.GUI:RefreshCurrentPage()
         end

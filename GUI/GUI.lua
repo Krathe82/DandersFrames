@@ -8348,7 +8348,20 @@ function DF:CreateGUI()
         local totalHeight = math.abs(y) + 20
         GUI.tabContainer:SetHeight(totalHeight)
     end
-    
+
+    -- Re-sync each category's expanded state from the current profile's saved
+    -- state and relayout the sidebar. Categories read their state once at
+    -- creation, so a profile switch needs this to reflect the new profile's
+    -- expanded/collapsed tabs without a /reload.
+    function GUI:RefreshCategoryStates()
+        local saved = DF.db and DF.db.party and DF.db.party.guiExpandedCategories
+        for name, cat in pairs(self.Categories) do
+            cat.expanded = (saved and saved[name]) or false
+            if cat.arrow then cat.arrow:SetText(cat.expanded and "-" or "+") end
+        end
+        self:UpdateTabLayout()
+    end
+
     -- Store category order
     GUI.CategoryOrder = {}
     
