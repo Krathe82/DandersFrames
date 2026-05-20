@@ -58,40 +58,88 @@ local function DerivePrefix(name)
     -- Leading alphabetic run, stopping at first underscore or digit.
     local prefix = name:match("^(%a+)")
     if not prefix or #prefix < 3 then return nil end
-    -- Generic container words aren't addon names on their own.
+    -- Generic container / root words aren't addon names on their own.
+    -- (GetDebugName of an anonymous frame yields its parent path, often
+    -- "UIParent…", which would otherwise produce a misleading guess.)
     local lower = prefix:lower()
     if lower == "frame" or lower == "button" or lower == "container"
-       or lower == "ui" or lower == "status" then
+       or lower == "ui" or lower == "status" or lower == "uiparent"
+       or lower == "worldframe" then
         return nil
     end
     return prefix
 end
 
+-- Addons we never attribute to: ourselves (we touch some foreign-adjacent
+-- frames) and Blizzard's UI namespace (taint of "Blizzard_*" isn't a useful
+-- third-party answer here).
+local IGNORE_ADDON = { DandersFrames = true }
+
+-- Taint owner of a global variable, or nil. A frame created with a global name
+-- has that global written from its creating addon's code, tainting it.
+local function GlobalTaint(name)
+    if not name or name == "" then return nil end
+    local ok, isSecure, addon = pcall(issecurevariable, name)
+    if ok and not isSecure and addon and addon ~= "" and not IGNORE_ADDON[addon] then
+        return addon
+    end
+    return nil
+end
+
+-- First non-ignored addon taint among a frame's Lua-set fields, or nil.
+-- issecurevariable(frame, key) reports which addon last wrote that field, so an
+-- addon that stashes config/state on its (even anonymous) frame is identifiable.
+local function FieldTaint(frame)
+    local n = 0
+    for k in pairs(frame) do
+        if type(k) == "string" then
+            local ok, isSecure, addon = pcall(issecurevariable, frame, k)
+            if ok and not isSecure and addon and addon ~= "" and not IGNORE_ADDON[addon] then
+                return addon
+            end
+        end
+        n = n + 1
+        if n >= 80 then break end   -- bound the scan
+    end
+    return nil
+end
+
 -- Best-effort source addon for a frame.
 -- Returns: displayName, confident. displayName is nil only when nothing resolved.
---
--- Primary method (no curated list needed): a globally-named frame's global was
--- written by its creating addon, which taints that variable. issecurevariable
--- reports the tainting addon's name — e.g. "Party1SpellBar" -> "BetterBlizzFrames".
 local function GuessAddon(frame)
     local name = frame:GetName()
 
-    -- 1. Taint ownership of the frame's global. Most reliable; real folder name.
+    -- 1. The frame's own global-name taint. Most reliable; real folder name.
     if name and name ~= "" and _G[name] == frame then
-        local ok, isSecure, taintAddon = pcall(issecurevariable, name)
-        if ok and not isSecure and taintAddon and taintAddon ~= "" then
-            return taintAddon, true
-        end
+        local a = GlobalTaint(name)
+        if a then return a, true end
     end
 
+    -- 2. The frame's own field taint (addon stashed state on the anchor frame).
+    local a = FieldTaint(frame)
+    if a then return a, true end
+
+    -- 3. Walk a few parent levels and check each ancestor's global-name and
+    --    field taint. Catches anonymous frames whose owning addon set fields on
+    --    a (possibly also anonymous) parent container — e.g. Northern Sky's
+    --    private-aura frames are parented to its NSRTFrame.
+    local p, guard = frame:GetParent(), 0
+    while p and guard < 5 do
+        if p == UIParent or p == WorldFrame or p:IsForbidden() then break end
+        local pn = p:GetName()
+        local pa = (pn and _G[pn] == p and GlobalTaint(pn)) or FieldTaint(p)
+        if pa then return pa, true end
+        p = p:GetParent()
+        guard = guard + 1
+    end
+
+    -- 4. Name / debug-name heuristics: curated list, then leading-token guess.
     local names = {}
     if name and name ~= "" then names[#names + 1] = name end
     if frame.GetDebugName then
         local ok, dn = pcall(frame.GetDebugName, frame)
         if ok and dn and dn ~= "" then names[#names + 1] = dn end
     end
-    -- 2. Curated list — canonicalises names that don't match the folder
-    --    (e.g. ElvUF -> ElvUI) and covers frames with no global taint.
     for _, s in ipairs(names) do
         local low = s:lower()
         for _, entry in ipairs(KNOWN_ADDONS) do
@@ -100,7 +148,6 @@ local function GuessAddon(frame)
             end
         end
     end
-    -- 3. Last resort: leading token of the frame's own name.
     for _, s in ipairs(names) do
         local prefix = DerivePrefix(s)
         if prefix then return prefix, false end
