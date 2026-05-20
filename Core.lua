@@ -4303,6 +4303,13 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 else
                     print("|cffff0000DandersFrames:|r Header info not available")
                 end
+            elseif msg == "attached" or msg == "attachments" then
+                -- List other addons anchored/parented to DF unit frames
+                if DF.ScanFrameAttachments then
+                    DF:ScanFrameAttachments()
+                else
+                    print("|cffff0000DandersFrames:|r Attachment scan not available")
+                end
             elseif msg == "debugheaders" then
                 -- Toggle header debug mode
                 DF.debugHeaders = not DF.debugHeaders
