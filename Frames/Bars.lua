@@ -1639,9 +1639,9 @@ function DF:UpdateHealPrediction(frame, testIndex)
     
     local mode = db.healPredictionMode or "OVERLAY"
     local showMode = db.healPredictionShowMode or "ALL"
-    -- SPLIT only segments in OVERLAY ("Attached to Health"); in Floating it has
-    -- no meaningful segmentation, so it behaves like the combined ALL bar.
-    local isSplit = (showMode == "SPLIT") and (mode == "OVERLAY")
+    -- SPLIT draws my heals + others' heals as two chained segments, in both
+    -- Attached-to-Health (overlay) and Floating display modes.
+    local isSplit = (showMode == "SPLIT")
 
     -- Get values - either from test data or real unit
     local maxHealth, incomingHeals
@@ -1728,9 +1728,8 @@ function DF:UpdateHealPrediction(frame, testIndex)
             elseif showMode == "OTHERS" then
                 incomingHeals = amountFromOthers
             elseif showMode == "SPLIT" then
-                -- Overlay split: primary segment = my heals (others drawn as bar2).
-                -- Floating split has no segments, so show the combined total.
-                incomingHeals = isSplit and amountFromHealer or amount
+                -- Primary segment = my heals; others are drawn as the second segment.
+                incomingHeals = amountFromHealer
             else
                 incomingHeals = amount
             end
@@ -1874,11 +1873,39 @@ function DF:UpdateHealPrediction(frame, testIndex)
             local bgC = db.healPredictionBackgroundColor or {r = 0, g = 0, b = 0, a = 0.5}
             bar.bg:SetColorTexture(bgC.r, bgC.g, bgC.b, bgC.a)
         end
-        
-        -- Use secret-aware SetBarValue
-        DF.SetBarValue(bar, incomingHeals, frame)
+
+        -- Use secret-aware SetBarValue. In test split, the primary segment shows
+        -- half the preview heal (bar2 the other half).
+        local seg1Val = (isSplit and isTestMode) and ((testHealPercent * 0.5) * maxHealth) or incomingHeals
+        DF.SetBarValue(bar, seg1Val, frame)
         bar:Show()
-        
+
+        -- SPLIT: others' segment, chained after the primary within the floating bar.
+        if isSplit and (isTestMode or othersHeals) then
+            local seg2 = GetOrCreateHealPredSegment2(frame)
+            StyleHealPredSegment(seg2, tex, blendMode, othersColor)
+            seg2:SetParent(frame)
+            seg2:SetFrameStrata(bar:GetFrameStrata())
+            seg2:SetFrameLevel(bar:GetFrameLevel() + 1)
+            if seg2.bg then seg2.bg:Hide() end
+            -- Map floating orientation + reverse fill to the segment anchor side.
+            local segOrient
+            if orientation == "VERTICAL" then
+                segOrient = db.healPredictionReverse and "VERTICAL_INV" or "VERTICAL"
+            else
+                segOrient = db.healPredictionReverse and "HORIZONTAL_INV" or "HORIZONTAL"
+            end
+            -- w is the bar's length in both orientations; AnchorHealPredSegment uses
+            -- whichever (width for horizontal, height for vertical).
+            AnchorHealPredSegment(seg2, bar:GetStatusBarTexture(), segOrient, w, w)
+            seg2:SetMinMaxValues(0, maxHealth)
+            local seg2Val = isTestMode and ((testHealPercent * 0.5) * maxHealth) or othersHeals
+            DF.SetBarValue(seg2, seg2Val, frame)
+            seg2:Show()
+        elseif frame.dfHealPredictionBar2 then
+            frame.dfHealPredictionBar2:Hide()
+        end
+
     -- ============================================================
     -- MODE: OVERLAY (anchors to health bar fill texture)
     -- No arithmetic on secret values - anchor and let StatusBar handle it
