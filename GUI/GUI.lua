@@ -113,6 +113,21 @@ function GUI:UpdateTabAvailability()
             btn:SetBackdropColor(0, 0, 0, 0)
         end
     end
+
+    -- Refresh the sidebar so party-only tabs (e.g. Visibility) hide/show for
+    -- the current mode.
+    if GUI.UpdateTabLayout then GUI:UpdateTabLayout() end
+
+    -- If the active tab just became hidden (party-only while in raid), move to a
+    -- safe always-present tab so the user isn't left on a hidden/empty page.
+    if not GUI._redirectingTab and GUI.SelectedMode == "raid" and GUI.CurrentPageName then
+        local cur = GUI.Tabs[GUI.CurrentPageName]
+        if cur and cur.partyOnly and GUI.SelectTab then
+            GUI._redirectingTab = true
+            GUI.SelectTab("general_settings")
+            GUI._redirectingTab = false
+        end
+    end
 end
 
 -- Track currently open dropdown menu (only one can be open at a time)
@@ -8331,11 +8346,16 @@ function DF:CreateGUI()
                 
                 if cat.expanded then
                     for _, btn in ipairs(cat.children) do
-                        btn:Show()
-                        btn:ClearAllPoints()
-                        btn:SetPoint("TOPLEFT", 0, y)
-                        btn:SetPoint("TOPRIGHT", 0, y)
-                        y = y - 28
+                        -- Party-only tabs are hidden entirely in raid mode.
+                        if btn.partyOnly and GUI.SelectedMode == "raid" then
+                            btn:Hide()
+                        else
+                            btn:Show()
+                            btn:ClearAllPoints()
+                            btn:SetPoint("TOPLEFT", 0, y)
+                            btn:SetPoint("TOPRIGHT", 0, y)
+                            y = y - 28
+                        end
                     end
                 else
                     for _, btn in ipairs(cat.children) do

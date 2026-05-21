@@ -917,6 +917,7 @@ L["Medium"] = true
 L["Medium Health (50%)"] = true
 L["Min Stacks to Show"] = true
 L["Minimal"] = true
+L["Minimap"] = true
 L["Minimum Log Level"] = true
 L["Missing Buff Alpha"] = true
 L["Missing Buffs"] = true

@@ -4,6 +4,7 @@
 
 ### Bug Fixes
 
+* (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode.
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
 * (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 
