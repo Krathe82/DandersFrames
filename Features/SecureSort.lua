@@ -167,6 +167,12 @@ function SecureSort:CreateHandler()
         if DF and DF.FireAPICallback then
             DF:FireAPICallback("OnFramesSorted", sortType)
         end
+        -- Sorting reassigns unit tokens to different buttons, so a pet's owner
+        -- unit may now live on a different frame. Re-anchor pets to their
+        -- current owner frame (cheap; only repositions, no rebuild).
+        if DF and DF.UpdateAllPetFramePositions then
+            DF:UpdateAllPetFramePositions()
+        end
     end
     
     -- Initialize the secure environment with our base tables
