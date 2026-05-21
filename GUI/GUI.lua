@@ -8096,7 +8096,8 @@ function DF:CreateGUI()
             end
             
             GUI.Pages[name]:Show()
-            GUI.Pages[name]:Refresh()
+            -- Tab switching uses the cache-aware path so revisiting a tab is cheap.
+            GUI.Pages[name]:RefreshCached()
             if GUI.Pages[name].RefreshStates then GUI.Pages[name]:RefreshStates() end
             -- Reapply picker overlays if in picker mode
             if DF.settingsPickerMode and DF.ApplyPickerOverlaysToCurrentPage then
@@ -8450,19 +8451,21 @@ function DF:CreateGUI()
             self:RefreshStates()
         end
 
-        -- Invalidate this page's cache so the next Refresh() triggers a full rebuild.
+        -- Invalidate this page's cache so the next RefreshCached() rebuilds.
         page.Invalidate = function(self)
             self.cacheValid = false
             self.builtForMode = nil
         end
 
-        page.Refresh = function(self)
+        -- Cache-aware refresh — used ONLY by tab switching. If the cached build
+        -- is still valid for the current mode and enabled/disabled state, run the
+        -- cheap visibility/layout pass; otherwise rebuild. This is the perf path
+        -- that makes revisiting a tab cheap.
+        page.RefreshCached = function(self)
             local db = DF.db[GUI.SelectedMode]
             -- Guard against nil db (e.g., when "clicks" mode is selected)
             if not db then return end
 
-            -- Cache hit: mode matches, build is valid, and the tab's
-            -- enabled/disabled banner state hasn't changed since last build.
             local isDisabled = GUI:IsTabDisabledForCurrentMode(self.tabName)
             if self.cacheValid
                and self.builtForMode == GUI.SelectedMode
@@ -8473,6 +8476,17 @@ function DF:CreateGUI()
 
             -- Cache miss: build fresh for this mode.
             -- DoBuild sets cacheValid and calls RefreshStates() before returning.
+            DoBuild(self)
+        end
+
+        -- Refresh() ALWAYS rebuilds. This is its historical contract: callers
+        -- invoke it after mutating data (adding/removing list items, reset/copy/
+        -- sync, profile changes, etc.) and rely on the page being reconstructed.
+        -- Only tab switching uses the cache, via RefreshCached().
+        page.Refresh = function(self)
+            local db = DF.db[GUI.SelectedMode]
+            -- Guard against nil db (e.g., when "clicks" mode is selected)
+            if not db then return end
             DoBuild(self)
         end
 
