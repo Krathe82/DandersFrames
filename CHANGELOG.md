@@ -2,6 +2,10 @@
 
 ## [4.3.11] - 2026-05-21
 
+### New Features
+
+* (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments.
+
 ### Bug Fixes
 
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)

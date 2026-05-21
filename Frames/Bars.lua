@@ -1557,7 +1557,63 @@ end
 -- IMPORTANT: All health/heal values may be secret in M+, so we CANNOT do
 -- any arithmetic on them. We anchor to the health bar fill texture and
 -- pass values directly to StatusBar:SetValue().
+--
+-- SPLIT mode ("Attached to Health" only) draws two chained segments — your
+-- heals then everyone else's — by anchoring the second segment's leading edge
+-- to the first segment's fill-texture trailing edge. Same secret-safe trick as
+-- the single bar (no arithmetic; the StatusBar fills itself from SetValue).
 -- ============================================================
+
+-- Anchor a segment's leading edge to the trailing edge of a previous fill
+-- texture (the health fill, or the prior segment), per health orientation.
+local function AnchorHealPredSegment(seg, prevTex, orient, w, h)
+    seg:ClearAllPoints()
+    if orient == "HORIZONTAL_INV" then
+        seg:SetOrientation("HORIZONTAL"); seg:SetReverseFill(true); seg:SetWidth(w)
+        seg:SetPoint("TOPRIGHT", prevTex, "TOPLEFT", 0, 0)
+        seg:SetPoint("BOTTOMRIGHT", prevTex, "BOTTOMLEFT", 0, 0)
+    elseif orient == "VERTICAL" then
+        seg:SetOrientation("VERTICAL"); seg:SetReverseFill(false); seg:SetHeight(h)
+        seg:SetPoint("BOTTOMLEFT", prevTex, "TOPLEFT", 0, 0)
+        seg:SetPoint("BOTTOMRIGHT", prevTex, "TOPRIGHT", 0, 0)
+    elseif orient == "VERTICAL_INV" then
+        seg:SetOrientation("VERTICAL"); seg:SetReverseFill(true); seg:SetHeight(h)
+        seg:SetPoint("TOPLEFT", prevTex, "BOTTOMLEFT", 0, 0)
+        seg:SetPoint("TOPRIGHT", prevTex, "BOTTOMRIGHT", 0, 0)
+    else  -- HORIZONTAL (default)
+        seg:SetOrientation("HORIZONTAL"); seg:SetReverseFill(false); seg:SetWidth(w)
+        seg:SetPoint("TOPLEFT", prevTex, "TOPRIGHT", 0, 0)
+        seg:SetPoint("BOTTOMLEFT", prevTex, "BOTTOMRIGHT", 0, 0)
+    end
+end
+
+-- Get/create the second heal-prediction segment ("others' heals" in SPLIT mode).
+local function GetOrCreateHealPredSegment2(frame)
+    if not frame.dfHealPredictionBar2 then
+        local seg = CreateFrame("StatusBar", nil, frame)
+        seg:SetMinMaxValues(0, 1)
+        seg:EnableMouse(false)
+        frame.dfHealPredictionBar2 = seg
+    end
+    return frame.dfHealPredictionBar2
+end
+
+-- Style a segment to match the primary bar (texture, blend, draw layer, colour).
+local function StyleHealPredSegment(seg, tex, blendMode, color)
+    if seg.currentTexture ~= tex then
+        seg.currentTexture = tex
+        seg:SetStatusBarTexture(tex)
+        local t = seg:GetStatusBarTexture()
+        if t then
+            t:SetHorizTile(false); t:SetVertTile(false)
+            t:SetTexCoord(0, 1, 0, 1); t:SetDrawLayer("ARTWORK", 1)
+        end
+    end
+    local t = seg:GetStatusBarTexture()
+    if t then t:SetBlendMode(blendMode) end
+    seg:SetStatusBarColor(color.r, color.g, color.b, color.a or 0.7)
+end
+
 function DF:UpdateHealPrediction(frame, testIndex)
     if not frame or not frame.healthBar then return end
     
@@ -1575,14 +1631,21 @@ function DF:UpdateHealPrediction(frame, testIndex)
         if frame.dfHealPredictionBar then
             frame.dfHealPredictionBar:Hide()
         end
+        if frame.dfHealPredictionBar2 then
+            frame.dfHealPredictionBar2:Hide()
+        end
         return
     end
     
     local mode = db.healPredictionMode or "OVERLAY"
     local showMode = db.healPredictionShowMode or "ALL"
-    
+    -- SPLIT only segments in OVERLAY ("Attached to Health"); in Floating it has
+    -- no meaningful segmentation, so it behaves like the combined ALL bar.
+    local isSplit = (showMode == "SPLIT") and (mode == "OVERLAY")
+
     -- Get values - either from test data or real unit
     local maxHealth, incomingHeals
+    local myHeals, othersHeals          -- Per-source breakdown (SPLIT mode)
     local isTestMode = false
     local testHealthPercent, testHealPercent  -- Only for test mode
     
@@ -1623,6 +1686,7 @@ function DF:UpdateHealPrediction(frame, testIndex)
         -- Ensure unit exists before querying
         if not UnitExists(unit) then
             if frame.dfHealPredictionBar then frame.dfHealPredictionBar:Hide() end
+            if frame.dfHealPredictionBar2 then frame.dfHealPredictionBar2:Hide() end
             return
         end
         
@@ -1647,24 +1711,32 @@ function DF:UpdateHealPrediction(frame, testIndex)
             calc:SetIncomingHealClampMode(clampMode)
             calc:SetIncomingHealOverflowPercent(1.0)  -- Always 100%
             
+            -- SPLIT needs the per-source breakdown, so query with the player as
+            -- the healer for MINE/OTHERS/SPLIT.
             local healerUnit = nil
-            if showMode == "MINE" or showMode == "OTHERS" then
+            if showMode == "MINE" or showMode == "OTHERS" or showMode == "SPLIT" then
                 healerUnit = "player"
             end
-            
+
             UnitGetDetailedHealPrediction(unit, healerUnit, calc)
-            
+
             local amount, amountFromHealer, amountFromOthers, clamped = calc:GetIncomingHeals()
-            
+            myHeals, othersHeals = amountFromHealer, amountFromOthers
+
             if showMode == "MINE" then
                 incomingHeals = amountFromHealer
             elseif showMode == "OTHERS" then
                 incomingHeals = amountFromOthers
+            elseif showMode == "SPLIT" then
+                -- Overlay split: primary segment = my heals (others drawn as bar2).
+                -- Floating split has no segments, so show the combined total.
+                incomingHeals = isSplit and amountFromHealer or amount
             else
                 incomingHeals = amount
             end
         else
-            -- Fallback to simple API if calculator not available
+            -- Fallback to simple API if calculator not available (no breakdown,
+            -- so SPLIT degrades to a single combined bar).
             if showMode == "MINE" then
                 incomingHeals = UnitGetIncomingHeals(unit, "player")
             else
@@ -1681,12 +1753,15 @@ function DF:UpdateHealPrediction(frame, testIndex)
         end
     end
     
-    -- Get color based on show mode
+    -- Get color based on show mode. The primary bar uses My colour when split;
+    -- the second segment (bar2) uses Others colour. Floating split shows the
+    -- combined total, so it uses the All colour.
     local color
-    if showMode == "MINE" then
+    local othersColor = db.healPredictionOthersColor or {r = 0.0, g = 0.5, b = 0.8, a = 0.7}
+    if showMode == "MINE" or isSplit then
         color = db.healPredictionMyColor or {r = 0.0, g = 0.8, b = 0.2, a = 0.7}
     elseif showMode == "OTHERS" then
-        color = db.healPredictionOthersColor or {r = 0.0, g = 0.5, b = 0.8, a = 0.7}
+        color = othersColor
     else
         color = db.healPredictionAllColor or {r = 0.0, g = 0.7, b = 0.4, a = 0.7}
     end
@@ -1705,7 +1780,12 @@ function DF:UpdateHealPrediction(frame, testIndex)
     end
     
     local bar = frame.dfHealPredictionBar
-    
+
+    -- Hide the second segment unless we're actively rendering a split overlay.
+    if not isSplit and frame.dfHealPredictionBar2 then
+        frame.dfHealPredictionBar2:Hide()
+    end
+
     -- Strata and level
     local strata = db.healPredictionStrata or "SANDWICH"
     local useSandwich = (strata == "SANDWICH")
@@ -1832,8 +1912,10 @@ function DF:UpdateHealPrediction(frame, testIndex)
             local barHeight = frame.healthBar:GetHeight() - (inset * 2)
             local healthWidth = testHealthPercent * barWidth
             local healthHeight = testHealthPercent * barHeight
-            local healWidth = testHealPercent * barWidth
-            local healHeight = testHealPercent * barHeight
+            -- Split preview: primary (my) segment takes half, bar2 the other half.
+            local primaryFrac = isSplit and (testHealPercent * 0.5) or testHealPercent
+            local healWidth = primaryFrac * barWidth
+            local healHeight = primaryFrac * barHeight
             
             if healthOrient == "HORIZONTAL" then
                 bar:SetOrientation("HORIZONTAL")
@@ -1900,8 +1982,41 @@ function DF:UpdateHealPrediction(frame, testIndex)
             bar:SetMinMaxValues(0, maxHealth)
             DF.SetBarValue(bar, incomingHeals, frame)
         end
-        
+
         bar:Show()
+
+        -- ============================================================
+        -- SPLIT: second segment ("others' heals"), chained after the
+        -- primary (my) segment by anchoring to its fill-texture edge.
+        -- Secret-safe: no arithmetic, the StatusBar fills from SetValue.
+        -- ============================================================
+        -- othersHeals is only available from the calculator path; if absent
+        -- (no calculator), there's no breakdown to draw a second segment from.
+        if isSplit and (isTestMode or othersHeals) then
+            local seg2 = GetOrCreateHealPredSegment2(frame)
+            StyleHealPredSegment(seg2, tex, blendMode, othersColor)
+            seg2:SetParent(frame)
+            seg2:SetFrameStrata(frame:GetFrameStrata())
+            seg2:SetFrameLevel(predictionLevel)
+            local prevTex = bar:GetStatusBarTexture()
+            local barWidth = frame.healthBar:GetWidth() - (inset * 2)
+            local barHeight = frame.healthBar:GetHeight() - (inset * 2)
+            if isTestMode then
+                -- Others' half of the preview heal; segment width is the amount.
+                local othersFrac = testHealPercent * 0.5
+                AnchorHealPredSegment(seg2, prevTex, healthOrient, othersFrac * barWidth, othersFrac * barHeight)
+                seg2:SetMinMaxValues(0, 1)
+                seg2:SetValue(1)
+            else
+                -- Full-width segment; StatusBar fills the others' proportion.
+                AnchorHealPredSegment(seg2, prevTex, healthOrient, barWidth, barHeight)
+                seg2:SetMinMaxValues(0, maxHealth)
+                DF.SetBarValue(seg2, othersHeals, frame)
+            end
+            seg2:Show()
+        elseif frame.dfHealPredictionBar2 then
+            frame.dfHealPredictionBar2:Hide()
+        end
     end
 end
 

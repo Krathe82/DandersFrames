@@ -4075,10 +4075,36 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local overhealCheckbox = appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Overheal"], db, "healPredictionShowOverheal", function() DF:UpdateAllFrames() end), 30)
         overhealCheckbox.disableOn = function(d) return not d.healPredictionEnabled end
         overhealCheckbox.tooltip = L["When enabled, shows incoming heals even if they would overheal."]
-        
-        local myColor = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Heal Prediction Color"], db, "healPredictionMyColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
-        myColor.disableOn = function(d) return not d.healPredictionEnabled end
-        
+
+        local showModeOptions = {
+            ALL = L["All Incoming"], MINE = L["My Heals"], OTHERS = L["Others' Heals"],
+            SPLIT = L["Split (Mine + Others)"],
+            _order = { "ALL", "MINE", "OTHERS", "SPLIT" },
+        }
+        local showModeDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Show Heals From"], showModeOptions, db, "healPredictionShowMode", function()
+            -- Rebuild so the colour picker(s) rebind to the selected mode.
+            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+            DF:UpdateAllFrames()
+        end), 55)
+        showModeDropdown.disableOn = function(d) return not d.healPredictionEnabled end
+        showModeDropdown.tooltip = L["Which incoming heals the bar shows: all sources, only yours, or only from others."]
+
+        -- Colour picker(s): Split shows both segment colours; other modes show
+        -- the single colour for the selected mode. The mode dropdown rebuilds
+        -- the page so these rebind when the mode changes.
+        if db.healPredictionShowMode == "SPLIT" then
+            local myColor = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["My Heals Color"], db, "healPredictionMyColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
+            myColor.disableOn = function(d) return not d.healPredictionEnabled end
+            local othersColor = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Others' Heals Color"], db, "healPredictionOthersColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
+            othersColor.disableOn = function(d) return not d.healPredictionEnabled end
+        else
+            local showModeColorKey = (db.healPredictionShowMode == "ALL" and "healPredictionAllColor")
+                or (db.healPredictionShowMode == "OTHERS" and "healPredictionOthersColor")
+                or "healPredictionMyColor"
+            local myColor = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Heal Prediction Color"], db, showModeColorKey, true, nil, function() DF:UpdateAllFrames() end, true), 35)
+            myColor.disableOn = function(d) return not d.healPredictionEnabled end
+        end
+
         Add(appearanceGroup, nil, 2)
         
         -- ===== FLOATING POSITION GROUP (Column 1, conditional) =====

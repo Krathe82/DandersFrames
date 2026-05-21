@@ -967,6 +967,10 @@ function DF:UpdateHealPredictionBarAppearance(frame)
     if db.oorEnabled then
         local oorAlpha = db.oorAbsorbBarAlpha or 0.5
         ApplyOORAlpha(frame.dfHealPredictionBar, inRange, 1.0, oorAlpha)
+        -- Second segment (others' heals in SPLIT mode) fades to match.
+        if frame.dfHealPredictionBar2 and frame.dfHealPredictionBar2:IsShown() then
+            ApplyOORAlpha(frame.dfHealPredictionBar2, inRange, 1.0, oorAlpha)
+        end
     end
 end
 
