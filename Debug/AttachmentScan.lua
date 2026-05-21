@@ -24,6 +24,7 @@ local format = string.format
 local tinsert, tsort = table.insert, table.sort
 local pcall = pcall
 local EnumerateFrames = EnumerateFrames
+local issecretvalue = issecretvalue or function() return false end
 
 -- Known addons keyed by a lowercase substring found in their frame names.
 -- Best-effort only — extend as we see new culprits in bug reports.
@@ -275,12 +276,18 @@ function DF:ScanFrameAttachments()
                 end
             else
                 -- Anchored (SetPoint) to a DF frame without re-parenting.
-                local np = f:GetNumPoints() or 0
-                for i = 1, np do
-                    local ok, _, relTo = pcall(f.GetPoint, f, i)
-                    if ok and relTo and dfSet[relTo] then
-                        record(dfSet[relTo], f, "anchored")
-                        break
+                -- In combat, GetNumPoints/GetPoint return secret values for
+                -- protected frames — a secret can't be a for-loop limit. Skip
+                -- those (foreign castbar/cooldown frames aren't protected, so
+                -- they're still scanned); guard relTo the same way.
+                local np = f:GetNumPoints()
+                if type(np) == "number" and not issecretvalue(np) then
+                    for i = 1, np do
+                        local ok, _, relTo = pcall(f.GetPoint, f, i)
+                        if ok and relTo and not issecretvalue(relTo) and dfSet[relTo] then
+                            record(dfSet[relTo], f, "anchored")
+                            break
+                        end
                     end
                 end
             end
