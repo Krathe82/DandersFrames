@@ -1,5 +1,12 @@
 # DandersFrames Changelog
 
+## [4.3.11] - 2026-05-21
+
+### Bug Fixes
+
+* (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
+* (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
+
 ## [4.3.10]
 
 ### New Features
@@ -32,8 +39,6 @@
 * (Resource Bar) Fix a 1-pixel gap appearing on one side when "Match Health Bar Width" is on with Pixel Perfect. (PR #80 by Krathe)
 * (Search) Fix settings edited from search results not firing their setting-specific update for any widget type (checkboxes, sliders, dropdowns, colour pickers, toggle switches) — e.g. the minimap button toggle had no effect when used from search. (PR #98 by Krathe)
 * (Settings) Reduce FPS loss when dragging or scrolling the settings window by caching each settings page after its first build. (PR #101 by Krathe)
-* (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
-* (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 * (Test Mode) Fix locking frames turning off test mode when it was already active. (PR #87 by Krathe)
 
 ## [4.3.9]
