@@ -318,6 +318,16 @@ end
 function DF:SetPetFrameVisible(frame, visible)
     if not frame then return end
 
+    -- Never show a pet when the feature is disabled for this mode. Pet/owner
+    -- UNIT_HEALTH events route through here and would otherwise re-show a pet
+    -- that was just toggled off, until a /reload.
+    if visible then
+        local db = DF:GetFrameDB(frame)
+        if not (db and db.petEnabled) then
+            visible = false
+        end
+    end
+
     if visible then
         -- Mark as visible - range system will set appropriate alpha
         frame.dfPetHidden = false
