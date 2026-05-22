@@ -274,6 +274,132 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
     return drop
 end
 
+-- ============================================================
+-- ELEMENT CARD
+-- A collapsible card showing one text element. Click header to expand.
+-- Body sections (Content / Appearance / Position) added in Tasks 7-9;
+-- header action icons added in Task 6.
+-- ============================================================
+
+local CARD_HEADER_HEIGHT = 28
+local CARD_BODY_HEIGHT_PLACEHOLDER = 80  -- Tasks 7-9 set real height
+
+local function BuildCard(GUI, parent, elem, tdDB, state, page)
+    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    card:SetSize(1, CARD_HEADER_HEIGHT)  -- width set by anchor
+    card:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    card:SetBackdropColor(0.08, 0.10, 0.13, 0.7)
+    card:SetBackdropBorderColor(0.2, 0.25, 0.3, 0.8)
+
+    -- Context for callbacks (delete needs to remove from db and re-render)
+    card._tdDB = tdDB
+    card._state = state
+    card._GUI = GUI
+    card._page = page
+
+    -- ── HEADER (always visible) ──────────────────────────────
+    local header = CreateFrame("Button", nil, card)
+    header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
+    header:SetHeight(CARD_HEADER_HEIGHT)
+    card.header = header
+
+    local title = header:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(title, 11, "OUTLINE")
+    title:SetPoint("LEFT", header, "LEFT", 10, 0)
+    local ct = FindContentType(elem.contentType)
+    title:SetText(ct and ct.label or elem.contentType)
+    title:SetTextColor(0.95, 0.95, 0.95)
+    card.title = title
+
+    local meta = header:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(meta, 9, "")
+    meta:SetPoint("LEFT", title, "RIGHT", 8, 0)
+    meta:SetText("")  -- Tasks 7-9 will populate with position/format summary
+    meta:SetTextColor(0.55, 0.6, 0.7)
+    card.meta = meta
+
+    -- ── BODY (hidden by default) ─────────────────────────────
+    local body = CreateFrame("Frame", nil, card)
+    body:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    body:SetHeight(CARD_BODY_HEIGHT_PLACEHOLDER)
+    body:Hide()
+    card.body = body
+
+    -- Placeholder body content (Tasks 7-9 replace this)
+    local placeholder = body:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(placeholder, 10, "")
+    placeholder:SetPoint("CENTER", body, "CENTER", 0, 0)
+    placeholder:SetText(L["(Card body fields added in Tasks 7-9)"])
+    placeholder:SetTextColor(0.5, 0.5, 0.5)
+
+    -- ── EXPAND / COLLAPSE ────────────────────────────────────
+    card.expanded = false
+    function card:Expand()
+        self.expanded = true
+        self.body:Show()
+        self:SetHeight(CARD_HEADER_HEIGHT + self.body:GetHeight())
+    end
+    function card:Collapse()
+        self.expanded = false
+        self.body:Hide()
+        self:SetHeight(CARD_HEADER_HEIGHT)
+    end
+    header:SetScript("OnClick", function()
+        if card.expanded then card:Collapse() else card:Expand() end
+    end)
+
+    return card
+end
+
+-- ============================================================
+-- CARD LIST RENDERER
+-- Iterates db.elements in order, builds/positions cards. Uses a pool
+-- to avoid creating/destroying card frames on every render.
+-- ============================================================
+
+local function RenderCardList(GUI, page, tdDB, state)
+    -- Hide all existing card frames first
+    for _, card in pairs(state.cardFrames) do
+        card:Hide()
+    end
+
+    if #tdDB.elements == 0 then
+        if state.emptyMsg then state.emptyMsg:Show() end
+        state.listChild:SetHeight(1)
+        return
+    end
+
+    if state.emptyMsg then state.emptyMsg:Hide() end
+
+    local y = 0
+    local CARD_GAP = 4
+    for _, elem in ipairs(tdDB.elements) do
+        local card = state.cardFrames[elem.id]
+        if not card then
+            card = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
+            state.cardFrames[elem.id] = card
+        end
+        card:ClearAllPoints()
+        card:SetPoint("TOPLEFT", state.listChild, "TOPLEFT", 2, y)
+        card:SetPoint("TOPRIGHT", state.listChild, "TOPRIGHT", -2, y)
+        card:Show()
+        if card.expanded then
+            y = y - (CARD_HEADER_HEIGHT + card.body:GetHeight()) - CARD_GAP
+        else
+            y = y - CARD_HEADER_HEIGHT - CARD_GAP
+        end
+    end
+    state.listChild:SetHeight(math.max(1, -y + 4))
+end
+
+DF.TextDesigner.RenderCardList = RenderCardList  -- exposed for Task 6+
+
 -- The page state across builder invocations. Cached on the page frame.
 local function GetState(page)
     page.dfTD = page.dfTD or {
@@ -330,7 +456,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
                     id, typeKey, #tdDB.elements)
                 -- Hide empty state if it's still visible
                 if state.emptyMsg then state.emptyMsg:Hide() end
-                -- Card rendering lands in Task 5; for now just confirm via /dump
+                RenderCardList(GUI, page, tdDB, state)
             end)
         end
         if state.pickerFrame:IsShown() then
@@ -342,21 +468,26 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
     state.addBtn = addBtn
 
-    -- ── EMPTY STATE / CARD LIST CONTAINER ────────────────────
-    -- Centered message when no elements exist; replaced by the card list
-    -- (Task 5) once elements are added.
-    local listContainer = CreateFrame("Frame", nil, page.child)
+    -- ── CARD LIST CONTAINER ──────────────────────────────────
+    -- Scrollable list of element cards; empty-state message centered when
+    -- no elements exist.
+    local listContainer = CreateFrame("ScrollFrame", nil, page.child, "UIPanelScrollFrameTemplate")
     listContainer:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
-    listContainer:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -10, 10)
-    state.listContainer = listContainer
+    listContainer:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -28, 10)
 
-    local emptyMsg = listContainer:CreateFontString(nil, "OVERLAY")
+    local listChild = CreateFrame("Frame", nil, listContainer)
+    listChild:SetSize(1, 1)
+    listContainer:SetScrollChild(listChild)
+    state.listContainer = listContainer
+    state.listChild = listChild
+
+    local emptyMsg = listChild:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(emptyMsg, 11, "")
     emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
     emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
     emptyMsg:SetTextColor(0.6, 0.6, 0.6, 1)
     state.emptyMsg = emptyMsg
 
-    -- Hide empty state if there are already elements (preserves user state across rebuilds)
-    if #tdDB.elements > 0 then emptyMsg:Hide() end
+    -- Initial render — populate any existing elements
+    RenderCardList(GUI, page, tdDB, state)
 end

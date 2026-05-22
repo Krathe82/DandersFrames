@@ -30,6 +30,7 @@ if not L then return end
 --@do-not-package@
 
 L["    Show Frame Glow"] = true
+L["(Card body fields added in Tasks 7-9)"] = true
 -- ClickCasting UI strings
 L["1 = High"] = true
 L["10 = Low"] = true
