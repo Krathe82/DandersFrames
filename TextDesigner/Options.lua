@@ -75,6 +75,22 @@ local function FindContentType(key)
 end
 
 -- ============================================================
+-- CONFIRMATION POPUP for element delete
+-- ============================================================
+StaticPopupDialogs["DF_TEXTDESIGNER_DELETE_ELEMENT"] = {
+    text = L["Delete this text element?"],
+    button1 = L["Yes"],
+    button2 = L["No"],
+    OnAccept = function(self, data)
+        if data and data.onConfirm then data.onConfirm() end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- ============================================================
 -- ADD ELEMENT PICKER
 -- A floating dropdown: search input, category pill row, grouped list.
 -- Calls onPick(typeKey) when the user selects a type. Closes on pick.
@@ -322,6 +338,88 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     meta:SetText("")  -- Tasks 7-9 will populate with position/format summary
     meta:SetTextColor(0.55, 0.6, 0.7)
     card.meta = meta
+
+    -- ── ACTION ICONS (right side of header) ──────────────────
+    local ICON_SIZE = 18
+    local ICON_GAP = 4
+
+    -- Delete (rightmost)
+    local deleteBtn = CreateFrame("Button", nil, header)
+    deleteBtn:SetSize(ICON_SIZE, ICON_SIZE)
+    deleteBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+    local deleteFs = deleteBtn:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(deleteFs, 12, "OUTLINE")
+    deleteFs:SetPoint("CENTER")
+    deleteFs:SetText("X")
+    deleteFs:SetTextColor(0.9, 0.3, 0.3)
+    card.deleteBtn = deleteBtn
+
+    -- Drag handle (Task 10 wires up actual drag)
+    local dragBtn = CreateFrame("Button", nil, header)
+    dragBtn:SetSize(ICON_SIZE, ICON_SIZE)
+    dragBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -ICON_GAP, 0)
+    local dragFs = dragBtn:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(dragFs, 12, "OUTLINE")
+    dragFs:SetPoint("CENTER")
+    dragFs:SetText("=")  -- placeholder glyph
+    dragFs:SetTextColor(0.7, 0.7, 0.7)
+    card.dragBtn = dragBtn
+
+    -- Visibility toggle (eye)
+    local eyeBtn = CreateFrame("Button", nil, header)
+    eyeBtn:SetSize(ICON_SIZE, ICON_SIZE)
+    eyeBtn:SetPoint("RIGHT", dragBtn, "LEFT", -ICON_GAP, 0)
+    local eyeFs = eyeBtn:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(eyeFs, 12, "OUTLINE")
+    eyeFs:SetPoint("CENTER")
+    eyeFs:SetText(elem.enabled and "O" or "-")
+    eyeFs:SetTextColor(elem.enabled and 0.95 or 0.45, 0.95, 0.95)
+    card.eyeBtn = eyeBtn
+    card.eyeFs = eyeFs
+
+    -- Stop header click-through when clicking icons
+    for _, btn in ipairs({eyeBtn, dragBtn, deleteBtn}) do
+        btn:RegisterForClicks("LeftButtonUp")
+        btn:SetFrameLevel(header:GetFrameLevel() + 1)
+    end
+
+    -- Visibility toggle behaviour
+    eyeBtn:SetScript("OnClick", function()
+        elem.enabled = not elem.enabled
+        eyeFs:SetText(elem.enabled and "O" or "-")
+        eyeFs:SetTextColor(elem.enabled and 0.95 or 0.45, 0.95, 0.95)
+        DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
+    end)
+
+    -- Delete behaviour
+    deleteBtn:SetScript("OnClick", function()
+        local popup = StaticPopup_Show("DF_TEXTDESIGNER_DELETE_ELEMENT")
+        if popup then
+            popup.data = {
+                onConfirm = function()
+                    local capturedTdDB = card._tdDB
+                    local capturedState = card._state
+                    local capturedGUI = card._GUI
+                    local capturedPage = card._page
+                    if not capturedTdDB or not capturedState then return end
+                    for i, e in ipairs(capturedTdDB.elements) do
+                        if e.id == elem.id then
+                            table.remove(capturedTdDB.elements, i)
+                            break
+                        end
+                    end
+                    capturedState.cardFrames[elem.id] = nil
+                    card:Hide()
+                    card:SetParent(nil)
+                    if DF.TextDesigner.RenderCardList then
+                        DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+                    end
+                    DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
+                        elem.id, #capturedTdDB.elements)
+                end,
+            }
+        end
+    end)
 
     -- ── BODY (hidden by default) ─────────────────────────────
     local body = CreateFrame("Frame", nil, card)
