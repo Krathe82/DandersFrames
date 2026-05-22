@@ -656,6 +656,60 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         btn:SetFrameLevel(header:GetFrameLevel() + 1)
     end
 
+    -- Drag-to-reorder (Task 10): drag the handle to move the card up/down
+    dragBtn:RegisterForDrag("LeftButton")
+    dragBtn:SetScript("OnDragStart", function()
+        card._dragging = true
+        card:SetFrameStrata("HIGH")
+        card:SetAlpha(0.7)
+        DF:Debug("TD", "Drag start id=%d", elem.id)
+    end)
+    dragBtn:SetScript("OnDragStop", function()
+        if not card._dragging then return end
+        card._dragging = false
+        card:SetFrameStrata("MEDIUM")
+        card:SetAlpha(1)
+
+        local capturedTdDB = card._tdDB
+        local capturedState = card._state
+        local capturedGUI = card._GUI
+        local capturedPage = card._page
+        if not capturedTdDB or not capturedState then return end
+
+        -- Find which position the card should move to based on cursor Y
+        local _, cursorY = GetCursorPosition()
+        local scale = UIParent:GetEffectiveScale()
+        cursorY = cursorY / scale
+
+        local newIndex = #capturedTdDB.elements
+        for i, e in ipairs(capturedTdDB.elements) do
+            local target = capturedState.cardFrames[e.id]
+            if target and target ~= card and target:IsShown() then
+                local top = target:GetTop()
+                if top and cursorY > top then
+                    newIndex = i
+                    break
+                end
+            end
+        end
+
+        -- Find current index
+        local currentIndex
+        for i, e in ipairs(capturedTdDB.elements) do
+            if e.id == elem.id then currentIndex = i; break end
+        end
+
+        if currentIndex and currentIndex ~= newIndex then
+            local moved = table.remove(capturedTdDB.elements, currentIndex)
+            table.insert(capturedTdDB.elements, math.min(newIndex, #capturedTdDB.elements + 1), moved)
+            DF:Debug("TD", "Reorder id=%d from %d to %d", elem.id, currentIndex, newIndex)
+        end
+
+        if DF.TextDesigner.RenderCardList then
+            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+        end
+    end)
+
     -- Visibility toggle behaviour
     eyeBtn:SetScript("OnClick", function()
         elem.enabled = not elem.enabled
