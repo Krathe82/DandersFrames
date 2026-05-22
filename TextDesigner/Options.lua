@@ -598,9 +598,10 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
         ApplyPillState()
         RenderList()
         drop:ClearAllPoints()
-        -- Anchor below the controls bar at the left edge so the dropdown stays
-        -- within the settings panel bounds regardless of where the Add button sits.
-        drop:SetPoint("TOPLEFT", anchor:GetParent(), "BOTTOMLEFT", 0, -4)
+        -- Anchor the dropdown's TOPRIGHT to the Add button's BOTTOMRIGHT.
+        -- The dropdown extends LEFT and DOWN from that corner so it stays inside
+        -- the settings panel regardless of where in the page the button sits.
+        drop:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
         drop:Show()
         searchBox:SetFocus()
     end
@@ -848,7 +849,11 @@ local function RenderCardList(GUI, page, tdDB, state)
     -- Ensure listChild width matches the container — cards anchor TOPLEFT/TOPRIGHT
     -- to listChild, so if its width is 0/1 (e.g. before lazy sizing kicks in)
     -- they'll end up with negative width and render invisibly.
-    state.listChild:SetWidth(state.listContainer:GetWidth())
+    -- Guard against transient 0: don't overwrite a good width with nothing.
+    local cw = state.listContainer:GetWidth()
+    if cw and cw > 1 then
+        state.listChild:SetWidth(cw)
+    end
 
     -- Hide all existing card frames first
     for _, card in pairs(state.cardFrames) do
@@ -905,6 +910,21 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     DF.TextDesigner:EnsureDB(db)
     local tdDB = db.textDesigner
     local state = GetState(page)
+
+    -- Override RefreshStates: TD doesn't use the Add() widget helper, so the
+    -- default calculation would shrink page.child to ~40px tall, collapsing
+    -- our list panel into an inside-out degenerate rect. Set page.child to
+    -- the full page viewport instead. (Mirrors AuraDesigner/Options.lua:5849.)
+    -- Installed every call (even when short-circuited) because RefreshStates
+    -- may be invoked freshly on tab re-open.
+    page.RefreshStates = function(self)
+        if self.child then
+            self.child:SetHeight(self:GetHeight())
+            if GUI.contentFrame then
+                self.child:SetWidth(GUI.contentFrame:GetWidth() - 30)
+            end
+        end
+    end
 
     if state.built then return end
     state.built = true
@@ -982,11 +1002,22 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     end)
 
     local listChild = CreateFrame("Frame", nil, listContainer)
-    listChild:SetSize(listContainer:GetWidth(), 1)
+    -- Compute initial width from page.child (which is sized correctly thanks to
+    -- the RefreshStates override above). listContainer:GetWidth() returns 0 at
+    -- creation time because layout hasn't run yet, so we can't rely on it.
+    -- Fall back to a sane default if page.child isn't sized yet.
+    local initialW = page.child:GetWidth()
+    if initialW < 100 then
+        initialW = (GUI.contentFrame and GUI.contentFrame:GetWidth() or 600) - 30
+    end
+    listChild:SetSize(math.max(1, initialW - 40), 1)
     listContainer:SetScrollChild(listChild)
-    -- Re-sync width when the container resizes (responsive to settings GUI resize)
-    listContainer:HookScript("OnSizeChanged", function(self)
-        listChild:SetWidth(self:GetWidth())
+    -- Keep listChild width in sync with listContainer when its size changes.
+    -- Guard against transient 0 values that would wipe out a good width.
+    listContainer:HookScript("OnSizeChanged", function(self, w, h)
+        if w and w > 1 then
+            listChild:SetWidth(w)
+        end
     end)
     state.listPanel = listPanel
     state.listContainer = listContainer
