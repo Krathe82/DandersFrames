@@ -312,7 +312,8 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     enableCheck:SetPoint("LEFT", controlsBar, "LEFT", 0, 0)
 
     -- Add Element button — opens the picker dropdown.
-    local addBtn = GUI:CreateButton(controlsBar, "+ " .. L["Add Text Element"], 160, 22, function()
+    local addBtn
+    addBtn = GUI:CreateButton(controlsBar, "+ " .. L["Add Text Element"], 160, 22, function()
         if not state.pickerFrame then
             state.pickerFrame = BuildPicker(GUI, page, tdDB, function(typeKey)
                 -- Create a new element instance
