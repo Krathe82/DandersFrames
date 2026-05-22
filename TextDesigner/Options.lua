@@ -598,7 +598,9 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
         ApplyPillState()
         RenderList()
         drop:ClearAllPoints()
-        drop:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4)
+        -- Anchor below the controls bar at the left edge so the dropdown stays
+        -- within the settings panel bounds regardless of where the Add button sits.
+        drop:SetPoint("TOPLEFT", anchor:GetParent(), "BOTTOMLEFT", 0, -4)
         drop:Show()
         searchBox:SetFocus()
     end
@@ -843,6 +845,11 @@ end
 -- ============================================================
 
 local function RenderCardList(GUI, page, tdDB, state)
+    -- Ensure listChild width matches the container — cards anchor TOPLEFT/TOPRIGHT
+    -- to listChild, so if its width is 0/1 (e.g. before lazy sizing kicks in)
+    -- they'll end up with negative width and render invisibly.
+    state.listChild:SetWidth(state.listContainer:GetWidth())
+
     -- Hide all existing card frames first
     for _, card in pairs(state.cardFrames) do
         card:Hide()
@@ -975,8 +982,12 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     end)
 
     local listChild = CreateFrame("Frame", nil, listContainer)
-    listChild:SetSize(1, 1)
+    listChild:SetSize(listContainer:GetWidth(), 1)
     listContainer:SetScrollChild(listChild)
+    -- Re-sync width when the container resizes (responsive to settings GUI resize)
+    listContainer:HookScript("OnSizeChanged", function(self)
+        listChild:SetWidth(self:GetWidth())
+    end)
     state.listPanel = listPanel
     state.listContainer = listContainer
     state.listChild = listChild
