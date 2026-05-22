@@ -559,6 +559,7 @@ L["Del"] = true
 L["Delete Current Profile"] = true
 L["Delete Layout"] = true
 L["Delete layout \"%s\"?"] = true
+L["Delete Text Element"] = true
 L["Delete this text element?"] = true
 L["Deleted profile: %s"] = true
 L["Demon Hunter"] = true
