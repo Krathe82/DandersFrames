@@ -189,6 +189,72 @@ local function BuildContentSection(GUI, parent, elem, yStart)
     return y - SECTION_GAP
 end
 
+-- Returns the y-offset where the next section should start (negative, goes down).
+local function BuildAppearanceSection(GUI, parent, elem, yStart)
+    local label = CreateSectionLabel(GUI, parent, L["Appearance"])
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
+    local y = yStart - SECTION_LABEL_HEIGHT
+
+    -- Defaults
+    elem.font = elem.font or "DF Roboto SemiBold"
+    elem.fontSize = elem.fontSize or 10
+    elem.outline = elem.outline or "SHADOW"
+    elem.color = elem.color or {r = 1, g = 1, b = 1, a = 1}
+    if elem.useClassColor == nil then elem.useClassColor = false end
+
+    -- Font (LSM-aware dropdown). Use GUI:CreateFontDropdown if available;
+    -- otherwise fall back to a generic dropdown listing the current font only.
+    local fontDrop
+    if GUI.CreateFontDropdown then
+        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], elem, "font", function() end)
+    else
+        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[elem.font] = elem.font}, elem, "font", function() end)
+    end
+    fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    -- Size
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function() end)
+    sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    -- Outline
+    local outlineOpts = {
+        NONE = L["None"],
+        OUTLINE = L["Outline"],
+        THICKOUTLINE = L["Thick Outline"],
+        SHADOW = L["Shadow"],
+    }
+    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, elem, "outline", function() end)
+    outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    -- Color picker + Use Class Color toggle.
+    -- CreateColorPicker signature: (parent, label, dbTable, dbKey, hasAlpha, callback, ...)
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function() end)
+    colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+
+    local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], elem, "useClassColor", function()
+        if elem.useClassColor then
+            if colorPicker.Disable then colorPicker:Disable() end
+            colorPicker:SetAlpha(0.4)
+        else
+            if colorPicker.Enable then colorPicker:Enable() end
+            colorPicker:SetAlpha(1)
+        end
+    end)
+    classColorCheck:SetPoint("LEFT", colorPicker, "RIGHT", 16, 0)
+
+    -- Apply initial grayed state if class color is on
+    if elem.useClassColor then
+        if colorPicker.Disable then colorPicker:Disable() end
+        colorPicker:SetAlpha(0.4)
+    end
+    y = y - FIELD_ROW_HEIGHT
+
+    return y - SECTION_GAP
+end
+
 -- ============================================================
 -- ADD ELEMENT PICKER
 -- A floating dropdown: search input, category pill row, grouped list.
@@ -530,7 +596,8 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
 
     -- ── BODY CONTENT ─────────────────────────────────────────
     local yEnd = BuildContentSection(GUI, body, elem, -10)
-    -- Tasks 8 (Appearance) and 9 (Position) will continue from yEnd.
+    yEnd = BuildAppearanceSection(GUI, body, elem, yEnd)
+    -- Task 9 (Position) will continue from yEnd.
     body:SetHeight(-yEnd + 10)
 
     -- ── EXPAND / COLLAPSE ────────────────────────────────────
