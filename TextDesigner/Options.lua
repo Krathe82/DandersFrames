@@ -646,7 +646,11 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     GUI:SetSettingsFont(eyeFs, 12, "OUTLINE")
     eyeFs:SetPoint("CENTER")
     eyeFs:SetText(elem.enabled and "O" or "-")
-    eyeFs:SetTextColor(elem.enabled and 0.95 or 0.45, 0.95, 0.95)
+    local function updateEyeColor()
+        local c = elem.enabled and 0.95 or 0.45
+        eyeFs:SetTextColor(c, c, c)
+    end
+    updateEyeColor()
     card.eyeBtn = eyeBtn
     card.eyeFs = eyeFs
 
@@ -714,7 +718,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     eyeBtn:SetScript("OnClick", function()
         elem.enabled = not elem.enabled
         eyeFs:SetText(elem.enabled and "O" or "-")
-        eyeFs:SetTextColor(elem.enabled and 0.95 or 0.45, 0.95, 0.95)
+        updateEyeColor()
         DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
     end)
 
