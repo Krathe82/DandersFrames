@@ -3264,8 +3264,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         resetAllBtn:SetScript("OnLeave", function(s) s:SetBackdropColor(0.15, 0.15, 0.15, 1) end)
         col1:AddWidget(resetAllBtn, 30)
         
-        -- First half of classes in column 1
-        for i = 1, 7 do
+        -- All classes in a single section
+        for i = 1, #CLASS_LIST do
             local info = CLASS_LIST[i]
             local token = info.token
             -- Initialize from Blizzard defaults if not customized
@@ -3281,37 +3281,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 DF:RefreshAllVisibleFrames()
             end, true), 30)
         end
-        
+
         Add(col1, nil, 1)
-        
-        -- ===== Column 2 =====
-        local col2 = GUI:CreateSettingsGroup(self.child, 280)
-        col2:AddWidget(GUI:CreateHeader(self.child, " "), 40)
-        col2:AddWidget(GUI:CreateLabel(self.child, L["Click a color swatch to open the color picker. These settings are shared across party and raid frames."], 260), 50)
-        
-        -- Spacer to match Reset button height in column 1
-        local spacer = CreateFrame("Frame", nil, self.child)
-        spacer:SetSize(260, 24)
-        col2:AddWidget(spacer, 30)
-        
-        -- Second half of classes in column 2
-        for i = 8, #CLASS_LIST do
-            local info = CLASS_LIST[i]
-            local token = info.token
-            if not classColorsDB[token] then
-                local default = RAID_CLASS_COLORS[token]
-                if default then
-                    classColorsDB[token] = { r = default.r, g = default.g, b = default.b, a = 1 }
-                end
-            end
-            col2:AddWidget(GUI:CreateColorPicker(self.child, info.name, classColorsDB, token, false, function()
-                DF:RefreshAllVisibleFrames()
-            end, function()
-                DF:RefreshAllVisibleFrames()
-            end, true), 30)
-        end
-        
-        Add(col2, nil, 2)
     end)
     
     -- ========================================

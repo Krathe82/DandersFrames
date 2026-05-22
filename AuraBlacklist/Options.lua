@@ -110,12 +110,15 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
         fill:SetColorTexture(tc.r, tc.g, tc.b, 0.9)
         fill:SetShown(checked)
 
-        -- Label text
-        local text = cb:CreateFontString(nil, "OVERLAY")
-        GUI:SetSettingsFont(text, 8, "")
-        text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
-        text:SetText(label)
-        text:SetTextColor(0.55, 0.55, 0.55)
+        -- Label text (optional — column headers carry the meaning when omitted)
+        local text
+        if label and label ~= "" then
+            text = cb:CreateFontString(nil, "OVERLAY")
+            GUI:SetSettingsFont(text, 8, "")
+            text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+            text:SetText(label)
+            text:SetTextColor(0.55, 0.55, 0.55)
+        end
 
         cb:SetScript("OnClick", function()
             local newState = not fill:IsShown()
@@ -124,11 +127,11 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
         end)
         cb:SetScript("OnEnter", function()
             border:SetColorTexture(tc.r * 0.6, tc.g * 0.6, tc.b * 0.6, 1)
-            text:SetTextColor(0.80, 0.80, 0.80)
+            if text then text:SetTextColor(0.80, 0.80, 0.80) end
         end)
         cb:SetScript("OnLeave", function()
             border:SetColorTexture(0.30, 0.30, 0.30, 1)
-            text:SetTextColor(0.55, 0.55, 0.55)
+            if text then text:SetTextColor(0.55, 0.55, 0.55) end
         end)
 
         cb._check = fill
@@ -208,7 +211,7 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
         local combatChecked = isBlacklisted and type(entry) == "table" and entry.combat or false
         local oocChecked = isBlacklisted and type(entry) == "table" and entry.ooc or false
 
-        local combatCB = CreateMiniCheckbox(row, L["Combat"], combatChecked, function(newState)
+        local combatCB = CreateMiniCheckbox(row, nil, combatChecked, function(newState)
             local blNow = GetBlacklist()
             local e = blNow[blacklistKey] and blNow[blacklistKey][spell.spellId]
             if newState and not e then
@@ -227,9 +230,9 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
             NotifyBlacklistChanged()
             refreshFn()
         end)
-        combatCB:SetPoint("RIGHT", row, "RIGHT", -104, 0)
+        combatCB:SetPoint("RIGHT", row, "RIGHT", -120, 0)
 
-        local oocCB = CreateMiniCheckbox(row, L["OOC"], oocChecked, function(newState)
+        local oocCB = CreateMiniCheckbox(row, nil, oocChecked, function(newState)
             local blNow = GetBlacklist()
             local e = blNow[blacklistKey] and blNow[blacklistKey][spell.spellId]
             if newState and not e then
@@ -248,7 +251,7 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
             NotifyBlacklistChanged()
             refreshFn()
         end)
-        oocCB:SetPoint("RIGHT", row, "RIGHT", -44, 0)
+        oocCB:SetPoint("RIGHT", row, "RIGHT", -40, 0)
 
         -- Click row to toggle blacklist (toggle both on/off)
         row:SetScript("OnClick", function()
@@ -306,6 +309,20 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
         local countText = container:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
         countText:SetPoint("LEFT", header, "RIGHT", 10, 0)
         countText:SetTextColor(0.5, 0.5, 0.5)
+
+        -- Column headers for the per-row toggles. Centered over the checkbox
+        -- columns (rows sit ~24px inside the list's right edge to clear the
+        -- scrollbar, so the offsets account for that). Full words here mean the
+        -- rows themselves can stay label-free and uncluttered.
+        local combatHeader = container:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
+        combatHeader:SetPoint("TOP", container, "TOPRIGHT", -150, -1)
+        combatHeader:SetText(L["Combat"])
+        combatHeader:SetTextColor(0.55, 0.55, 0.55)
+
+        local oocHeader = container:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
+        oocHeader:SetPoint("TOP", container, "TOPRIGHT", -70, -1)
+        oocHeader:SetText(L["Out of Combat"])
+        oocHeader:SetTextColor(0.55, 0.55, 0.55)
 
         -- List background
         local listBg = CreateFrame("Frame", nil, container, "BackdropTemplate")
@@ -442,11 +459,13 @@ function DF.BuildAuraBlacklistPage(guiRef, pageRef, dbRef)
     dropdownText:SetPoint("RIGHT", -20, 0)
     dropdownText:SetJustifyH("LEFT")
 
+    -- Use the same chevron as every other DF dropdown (was a one-off yellow
+    -- sort arrow that looked out of place).
     local dropdownArrow = dropdownBtn:CreateTexture(nil, "OVERLAY")
-    dropdownArrow:SetSize(10, 10)
-    dropdownArrow:SetPoint("RIGHT", -6, 0)
-    dropdownArrow:SetTexture("Interface\\Buttons\\UI-SortArrow")
-    dropdownArrow:SetTexCoord(0, 1, 1, 0)
+    dropdownArrow:SetSize(12, 12)
+    dropdownArrow:SetPoint("RIGHT", -8, 0)
+    dropdownArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+    dropdownArrow:SetVertexColor(0.6, 0.6, 0.6)
 
     -- Update dropdown display text
     local function UpdateDropdownText()
