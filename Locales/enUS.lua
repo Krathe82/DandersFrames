@@ -1327,6 +1327,7 @@ L["Test mode ended — entering combat."] = true
 L["Text"] = true
 L["Text Color"] = true
 L["Text Colors:"] = true
+L["Text Designer"] = true
 L["Text Format"] = true
 L["Text Position"] = true
 L["Text Scale"] = true

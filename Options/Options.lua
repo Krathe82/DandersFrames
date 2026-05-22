@@ -4292,7 +4292,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         truncDropdown.disableOn = function(d) return (d.nameTextLength or 0) == 0 end
         Add(truncGroup, nil, 2)
     end)
-    
+
+    -- Text > Text Designer (NEW — alpha only)
+    -- Phase 1: non-functional UI scaffold. See spec at
+    -- docs/superpowers/specs/2026-05-22-text-designer-phase1-design.md
+    if DF.RELEASE_CHANNEL ~= "release" then
+        local pageTextDesigner = CreateSubTab("text", "text_designer", L["Text Designer"])
+        BuildPage(pageTextDesigner, function(self, db, Add, AddSpace, AddSyncPoint)
+            if DF.BuildTextDesignerPage then
+                DF.BuildTextDesignerPage(GUI, self, db)
+            end
+        end)
+    end
+
     -- ========================================
     -- CATEGORY: Auras
     -- ========================================
