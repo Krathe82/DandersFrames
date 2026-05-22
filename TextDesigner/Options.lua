@@ -588,56 +588,55 @@ end
 
 -- ============================================================
 -- ELEMENT CARD
--- A collapsible card showing one text element. Click header to expand.
--- Body sections (Content / Appearance / Position) added in Tasks 7-9;
--- header action icons added in Task 6.
+-- A collapsible settings group representing one text element. Uses the
+-- shared GUI:CreateSettingsGroup helper so the card matches the rest of
+-- the addon's theming (arrow icon, theme accent color, bottom collapse bar).
+-- Body sections: Content / Appearance / Position.
 -- ============================================================
 
-local CARD_HEADER_HEIGHT = 28
-local CARD_BODY_HEIGHT_PLACEHOLDER = 80  -- Tasks 7-9 set real height
-
 local function BuildCard(GUI, parent, elem, tdDB, state, page)
-    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    card:SetSize(1, CARD_HEADER_HEIGHT)  -- width set by anchor
-    card:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
+    local card = GUI:CreateSettingsGroup(parent, parent:GetWidth() - 4, {
+        collapsible = true,
+        onCollapseChanged = function(group)
+            if DF.TextDesigner.RenderCardList then
+                DF.TextDesigner.RenderCardList(group._GUI, group._page, group._tdDB, group._state)
+            end
+        end,
     })
-    card:SetBackdropColor(0.08, 0.10, 0.13, 0.7)
-    card:SetBackdropBorderColor(0.2, 0.25, 0.3, 0.8)
 
-    -- Context for callbacks (delete needs to remove from db and re-render)
+    -- Context for callbacks (used by delete + reflow paths and the
+    -- onCollapseChanged closure above)
     card._tdDB = tdDB
     card._state = state
     card._GUI = GUI
     card._page = page
 
-    -- ── HEADER (always visible) ──────────────────────────────
-    local header = CreateFrame("Button", nil, card)
-    header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
-    header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
-    header:SetHeight(CARD_HEADER_HEIGHT)
-    card.header = header
+    -- ── HEADER WIDGET ────────────────────────────────────────
+    -- The helper expects the first AddWidget to be the header and looks for
+    -- `widget.text` (a FontString) to attach the collapse arrow.
+    local header = CreateFrame("Frame", nil, card)
+    header:SetHeight(28)
 
+    local ct = FindContentType(elem.contentType)
     local title = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(title, 11, "OUTLINE")
-    title:SetPoint("LEFT", header, "LEFT", 10, 0)
-    local ct = FindContentType(elem.contentType)
+    title:SetPoint("LEFT", header, "LEFT", 24, 0)  -- 24 leaves room for the arrow icon
     title:SetText(ct and ct.label or elem.contentType)
     title:SetTextColor(0.95, 0.95, 0.95)
+    header.text = title  -- helper requires this to wire the collapse arrow
     card.title = title
 
     local meta = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(meta, 9, "")
     meta:SetPoint("LEFT", title, "RIGHT", 8, 0)
-    meta:SetText("")  -- Tasks 7-9 will populate with position/format summary
+    meta:SetText("")
     meta:SetTextColor(0.55, 0.6, 0.7)
     card.meta = meta
 
     -- ── ACTION ICONS (right side of header) ──────────────────
     local ICON_SIZE = 18
     local ICON_GAP = 4
+    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
     -- Delete (rightmost)
     local deleteBtn = CreateFrame("Button", nil, header)
@@ -645,19 +644,19 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     deleteBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
     local deleteIcon = deleteBtn:CreateTexture(nil, "OVERLAY")
     deleteIcon:SetAllPoints()
-    deleteIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\delete")
+    deleteIcon:SetTexture(mediaPath .. "delete")
     deleteIcon:SetVertexColor(0.9, 0.4, 0.4)
     deleteBtn:SetScript("OnEnter", function() deleteIcon:SetVertexColor(1, 0.6, 0.6) end)
     deleteBtn:SetScript("OnLeave", function() deleteIcon:SetVertexColor(0.9, 0.4, 0.4) end)
     card.deleteBtn = deleteBtn
 
-    -- Drag handle (Task 10 wires up actual drag)
+    -- Drag handle
     local dragBtn = CreateFrame("Button", nil, header)
     dragBtn:SetSize(ICON_SIZE, ICON_SIZE)
     dragBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -ICON_GAP, 0)
     local dragIcon = dragBtn:CreateTexture(nil, "OVERLAY")
     dragIcon:SetAllPoints()
-    dragIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\menu")
+    dragIcon:SetTexture(mediaPath .. "menu")
     dragIcon:SetVertexColor(0.7, 0.7, 0.7)
     card.dragBtn = dragBtn
 
@@ -669,23 +668,67 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     eyeIcon:SetAllPoints()
     local function updateEyeIcon()
         if elem.enabled then
-            eyeIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\visibility")
+            eyeIcon:SetTexture(mediaPath .. "visibility")
             eyeIcon:SetVertexColor(0.95, 0.95, 0.95)
         else
-            eyeIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\visibility_off")
+            eyeIcon:SetTexture(mediaPath .. "visibility_off")
             eyeIcon:SetVertexColor(0.45, 0.45, 0.45)
         end
     end
     updateEyeIcon()
     card.eyeBtn = eyeBtn
 
-    -- Stop header click-through when clicking icons
+    -- Lift action icons above the header's OnMouseDown collapse handler so
+    -- clicks on them don't toggle the card. RegisterForClicks + a higher
+    -- frame level keep them isolated from the header.
     for _, btn in ipairs({eyeBtn, dragBtn, deleteBtn}) do
         btn:RegisterForClicks("LeftButtonUp")
-        btn:SetFrameLevel(header:GetFrameLevel() + 1)
+        btn:SetFrameLevel(header:GetFrameLevel() + 5)
     end
 
-    -- Drag-to-reorder (Task 10): drag the handle to move the card up/down
+    -- Wire visibility toggle
+    eyeBtn:SetScript("OnClick", function()
+        elem.enabled = not elem.enabled
+        updateEyeIcon()
+        DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
+    end)
+
+    -- Wire delete (themed popup)
+    deleteBtn:SetScript("OnClick", function()
+        local capturedTdDB = card._tdDB
+        local capturedState = card._state
+        local capturedGUI = card._GUI
+        local capturedPage = card._page
+        DF:ShowPopupAlert({
+            title = L["Delete Text Element"],
+            message = L["Delete this text element?"],
+            buttons = {
+                {
+                    label = L["Yes"],
+                    onClick = function()
+                        if not capturedTdDB or not capturedState then return end
+                        for i, e in ipairs(capturedTdDB.elements) do
+                            if e.id == elem.id then
+                                table.remove(capturedTdDB.elements, i)
+                                break
+                            end
+                        end
+                        capturedState.cardFrames[elem.id] = nil
+                        card:Hide()
+                        card:SetParent(nil)
+                        if DF.TextDesigner.RenderCardList then
+                            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+                        end
+                        DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
+                            elem.id, #capturedTdDB.elements)
+                    end,
+                },
+                { label = L["No"] },
+            },
+        })
+    end)
+
+    -- Wire drag-to-reorder
     dragBtn:RegisterForDrag("LeftButton")
     dragBtn:SetScript("OnDragStart", function()
         card._dragging = true
@@ -739,86 +782,40 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         end
     end)
 
-    -- Visibility toggle behaviour
-    eyeBtn:SetScript("OnClick", function()
-        elem.enabled = not elem.enabled
-        updateEyeIcon()
-        DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
-    end)
+    -- Register header as the FIRST widget — wires the helper's collapse arrow
+    -- + OnMouseDown handler onto it.
+    card:AddWidget(header, 28)
 
-    -- Delete behaviour
-    deleteBtn:SetScript("OnClick", function()
-        local capturedTdDB = card._tdDB
-        local capturedState = card._state
-        local capturedGUI = card._GUI
-        local capturedPage = card._page
-        DF:ShowPopupAlert({
-            title = L["Delete Text Element"],
-            message = L["Delete this text element?"],
-            buttons = {
-                {
-                    label = L["Yes"],
-                    onClick = function()
-                        if not capturedTdDB or not capturedState then return end
-                        for i, e in ipairs(capturedTdDB.elements) do
-                            if e.id == elem.id then
-                                table.remove(capturedTdDB.elements, i)
-                                break
-                            end
-                        end
-                        capturedState.cardFrames[elem.id] = nil
-                        card:Hide()
-                        card:SetParent(nil)
-                        if DF.TextDesigner.RenderCardList then
-                            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
-                        end
-                        DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
-                            elem.id, #capturedTdDB.elements)
-                    end,
-                },
-                { label = L["No"] },
-            },
-        })
-    end)
+    -- ── BODY SECTIONS ────────────────────────────────────────
+    -- Each section is built into its own Frame, sized to its content, and
+    -- handed to the helper's LayoutChildren for vertical stacking. AddWidget
+    -- reparents the widget to the group, so each section needs to be a
+    -- self-contained Frame that holds its own widgets.
+    local contentFrame = CreateFrame("Frame", nil, card)
+    local contentY = BuildContentSection(GUI, contentFrame, elem, -4)
+    local contentHeight = math.max(1, -contentY + 4)
+    contentFrame:SetHeight(contentHeight)
+    card:AddWidget(contentFrame, contentHeight)
 
-    -- ── BODY (hidden by default) ─────────────────────────────
-    local body = CreateFrame("Frame", nil, card)
-    body:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
-    body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    body:SetHeight(CARD_BODY_HEIGHT_PLACEHOLDER)
-    body:Hide()
-    card.body = body
+    local appearanceFrame = CreateFrame("Frame", nil, card)
+    local appearanceY = BuildAppearanceSection(GUI, appearanceFrame, elem, -4)
+    local appearanceHeight = math.max(1, -appearanceY + 4)
+    appearanceFrame:SetHeight(appearanceHeight)
+    card:AddWidget(appearanceFrame, appearanceHeight)
 
-    -- ── BODY CONTENT ─────────────────────────────────────────
-    local yEnd = BuildContentSection(GUI, body, elem, -10)
-    yEnd = BuildAppearanceSection(GUI, body, elem, yEnd)
-    yEnd = BuildPositionSection(GUI, body, elem, yEnd)
-    body:SetHeight(-yEnd + 10)
+    local positionFrame = CreateFrame("Frame", nil, card)
+    local positionY = BuildPositionSection(GUI, positionFrame, elem, -4)
+    local positionHeight = math.max(1, -positionY + 4)
+    positionFrame:SetHeight(positionHeight)
+    card:AddWidget(positionFrame, positionHeight)
+
+    card:LayoutChildren()
 
     -- Update the header meta line with current anchor + offset summary
     function card:UpdateMeta()
         meta:SetText((elem.anchor or "CENTER") .. " · " .. (elem.offsetX or 0) .. "," .. (elem.offsetY or 0))
     end
     card:UpdateMeta()
-
-    -- ── EXPAND / COLLAPSE ────────────────────────────────────
-    card.expanded = false
-    function card:Expand()
-        self.expanded = true
-        self.body:Show()
-        self:SetHeight(CARD_HEADER_HEIGHT + self.body:GetHeight())
-    end
-    function card:Collapse()
-        self.expanded = false
-        self.body:Hide()
-        self:SetHeight(CARD_HEADER_HEIGHT)
-    end
-    header:SetScript("OnClick", function()
-        card.expanded = not card.expanded
-        if DF.TextDesigner.RenderCardList then
-            DF.TextDesigner.RenderCardList(card._GUI, card._page, card._tdDB, card._state)
-        end
-    end)
 
     return card
 end
@@ -855,33 +852,22 @@ local function RenderCardList(GUI, page, tdDB, state)
     if state.emptyHint then state.emptyHint:Hide() end
 
     local y = 0
-    local CARD_GAP = 4
+    local CARD_GAP = 6
     for _, elem in ipairs(tdDB.elements) do
         local card = state.cardFrames[elem.id]
         if not card then
             card = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
             state.cardFrames[elem.id] = card
         end
-        -- Sync the card's visible state with its logical expanded flag. The
-        -- header click handler only flips the flag and re-runs RenderCardList;
-        -- showing/hiding the body and resizing the card live here so the
-        -- cascading y-offset stays consistent for the cards that follow.
-        if card.expanded then
-            card.body:Show()
-            card:SetHeight(CARD_HEADER_HEIGHT + card.body:GetHeight())
-        else
-            card.body:Hide()
-            card:SetHeight(CARD_HEADER_HEIGHT)
-        end
+        -- Let the helper recompute its own height. LayoutChildren walks
+        -- groupChildren and honors `collapsed` to show only the header,
+        -- so card:GetHeight() afterwards is the authoritative height.
+        if card.LayoutChildren then card:LayoutChildren() end
         card:ClearAllPoints()
         card:SetPoint("TOPLEFT", state.listChild, "TOPLEFT", 2, y)
         card:SetPoint("TOPRIGHT", state.listChild, "TOPRIGHT", -2, y)
         card:Show()
-        if card.expanded then
-            y = y - (CARD_HEADER_HEIGHT + card.body:GetHeight()) - CARD_GAP
-        else
-            y = y - CARD_HEADER_HEIGHT - CARD_GAP
-        end
+        y = y - card:GetHeight() - CARD_GAP
     end
     state.listChild:SetHeight(math.max(1, -y + 4))
 end
