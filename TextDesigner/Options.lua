@@ -91,6 +91,105 @@ StaticPopupDialogs["DF_TEXTDESIGNER_DELETE_ELEMENT"] = {
 }
 
 -- ============================================================
+-- BODY SECTION HELPERS
+-- Shared layout primitives used by the Content / Appearance / Position
+-- section builders.
+-- ============================================================
+
+local SECTION_LABEL_HEIGHT = 18
+local FIELD_ROW_HEIGHT = 28
+local SECTION_GAP = 8
+
+local function CreateSectionLabel(GUI, parent, text)
+    local fs = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(fs, 9, "OUTLINE")
+    fs:SetText(text:upper())
+    fs:SetTextColor(0.5, 0.7, 1, 0.9)
+    return fs
+end
+
+-- Returns the y-offset where the next section should start (negative, goes down).
+local function BuildContentSection(GUI, parent, elem, yStart)
+    local label = CreateSectionLabel(GUI, parent, L["Content"])
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
+    local y = yStart - SECTION_LABEL_HEIGHT
+
+    local ct = FindContentType(elem.contentType)
+    if not ct then return y end
+
+    -- Numeric types: abbreviate checkbox
+    if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "hp_deficit"
+       or ct.key == "power_current" or ct.key == "power_deficit"
+       or ct.key == "absorb_amount" or ct.key == "overshield_amount"
+       or ct.key == "heal_absorb_amount"
+       or ct.key == "incoming_heal" or ct.key == "incoming_heal_mine"
+    then
+        elem.abbreviate = elem.abbreviate
+        if elem.abbreviate == nil then elem.abbreviate = true end
+        local abbrev = GUI:CreateCheckbox(parent, L["Abbreviate"], elem, "abbreviate", function() end)
+        abbrev:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+
+    -- Percent types: decimals slider
+    elseif ct.key == "hp_percent" or ct.key == "power_percent"
+           or ct.key == "hp_max_reduction" or ct.key == "threat_percent" then
+        elem.decimals = elem.decimals or 0
+        local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", function() end)
+        dec:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+
+    -- Name: length cap + truncate mode
+    elseif ct.key == "name" then
+        elem.nameLength = elem.nameLength or 12
+        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", function() end)
+        lenSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+
+        elem.truncateMode = elem.truncateMode or "ELLIPSIS"
+        local truncOpts = { ELLIPSIS = L["Ellipsis"], CUT = L["Cut"] }
+        local truncDrop = GUI:CreateDropdown(parent, L["Truncate Mode"], truncOpts, elem, "truncateMode", function() end)
+        truncDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+
+    -- Custom static text: a plain edit box
+    elseif ct.key == "custom_static" then
+        elem.staticText = elem.staticText or ""
+        local edit = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        edit:SetSize(240, 20)
+        edit:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y - 2)
+        edit:SetAutoFocus(false)
+        edit:SetText(elem.staticText)
+        edit:SetScript("OnTextChanged", function(self)
+            elem.staticText = self:GetText()
+        end)
+        edit:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+        edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        local lbl = parent:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(lbl, 10, "")
+        lbl:SetText(L["Text"])
+        lbl:SetPoint("RIGHT", edit, "LEFT", -8, 0)
+        y = y - FIELD_ROW_HEIGHT
+
+    -- Group number: prefix/suffix format
+    elseif ct.key == "group_number" then
+        elem.groupFormat = elem.groupFormat or "SUFFIX"
+        local opts = {
+            PREFIX = L["Prefix"],
+            SUFFIX = L["Suffix"],
+            STANDALONE = L["Standalone"],
+        }
+        local fmtDrop = GUI:CreateDropdown(parent, L["Format"], opts, elem, "groupFormat", function() end)
+        fmtDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+    end
+    -- Types with no Content-section fields fall through:
+    -- class, status_text, aggro_flag, range_text, power_type_string, race_level_faction.
+    -- They render only the section header (no fields), which is fine.
+
+    return y - SECTION_GAP
+end
+
+-- ============================================================
 -- ADD ELEMENT PICKER
 -- A floating dropdown: search input, category pill row, grouped list.
 -- Calls onPick(typeKey) when the user selects a type. Closes on pick.
@@ -429,12 +528,10 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     body:Hide()
     card.body = body
 
-    -- Placeholder body content (Tasks 7-9 replace this)
-    local placeholder = body:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(placeholder, 10, "")
-    placeholder:SetPoint("CENTER", body, "CENTER", 0, 0)
-    placeholder:SetText(L["(Card body fields added in Tasks 7-9)"])
-    placeholder:SetTextColor(0.5, 0.5, 0.5)
+    -- ── BODY CONTENT ─────────────────────────────────────────
+    local yEnd = BuildContentSection(GUI, body, elem, -10)
+    -- Tasks 8 (Appearance) and 9 (Position) will continue from yEnd.
+    body:SetHeight(-yEnd + 10)
 
     -- ── EXPAND / COLLAPSE ────────────────────────────────────
     card.expanded = false
