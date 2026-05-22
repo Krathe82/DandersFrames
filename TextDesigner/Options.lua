@@ -112,7 +112,12 @@ end
 -- ============================================================
 
 local SECTION_LABEL_HEIGHT = 18
-local FIELD_ROW_HEIGHT = 28
+-- Y-decrement per field row. GUI helpers vary in height (CreateDropdown ~36,
+-- CreateSlider ~30, CreateEditBox ~48 with label-above), so this value is
+-- tuned to clear the tallest common widget without being wasteful. The
+-- custom_static row uses an even taller decrement (see BuildContentSection)
+-- because CreateEditBox renders its label above the input.
+local FIELD_ROW_HEIGHT = 44
 local SECTION_GAP = 8
 
 local function CreateSectionLabel(GUI, parent, text)
@@ -171,10 +176,10 @@ local function BuildContentSection(GUI, parent, elem, yStart)
         elem.staticText = elem.staticText or ""
         local edit = GUI:CreateEditBox(parent, L["Text"], elem, "staticText", function() end, 240)
         edit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
-        -- CreateEditBox produces a 44-tall frame (label above the box), so
-        -- it needs a taller row than FIELD_ROW_HEIGHT to avoid colliding with
-        -- the section below.
-        y = y - 48
+        -- CreateEditBox renders its label ABOVE the input, so the row is
+        -- taller than other widgets. Use a custom y-decrement instead of
+        -- FIELD_ROW_HEIGHT.
+        y = y - 56
 
     -- Group number: prefix/suffix format
     elseif ct.key == "group_number" then
@@ -728,63 +733,128 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         })
     end)
 
-    -- Wire drag-to-reorder
-    dragBtn:RegisterForDrag("LeftButton")
-    dragBtn:SetScript("OnDragStart", function()
+    -- Wire drag-to-reorder.
+    -- Mirrors the OnMouseDown / OnMouseUp / OnUpdate pattern used by
+    -- GUI:CreateRoleOrderList (GUI/GUI.lua:4438-4518) so the dragged card
+    -- follows the cursor live and other cards reflow underneath it as the
+    -- drop position changes. The drag handle is the grip icon (dragBtn);
+    -- the card itself owns the OnUpdate that moves it with the cursor.
+    local dragOffsetY = 0
+    local CARD_GAP_DRAG = 6  -- must match CARD_GAP in RenderCardList
+
+    dragBtn:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
         card._dragging = true
-        card:SetFrameStrata("HIGH")
-        card:SetAlpha(0.7)
+        local cursorY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
+        local cardTop = card:GetTop()
+        if cardTop then
+            dragOffsetY = cardTop - cursorY
+        else
+            dragOffsetY = 0
+        end
+        local listChild = card._state and card._state.listChild
+        local baseLevel = (listChild and listChild:GetFrameLevel()) or card:GetFrameLevel()
+        card:SetFrameLevel(baseLevel + 10)
+        card:SetAlpha(0.85)
+        dragIcon:SetVertexColor(1, 1, 1)
         DF:Debug("TD", "Drag start id=%d", elem.id)
     end)
-    dragBtn:SetScript("OnDragStop", function()
+
+    dragBtn:SetScript("OnMouseUp", function(self, button)
+        if button ~= "LeftButton" then return end
         if not card._dragging then return end
         card._dragging = false
-        card:SetFrameStrata("MEDIUM")
         card:SetAlpha(1)
+        dragIcon:SetVertexColor(0.7, 0.7, 0.7)
+        -- RenderCardList re-anchors every card to its index position and
+        -- restores frame level / visibility, so we don't need to undo
+        -- anything manually here.
+        if DF.TextDesigner.RenderCardList then
+            DF.TextDesigner.RenderCardList(card._GUI, card._page, card._tdDB, card._state)
+        end
+    end)
 
+    card:SetScript("OnUpdate", function(self, elapsed)
+        if not card._dragging then return end
         local capturedTdDB = card._tdDB
         local capturedState = card._state
-        local capturedGUI = card._GUI
-        local capturedPage = card._page
-        if not capturedTdDB or not capturedState then return end
+        if not capturedTdDB or not capturedState or not capturedState.listChild then return end
 
-        -- Find which position the card should move to based on cursor Y
-        local _, cursorY = GetCursorPosition()
-        local scale = UIParent:GetEffectiveScale()
-        cursorY = cursorY / scale
+        local cursorY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
+        local listChildTop = capturedState.listChild:GetTop()
+        if not listChildTop then return end
 
-        local newIndex = #capturedTdDB.elements
+        -- Position the dragged card under the cursor (preserving the click
+        -- offset so it doesn't snap to the cursor origin).
+        local targetY = cursorY + dragOffsetY
+        local offsetFromTop = listChildTop - targetY
+        -- Clamp so the card stays inside the list child bounds.
+        local listHeight = capturedState.listChild:GetHeight()
+        local cardHeight = card:GetHeight()
+        local maxOffset = math.max(0, listHeight - cardHeight)
+        offsetFromTop = math.max(0, math.min(offsetFromTop, maxOffset))
+
+        card:ClearAllPoints()
+        card:SetPoint("TOPLEFT", capturedState.listChild, "TOPLEFT", 2, -offsetFromTop)
+        card:SetPoint("TOPRIGHT", capturedState.listChild, "TOPRIGHT", -2, -offsetFromTop)
+
+        -- Compute the target drop index from cursor position relative to
+        -- the other cards.
+        local dropIndex
         for i, e in ipairs(capturedTdDB.elements) do
-            local target = capturedState.cardFrames[e.id]
-            if target and target ~= card and target:IsShown() then
-                local top = target:GetTop()
-                if top and cursorY > top then
-                    newIndex = i
+            local other = capturedState.cardFrames[e.id]
+            if other and other ~= card and other:IsShown() then
+                local otherTop = other:GetTop()
+                if otherTop and cursorY > otherTop then
+                    dropIndex = i
                     break
                 end
             end
         end
+        if not dropIndex then dropIndex = #capturedTdDB.elements end
 
-        -- Find current index
-        local currentIndex
+        -- Find the dragged card's current index in the db.
+        local currentIdx
         for i, e in ipairs(capturedTdDB.elements) do
-            if e.id == elem.id then currentIndex = i; break end
+            if e.id == elem.id then currentIdx = i; break end
         end
+        if not currentIdx then return end
 
-        if currentIndex and currentIndex ~= newIndex then
-            local moved = table.remove(capturedTdDB.elements, currentIndex)
-            table.insert(capturedTdDB.elements, math.min(newIndex, #capturedTdDB.elements + 1), moved)
-            DF:Debug("TD", "Reorder id=%d from %d to %d", elem.id, currentIndex, newIndex)
-        end
-
-        if DF.TextDesigner.RenderCardList then
-            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+        -- If the drop slot has moved, reorder the db live and reflow the
+        -- OTHER cards. The dragged card itself stays under the cursor —
+        -- the next OnUpdate tick re-sets its position from the cursor, so
+        -- we deliberately don't reposition it here.
+        if currentIdx ~= dropIndex then
+            local moved = table.remove(capturedTdDB.elements, currentIdx)
+            table.insert(capturedTdDB.elements, math.min(dropIndex, #capturedTdDB.elements + 1), moved)
+            local y = 0
+            for _, e in ipairs(capturedTdDB.elements) do
+                local sibling = capturedState.cardFrames[e.id]
+                if sibling then
+                    if sibling.LayoutChildren then sibling:LayoutChildren() end
+                    if sibling ~= card then
+                        sibling:ClearAllPoints()
+                        sibling:SetPoint("TOPLEFT", capturedState.listChild, "TOPLEFT", 2, y)
+                        sibling:SetPoint("TOPRIGHT", capturedState.listChild, "TOPRIGHT", -2, y)
+                    end
+                    y = y - sibling:GetHeight() - CARD_GAP_DRAG
+                end
+            end
         end
     end)
 
     -- Register header as the FIRST widget — wires the helper's collapse arrow
     -- + OnMouseDown handler onto it.
     card:AddWidget(header, 28)
+
+    -- Override the helper's BOTTOMLEFT positioning of the title FontString.
+    -- AddWidget pins header.text to BOTTOMLEFT (intended for CreateHeader's
+    -- 25-px header layout), which leaves the title visually low in our
+    -- 28-px header bar with centered action icons. Re-anchor to LEFT so
+    -- the title vertically centers. The collapse arrow is anchored to the
+    -- text's LEFT (see GUI.lua:478) so it follows automatically.
+    header.text:ClearAllPoints()
+    header.text:SetPoint("LEFT", header, "LEFT", 24, 0)
 
     -- ── BODY SECTIONS ────────────────────────────────────────
     -- Each section is built into its own Frame, sized to its content, and
