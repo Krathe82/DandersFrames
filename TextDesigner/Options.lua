@@ -32,6 +32,9 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     local tdDB = db.textDesigner
     local state = GetState(page)
 
+    if state.built then return end
+    state.built = true
+
     -- ── TAB-LEVEL CONTROLS BAR ───────────────────────────────
     -- Master enable toggle + Add Element button, side by side at top.
     local controlsBar = CreateFrame("Frame", nil, page.child)
@@ -50,23 +53,10 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     enableCheck:SetPoint("LEFT", controlsBar, "LEFT", 0, 0)
 
     -- Add Element button (functionality lands in Task 4)
-    local addBtn = CreateFrame("Button", nil, controlsBar, "BackdropTemplate")
-    addBtn:SetSize(160, 22)
-    addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
-    addBtn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    addBtn:SetBackdropColor(0.2, 0.4, 0.7, 0.5)
-    addBtn:SetBackdropBorderColor(0.4, 0.6, 0.9, 0.8)
-    local addLbl = addBtn:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(addLbl, 10, "")
-    addLbl:SetPoint("CENTER")
-    addLbl:SetText("+ " .. L["Add Text Element"])
-    addBtn:SetScript("OnClick", function()
+    local addBtn = GUI:CreateButton(controlsBar, "+ " .. L["Add Text Element"], 160, 22, function()
         DF:Debug("TD", "Add Element clicked (picker lands in Task 4)")
     end)
+    addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
     state.addBtn = addBtn
 
     -- ── EMPTY STATE / CARD LIST CONTAINER ────────────────────
