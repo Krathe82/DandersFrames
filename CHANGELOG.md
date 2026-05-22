@@ -7,6 +7,7 @@
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers.
 * (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one.
 * (Class Colors) The class colour list is now a single section instead of being split into two columns.
+* (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity.
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
 * (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 

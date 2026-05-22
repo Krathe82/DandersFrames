@@ -1292,7 +1292,7 @@ L["Start (Left/Top)"] = true
 L["Start = Left/Top, End = Right/Bottom depending on direction."] = true
 L["Start of Group"] = true
 L["Start: Above/left of groups.\nCenter: Middle of the group.\nEnd: Below/right of groups."] = true
-L["Status Icon Text Settings"] = true
+L["Icon Text Settings"] = true
 L["Status Text"] = true
 L["Status Text (Dead/Offline)"] = true
 L["Status Text Alpha"] = true

@@ -6466,9 +6466,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         
         -- ============================================
-        -- STATUS ICON TEXT SETTINGS (Collapsible, at top)
+        -- ICON TEXT SETTINGS (Collapsible, at top)
         -- ============================================
-        local textSection = Add(GUI:CreateCollapsibleSection(self.child, L["Status Icon Text Settings"], false, 250), 28, 1)
+        local textSection = Add(GUI:CreateCollapsibleSection(self.child, L["Icon Text Settings"], false, 250), 28, 1)
         
         local textLabel = Add(GUI:CreateLabel(self.child, L["Font settings for icons displayed as text (Summon, Res, AFK, etc.)"], 240), 30, 1)
         textSection:RegisterChild(textLabel)
