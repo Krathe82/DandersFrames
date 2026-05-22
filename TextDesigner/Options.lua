@@ -5,6 +5,37 @@ if DF.RELEASE_CHANNEL == "release" then return end
 local L = DF.L
 
 -- ============================================================
+-- COLOR CONSTANTS & SHARED HELPERS
+-- Mirrors AuraDesigner's palette so the Text Designer reads as the same
+-- visual family as the rest of the addon.
+-- ============================================================
+
+local C_BACKGROUND = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
+local C_PANEL      = {r = 0.12, g = 0.12, b = 0.12, a = 1}
+local C_ELEMENT    = {r = 0.18, g = 0.18, b = 0.18, a = 1}
+local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
+local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
+local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
+local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
+local C_PANEL_DIM  = {r = 1, g = 1, b = 1, a = 0.03}
+local C_BORDER_DIM = {r = 1, g = 1, b = 1, a = 0.08}
+
+local function ApplyBackdrop(frame, bg, border)
+    if not frame.SetBackdrop then return end
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    if bg then
+        frame:SetBackdropColor(bg.r, bg.g, bg.b, bg.a or 1)
+    end
+    if border then
+        frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a or 1)
+    end
+end
+
+-- ============================================================
 -- TEXT DESIGNER - GUI BUILDER
 -- Phase 1: non-functional UI scaffold. Adds tab-level controls
 -- (master toggle, Add Element button) and the empty state.
@@ -372,15 +403,10 @@ end
 
 local function BuildPicker(GUI, parent, tdDB, onPick)
     local drop = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    drop:SetFrameStrata("DIALOG")
+    drop:SetFrameStrata("FULLSCREEN_DIALOG")
+    drop:SetClampedToScreen(true)
     drop:SetSize(280, 380)
-    drop:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    drop:SetBackdropColor(0.05, 0.07, 0.1, 0.98)
-    drop:SetBackdropBorderColor(0.3, 0.5, 0.8, 0.6)
+    ApplyBackdrop(drop, C_BACKGROUND, C_BORDER)
     drop:Hide()
 
     -- ── Search input ─────────────────────────────────────────
@@ -392,42 +418,54 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
     drop.searchBox = searchBox
 
     -- ── Pill row (category filters) ─────────────────────────
+    -- Sized to the dropdown width minus side padding so flow-layout can wrap.
+    local PILL_ROW_PAD = 16
     local pillRow = CreateFrame("Frame", nil, drop)
     pillRow:SetPoint("TOPLEFT", searchBox, "BOTTOMLEFT", -4, -6)
-    pillRow:SetSize(260, 22)
+    pillRow:SetPoint("TOPRIGHT", drop, "TOPRIGHT", -PILL_ROW_PAD, 0)
+    pillRow:SetHeight(18)
     local pills = {}
 
-    local function MakePill(label, key, x)
+    local CHIP_H, CHIP_GAP, CHIP_ROW_GAP = 18, 4, 4
+
+    local function MakePill(label, key)
         local p = CreateFrame("Button", nil, pillRow, "BackdropTemplate")
-        p:SetSize(0, 18)
-        p:SetPoint("LEFT", pillRow, "LEFT", x, 0)
-        p:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
-        p:SetBackdropColor(0.15, 0.15, 0.18, 0.8)
-        p:SetBackdropBorderColor(0.35, 0.35, 0.4, 0.6)
+        p:SetHeight(CHIP_H)
+        ApplyBackdrop(p, C_PANEL, C_BORDER)
         local fs = p:CreateFontString(nil, "OVERLAY")
         GUI:SetSettingsFont(fs, 9, "")
         fs:SetPoint("CENTER")
         fs:SetText(label)
-        local w = fs:GetStringWidth() + 14
-        p:SetWidth(w)
+        p:SetWidth(fs:GetStringWidth() + 14)
         p.key = key
         p.fs = fs
-        return p, w
+        return p
     end
 
-    local pillX = 0
-    local allPill, w = MakePill(L["All"], "_all", pillX)
-    pills[#pills+1] = allPill
-    pillX = pillX + w + 4
+    pills[#pills+1] = MakePill(L["All"], "_all")
     for _, cat in ipairs(CONTENT_CATEGORIES) do
-        local pp, ww = MakePill(CONTENT_CATEGORY_LABELS[cat], cat, pillX)
-        pills[#pills+1] = pp
-        pillX = pillX + ww + 4
+        pills[#pills+1] = MakePill(CONTENT_CATEGORY_LABELS[cat], cat)
     end
+
+    -- Flow-layout: position pills with wrapping on parent resize
+    local function LayoutPills()
+        local maxW = pillRow:GetWidth()
+        if maxW <= 0 then maxW = 260 end
+        local cx, cy = 0, 0
+        for _, btn in ipairs(pills) do
+            local bw = btn:GetWidth()
+            if cx > 0 and (cx + bw) > maxW then
+                cx = 0
+                cy = cy - (CHIP_H + CHIP_ROW_GAP)
+            end
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", pillRow, "TOPLEFT", cx, cy)
+            cx = cx + bw + CHIP_GAP
+        end
+        pillRow:SetHeight(math.max(-cy + CHIP_H, CHIP_H))
+    end
+    LayoutPills()
+    pillRow:SetScript("OnSizeChanged", LayoutPills)
 
     local activePill = "_all"
     local function ApplyPillState()
@@ -437,18 +475,25 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
                 p:SetBackdropBorderColor(0.4, 0.7, 1, 1)
                 p.fs:SetTextColor(1, 1, 1)
             else
-                p:SetBackdropColor(0.15, 0.15, 0.18, 0.8)
-                p:SetBackdropBorderColor(0.35, 0.35, 0.4, 0.6)
-                p.fs:SetTextColor(0.75, 0.75, 0.75)
+                p:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, C_PANEL.a)
+                p:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, C_BORDER.a)
+                p.fs:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
             end
         end
     end
     ApplyPillState()
 
     -- ── Scrolling list of items ─────────────────────────────
-    local scrollFrame = CreateFrame("ScrollFrame", nil, drop, "UIPanelScrollFrameTemplate")
+    -- Anchor to bottom of pillRow so wrapped pills push the list down correctly.
+    local scrollFrame = CreateFrame("ScrollFrame", nil, drop, "ScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", pillRow, "BOTTOMLEFT", 4, -6)
-    scrollFrame:SetSize(244, 290)
+    scrollFrame:SetPoint("BOTTOMRIGHT", drop, "BOTTOMRIGHT", -20, 10)
+    DF.GUI.StyleScrollBar(scrollFrame)
+    scrollFrame:EnableMouseWheel(true)
+    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        self:SetVerticalScroll(math.max(0, math.min(current - delta * 20, self:GetVerticalScrollRange())))
+    end)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetSize(244, 1)
@@ -902,24 +947,36 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
     state.addBtn = addBtn
 
-    -- ── CARD LIST CONTAINER ──────────────────────────────────
-    -- Scrollable list of element cards; empty-state message centered when
-    -- no elements exist.
-    local listContainer = CreateFrame("ScrollFrame", nil, page.child, "UIPanelScrollFrameTemplate")
-    listContainer:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
-    listContainer:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -28, 10)
+    -- ── CARD LIST AREA ───────────────────────────────────────
+    -- A bordered panel hosts the section header and the scrollable card list.
+    -- Empty-state message centers inside the panel when no elements exist.
+    local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
+    listPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
+    listPanel:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -10, 10)
+    ApplyBackdrop(listPanel, C_PANEL_DIM, C_BORDER_DIM)
+
+    local listContainer = CreateFrame("ScrollFrame", nil, listPanel, "ScrollFrameTemplate")
+    listContainer:SetPoint("TOPLEFT", listPanel, "TOPLEFT", 6, -6)
+    listContainer:SetPoint("BOTTOMRIGHT", listPanel, "BOTTOMRIGHT", -22, 8)
+    DF.GUI.StyleScrollBar(listContainer)
+    listContainer:EnableMouseWheel(true)
+    listContainer:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        self:SetVerticalScroll(math.max(0, math.min(current - delta * 20, self:GetVerticalScrollRange())))
+    end)
 
     local listChild = CreateFrame("Frame", nil, listContainer)
     listChild:SetSize(1, 1)
     listContainer:SetScrollChild(listChild)
+    state.listPanel = listPanel
     state.listContainer = listContainer
     state.listChild = listChild
 
-    local emptyMsg = listChild:CreateFontString(nil, "OVERLAY")
+    local emptyMsg = listPanel:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(emptyMsg, 11, "")
     emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
     emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
-    emptyMsg:SetTextColor(0.6, 0.6, 0.6, 1)
+    emptyMsg:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
     state.emptyMsg = emptyMsg
 
     -- Initial render — populate any existing elements
