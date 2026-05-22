@@ -863,6 +863,7 @@ L["Incoming Heal"] = true
 L["Incoming Heal From Me Only"] = true
 L["Indicators"] = true
 L["Info (All)"] = true
+L["Inherit"] = true
 L["Insanity"] = true
 L["Inset"] = true
 L["Inside (Bottom)"] = true

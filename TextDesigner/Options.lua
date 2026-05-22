@@ -189,6 +189,64 @@ local function BuildContentSection(GUI, parent, elem, yStart)
     return y - SECTION_GAP
 end
 
+-- ============================================================
+-- 9-POINT ANCHOR GRID WIDGET
+-- 3x3 grid of buttons mapping to TOPLEFT, TOP, TOPRIGHT, LEFT, CENTER, etc.
+-- Click selects. Selected button is highlighted.
+-- ============================================================
+
+local ANCHOR_GRID = {
+    {"TOPLEFT",    "TOP",      "TOPRIGHT"},
+    {"LEFT",       "CENTER",   "RIGHT"},
+    {"BOTTOMLEFT", "BOTTOM",   "BOTTOMRIGHT"},
+}
+
+local function CreateAnchorGrid(GUI, parent, elem)
+    local grid = CreateFrame("Frame", nil, parent)
+    grid:SetSize(60, 60)
+
+    local btns = {}
+    local function ApplyButtonState(b, active)
+        if active then
+            b:SetBackdropColor(0.3, 0.55, 0.9, 0.9)
+            b:SetBackdropBorderColor(0.5, 0.75, 1, 1)
+        else
+            b:SetBackdropColor(0.12, 0.14, 0.18, 0.8)
+            b:SetBackdropBorderColor(0.3, 0.3, 0.35, 0.6)
+        end
+    end
+
+    for row = 1, 3 do
+        for col = 1, 3 do
+            local point = ANCHOR_GRID[row][col]
+            local b = CreateFrame("Button", nil, grid, "BackdropTemplate")
+            b:SetSize(18, 18)
+            b:SetPoint("TOPLEFT", grid, "TOPLEFT", (col - 1) * 20, -((row - 1) * 20))
+            b:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Buttons\\WHITE8x8",
+                edgeSize = 1,
+            })
+            b.point = point
+            btns[point] = b
+            b:SetScript("OnClick", function()
+                elem.anchor = point
+                for p, bb in pairs(btns) do
+                    ApplyButtonState(bb, p == point)
+                end
+            end)
+        end
+    end
+
+    -- Initial state
+    elem.anchor = elem.anchor or "CENTER"
+    for p, b in pairs(btns) do
+        ApplyButtonState(b, p == elem.anchor)
+    end
+
+    return grid
+end
+
 -- Returns the y-offset where the next section should start (negative, goes down).
 local function BuildAppearanceSection(GUI, parent, elem, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Appearance"])
@@ -250,6 +308,56 @@ local function BuildAppearanceSection(GUI, parent, elem, yStart)
         if colorPicker.Disable then colorPicker:Disable() end
         colorPicker:SetAlpha(0.4)
     end
+    y = y - FIELD_ROW_HEIGHT
+
+    return y - SECTION_GAP
+end
+
+-- Returns the y-offset where the next section should start (negative, goes down).
+local function BuildPositionSection(GUI, parent, elem, yStart)
+    local label = CreateSectionLabel(GUI, parent, L["Position"])
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
+    local y = yStart - SECTION_LABEL_HEIGHT
+
+    -- Defaults
+    elem.anchor = elem.anchor or "CENTER"
+    elem.offsetX = elem.offsetX or 0
+    elem.offsetY = elem.offsetY or 0
+    elem.frameLevel = elem.frameLevel or 25
+    elem.frameStrata = elem.frameStrata or "INHERIT"
+
+    -- Anchor grid on the left
+    local grid = CreateAnchorGrid(GUI, parent, elem)
+    grid:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y - 4)
+    local gridLabel = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(gridLabel, 8, "")
+    gridLabel:SetText(L["Anchor"])
+    gridLabel:SetPoint("TOP", grid, "BOTTOM", 0, -2)
+    gridLabel:SetTextColor(0.6, 0.6, 0.6)
+
+    -- Offsets / frame settings on the right
+    local rightX = 100
+    local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", function() end)
+    xSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", function() end)
+    ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", function() end)
+    lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    local strataOpts = {
+        INHERIT = L["Inherit"],
+        LOW = "LOW",
+        MEDIUM = "MEDIUM",
+        HIGH = "HIGH",
+        DIALOG = "DIALOG",
+    }
+    local strataDrop = GUI:CreateDropdown(parent, L["Frame Strata"], strataOpts, elem, "frameStrata", function() end)
+    strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
     y = y - FIELD_ROW_HEIGHT
 
     return y - SECTION_GAP
@@ -597,8 +705,14 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- ── BODY CONTENT ─────────────────────────────────────────
     local yEnd = BuildContentSection(GUI, body, elem, -10)
     yEnd = BuildAppearanceSection(GUI, body, elem, yEnd)
-    -- Task 9 (Position) will continue from yEnd.
+    yEnd = BuildPositionSection(GUI, body, elem, yEnd)
     body:SetHeight(-yEnd + 10)
+
+    -- Update the header meta line with current anchor + offset summary
+    function card:UpdateMeta()
+        meta:SetText((elem.anchor or "CENTER") .. " · " .. (elem.offsetX or 0) .. "," .. (elem.offsetY or 0))
+    end
+    card:UpdateMeta()
 
     -- ── EXPAND / COLLAPSE ────────────────────────────────────
     card.expanded = false
