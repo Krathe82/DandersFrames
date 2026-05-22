@@ -77,8 +77,8 @@ end
 -- ============================================================
 -- ADD ELEMENT PICKER
 -- A floating dropdown: search input, category pill row, grouped list.
--- Calls onPick(typeKey) when the user selects a type. Closes on pick or
--- when the user clicks outside.
+-- Calls onPick(typeKey) when the user selects a type. Closes on pick.
+-- Click the Add Element button again to dismiss without picking.
 -- ============================================================
 
 local function BuildPicker(GUI, parent, tdDB, onPick)
@@ -173,16 +173,17 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
         end
         local it = CreateFrame("Button", nil, scrollChild, "BackdropTemplate")
         it:SetSize(240, 16)
+        it:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8x8"})
+        it:SetBackdropColor(0.2, 0.4, 0.7, 0)
         local fs = it:CreateFontString(nil, "OVERLAY")
         GUI:SetSettingsFont(fs, 10, "")
         fs:SetPoint("LEFT", it, "LEFT", 14, 0)
         it.fs = fs
         it:SetScript("OnEnter", function(self)
-            self:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8x8"})
             self:SetBackdropColor(0.2, 0.4, 0.7, 0.3)
         end)
         it:SetScript("OnLeave", function(self)
-            self:SetBackdrop(nil)
+            self:SetBackdropColor(0.2, 0.4, 0.7, 0)
         end)
         itemPool[#itemPool+1] = it
         return it
@@ -207,8 +208,8 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
 
     local function RenderList()
         HideAll()
-        local query = searchBox:GetText() or ""
-        query = query:lower():gsub("%s+", "")
+        local query = (searchBox:GetText() or ""):lower()
+        query = query:match("^%s*(.-)%s*$") or ""
 
         local y = -2
         for _, cat in ipairs(CONTENT_CATEGORIES) do
