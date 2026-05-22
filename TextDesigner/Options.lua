@@ -17,8 +17,8 @@ local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
 local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
 local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
-local C_PANEL_DIM  = {r = 1, g = 1, b = 1, a = 0.03}
-local C_BORDER_DIM = {r = 1, g = 1, b = 1, a = 0.08}
+local C_PANEL_VISIBLE  = {r = 1, g = 1, b = 1, a = 0.05}
+local C_BORDER_VISIBLE = {r = 1, g = 1, b = 1, a = 0.2}
 
 local function ApplyBackdrop(frame, bg, border)
     if not frame.SetBackdrop then return end
@@ -850,11 +850,13 @@ local function RenderCardList(GUI, page, tdDB, state)
 
     if #tdDB.elements == 0 then
         if state.emptyMsg then state.emptyMsg:Show() end
+        if state.emptyHint then state.emptyHint:Show() end
         state.listChild:SetHeight(1)
         return
     end
 
     if state.emptyMsg then state.emptyMsg:Hide() end
+    if state.emptyHint then state.emptyHint:Hide() end
 
     local y = 0
     local CARD_GAP = 4
@@ -935,6 +937,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
                     id, typeKey, #tdDB.elements)
                 -- Hide empty state if it's still visible
                 if state.emptyMsg then state.emptyMsg:Hide() end
+                if state.emptyHint then state.emptyHint:Hide() end
                 RenderCardList(GUI, page, tdDB, state)
             end)
         end
@@ -950,10 +953,16 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- ── CARD LIST AREA ───────────────────────────────────────
     -- A bordered panel hosts the section header and the scrollable card list.
     -- Empty-state message centers inside the panel when no elements exist.
+    local listHeader = page.child:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(listHeader, 9, "OUTLINE")
+    listHeader:SetText(L["Text Elements"]:upper())
+    listHeader:SetTextColor(0.5, 0.7, 1, 0.9)
+    listHeader:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 12, -6)
+
     local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
-    listPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
+    listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", -12, -4)
     listPanel:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -10, 10)
-    ApplyBackdrop(listPanel, C_PANEL_DIM, C_BORDER_DIM)
+    ApplyBackdrop(listPanel, C_PANEL_VISIBLE, C_BORDER_VISIBLE)
 
     local listContainer = CreateFrame("ScrollFrame", nil, listPanel, "ScrollFrameTemplate")
     listContainer:SetPoint("TOPLEFT", listPanel, "TOPLEFT", 6, -6)
@@ -973,11 +982,18 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.listChild = listChild
 
     local emptyMsg = listPanel:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(emptyMsg, 11, "")
+    GUI:SetSettingsFont(emptyMsg, 12, "")
     emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
     emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
-    emptyMsg:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
     state.emptyMsg = emptyMsg
+
+    local emptyHint = listPanel:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(emptyHint, 10, "")
+    emptyHint:SetText(L["Use the + button above to add your first element."])
+    emptyHint:SetPoint("TOP", emptyMsg, "BOTTOM", 0, -8)
+    emptyHint:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    state.emptyHint = emptyHint
 
     -- Initial render — populate any existing elements
     RenderCardList(GUI, page, tdDB, state)
