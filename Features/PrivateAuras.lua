@@ -957,10 +957,13 @@ function DF:UpdateAllPrivateAuraAnchors()
 
     local function setupIfNeeded(frame)
         if frame and frame.unit then
-            local anchors = frameAnchors[frame]
-            if not anchors or #anchors == 0 then
-                DF:SetupPrivateAuraAnchors(frame)
-            end
+            -- Always clear before re-registering: if the frame was previously
+            -- anchored (anchors > 0) but the unit slot was reassigned to a new
+            -- player, the existing anchors are stale. Unconditional teardown
+            -- mirrors the ElvUI/Grid2 pattern and guarantees clean state on
+            -- every roster-change trigger.
+            DF:ClearPrivateAuraAnchors(frame)
+            DF:SetupPrivateAuraAnchors(frame)
         end
     end
 
