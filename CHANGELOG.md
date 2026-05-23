@@ -5,6 +5,8 @@
 ### Bug Fixes
 
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
+* (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
+* (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
 * (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 * (Test Mode) Fix grouped raid frames in vertical layout with Players Grow From set to End: frames no longer overflow below the anchor box, and the column growth direction is no longer inverted, so test mode now matches live frames. (PR #113 by Krathe)

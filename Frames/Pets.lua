@@ -318,6 +318,16 @@ end
 function DF:SetPetFrameVisible(frame, visible)
     if not frame then return end
 
+    -- Never show a pet when the feature is disabled for this mode. Pet/owner
+    -- UNIT_HEALTH events route through here and would otherwise re-show a pet
+    -- that was just toggled off, until a /reload.
+    if visible then
+        local db = DF:GetFrameDB(frame)
+        if not (db and db.petEnabled) then
+            visible = false
+        end
+    end
+
     if visible then
         -- Mark as visible - range system will set appropriate alpha
         frame.dfPetHidden = false
@@ -688,9 +698,16 @@ function DF:PositionPetFrame(frame)
         return
     end
     
-    -- ATTACHED mode - position relative to owner
+    -- ATTACHED mode - position relative to owner.
+    -- Re-resolve the current owner frame: custom sorting reassigns unit tokens
+    -- to different buttons, so the frame captured at pet creation can be stale.
+    -- Anchor to whichever frame currently shows the owner unit. (Test mode keeps
+    -- its dedicated test owner frame.)
+    if not (DF.testMode or DF.raidTestMode) and frame.ownerUnit and DF.GetFrameForUnit then
+        frame.ownerFrame = DF:GetFrameForUnit(frame.ownerUnit) or frame.ownerFrame
+    end
     if not frame.ownerFrame then return end
-    
+
     local anchor = db.petAnchor or "BOTTOM"
     local offsetX = db.petOffsetX or 0
     local offsetY = db.petOffsetY or -2
