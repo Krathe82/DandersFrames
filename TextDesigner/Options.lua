@@ -1243,7 +1243,11 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
     yEnd = BuildAppearanceSection(GUI, body, elem, card, yEnd)
     yEnd = BuildPositionSection(GUI, body, elem, tdDB, card, yEnd)
-    body:SetHeight(math.max(1, -yEnd + 10))
+    -- Compute body height as a local so we never have to round-trip through
+    -- body:GetHeight() (which can return stale values mid-frame, the same way
+    -- AD's CreateEffectCard accumulates totalCardH locally).
+    local bodyHeight = math.max(1, -yEnd + 10)
+    body:SetHeight(bodyHeight)
 
     -- ── COLLAPSE STATE ──────────────────────────────────────
     -- Persisted across reloads via GUI:GetCollapsedGroups(), keyed by element
@@ -1253,15 +1257,19 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     card.collapsed = savedStates[cardKey] == true
     card.cardKey = cardKey
 
+    local headerHeight = 30
+
+    -- ApplyCollapseState sources heights from the local `bodyHeight` rather
+    -- than `body:GetHeight()` so collapse toggles are always authoritative.
     local function ApplyCollapseState()
         if card.collapsed then
             body:Hide()
             arrow:SetTexture(mediaPath .. "chevron_right")
-            card:SetHeight(30)
+            card:SetHeight(headerHeight)
         else
             body:Show()
             arrow:SetTexture(mediaPath .. "expand_more")
-            card:SetHeight(30 + body:GetHeight())
+            card:SetHeight(headerHeight + bodyHeight)
         end
     end
     card.ApplyCollapseState = ApplyCollapseState
@@ -1421,13 +1429,24 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     end
     card:UpdateMeta()
 
-    return card
+    -- Compute total card height based on the current collapse state. This
+    -- mirrors AD's CreateEffectCard (AuraDesigner/Options.lua:4843+) which
+    -- accumulates totalCardH locally and returns the new y-cursor. Sourcing
+    -- this from a local instead of card:GetHeight() eliminates a class of
+    -- "card height stale during render" bugs.
+    local totalCardH = card.collapsed and headerHeight or (headerHeight + bodyHeight)
+
+    return card, totalCardH
 end
 
 -- ============================================================
 -- CARD LIST RENDERER
--- Iterates db.elements in order, builds/positions cards. Uses a pool
--- to avoid creating/destroying card frames on every render.
+-- Mirrors AuraDesigner's full-rebuild pattern (AuraDesigner/Options.lua:4882+
+-- BuildEffectsTab): every render destroys all existing cards and rebuilds
+-- them from scratch. No pool. This eliminates a class of "stale frame state
+-- during reuse" bugs (card heights, dropdown options, etc.) at the cost of
+-- a few CreateFrame calls per interaction — TD has at most ~20 elements and
+-- rebuilds happen only on user-driven clicks, so cost is negligible.
 -- ============================================================
 
 local function RenderCardList(GUI, page, tdDB, state)
@@ -1440,9 +1459,20 @@ local function RenderCardList(GUI, page, tdDB, state)
         state.listChild:SetWidth(cw)
     end
 
-    -- Hide all existing card frames first
-    for _, card in pairs(state.cardFrames) do
-        card:Hide()
+    -- Destroy ALL existing cards from any previous render. We can't actually
+    -- free WoW frames (CreateFrame has no destructor), so we hide them,
+    -- detach them from anchors, and nil out their per-frame OnUpdate so the
+    -- drag loop closure doesn't keep this card animating against an old
+    -- elements array.
+    if state.cardFrames then
+        for _, card in pairs(state.cardFrames) do
+            card:Hide()
+            card:ClearAllPoints()
+            card:SetScript("OnUpdate", nil)
+        end
+        wipe(state.cardFrames)
+    else
+        state.cardFrames = {}
     end
 
     if #tdDB.elements == 0 then
@@ -1455,42 +1485,30 @@ local function RenderCardList(GUI, page, tdDB, state)
     if state.emptyMsg then state.emptyMsg:Hide() end
     if state.emptyHint then state.emptyHint:Hide() end
 
+    -- Build fresh cards. BuildCard returns the total card height it occupies,
+    -- so we advance the y-cursor with that local rather than card:GetHeight()
+    -- — same pattern as AD's BuildEffectsTab caller (AuraDesigner/Options.lua:5147).
     local y = 0
     local CARD_GAP = 5
     for _, elem in ipairs(tdDB.elements) do
-        local card = state.cardFrames[elem.id]
-        if not card then
-            card = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
-            state.cardFrames[elem.id] = card
-        end
-        -- Card height is authoritative: header-only when collapsed,
-        -- header + body when expanded (managed by ApplyCollapseState).
+        local card, totalCardH = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
+        state.cardFrames[elem.id] = card
         card:ClearAllPoints()
         card:SetPoint("TOPLEFT", state.listChild, "TOPLEFT", 2, y)
         card:SetPoint("TOPRIGHT", state.listChild, "TOPRIGHT", -2, y)
         card:Show()
-        y = y - card:GetHeight() - CARD_GAP
+        y = y - totalCardH - CARD_GAP
     end
     state.listChild:SetHeight(math.max(1, -y + 4))
 end
 
 DF.TextDesigner.RenderCardList = RenderCardList  -- exposed for Task 6+
 
--- Tear down every cached card frame and re-render from scratch. Used by any
--- mutation that changes the SET of elements (add / delete) or any displayed
--- label, because the Anchor To dropdown options are built once per card from
--- the current element list and won't refresh otherwise.
+-- FullRebuildCards is now an alias for RenderCardList: every render is a full
+-- rebuild now that the pool is gone. Kept as a named export so existing
+-- callers (delete button, picker onPick, label edit, group-item add/remove,
+-- mode swap teardown logic, etc.) continue to work without churn.
 local function FullRebuildCards(GUI, page, tdDB, state)
-    if state.cardFrames then
-        for _, card in pairs(state.cardFrames) do
-            card:Hide()
-            card:ClearAllPoints()
-            -- Also nil out any per-frame handlers so the OnUpdate drag loop
-            -- doesn't keep references alive in the closure.
-            card:SetScript("OnUpdate", nil)
-        end
-        wipe(state.cardFrames)
-    end
     RenderCardList(GUI, page, tdDB, state)
 end
 DF.TextDesigner.FullRebuildCards = FullRebuildCards
