@@ -139,6 +139,35 @@ local function FindContentType(key)
     end
 end
 
+-- Auto-number duplicate-type elements: first one stays unlabeled (renders as
+-- just the type name), subsequent ones get "TypeName #2", "Name #3", etc.
+-- N is the next available integer >= 2 in existing labels matching the
+-- "TypeName #N" pattern, so delete + re-add doesn't produce duplicates.
+local function ComputeAutoLabel(tdDB, ct)
+    if not ct then return "" end
+    local typeLabel = ct.label or ct.key
+    -- Count existing elements with the same contentType
+    local hasAny = false
+    for _, e in ipairs(tdDB.elements) do
+        if e.contentType == ct.key then
+            hasAny = true
+            break
+        end
+    end
+    if not hasAny then return "" end  -- first of its type, no label needed
+    -- Find next available #N
+    local maxN = 1
+    local escapedLabel = typeLabel:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+    local pattern = "^" .. escapedLabel .. " #(%d+)$"
+    for _, e in ipairs(tdDB.elements) do
+        if e.contentType == ct.key and e.label then
+            local n = tonumber(e.label:match(pattern))
+            if n and n > maxN then maxN = n end
+        end
+    end
+    return typeLabel .. " #" .. (maxN + 1)
+end
+
 -- ============================================================
 -- BODY SECTION HELPERS
 -- Shared layout primitives used by the Content / Appearance / Position
@@ -556,7 +585,7 @@ local function BuildAnchorTargets(tdDB, currentElem)
                 optLabel = other.label
             else
                 local ct = FindContentType(other.contentType)
-                optLabel = (ct and ct.label or other.contentType) .. " #" .. other.id
+                optLabel = ct and ct.label or other.contentType
             end
             opts[tostring(other.id)] = optLabel
         end
@@ -1579,10 +1608,12 @@ function DF.BuildTextDesignerPage(GUI, page, db)
                 -- Create a new element instance
                 local id = tdDB.nextElementID
                 tdDB.nextElementID = id + 1
+                local pickedCT = FindContentType(typeKey)
                 local elem = {
                     id = id,
                     contentType = typeKey,
                     enabled = true,
+                    label = ComputeAutoLabel(tdDB, pickedCT),
                 }
                 table.insert(tdDB.elements, elem)
                 DF:Debug("TD", "Added element id=%d type=%s (total=%d)",
