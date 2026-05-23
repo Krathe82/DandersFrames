@@ -2,6 +2,10 @@
 
 ## [4.3.11] - 2026-05-21
 
+### New Features
+
+* (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments.
+
 ### Bug Fixes
 
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
