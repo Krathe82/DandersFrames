@@ -14,11 +14,36 @@ local C_BACKGROUND = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
 local C_PANEL      = {r = 0.12, g = 0.12, b = 0.12, a = 1}
 local C_ELEMENT    = {r = 0.18, g = 0.18, b = 0.18, a = 1}
 local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
-local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
 local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
 local C_PANEL_VISIBLE  = {r = 1, g = 1, b = 1, a = 0.05}
 local C_BORDER_VISIBLE = {r = 1, g = 1, b = 1, a = 0.2}
+
+-- Destructive action red — matches Aura Designer's delete X cross palette.
+local C_DESTRUCTIVE       = {r = 0.55, g = 0.20, b = 0.20, a = 1}
+local C_DESTRUCTIVE_HOVER = {r = 1.00, g = 0.35, b = 0.35, a = 1}
+
+-- Primary-CTA backdrop multipliers (applied to the theme accent color).
+-- Mirrors AuraDesigner/Options.lua:4894-4915 "+ Add Indicator" button.
+local CTA_BG_RESTING     = 0.10
+local CTA_BORDER_RESTING = 0.50
+local CTA_BG_HOVER       = 0.20
+local CTA_BORDER_HOVER   = 0.80
+
+-- Row-height constant for GUI:CreateEditBox (label-above style).
+local EDIT_BOX_ROW_H = 56
+
+-- Semantic palette for content-type categories. Tints card title text and
+-- could be reused for category badges later.
+local CATEGORY_COLORS = {
+    group    = {r = 0.65, g = 0.45, b = 0.95, a = 1},  -- purple
+    identity = {r = 0.55, g = 0.75, b = 0.95, a = 1},  -- light blue
+    health   = {r = 0.95, g = 0.35, b = 0.35, a = 1},  -- red
+    power    = {r = 0.35, g = 0.55, b = 0.95, a = 1},  -- blue
+    shields  = {r = 0.45, g = 0.85, b = 0.85, a = 1},  -- cyan
+    status   = {r = 0.65, g = 0.65, b = 0.65, a = 1},  -- gray
+    threat   = {r = 0.95, g = 0.65, b = 0.25, a = 1},  -- orange
+}
 
 local function ApplyBackdrop(frame, bg, border)
     if not frame.SetBackdrop then return end
@@ -125,9 +150,9 @@ local SECTION_GAP = 8
 
 local function CreateSectionLabel(GUI, parent, text)
     local fs = parent:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(fs, 9, "OUTLINE")
+    GUI:SetSettingsFont(fs, 9, "")  -- no outline; subtle dim grey caption
     fs:SetText(text:upper())
-    fs:SetTextColor(0.5, 0.7, 1, 0.9)
+    fs:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
     return fs
 end
 
@@ -159,11 +184,19 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                 or (activeCT and activeCT.label)
                 or elem.contentType
             card.title:SetText(displayName)
+            -- Re-apply the category tint so SetText doesn't reset it back to
+            -- the default font colour.
+            local cc = card.titleCatColor
+            if cc then
+                card.title:SetTextColor(cc.r, cc.g, cc.b, cc.a)
+            else
+                card.title:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, C_TEXT.a)
+            end
         end
     end, 200)
     labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     -- CreateEditBox is label-above style; row is taller than other widgets.
-    y = y - 56
+    y = y - EDIT_BOX_ROW_H
 
     -- Numeric types: abbreviate checkbox
     if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "hp_deficit"
@@ -207,7 +240,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         -- CreateEditBox renders its label ABOVE the input, so the row is
         -- taller than other widgets. Use a custom y-decrement instead of
         -- FIELD_ROW_HEIGHT.
-        y = y - 56
+        y = y - EDIT_BOX_ROW_H
 
     -- Group number: prefix/suffix format
     elseif ct.key == "group_number" then
@@ -238,18 +271,17 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         -- Separator input (CreateEditBox renders its label ABOVE the input)
         local sepEdit = GUI:CreateEditBox(parent, L["Separator"], elem, "groupSeparator", function() end, 120)
         sepEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
-        y = y - 56
+        y = y - EDIT_BOX_ROW_H
 
         -- Items label
         local itemsLabel = parent:CreateFontString(nil, "OVERLAY")
-        GUI:SetSettingsFont(itemsLabel, 9, "OUTLINE")
+        GUI:SetSettingsFont(itemsLabel, 9, "")
         itemsLabel:SetText(L["Items"]:upper())
-        itemsLabel:SetTextColor(0.5, 0.7, 1, 0.9)
+        itemsLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
         itemsLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - 16
 
         -- Items list — one row per item in elem.groupItems
-        local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
         if #elem.groupItems == 0 then
             local emptyLbl = parent:CreateFontString(nil, "OVERLAY")
             GUI:SetSettingsFont(emptyLbl, 10, "")
@@ -271,16 +303,31 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                 itemLabel:SetText(itemIdx .. ". " .. (itemCT and itemCT.label or itemKey))
                 itemLabel:SetTextColor(0.9, 0.9, 0.9)
 
-                -- Remove button
-                local removeBtn = CreateFrame("Button", nil, itemRow)
+                -- Remove button — hand-drawn X cross (smaller variant for in-row).
+                -- Two rotated SetColorTexture lines mirror AuraDesigner's pattern
+                -- (AuraDesigner/Options.lua:4412-4433).
+                local removeBtn = CreateFrame("Button", nil, itemRow, "BackdropTemplate")
                 removeBtn:SetSize(16, 16)
                 removeBtn:SetPoint("RIGHT", itemRow, "RIGHT", -4, 0)
-                local removeIcon = removeBtn:CreateTexture(nil, "OVERLAY")
-                removeIcon:SetAllPoints()
-                removeIcon:SetTexture(mediaPath .. "delete")
-                removeIcon:SetVertexColor(0.85, 0.4, 0.4)
-                removeBtn:SetScript("OnEnter", function() removeIcon:SetVertexColor(1, 0.6, 0.6) end)
-                removeBtn:SetScript("OnLeave", function() removeIcon:SetVertexColor(0.85, 0.4, 0.4) end)
+                local rxSize, rxThick = 10, 1.5
+                local rline1 = removeBtn:CreateTexture(nil, "OVERLAY")
+                rline1:SetSize(rxSize, rxThick)
+                rline1:SetPoint("CENTER", 0, 0)
+                rline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+                rline1:SetRotation(math.rad(45))
+                local rline2 = removeBtn:CreateTexture(nil, "OVERLAY")
+                rline2:SetSize(rxSize, rxThick)
+                rline2:SetPoint("CENTER", 0, 0)
+                rline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+                rline2:SetRotation(math.rad(-45))
+                removeBtn:SetScript("OnEnter", function()
+                    rline1:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+                    rline2:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+                end)
+                removeBtn:SetScript("OnLeave", function()
+                    rline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+                    rline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+                end)
                 local capturedIdx = itemIdx
                 removeBtn:SetScript("OnClick", function()
                     table.remove(elem.groupItems, capturedIdx)
@@ -314,6 +361,25 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
             end
         end)
         addItemBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
+
+        -- Theme-tint the button to match AuraDesigner's CTA pattern.
+        do
+            local tc = GUI:GetThemeColor()
+            if addItemBtn.SetBackdropColor then
+                addItemBtn:SetBackdropColor(tc.r * CTA_BG_RESTING, tc.g * CTA_BG_RESTING, tc.b * CTA_BG_RESTING, 1)
+                addItemBtn:SetBackdropBorderColor(tc.r * CTA_BORDER_RESTING, tc.g * CTA_BORDER_RESTING, tc.b * CTA_BORDER_RESTING, 1)
+                addItemBtn:HookScript("OnEnter", function(self)
+                    local c = GUI:GetThemeColor()
+                    self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
+                    self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
+                end)
+                addItemBtn:HookScript("OnLeave", function(self)
+                    local c = GUI:GetThemeColor()
+                    self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
+                    self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
+                end)
+            end
+        end
         y = y - 32
     end
     -- Types with no Content-section fields fall through:
@@ -342,11 +408,12 @@ local function CreateAnchorGrid(GUI, parent, elem)
     local btns = {}
     local function ApplyButtonState(b, active)
         if active then
-            b:SetBackdropColor(0.3, 0.55, 0.9, 0.9)
-            b:SetBackdropBorderColor(0.5, 0.75, 1, 1)
+            local tc = GUI:GetThemeColor()
+            b:SetBackdropColor(tc.r, tc.g, tc.b, 0.40)
+            b:SetBackdropBorderColor(tc.r, tc.g, tc.b, 0.90)
         else
-            b:SetBackdropColor(0.12, 0.14, 0.18, 0.8)
-            b:SetBackdropBorderColor(0.3, 0.3, 0.35, 0.6)
+            b:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, 0.80)
+            b:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.50)
         end
     end
 
@@ -641,10 +708,11 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
 
     local activePill = "_all"
     local function ApplyPillState()
+        local tc = GUI:GetThemeColor()
         for _, p in ipairs(pills) do
             if p.key == activePill then
-                p:SetBackdropColor(0.2, 0.4, 0.7, 1)
-                p:SetBackdropBorderColor(0.4, 0.7, 1, 1)
+                p:SetBackdropColor(tc.r, tc.g, tc.b, 0.20)
+                p:SetBackdropBorderColor(tc.r, tc.g, tc.b, 0.50)
                 p.fs:SetTextColor(1, 1, 1)
             else
                 p:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, C_PANEL.a)
@@ -680,16 +748,21 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
         local it = CreateFrame("Button", nil, scrollChild, "BackdropTemplate")
         it:SetSize(240, 16)
         it:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8x8"})
-        it:SetBackdropColor(0.2, 0.4, 0.7, 0)
+        do
+            local tc = GUI:GetThemeColor()
+            it:SetBackdropColor(tc.r, tc.g, tc.b, 0)
+        end
         local fs = it:CreateFontString(nil, "OVERLAY")
         GUI:SetSettingsFont(fs, 10, "")
         fs:SetPoint("LEFT", it, "LEFT", 14, 0)
         it.fs = fs
         it:SetScript("OnEnter", function(self)
-            self:SetBackdropColor(0.2, 0.4, 0.7, 0.3)
+            local tc = GUI:GetThemeColor()
+            self:SetBackdropColor(tc.r, tc.g, tc.b, 0.30)
         end)
         it:SetScript("OnLeave", function(self)
-            self:SetBackdropColor(0.2, 0.4, 0.7, 0)
+            local tc = GUI:GetThemeColor()
+            self:SetBackdropColor(tc.r, tc.g, tc.b, 0)
         end)
         itemPool[#itemPool+1] = it
         return it
@@ -732,7 +805,7 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
                     local h = AcquireHeader()
                     h:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, y)
                     h:SetText(CONTENT_CATEGORY_LABELS[cat]:upper())
-                    h:SetTextColor(0.5, 0.7, 1, 0.9)
+                    h:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
                     h:Show()
                     y = y - 14
                     for _, t in ipairs(matches) do
@@ -811,6 +884,13 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         end,
     })
 
+    -- Override the helper's subtle white-tint backdrop with AD-matching card
+    -- chrome (AuraDesigner/Options.lua:4297-4304).
+    if card.SetBackdropColor then
+        card:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+        card:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
+    end
+
     -- Context for callbacks (used by delete + reflow paths and the
     -- onCollapseChanged closure above)
     card._tdDB = tdDB
@@ -822,7 +902,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- The helper expects the first AddWidget to be the header and looks for
     -- `widget.text` (a FontString) to attach the collapse arrow.
     local header = CreateFrame("Frame", nil, card)
-    header:SetHeight(28)
+    header:SetHeight(30)
 
     local ct = FindContentType(elem.contentType)
     -- Prefer the user-supplied label if set; otherwise fall back to the
@@ -834,9 +914,16 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     GUI:SetSettingsFont(title, 11, "OUTLINE")
     title:SetPoint("LEFT", header, "LEFT", 24, 0)  -- 24 leaves room for the arrow icon
     title:SetText(displayName)
-    title:SetTextColor(0.95, 0.95, 0.95)
+    -- Tint title by content category so the type identity reads at a glance.
+    local catColor = ct and CATEGORY_COLORS[ct.category]
+    if catColor then
+        title:SetTextColor(catColor.r, catColor.g, catColor.b, catColor.a)
+    else
+        title:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, C_TEXT.a)
+    end
     header.text = title  -- helper requires this to wire the collapse arrow
     card.title = title
+    card.titleCatColor = catColor  -- so label-edit callback can re-apply it
 
     local meta = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(meta, 9, "")
@@ -850,16 +937,30 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     local ICON_GAP = 4
     local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
-    -- Delete (rightmost)
-    local deleteBtn = CreateFrame("Button", nil, header)
+    -- Delete (rightmost) — hand-drawn X cross matching AuraDesigner.
+    -- Two rotated SetColorTexture lines (AuraDesigner/Options.lua:4412-4433).
+    local deleteBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
     deleteBtn:SetSize(ICON_SIZE, ICON_SIZE)
     deleteBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
-    local deleteIcon = deleteBtn:CreateTexture(nil, "OVERLAY")
-    deleteIcon:SetAllPoints()
-    deleteIcon:SetTexture(mediaPath .. "delete")
-    deleteIcon:SetVertexColor(0.9, 0.4, 0.4)
-    deleteBtn:SetScript("OnEnter", function() deleteIcon:SetVertexColor(1, 0.6, 0.6) end)
-    deleteBtn:SetScript("OnLeave", function() deleteIcon:SetVertexColor(0.9, 0.4, 0.4) end)
+    local xSize, xThick = 12, 2
+    local xLine1 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    xLine1:SetSize(xSize, xThick)
+    xLine1:SetPoint("CENTER", 0, 0)
+    xLine1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    xLine1:SetRotation(math.rad(45))
+    local xLine2 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    xLine2:SetSize(xSize, xThick)
+    xLine2:SetPoint("CENTER", 0, 0)
+    xLine2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    xLine2:SetRotation(math.rad(-45))
+    deleteBtn:SetScript("OnEnter", function()
+        xLine1:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+        xLine2:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+    end)
+    deleteBtn:SetScript("OnLeave", function()
+        xLine1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+        xLine2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    end)
     card.deleteBtn = deleteBtn
 
     -- Drag handle
@@ -870,6 +971,12 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     dragIcon:SetAllPoints()
     dragIcon:SetTexture(mediaPath .. "menu")
     dragIcon:SetVertexColor(0.7, 0.7, 0.7)
+    dragBtn:SetScript("OnEnter", function()
+        if not card._dragging then dragIcon:SetVertexColor(1, 1, 1) end
+    end)
+    dragBtn:SetScript("OnLeave", function()
+        if not card._dragging then dragIcon:SetVertexColor(0.7, 0.7, 0.7) end
+    end)
     card.dragBtn = dragBtn
 
     -- Visibility toggle (eye)
@@ -947,7 +1054,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- drop position changes. The drag handle is the grip icon (dragBtn);
     -- the card itself owns the OnUpdate that moves it with the cursor.
     local dragOffsetY = 0
-    local CARD_GAP_DRAG = 6  -- must match CARD_GAP in RenderCardList
+    local CARD_GAP_DRAG = 5  -- must match CARD_GAP in RenderCardList
 
     dragBtn:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
@@ -1052,7 +1159,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
 
     -- Register header as the FIRST widget — wires the helper's collapse arrow
     -- + OnMouseDown handler onto it.
-    card:AddWidget(header, 28)
+    card:AddWidget(header, 30)
 
     -- Override the helper's BOTTOMLEFT positioning of the title FontString.
     -- AddWidget pins header.text to BOTTOMLEFT (intended for CreateHeader's
@@ -1129,7 +1236,7 @@ local function RenderCardList(GUI, page, tdDB, state)
     if state.emptyHint then state.emptyHint:Hide() end
 
     local y = 0
-    local CARD_GAP = 6
+    local CARD_GAP = 5
     for _, elem in ipairs(tdDB.elements) do
         local card = state.cardFrames[elem.id]
         if not card then
@@ -1235,13 +1342,33 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
     state.addBtn = addBtn
 
+    -- Theme-tint the primary CTA to match AuraDesigner's "+ Add Indicator"
+    -- pattern (AuraDesigner/Options.lua:4889-4915).
+    do
+        local tc = GUI:GetThemeColor()
+        if addBtn.SetBackdropColor then
+            addBtn:SetBackdropColor(tc.r * CTA_BG_RESTING, tc.g * CTA_BG_RESTING, tc.b * CTA_BG_RESTING, 1)
+            addBtn:SetBackdropBorderColor(tc.r * CTA_BORDER_RESTING, tc.g * CTA_BORDER_RESTING, tc.b * CTA_BORDER_RESTING, 1)
+            addBtn:HookScript("OnEnter", function(self)
+                local c = GUI:GetThemeColor()
+                self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
+                self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
+            end)
+            addBtn:HookScript("OnLeave", function(self)
+                local c = GUI:GetThemeColor()
+                self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
+                self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
+            end)
+        end
+    end
+
     -- ── CARD LIST AREA ───────────────────────────────────────
     -- A bordered panel hosts the section header and the scrollable card list.
     -- Empty-state message centers inside the panel when no elements exist.
     local listHeader = page.child:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(listHeader, 9, "OUTLINE")
+    GUI:SetSettingsFont(listHeader, 9, "")
     listHeader:SetText(L["Text Elements"]:upper())
-    listHeader:SetTextColor(0.5, 0.7, 1, 0.9)
+    listHeader:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
     listHeader:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 12, -6)
 
     local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
