@@ -66,6 +66,9 @@ Debug\DebugConsole.lua
 # OnUpdate registry full coverage of all DF every-frame handlers)
 Debug\Profiler.lua
 
+# Foreign-attachment scan (/df attached) — diagnoses other addons anchored to our frames
+Debug\AttachmentScan.lua
+
 # GUI System
 GUI\IconLib.lua
 GUI\GUI.lua
