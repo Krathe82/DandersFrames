@@ -1974,18 +1974,10 @@ function DF:LightweightUpdateBorderColor()
     
     local function UpdateFrame(frame)
         if not frame or not frame.border then return end
-        local r, g, b, a = borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1
-        if frame.border.top then
-            frame.border.top:SetColorTexture(r, g, b, a)
-        end
-        if frame.border.bottom then
-            frame.border.bottom:SetColorTexture(r, g, b, a)
-        end
-        if frame.border.left then
-            frame.border.left:SetColorTexture(r, g, b, a)
-        end
-        if frame.border.right then
-            frame.border.right:SetColorTexture(r, g, b, a)
+        -- Route through SetBorderColor so it recolours whichever mode (solid
+        -- edges or texture backdrop) is currently active.
+        if frame.border.SetBorderColor then
+            frame.border:SetBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
         end
     end
     
@@ -3305,6 +3297,30 @@ DF._MainEventDispatcher = function(self, event, arg1)
                         profile[mode].directBuffFilterRaidInCombat = true
                         profile[mode]._directFilterDefaultsV409 = true
                     end
+                end
+            end
+        end
+
+        -- Migrate the single border dropdown to the Style + Texture split.
+        -- Previously borderTexture held either "SOLID" (the built-in border) or an
+        -- LSM key. A non-SOLID key means the user had a texture selected, so flip
+        -- borderStyle to TEXTURE. One-time so picking Solid later isn't reverted.
+        local function migrateBorderStyle(modeDb)
+            if modeDb and not modeDb._borderStyleMigrated then
+                local tex = modeDb.borderTexture
+                if tex and tex ~= "SOLID" and tex ~= "" then
+                    modeDb.borderStyle = "TEXTURE"
+                end
+                modeDb._borderStyleMigrated = true
+            end
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            migrateBorderStyle(DF.db[mode])
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    migrateBorderStyle(profile[mode])
                 end
             end
         end

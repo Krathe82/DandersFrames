@@ -38,6 +38,108 @@ if bindingTooltip.NineSlice then
 end
 DFBindingTooltipTextLeft1:SetFontObject(GameTooltipText)
 
+-- ============================================================
+-- FRAME BORDER WIDGET
+-- frame.border supports two modes sharing one SetBorderColor API:
+--   * Solid (default): four ColorTexture edges — pixel-perfect, unchanged.
+--   * Texture: a BackdropTemplate child using a LibSharedMedia border edgeFile.
+-- DF:ApplyFrameBorder reconfigures the active mode from the db; recolour
+-- consumers (live colour update, etc.) call frame.border:SetBorderColor and it
+-- routes to whichever mode is active.
+-- ============================================================
+
+function DF:CreateFrameBorder(frame, db)
+    local border = CreateFrame("Frame", nil, frame)
+    border:SetAllPoints()
+    border:SetFrameLevel(frame:GetFrameLevel() + 10)
+
+    border.top = border:CreateTexture(nil, "BORDER")
+    border.top:SetPoint("TOPLEFT", 0, 0)
+    border.top:SetPoint("TOPRIGHT", 0, 0)
+    border.bottom = border:CreateTexture(nil, "BORDER")
+    border.bottom:SetPoint("BOTTOMLEFT", 0, 0)
+    border.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
+    border.left = border:CreateTexture(nil, "BORDER")
+    border.left:SetPoint("TOPLEFT", 0, 0)
+    border.left:SetPoint("BOTTOMLEFT", 0, 0)
+    border.right = border:CreateTexture(nil, "BORDER")
+    border.right:SetPoint("TOPRIGHT", 0, 0)
+    border.right:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    -- Recolour whichever mode is currently active (used by live colour updates,
+    -- aggro/threat/dispel overlays, etc.).
+    border.SetBorderColor = function(self, r, g, b, a)
+        a = a or 1
+        if self.activeTexture then
+            if self.bd then self.bd:SetBackdropBorderColor(r, g, b, a) end
+        else
+            self.top:SetColorTexture(r, g, b, a)
+            self.bottom:SetColorTexture(r, g, b, a)
+            self.left:SetColorTexture(r, g, b, a)
+            self.right:SetColorTexture(r, g, b, a)
+        end
+    end
+
+    frame.border = border
+    DF:ApplyFrameBorder(frame, db)
+    return border
+end
+
+function DF:ApplyFrameBorder(frame, db)
+    local border = frame and frame.border
+    if not border then return end
+    db = db or (DF.GetFrameDB and DF:GetFrameDB(frame))
+    if not db then return end
+
+    local edges = { border.top, border.bottom, border.left, border.right }
+
+    -- Hidden border: hide both modes.
+    if db.showFrameBorder == false then
+        for _, e in ipairs(edges) do if e then e:Hide() end end
+        if border.bd then border.bd:Hide() end
+        border.activeTexture = nil
+        return
+    end
+
+    local size = db.borderSize or 1
+    if db.pixelPerfect and DF.PixelPerfect then size = DF:PixelPerfect(size) end
+    local c = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
+    local cr, cg, cb, ca = c.r or 0, c.g or 0, c.b or 0, c.a or 1
+    -- Only resolve an LSM edgeFile when the Texture style is selected; otherwise
+    -- fall through to the built-in solid four-edge border below.
+    local style = db.borderStyle or "SOLID"
+    local texture = db.borderTexture
+    local edgeFile = (style == "TEXTURE" and texture and texture ~= "" and texture ~= "SOLID" and DF.GetBorderTexturePath)
+        and DF:GetBorderTexturePath(texture) or nil
+
+    if not edgeFile then
+        -- Solid mode (default), or a texture that couldn't be resolved — fall
+        -- back to solid so the border never silently vanishes.
+        border.activeTexture = nil
+        if border.bd then border.bd:Hide() end
+        border.top:SetHeight(size)
+        border.bottom:SetHeight(size)
+        border.left:SetWidth(size)
+        border.right:SetWidth(size)
+        for _, e in ipairs(edges) do
+            e:SetColorTexture(cr, cg, cb, ca)
+            e:Show()
+        end
+    else
+        -- Texture mode: a BackdropTemplate child with the LSM border edgeFile.
+        for _, e in ipairs(edges) do if e then e:Hide() end end
+        if not border.bd then
+            border.bd = CreateFrame("Frame", nil, border, "BackdropTemplate")
+            border.bd:SetAllPoints(border)
+        end
+        local bd = border.bd
+        bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = (size > 0 and size) or 1 })
+        bd:SetBackdropBorderColor(cr, cg, cb, ca)
+        bd:Show()
+        border.activeTexture = texture
+    end
+end
+
 local BINDING_SHORT_NAMES = {
     LeftButton = "Left", RightButton = "Right", MiddleButton = "Middle",
 }
@@ -718,44 +820,7 @@ function DF:CreateFrameElementsExtended(frame, db)
     -- ========================================
     -- BORDER
     -- ========================================
-    frame.border = CreateFrame("Frame", nil, frame)
-    frame.border:SetAllPoints()
-    frame.border:SetFrameLevel(frame:GetFrameLevel() + 10)
-    
-    local borderSize = db.borderSize or 1
-    local borderColor = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
-    
-    frame.border.top = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.top:SetHeight(borderSize)
-    frame.border.top:SetPoint("TOPLEFT", 0, 0)
-    frame.border.top:SetPoint("TOPRIGHT", 0, 0)
-    frame.border.top:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.bottom = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.bottom:SetHeight(borderSize)
-    frame.border.bottom:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.border.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.border.bottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.left = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.left:SetWidth(borderSize)
-    frame.border.left:SetPoint("TOPLEFT", 0, 0)
-    frame.border.left:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.border.left:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.right = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.right:SetWidth(borderSize)
-    frame.border.right:SetPoint("TOPRIGHT", 0, 0)
-    frame.border.right:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.border.right:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    -- Helper function to set border color
-    frame.border.SetBorderColor = function(self, r, g, b, a)
-        self.top:SetColorTexture(r, g, b, a)
-        self.bottom:SetColorTexture(r, g, b, a)
-        self.left:SetColorTexture(r, g, b, a)
-        self.right:SetColorTexture(r, g, b, a)
-    end
+    DF:CreateFrameBorder(frame, db)
     
     -- ========================================
     -- ROLE ICON
@@ -1426,44 +1491,7 @@ function DF:CreateUnitFrame(unit, index, isRaid)
     -- ========================================
     -- BORDER
     -- ========================================
-    frame.border = CreateFrame("Frame", nil, frame)
-    frame.border:SetAllPoints()
-    frame.border:SetFrameLevel(frame:GetFrameLevel() + 10)
-    
-    local borderSize = db.borderSize or 1
-    local borderColor = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
-    
-    frame.border.top = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.top:SetHeight(borderSize)
-    frame.border.top:SetPoint("TOPLEFT", 0, 0)
-    frame.border.top:SetPoint("TOPRIGHT", 0, 0)
-    frame.border.top:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.bottom = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.bottom:SetHeight(borderSize)
-    frame.border.bottom:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.border.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.border.bottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.left = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.left:SetWidth(borderSize)
-    frame.border.left:SetPoint("TOPLEFT", 0, 0)
-    frame.border.left:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.border.left:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    frame.border.right = frame.border:CreateTexture(nil, "BORDER")
-    frame.border.right:SetWidth(borderSize)
-    frame.border.right:SetPoint("TOPRIGHT", 0, 0)
-    frame.border.right:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.border.right:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    
-    -- Helper function to set border color
-    frame.border.SetBorderColor = function(self, r, g, b, a)
-        self.top:SetColorTexture(r, g, b, a)
-        self.bottom:SetColorTexture(r, g, b, a)
-        self.left:SetColorTexture(r, g, b, a)
-        self.right:SetColorTexture(r, g, b, a)
-    end
+    DF:CreateFrameBorder(frame, db)
     
     -- ========================================
     -- ROLE ICON

@@ -1474,6 +1474,24 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Frame Border"], db, "showFrameBorder", UpdateFrames), 30)
         local borderColorPicker = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "borderColor", true, UpdateFrames, function() DF:LightweightUpdateBorderColor() end, true), 35)
         borderColorPicker.hideOn = function(d) return not d.showFrameBorder end
+        local borderStyleDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Border Style"], { SOLID = L["Solid"], TEXTURE = L["Texture"] }, db, "borderStyle", function()
+            -- Switching to Texture with no valid texture chosen would show a blank
+            -- dropdown and keep rendering the solid border. Seed the first available
+            -- SharedMedia border so the change is immediately visible.
+            if db.borderStyle == "TEXTURE" then
+                local list = DF:GetBorderList()
+                if not (db.borderTexture and list[db.borderTexture]) then
+                    db.borderTexture = next(list)
+                end
+            end
+            UpdateFrames()
+            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+        end), 55)
+        borderStyleDropdown.hideOn = function(d) return not d.showFrameBorder end
+        local borderTextureDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Border Texture"], DF:GetBorderList(), db, "borderTexture", UpdateFrames), 55)
+        borderTextureDropdown.hideOn = function(d) return not d.showFrameBorder or d.borderStyle ~= "TEXTURE" end
+        local borderSizeSlider = appearanceGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 1, 16, 1, db, "borderSize", UpdateFrames, UpdateFrames, true), 55)
+        borderSizeSlider.hideOn = function(d) return not d.showFrameBorder end
         appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pixel-Perfect Scaling"], db, "pixelPerfect", UpdateFrames), 30)
         appearanceGroup:AddWidget(GUI:CreateLabel(self.child, L["Snaps sizes and borders to exact pixels for crisp rendering."], 250), 30)
         Add(appearanceGroup, nil, 2)

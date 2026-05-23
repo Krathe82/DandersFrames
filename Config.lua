@@ -441,8 +441,34 @@ function DF:GetTextureList(includeSolid)
             end
         end
     end
-    
+
     return list
+end
+
+-- SharedMedia border textures for the "Texture" border style dropdown. The
+-- built-in pixel-perfect four-edge border is the separate "Solid" style and is
+-- intentionally not listed here. LibSharedMedia ships a few defaults (e.g.
+-- "Blizzard Tooltip"/"Blizzard Dialog"), so this is normally non-empty.
+function DF:GetBorderList()
+    local list = {}
+    local LSM = GetLSM()
+    if LSM then
+        for _, name in ipairs(LSM:List(LSM.MediaType.BORDER)) do
+            list[name] = name
+        end
+    end
+    return list
+end
+
+-- Resolve a stored border value to an edgeFile path. "SOLID"/""/nil → nil
+-- (the caller uses the four-edge solid border instead).
+function DF:GetBorderTexturePath(key)
+    if not key or key == "SOLID" or key == "" then return nil end
+    local LSM = GetLSM()
+    if LSM then
+        return LSM:Fetch(LSM.MediaType.BORDER, key)
+    end
+    return nil
 end
 
 -- Get texture display name from path (with fuzzy matching for SharedMedia compatibility)
@@ -836,6 +862,8 @@ DF.PartyDefaults = {
     -- Border
     borderColor = {r = 0, g = 0, b = 0, a = 1},
     borderSize = 1,
+    borderStyle = "SOLID",
+    borderTexture = "SOLID",
     showFrameBorder = true,
 
     -- Boss Debuffs
@@ -2155,6 +2183,8 @@ DF.RaidDefaults = {
     -- Border
     borderColor = {r = 0, g = 0, b = 0, a = 1},
     borderSize = 1,
+    borderStyle = "SOLID",
+    borderTexture = "SOLID",
     showFrameBorder = true,
 
     -- Boss Debuffs
