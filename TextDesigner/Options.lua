@@ -264,6 +264,13 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         -- Helper to re-render the whole card list when items change.
         local function ReRender()
             if state and DF.TextDesigner.RenderCardList then
+                -- Force a full card rebuild so the body's items list re-renders
+                if state.cardFrames and state.cardFrames[elem.id] then
+                    local oldCard = state.cardFrames[elem.id]
+                    state.cardFrames[elem.id] = nil
+                    oldCard:Hide()
+                    oldCard:SetParent(nil)
+                end
                 DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
             end
         end
