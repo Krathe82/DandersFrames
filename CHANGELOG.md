@@ -1,25 +1,34 @@
 # DandersFrames Changelog
 
-## [4.3.11] - 2026-05-21
+## [4.3.12]
 
 ### New Features
 
-* (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments.
+* (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments. (PR #109 by Krathe)
+* Added a `/df attached` command that lists other addons attaching castbars, cooldowns or auras to your frames — handy for telling apart DF features from another addon's. (PR #104 by Krathe)
 
 ### Bug Fixes
 
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
 * (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one. (PR #111 by Krathe)
+* (Aura Designer) Fix the colour picker's alpha not affecting the health bar indicator on live frames, and fix the Blend % slider reappearing in Replace mode after closing and reopening the GUI. (PR #102 by Krathe)
+* (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon. (PR #103 by Krathe)
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
+* (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
 * (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
 * (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
 * (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode. (PR #110 by Krathe)
-* (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
-* (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 * (Settings) Made the raid layout positioning options consistent between Group and Flat modes: Start/Center/End options are now labelled "Alignment", directional options use real directions (Left/Right or Top/Bottom), and these labels and their values now update live when you change the layout direction instead of needing the settings window reopened. (PR #114 by Krathe)
 * (Test Mode) Fix grouped raid frames in vertical layout with Players Grow From set to End: frames no longer overflow below the anchor box, and the column growth direction is no longer inverted, so test mode now matches live frames. (PR #113 by Krathe)
+
+## [4.3.11] - 2026-05-21
+
+### Bug Fixes
+
+* (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
+* (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
 
 ## [4.3.10]
 
@@ -29,13 +38,10 @@
 * (Click Casting) Added a "Disable only while flying" option to the Profiles panel. Disables click-casting only when airborne (including druid flight form), while keeping it active on ground mounts. Mutually exclusive with the existing "Disable while mounted/flying" option. (PR #96 by Krathe, suggested by JPEscher)
 * (Colour Picker) Added a Default button to the DF colour picker that resets the colour to its configured default value. Also populates ElvUI's Default button on the native picker for DF settings. (PR #95 by Krathe)
 * **Reduced Max Health bar** — a new sub-bar appears on the right edge of party and raid frames when a unit's maximum health has been temporarily reduced (e.g. by certain Mythic+ affixes or boss debuffs), showing exactly how much of the bar is locked out. Customise it under **Health Bar → Reduced Max Health**: enable/disable, choose a texture and colour, set a blend mode, and toggle whether the health bar visually shrinks to fit (Clip Health Bar) or the reduced section overlays it.
-* Added a `/df attached` command that lists other addons attaching castbars, cooldowns or auras to your frames — handy for telling apart DF features from another addon's.
 
 ### Bug Fixes
 
 * (Aura Designer) Banner controls no longer overlap when the settings window is narrow. (PR #81 by Krathe)
-* (Aura Designer) Fix the colour picker's alpha not affecting the health bar indicator on live frames, and fix the Blend % slider reappearing in Replace mode after closing and reopening the GUI. (PR #102 by Krathe)
-* (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon. (PR #103 by Krathe)
 * (Click Casting) Fix keyboard binds occasionally firing your action bar spell instead of the click-cast spell while the cursor is still on the frame. The mouseover-state guard now requires both checks to agree the cursor has actually left before clearing bindings.
 * (Class Power) Fix Size, Colors, Position, and Show for Roles section headers showing as floating labels when Class Power Pips is disabled. (PR #82 by Krathe)
 * (Debuffs) Fix debuff icons remaining visible on frames after a unit dies. (PR #85 by Krathe)
@@ -45,7 +51,6 @@
 * (Frame Movers) Fix the orange and blue frame mover outlines rendering above the settings GUI, not following the raid frames when clicking Edit on an Auto Layout, and the position panel X/Y values not refreshing on Auto Layout edit. (PR #93 by Krathe)
 * (Global Fonts) Fix the Affected Elements list missing entries and being clipped. (PR #76 by Krathe)
 * (Global Fonts) Fix the font dropdown showing the previous profile's font after switching profiles. (PR #77 by Krathe)
-* (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed.
 * (Leader / Assist Icon) Fix the leader and assist icons not appearing on frames straight away when someone is given assist or the group leader changes.
 * (Missing Buff Indicators) Fix a missing buff icon staying on your own frame after entering a delve and rebuffing. (PR #99 by Krathe)
 * (Missing Buff Indicators) Fix stale icons remaining on frames after leaving a group. (PR #75 by Krathe)
