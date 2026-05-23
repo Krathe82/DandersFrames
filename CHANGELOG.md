@@ -12,6 +12,7 @@
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
 * (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one. (PR #111 by Krathe)
 * (Aura Designer) Fix the colour picker's alpha not affecting the health bar indicator on live frames, and fix the Blend % slider reappearing in Replace mode after closing and reopening the GUI. (PR #102 by Krathe)
+* (Aura Designer) Fix the health bar indicator's expiring colour ignoring its own alpha — it reused the base colour's alpha instead. The expiring colour now uses its configured transparency, in both Tint and Replace modes. (PR #117 by Krathe)
 * (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon. (PR #103 by Krathe)
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
