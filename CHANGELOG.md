@@ -6,6 +6,7 @@
 
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
 * (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
+* (Settings) Made the raid layout positioning options consistent between Group and Flat modes: Start/Center/End options are now labelled "Alignment", directional options use real directions (Left/Right or Top/Bottom), and these labels and their values now update live when you change the layout direction instead of needing the settings window reopened. (PR #114 by Krathe)
 
 ## [4.3.10]
 
