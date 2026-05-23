@@ -4050,11 +4050,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== SETTINGS GROUP (Column 1) =====
         local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Heal Prediction"]), 40)
-        settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Heal Prediction"], db, "healPredictionEnabled", function() 
+        settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Heal Prediction"], db, "healPredictionEnabled", function()
             self:RefreshStates()
-            DF:UpdateAllFrames() 
+            DF:UpdateAllFrames()
         end), 30)
-        
+
+        local overhealCheckbox = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Overheal"], db, "healPredictionShowOverheal", function() DF:UpdateAllFrames() end), 30)
+        overhealCheckbox.disableOn = function(d) return not d.healPredictionEnabled end
+        overhealCheckbox.tooltip = L["When enabled, shows incoming heals even if they would overheal."]
+
         local modeOptions = { OVERLAY= L["Attached to Health"], FLOATING= L["Floating Bar"] }
         local modeDropdown = settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Display Mode"], modeOptions, db, "healPredictionMode", function()
             self:RefreshStates()
@@ -4065,26 +4069,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local textureOptions = DF:GetTextureList()
         local texDropdown = settingsGroup:AddWidget(GUI:CreateTextureDropdown(self.child, L["Texture"], db, "healPredictionTexture", function() DF:UpdateAllFrames() end, textureOptions), 55)
         texDropdown.disableOn = function(d) return not d.healPredictionEnabled end
-        
+
+        local myColor = settingsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Heal Prediction Color"], db, "healPredictionMyColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
+        myColor.disableOn = function(d) return not d.healPredictionEnabled end
+
         local blendOptions = { BLEND= L["Normal (BLEND)"], ADD= L["Additive (ADD)"] }
         local blendDropdown = settingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Blend Mode"], blendOptions, db, "healPredictionBlendMode", function() DF:UpdateAllFrames() end), 55)
         blendDropdown.disableOn = function(d) return not d.healPredictionEnabled end
-        
+
         Add(settingsGroup, nil, 1)
-        
-        -- ===== APPEARANCE GROUP (Column 2) =====
-        local appearanceGroup = GUI:CreateSettingsGroup(self.child, 280)
-        appearanceGroup:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 40)
-        
-        local overhealCheckbox = appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Overheal"], db, "healPredictionShowOverheal", function() DF:UpdateAllFrames() end), 30)
-        overhealCheckbox.disableOn = function(d) return not d.healPredictionEnabled end
-        overhealCheckbox.tooltip = L["When enabled, shows incoming heals even if they would overheal."]
-        
-        local myColor = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Heal Prediction Color"], db, "healPredictionMyColor", true, nil, function() DF:UpdateAllFrames() end, true), 35)
-        myColor.disableOn = function(d) return not d.healPredictionEnabled end
-        
-        Add(appearanceGroup, nil, 2)
-        
+
         -- ===== FLOATING POSITION GROUP (Column 1, conditional) =====
         local floatingGroup = GUI:CreateSettingsGroup(self.child, 280)
         floatingGroup:AddWidget(GUI:CreateHeader(self.child, L["Floating Bar Position"]), 40)
