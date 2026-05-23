@@ -1493,15 +1493,14 @@ function CC:CreateEditBindingPanel()
     local function ToggleAdvanced()
         panel.advancedExpanded = not panel.advancedExpanded
         
-        -- Determine if this is a macro/item binding
-        local isMacroOrItem = panel.pendingBinding and 
-            (panel.pendingBinding.actionType == CC.ACTION_TYPES.MACRO or 
-             panel.pendingBinding.actionType == CC.ACTION_TYPES.ITEM or
+        -- Only macros use the compact heights (items now use the spell layout
+        -- because they expose the targeting fallback section).
+        local isMacroOnly = panel.pendingBinding and
+            (panel.pendingBinding.actionType == CC.ACTION_TYPES.MACRO or
              panel.pendingBinding.macroId)
-        
-        -- Use appropriate heights
-        local collapsedHeight = isMacroOrItem and 475 or COLLAPSED_HEIGHT
-        local expandedHeight = isMacroOrItem and 540 or EXPANDED_HEIGHT
+
+        local collapsedHeight = isMacroOnly and 475 or COLLAPSED_HEIGHT
+        local expandedHeight = isMacroOnly and 540 or EXPANDED_HEIGHT
         
         if panel.advancedExpanded then
             advancedArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
@@ -1865,11 +1864,13 @@ function CC:ShowEditBindingPanel(spellData, existingBinding, existingIndex)
     -- Update binding button
     CC:UpdateBindingButtonText()
     
-    -- Check if this is a macro or item binding (they handle their own targeting)
+    -- Check if this is a macro or item binding (macros handle their own targeting)
     local actionType = panel.pendingBinding.actionType
     local isMacro = (actionType == CC.ACTION_TYPES.MACRO)
     local isItem = (actionType == CC.ACTION_TYPES.ITEM)
-    local hideTargeting = isMacro or isItem
+    -- Only macros hide the targeting section. Items use spell-style fallbacks
+    -- (mouseover / target / self) because /use can take @mouseover etc.
+    local hideTargeting = isMacro
     
     -- Update frames checkboxes (always shown)
     local frames = panel.pendingBinding.frames or { dandersFrames = true, otherFrames = true }

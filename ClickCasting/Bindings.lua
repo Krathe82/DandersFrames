@@ -2076,17 +2076,49 @@ function CC:BuildMacroTextForBinding(binding, forGlobalBinding)
         
     elseif actionType == self.ACTION_TYPES.ITEM then
         -- Item binding (equipment slot or consumable)
+        -- Resolve the item reference (slot number or item name/id)
+        local itemRef
         if binding.itemType == "slot" then
-            -- Equipment slot: /use 13 (slot number)
-            local slotNum = binding.itemSlot
-            if not slotNum then return nil end
-            return "/use " .. slotNum
+            if not binding.itemSlot then return nil end
+            itemRef = binding.itemSlot
         else
-            -- Consumable item: /use ItemName (prefer name over ID for readability)
-            local itemRef = binding.itemName or binding.itemId
+            itemRef = binding.itemName or binding.itemId
             if not itemRef then return nil end
-            return "/use " .. itemRef
         end
+
+        -- Frame click-casting always needs @mouseover so hovering a frame
+        -- targets that unit. Global keybinds only get @mouseover when the
+        -- user explicitly opts in via the fallback.
+        local frames = binding.frames or { dandersFrames = true, otherFrames = true }
+        local appliesToFrames = frames.dandersFrames or frames.otherFrames
+        local hasMouseover
+        if forGlobalBinding then
+            hasMouseover = fallback.mouseover == true
+        else
+            hasMouseover = appliesToFrames or fallback.mouseover == true
+        end
+        local hasTarget = fallback.target
+        local hasSelf = fallback.selfCast and targetType ~= "hostile"
+
+        local parts = {}
+
+        if hasMouseover then
+            table.insert(parts, "[@mouseover" .. targetStr .. ",exists,nodead" .. combatStr .. mountedStr .. "] " .. itemRef)
+        end
+
+        if hasTarget then
+            table.insert(parts, "[@target" .. targetStr .. ",exists,nodead" .. combatStr .. mountedStr .. "] " .. itemRef)
+        end
+
+        if hasSelf then
+            table.insert(parts, "[@player" .. combatStr .. mountedStr .. "] " .. itemRef)
+        end
+
+        if #parts == 0 then
+            table.insert(parts, tostring(itemRef))
+        end
+
+        return "/use " .. table.concat(parts, "; ")
         
     elseif actionType == "menu" then
         -- Can't do menu via macro, will need special handling
