@@ -13,6 +13,10 @@ local L = DF.L
 local C_BACKGROUND = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
 local C_PANEL      = {r = 0.12, g = 0.12, b = 0.12, a = 1}
 local C_ELEMENT    = {r = 0.18, g = 0.18, b = 0.18, a = 1}
+-- Card body backdrop — distinctly darker than C_ELEMENT (the header colour)
+-- so the body content visually separates from the header. Mirrors AD's
+-- two-layer card chrome (AuraDesigner/Options.lua:4463-4468).
+local C_BODY_BG    = {r = 0.09, g = 0.09, b = 0.09, a = 1}
 local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
 local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
 local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
@@ -1001,6 +1005,17 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     local card = GUI:CreateSettingsGroup(parent, parent:GetWidth() - 4, {
         collapsible = true,
         onCollapseChanged = function(group)
+            -- Hide the darker body backdrop when collapsed so it doesn't bleed
+            -- through as a 1-pixel border line at the header's bottom edge.
+            -- (The anchors invert to zero/negative height when the card shrinks
+            -- to header-only, but the border edge can still render.)
+            if group.bodyBackdrop then
+                if group.collapsed then
+                    group.bodyBackdrop:Hide()
+                else
+                    group.bodyBackdrop:Show()
+                end
+            end
             if DF.TextDesigner.RenderCardList then
                 DF.TextDesigner.RenderCardList(group._GUI, group._page, group._tdDB, group._state)
             end
@@ -1305,6 +1320,38 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     card:AddWidget(positionFrame, positionHeight)
 
     card:LayoutChildren()
+
+    -- ── BODY BACKDROP ────────────────────────────────────────
+    -- Darker layer behind the section widgets (Content / Appearance / Position),
+    -- so the body visually separates from the header (which keeps C_ELEMENT,
+    -- ~0.18 grey). Mirrors AD's two-layer card chrome
+    -- (AuraDesigner/Options.lua:4463-4468).
+    --
+    -- Anchored TOPLEFT to the header's BOTTOMLEFT and BOTTOMRIGHT to the card,
+    -- leaving ~16px at the bottom for the helper's collapse bar. When the helper
+    -- collapses the card to just the header, onCollapseChanged hides this frame.
+    local bodyBackdrop = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    bodyBackdrop:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
+    bodyBackdrop:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -1, 16)
+    bodyBackdrop:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    bodyBackdrop:SetBackdropColor(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
+    bodyBackdrop:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
+    -- Lower frame level so section content (Content/Appearance/Position frames)
+    -- renders ON TOP of this backdrop. CreateFrame defaults children to
+    -- parent:GetFrameLevel()+1, which is also where AddWidget'd section frames
+    -- live; setting this to card:GetFrameLevel() puts the backdrop one level
+    -- below them.
+    bodyBackdrop:SetFrameLevel(card:GetFrameLevel())
+    card.bodyBackdrop = bodyBackdrop
+
+    -- Match the helper's initial collapsed state on first build.
+    if card.collapsed then
+        bodyBackdrop:Hide()
+    end
 
     -- Update the header meta line with current anchor + offset summary
     function card:UpdateMeta()
