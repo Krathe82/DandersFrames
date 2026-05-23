@@ -1343,14 +1343,19 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- Body backdrop as a Texture at BORDER draw layer (above the card's
     -- BACKGROUND-layer chrome). Section content frames render at card+1 frame
     -- level so they draw on top of this texture.
-    -- Anchor bodyBg to card edges directly (not via header) so the body
-    -- backdrop spans the full card width. Anchoring to header:BOTTOMLEFT
-    -- inherits the helper's left padding (10px), leaving a grey strip of
-    -- the underlying C_ELEMENT chrome showing on the left edge.
-    local HEADER_HEIGHT = 30  -- matches card:AddWidget(header, 30) above
+    -- Anchor bodyBg horizontally to card edges (1-px inset, so the body
+    -- backdrop spans the full card width and doesn't leave a grey strip of
+    -- the underlying C_ELEMENT chrome on the left edge — which is what
+    -- anchoring to header:BOTTOMLEFT used to do, inheriting the helper's
+    -- 10-px left padding). TOP follows header:BOTTOM so it tracks the
+    -- helper's actual header position (LayoutChildren inserts a 10-px top
+    -- padding before placing the header, which a fixed offset from
+    -- card:TOPLEFT would miss).
     local bodyBg = card:CreateTexture(nil, "BORDER")
-    bodyBg:SetPoint("TOPLEFT", card, "TOPLEFT", 1, -(HEADER_HEIGHT + 2))
-    bodyBg:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -1, 16)
+    bodyBg:SetPoint("TOP", header, "BOTTOM", 0, -2)
+    bodyBg:SetPoint("LEFT", card, "LEFT", 1, 0)
+    bodyBg:SetPoint("RIGHT", card, "RIGHT", -1, 0)
+    bodyBg:SetPoint("BOTTOM", card, "BOTTOM", 0, 16)
     bodyBg:SetColorTexture(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
     card.bodyBackdrop = bodyBg
 
