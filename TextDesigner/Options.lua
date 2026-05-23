@@ -21,8 +21,6 @@ local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
 local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
 local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
-local C_PANEL_VISIBLE  = {r = 1, g = 1, b = 1, a = 0.05}
-local C_BORDER_VISIBLE = {r = 1, g = 1, b = 1, a = 0.2}
 -- Recessed dark backdrop for the list panel — distinctly darker than C_ELEMENT
 -- (the card color) so cards visibly sit "on top" of the panel surface.
 local C_LIST_PANEL     = {r = 0.04, g = 0.04, b = 0.04, a = 1}
@@ -1009,59 +1007,70 @@ end
 
 -- ============================================================
 -- ELEMENT CARD
--- A collapsible settings group representing one text element. Uses the
--- shared GUI:CreateSettingsGroup helper so the card matches the rest of
--- the addon's theming (arrow icon, theme accent color, bottom collapse bar).
+-- A collapsible card representing one text element. Built using the same
+-- direct-frame pattern as AuraDesigner's CreateEffectCard
+-- (AuraDesigner/Options.lua:4278-4879):
+--   - Outer card  = layout-only Frame, no backdrop
+--   - Header      = BackdropTemplate Button with its own backdrop + hover
+--   - Body        = separate BackdropTemplate Frame with its own backdrop
 -- Body sections: Content / Appearance / Position.
 -- ============================================================
 
 local function BuildCard(GUI, parent, elem, tdDB, state, page)
-    local card = GUI:CreateSettingsGroup(parent, parent:GetWidth() - 4, {
-        collapsible = true,
-        onCollapseChanged = function(group)
-            -- Hide the darker body backdrop (and its border lines) when
-            -- collapsed so they don't bleed through as a 1-pixel border line
-            -- at the header's bottom edge. (The anchors invert to zero/
-            -- negative height when the card shrinks to header-only, but the
-            -- border edges can still render.)
-            if group.ShowBody then
-                group.ShowBody(not group.collapsed)
-            end
-            if DF.TextDesigner.RenderCardList then
-                DF.TextDesigner.RenderCardList(group._GUI, group._page, group._tdDB, group._state)
-            end
-        end,
-    })
+    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
-    -- Override the helper's subtle white-tint backdrop with AD-matching card
-    -- chrome (AuraDesigner/Options.lua:4297-4304).
-    if card.SetBackdropColor then
-        card:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
-        card:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
-    end
+    -- Outer card: layout-only Frame. NO backdrop — header + body each own
+    -- their own chrome so there's no underlying surface to bleed through.
+    -- Height is set explicitly in ApplyCollapseState below.
+    local card = CreateFrame("Frame", nil, parent)
+    card:SetHeight(30)
 
-    -- Context for callbacks (used by delete + reflow paths and the
-    -- onCollapseChanged closure above)
+    -- Context for callbacks (used by delete + reorder + meta updates)
     card._tdDB = tdDB
     card._state = state
     card._GUI = GUI
     card._page = page
 
-    -- ── HEADER WIDGET ────────────────────────────────────────
-    -- The helper expects the first AddWidget to be the header and looks for
-    -- `widget.text` (a FontString) to attach the collapse arrow.
-    local header = CreateFrame("Frame", nil, card)
+    -- ── HEADER ──────────────────────────────────────────────
+    local header = CreateFrame("Button", nil, card, "BackdropTemplate")
+    header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
     header:SetHeight(30)
+    header:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    header:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+    header:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
 
+    -- Hover state mirrors AD's pattern (AuraDesigner/Options.lua:4453-4458).
+    header:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, C_HOVER.a)
+    end)
+    header:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+    end)
+    card.header = header
+
+    -- Collapse arrow on the LEFT, theme-tinted (like AD).
+    local arrow = header:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(10, 10)
+    arrow:SetPoint("LEFT", header, "LEFT", 8, 0)
+    do
+        local tc = GUI:GetThemeColor()
+        arrow:SetVertexColor(tc.r, tc.g, tc.b)
+    end
+    card.collapseArrow = arrow
+
+    -- Title text
     local ct = FindContentType(elem.contentType)
-    -- Prefer the user-supplied label if set; otherwise fall back to the
-    -- content type's display name. Same rule as BuildAnchorTargets.
     local displayName = (elem.label and elem.label ~= "" and elem.label)
         or (ct and ct.label)
         or elem.contentType
     local title = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(title, 11, "OUTLINE")
-    title:SetPoint("LEFT", header, "LEFT", 24, 0)  -- 24 leaves room for the arrow icon
+    title:SetPoint("LEFT", arrow, "RIGHT", 6, 0)
     title:SetText(displayName)
     -- Tint title by content category so the type identity reads at a glance.
     local catColor = ct and CATEGORY_COLORS[ct.category]
@@ -1070,10 +1079,10 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     else
         title:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, C_TEXT.a)
     end
-    header.text = title  -- helper requires this to wire the collapse arrow
     card.title = title
     card.titleCatColor = catColor  -- so label-edit callback can re-apply it
 
+    -- Meta line (anchor / offset / target summary)
     local meta = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(meta, 9, "")
     meta:SetPoint("LEFT", title, "RIGHT", 8, 0)
@@ -1084,7 +1093,6 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- ── ACTION ICONS (right side of header) ──────────────────
     local ICON_SIZE = 18
     local ICON_GAP = 4
-    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
     -- Delete (rightmost) — hand-drawn X cross matching AuraDesigner.
     -- Two rotated SetColorTexture lines (AuraDesigner/Options.lua:4412-4433).
@@ -1146,7 +1154,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     updateEyeIcon()
     card.eyeBtn = eyeBtn
 
-    -- Lift action icons above the header's OnMouseDown collapse handler so
+    -- Lift action icons above the header's OnClick collapse handler so
     -- clicks on them don't toggle the card. RegisterForClicks + a higher
     -- frame level keep them isolated from the header.
     for _, btn in ipairs({eyeBtn, dragBtn, deleteBtn}) do
@@ -1183,7 +1191,67 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
             elem.id, #capturedTdDB.elements)
     end)
 
-    -- Wire drag-to-reorder.
+    -- ── BODY ────────────────────────────────────────────────
+    -- Real Frame with real backdrop. Touches header's bottom (zero gap).
+    -- Content goes INSIDE this frame, chained via y-offset.
+    local body = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    body:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    body:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    body:SetBackdropColor(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
+    body:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
+    card.body = body
+
+    -- Build content sections INSIDE the body frame, chaining via y-offset.
+    -- Section builder signatures (preserved):
+    --   BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart)
+    --   BuildAppearanceSection(GUI, parent, elem, card, yStart)
+    --   BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
+    local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
+    yEnd = BuildAppearanceSection(GUI, body, elem, card, yEnd)
+    yEnd = BuildPositionSection(GUI, body, elem, tdDB, card, yEnd)
+    body:SetHeight(math.max(1, -yEnd + 10))
+
+    -- ── COLLAPSE STATE ──────────────────────────────────────
+    -- Persisted across reloads via GUI:GetCollapsedGroups(), keyed by element
+    -- id so each card remembers its own state.
+    local cardKey = "td_elem_" .. tostring(elem.id)
+    local savedStates = GUI:GetCollapsedGroups()
+    card.collapsed = savedStates[cardKey] == true
+    card.cardKey = cardKey
+
+    local function ApplyCollapseState()
+        if card.collapsed then
+            body:Hide()
+            arrow:SetTexture(mediaPath .. "chevron_right")
+            card:SetHeight(30)
+        else
+            body:Show()
+            arrow:SetTexture(mediaPath .. "expand_more")
+            card:SetHeight(30 + body:GetHeight())
+        end
+    end
+    card.ApplyCollapseState = ApplyCollapseState
+
+    -- Header click → toggle collapse
+    header:RegisterForClicks("LeftButtonUp")
+    header:SetScript("OnClick", function()
+        card.collapsed = not card.collapsed
+        GUI:GetCollapsedGroups()[cardKey] = card.collapsed or nil
+        ApplyCollapseState()
+        if DF.TextDesigner.RenderCardList then
+            DF.TextDesigner.RenderCardList(card._GUI, card._page, card._tdDB, card._state)
+        end
+    end)
+
+    -- Initial state
+    ApplyCollapseState()
+
+    -- ── DRAG-TO-REORDER ─────────────────────────────────────
     -- Mirrors the OnMouseDown / OnMouseUp / OnUpdate pattern used by
     -- GUI:CreateRoleOrderList (GUI/GUI.lua:4438-4518) so the dragged card
     -- follows the cursor live and other cards reflow underneath it as the
@@ -1281,7 +1349,6 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
             for _, e in ipairs(capturedTdDB.elements) do
                 local sibling = capturedState.cardFrames[e.id]
                 if sibling then
-                    if sibling.LayoutChildren then sibling:LayoutChildren() end
                     if sibling ~= card then
                         sibling:ClearAllPoints()
                         sibling:SetPoint("TOPLEFT", capturedState.listChild, "TOPLEFT", 2, y)
@@ -1292,112 +1359,6 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
             end
         end
     end)
-
-    -- Register header as the FIRST widget — wires the helper's collapse arrow
-    -- + OnMouseDown handler onto it.
-    card:AddWidget(header, 30)
-
-    -- Override the helper's BOTTOMLEFT positioning of the title FontString.
-    -- AddWidget pins header.text to BOTTOMLEFT (intended for CreateHeader's
-    -- 25-px header layout), which leaves the title visually low in our
-    -- 28-px header bar with centered action icons. Re-anchor to LEFT so
-    -- the title vertically centers. The collapse arrow is anchored to the
-    -- text's LEFT (see GUI.lua:478) so it follows automatically.
-    header.text:ClearAllPoints()
-    header.text:SetPoint("LEFT", header, "LEFT", 24, 0)
-
-    -- ── BODY SECTIONS ────────────────────────────────────────
-    -- Each section is built into its own Frame, sized to its content, and
-    -- handed to the helper's LayoutChildren for vertical stacking. AddWidget
-    -- reparents the widget to the group, so each section needs to be a
-    -- self-contained Frame that holds its own widgets.
-    local contentFrame = CreateFrame("Frame", nil, card)
-    -- Larger top inset (-16) on the first section gives the "CONTENT" label
-    -- breathing room from the header. Subsequent sections chain off yEnd of
-    -- the previous one and don't need their own bump.
-    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, card, -16)
-    local contentHeight = math.max(1, -contentY + 4)
-    contentFrame:SetHeight(contentHeight)
-    card:AddWidget(contentFrame, contentHeight)
-
-    local appearanceFrame = CreateFrame("Frame", nil, card)
-    local appearanceY = BuildAppearanceSection(GUI, appearanceFrame, elem, card, -4)
-    local appearanceHeight = math.max(1, -appearanceY + 4)
-    appearanceFrame:SetHeight(appearanceHeight)
-    card:AddWidget(appearanceFrame, appearanceHeight)
-
-    local positionFrame = CreateFrame("Frame", nil, card)
-    local positionY = BuildPositionSection(GUI, positionFrame, elem, tdDB, card, -4)
-    local positionHeight = math.max(1, -positionY + 4)
-    positionFrame:SetHeight(positionHeight)
-    card:AddWidget(positionFrame, positionHeight)
-
-    card:LayoutChildren()
-
-    -- ── BODY BACKDROP ────────────────────────────────────────
-    -- Darker layer behind the section widgets (Content / Appearance / Position),
-    -- so the body visually separates from the header (which keeps C_ELEMENT,
-    -- ~0.18 grey). Mirrors AD's two-layer card chrome
-    -- (AuraDesigner/Options.lua:4463-4468).
-    --
-    -- Body backdrop as a Texture at BORDER draw layer (above the card's
-    -- BACKGROUND-layer chrome). Section content frames render at card+1 frame
-    -- level so they draw on top of this texture.
-    -- Anchor bodyBg horizontally to card edges (1-px inset, so the body
-    -- backdrop spans the full card width and doesn't leave a grey strip of
-    -- the underlying C_ELEMENT chrome on the left edge — which is what
-    -- anchoring to header:BOTTOMLEFT used to do, inheriting the helper's
-    -- 10-px left padding). TOP follows header:BOTTOM so it tracks the
-    -- helper's actual header position (LayoutChildren inserts a 10-px top
-    -- padding before placing the header, which a fixed offset from
-    -- card:TOPLEFT would miss).
-    local bodyBg = card:CreateTexture(nil, "BORDER")
-    bodyBg:SetPoint("TOP", header, "BOTTOM", 0, -6)
-    bodyBg:SetPoint("LEFT", card, "LEFT", 1, 0)
-    bodyBg:SetPoint("RIGHT", card, "RIGHT", -1, 0)
-    bodyBg:SetPoint("BOTTOM", card, "BOTTOM", 0, 16)
-    bodyBg:SetColorTexture(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
-    card.bodyBackdrop = bodyBg
-
-    -- Subtle border around the body — four 1-px line textures at BORDER layer
-    local borderAlpha = 0.3
-    local function MakeBorderLine()
-        local t = card:CreateTexture(nil, "BORDER")
-        t:SetColorTexture(C_BORDER.r, C_BORDER.g, C_BORDER.b, borderAlpha)
-        return t
-    end
-    local bTop, bBottom, bLeft, bRight = MakeBorderLine(), MakeBorderLine(), MakeBorderLine(), MakeBorderLine()
-    bTop:SetPoint("TOPLEFT", bodyBg, "TOPLEFT", 0, 0)
-    bTop:SetPoint("TOPRIGHT", bodyBg, "TOPRIGHT", 0, 0)
-    bTop:SetHeight(1)
-    bBottom:SetPoint("BOTTOMLEFT", bodyBg, "BOTTOMLEFT", 0, 0)
-    bBottom:SetPoint("BOTTOMRIGHT", bodyBg, "BOTTOMRIGHT", 0, 0)
-    bBottom:SetHeight(1)
-    bLeft:SetPoint("TOPLEFT", bodyBg, "TOPLEFT", 0, 0)
-    bLeft:SetPoint("BOTTOMLEFT", bodyBg, "BOTTOMLEFT", 0, 0)
-    bLeft:SetWidth(1)
-    bRight:SetPoint("TOPRIGHT", bodyBg, "TOPRIGHT", 0, 0)
-    bRight:SetPoint("BOTTOMRIGHT", bodyBg, "BOTTOMRIGHT", 0, 0)
-    bRight:SetWidth(1)
-    card.bodyBorderLines = {bTop, bBottom, bLeft, bRight}
-
-    -- Helper to show/hide the body backdrop + its 4 border lines together.
-    local function ShowBody(visible)
-        if card.bodyBackdrop then
-            if visible then card.bodyBackdrop:Show() else card.bodyBackdrop:Hide() end
-        end
-        if card.bodyBorderLines then
-            for _, line in ipairs(card.bodyBorderLines) do
-                if visible then line:Show() else line:Hide() end
-            end
-        end
-    end
-    card.ShowBody = ShowBody
-
-    -- Match the helper's initial collapsed state on first build.
-    if card.collapsed then
-        ShowBody(false)
-    end
 
     -- Update the header meta line with current anchor + offset summary,
     -- plus the anchor target's name if anchored to another element. Read
@@ -1473,10 +1434,8 @@ local function RenderCardList(GUI, page, tdDB, state)
             card = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
             state.cardFrames[elem.id] = card
         end
-        -- Let the helper recompute its own height. LayoutChildren walks
-        -- groupChildren and honors `collapsed` to show only the header,
-        -- so card:GetHeight() afterwards is the authoritative height.
-        if card.LayoutChildren then card:LayoutChildren() end
+        -- Card height is authoritative: header-only when collapsed,
+        -- header + body when expanded (managed by ApplyCollapseState).
         card:ClearAllPoints()
         card:SetPoint("TOPLEFT", state.listChild, "TOPLEFT", 2, y)
         card:SetPoint("TOPRIGHT", state.listChild, "TOPRIGHT", -2, y)
