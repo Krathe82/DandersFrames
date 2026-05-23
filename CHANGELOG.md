@@ -6,6 +6,7 @@
 
 * (Settings) Fix changes such as adding an auto layout not appearing in the settings window until a reload, caused by the page-caching change. (PR #106 by Krathe)
 * (Settings) Fix the sidebar's expanded/collapsed categories not updating to match the new profile when switching profiles with the settings window open. (PR #107 by Krathe)
+* (Test Mode) Fix grouped raid frames in vertical layout with Players Grow From set to End: frames no longer overflow below the anchor box, and the column growth direction is no longer inverted, so test mode now matches live frames. (PR #113 by Krathe)
 
 ## [4.3.10]
 
