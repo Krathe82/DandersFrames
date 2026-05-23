@@ -4,7 +4,11 @@
 
 ### Bug Fixes
 
+* (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
+* (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one. (PR #111 by Krathe)
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
+* (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
+* (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
 * (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
 * (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode. (PR #110 by Krathe)
