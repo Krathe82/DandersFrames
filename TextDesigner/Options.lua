@@ -14,6 +14,7 @@ local C_BACKGROUND = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
 local C_PANEL      = {r = 0.12, g = 0.12, b = 0.12, a = 1}
 local C_ELEMENT    = {r = 0.18, g = 0.18, b = 0.18, a = 1}
 local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
+local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
 local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
 local C_PANEL_VISIBLE  = {r = 1, g = 1, b = 1, a = 0.05}
@@ -655,36 +656,99 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
         end
     end)
 
-    -- ── Search input ─────────────────────────────────────────
-    local searchBox = CreateFrame("EditBox", nil, drop, "InputBoxTemplate")
-    searchBox:SetSize(240, 20)
-    searchBox:SetPoint("TOPLEFT", drop, "TOPLEFT", 16, -10)
+    -- ── Themed search bar ────────────────────────────────────
+    -- Mirrors the global settings search bar pattern (Features/Search.lua:1001-1100).
+    -- Wrapper Frame holds a magnifying glass icon, EditBox, placeholder, and clear-X.
+    local searchBar = CreateFrame("Frame", nil, drop, "BackdropTemplate")
+    searchBar:SetSize(248, 28)
+    searchBar:SetPoint("TOPLEFT", drop, "TOPLEFT", 16, -12)
+    searchBar:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    searchBar:SetBackdropColor(0, 0, 0, 0.7)
+    searchBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    local searchIcon = searchBar:CreateTexture(nil, "OVERLAY")
+    searchIcon:SetPoint("LEFT", 6, 0)
+    searchIcon:SetSize(12, 12)
+    searchIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\search")
+    searchIcon:SetVertexColor(0.6, 0.6, 0.6)
+
+    local searchBox = CreateFrame("EditBox", nil, searchBar)
+    searchBox:SetPoint("LEFT", 22, 0)
+    searchBox:SetPoint("RIGHT", -24, 0)
+    searchBox:SetHeight(20)
+    searchBox:SetFontObject(DFFontHighlightSmall)
     searchBox:SetAutoFocus(false)
-    searchBox:SetFontObject("ChatFontNormal")
+    searchBox:SetTextInsets(2, 2, 0, 0)
     drop.searchBox = searchBox
+
+    local searchPlaceholder = searchBar:CreateFontString(nil, "OVERLAY", "DFFontDisableSmall")
+    searchPlaceholder:SetPoint("LEFT", 24, 0)
+    searchPlaceholder:SetText(L["Search..."])
+    searchPlaceholder:SetTextColor(0.5, 0.5, 0.5)
+
+    local clearBtn = CreateFrame("Button", nil, searchBar)
+    clearBtn:SetSize(16, 16)
+    clearBtn:SetPoint("RIGHT", -4, 0)
+    local clearIcon = clearBtn:CreateTexture(nil, "OVERLAY")
+    clearIcon:SetAllPoints()
+    clearIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\close")
+    clearIcon:SetVertexColor(0.5, 0.5, 0.5)
+    clearBtn:SetScript("OnEnter", function() clearIcon:SetVertexColor(1, 0.3, 0.3) end)
+    clearBtn:SetScript("OnLeave", function() clearIcon:SetVertexColor(0.5, 0.5, 0.5) end)
+    clearBtn:Hide()
+
+    searchBox:SetScript("OnEditFocusGained", function()
+        local tc = GUI:GetThemeColor()
+        searchBar:SetBackdropBorderColor(tc.r, tc.g, tc.b, 1)
+        searchPlaceholder:Hide()
+    end)
+    searchBox:SetScript("OnEditFocusLost", function()
+        searchBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        if searchBox:GetText() == "" then searchPlaceholder:Show() end
+    end)
 
     -- ── Pill row (category filters) ─────────────────────────
     -- Sized to the dropdown width minus side padding so flow-layout can wrap.
     local PILL_ROW_PAD = 16
     local pillRow = CreateFrame("Frame", nil, drop)
-    pillRow:SetPoint("TOPLEFT", searchBox, "BOTTOMLEFT", -4, -6)
+    pillRow:SetPoint("TOPLEFT", searchBar, "BOTTOMLEFT", 0, -10)
     pillRow:SetPoint("TOPRIGHT", drop, "TOPRIGHT", -PILL_ROW_PAD, 0)
-    pillRow:SetHeight(18)
+    pillRow:SetHeight(24)
     local pills = {}
 
-    local CHIP_H, CHIP_GAP, CHIP_ROW_GAP = 18, 4, 4
+    local CHIP_H, CHIP_GAP, CHIP_ROW_GAP = 24, 4, 4
+
+    -- Hoisted so MakePill's hover handlers can see it lexically. Set to the
+    -- starting filter; ApplyPillState() initializes visuals after pills exist.
+    local activePill = "_all"
 
     local function MakePill(label, key)
         local p = CreateFrame("Button", nil, pillRow, "BackdropTemplate")
         p:SetHeight(CHIP_H)
         ApplyBackdrop(p, C_PANEL, C_BORDER)
         local fs = p:CreateFontString(nil, "OVERLAY")
-        GUI:SetSettingsFont(fs, 9, "")
+        GUI:SetSettingsFont(fs, 10, "")
         fs:SetPoint("CENTER")
         fs:SetText(label)
-        p:SetWidth(fs:GetStringWidth() + 14)
+        p:SetWidth(fs:GetStringWidth() + 18)
         p.key = key
         p.fs = fs
+        p:SetScript("OnEnter", function(self)
+            if self.key ~= activePill then
+                self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1)
+                self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.8)
+            end
+        end)
+        p:SetScript("OnLeave", function(self)
+            if self.key ~= activePill then
+                self:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, C_PANEL.a)
+                self:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
+            end
+        end)
         return p
     end
 
@@ -713,7 +777,6 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     LayoutPills()
     pillRow:SetScript("OnSizeChanged", LayoutPills)
 
-    local activePill = "_all"
     local function ApplyPillState()
         local tc = GUI:GetThemeColor()
         for _, p in ipairs(pills) do
@@ -733,7 +796,7 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     -- ── Scrolling list of items ─────────────────────────────
     -- Anchor to bottom of pillRow so wrapped pills push the list down correctly.
     local scrollFrame = CreateFrame("ScrollFrame", nil, drop, "ScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", pillRow, "BOTTOMLEFT", 4, -6)
+    scrollFrame:SetPoint("TOPLEFT", pillRow, "BOTTOMLEFT", 4, -10)
     scrollFrame:SetPoint("BOTTOMRIGHT", drop, "BOTTOMRIGHT", -20, 10)
     DF.GUI.StyleScrollBar(scrollFrame)
     scrollFrame:EnableMouseWheel(true)
@@ -753,14 +816,14 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
             if not it:IsShown() then return it end
         end
         local it = CreateFrame("Button", nil, scrollChild, "BackdropTemplate")
-        it:SetSize(240, 16)
+        it:SetSize(240, 22)
         it:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8x8"})
         do
             local tc = GUI:GetThemeColor()
             it:SetBackdropColor(tc.r, tc.g, tc.b, 0)
         end
         local fs = it:CreateFontString(nil, "OVERLAY")
-        GUI:SetSettingsFont(fs, 10, "")
+        GUI:SetSettingsFont(fs, 11, "")
         fs:SetPoint("LEFT", it, "LEFT", 14, 0)
         it.fs = fs
         it:SetScript("OnEnter", function(self)
@@ -781,15 +844,29 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
             if not h:IsShown() then return h end
         end
         local h = scrollChild:CreateFontString(nil, "OVERLAY")
-        GUI:SetSettingsFont(h, 9, "")
+        GUI:SetSettingsFont(h, 10, "")
         h:SetJustifyH("LEFT")
         headerPool[#headerPool+1] = h
         return h
     end
 
+    -- Hairline divider pool — one thin texture between category sections.
+    local dividerPool = {}
+    local function AcquireDivider()
+        for _, d in ipairs(dividerPool) do
+            if not d:IsShown() then return d end
+        end
+        local d = scrollChild:CreateTexture(nil, "ARTWORK")
+        d:SetColorTexture(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
+        d:SetHeight(1)
+        dividerPool[#dividerPool+1] = d
+        return d
+    end
+
     local function HideAll()
         for _, it in ipairs(itemPool) do it:Hide() end
         for _, h in ipairs(headerPool) do h:Hide() end
+        for _, d in ipairs(dividerPool) do d:Hide() end
     end
 
     local function RenderList()
@@ -798,6 +875,7 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
         query = query:match("^%s*(.-)%s*$") or ""
 
         local y = -2
+        local renderedSection = false
         for _, cat in ipairs(CONTENT_CATEGORIES) do
             if activePill == "_all" or activePill == cat then
                 local matches = {}
@@ -809,32 +887,65 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
                     end
                 end
                 if #matches > 0 then
+                    -- Hairline divider above every section except the first
+                    if renderedSection then
+                        local sep = AcquireDivider()
+                        sep:ClearAllPoints()
+                        sep:SetPoint("LEFT", scrollChild, "LEFT", 8, 0)
+                        sep:SetPoint("RIGHT", scrollChild, "RIGHT", -8, 0)
+                        sep:SetPoint("TOP", scrollChild, "TOP", 0, y - 2)
+                        sep:Show()
+                        y = y - 8
+                    end
                     local h = AcquireHeader()
+                    h:ClearAllPoints()
                     h:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 8, y)
                     h:SetText(CONTENT_CATEGORY_LABELS[cat]:upper())
-                    h:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
+                    h:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 1)
                     h:Show()
-                    y = y - 14
+                    y = y - 16
                     for _, t in ipairs(matches) do
                         local it = AcquireItem()
-                        it:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 2, y)
+                        it:ClearAllPoints()
+                        it:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 6, y)
                         it.fs:SetText(t.label)
-                        it.fs:SetTextColor(0.95, 0.95, 0.95)
+                        local catColor = CATEGORY_COLORS[t.category]
+                        if catColor then
+                            it.fs:SetTextColor(catColor.r, catColor.g, catColor.b, catColor.a)
+                        else
+                            it.fs:SetTextColor(0.95, 0.95, 0.95)
+                        end
                         it:SetScript("OnClick", function()
                             drop:Hide()
                             if onPick then onPick(t.key) end
                         end)
                         it:Show()
-                        y = y - 16
+                        y = y - 24
                     end
                     y = y - 4
+                    renderedSection = true
                 end
             end
         end
         scrollChild:SetHeight(math.max(1, -y + 4))
     end
 
-    searchBox:SetScript("OnTextChanged", RenderList)
+    searchBox:SetScript("OnTextChanged", function(self, userInput)
+        local text = self:GetText()
+        if text and text ~= "" then
+            searchPlaceholder:Hide()
+            clearBtn:Show()
+        else
+            if not self:HasFocus() then searchPlaceholder:Show() end
+            clearBtn:Hide()
+        end
+        RenderList()
+    end)
+
+    clearBtn:SetScript("OnClick", function()
+        searchBox:SetText("")
+        searchBox:ClearFocus()
+    end)
 
     for _, p in ipairs(pills) do
         p:SetScript("OnClick", function(self)
@@ -851,6 +962,8 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     -- button which sits on the LEFT of the card body.
     function drop:Open(anchor, side)
         searchBox:SetText("")
+        searchPlaceholder:Show()
+        clearBtn:Hide()
         activePill = "_all"
         ApplyPillState()
         RenderList()
@@ -868,6 +981,9 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     drop:SetScript("OnHide", function()
         if overlay then overlay:Hide() end
         searchBox:ClearFocus()
+        searchBox:SetText("")
+        searchPlaceholder:Show()
+        clearBtn:Hide()
     end)
 
     return drop
@@ -1019,39 +1135,27 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
     end)
 
-    -- Wire delete (themed popup)
+    -- Wire delete (instant — no confirmation popup)
     deleteBtn:SetScript("OnClick", function()
         local capturedTdDB = card._tdDB
         local capturedState = card._state
         local capturedGUI = card._GUI
         local capturedPage = card._page
-        DF:ShowPopupAlert({
-            title = L["Delete Text Element"],
-            message = L["Delete this text element?"],
-            buttons = {
-                {
-                    label = L["Yes"],
-                    onClick = function()
-                        if not capturedTdDB or not capturedState then return end
-                        for i, e in ipairs(capturedTdDB.elements) do
-                            if e.id == elem.id then
-                                table.remove(capturedTdDB.elements, i)
-                                break
-                            end
-                        end
-                        capturedState.cardFrames[elem.id] = nil
-                        card:Hide()
-                        card:SetParent(nil)
-                        if DF.TextDesigner.RenderCardList then
-                            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
-                        end
-                        DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
-                            elem.id, #capturedTdDB.elements)
-                    end,
-                },
-                { label = L["No"] },
-            },
-        })
+        if not capturedTdDB or not capturedState then return end
+        for i, e in ipairs(capturedTdDB.elements) do
+            if e.id == elem.id then
+                table.remove(capturedTdDB.elements, i)
+                break
+            end
+        end
+        capturedState.cardFrames[elem.id] = nil
+        card:Hide()
+        card:SetParent(nil)
+        if DF.TextDesigner.RenderCardList then
+            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+        end
+        DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
+            elem.id, #capturedTdDB.elements)
     end)
 
     -- Wire drag-to-reorder.
