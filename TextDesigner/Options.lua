@@ -1484,7 +1484,10 @@ local function FullRebuildCards(GUI, page, tdDB, state)
     if state.cardFrames then
         for _, card in pairs(state.cardFrames) do
             card:Hide()
-            card:SetParent(nil)
+            card:ClearAllPoints()
+            -- Also nil out any per-frame handlers so the OnUpdate drag loop
+            -- doesn't keep references alive in the closure.
+            card:SetScript("OnUpdate", nil)
         end
         wipe(state.cardFrames)
     end
@@ -1534,15 +1537,16 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         if state.cardFrames then
             for _, card in pairs(state.cardFrames) do
                 card:Hide()
-                card:SetParent(nil)
+                card:ClearAllPoints()
+                card:SetScript("OnUpdate", nil)
             end
             wipe(state.cardFrames)
         end
-        if state.copyBtnContainer then state.copyBtnContainer:Hide(); state.copyBtnContainer:SetParent(nil) end
-        if state.controlsBar then state.controlsBar:Hide(); state.controlsBar:SetParent(nil) end
+        if state.copyBtnContainer then state.copyBtnContainer:Hide(); state.copyBtnContainer:ClearAllPoints() end
+        if state.controlsBar then state.controlsBar:Hide(); state.controlsBar:ClearAllPoints() end
         if state.listHeader then state.listHeader:Hide() end
-        if state.listPanel then state.listPanel:Hide(); state.listPanel:SetParent(nil) end
-        if state.pickerFrame then state.pickerFrame:Hide(); state.pickerFrame:SetParent(nil) end
+        if state.listPanel then state.listPanel:Hide(); state.listPanel:ClearAllPoints() end
+        if state.pickerFrame then state.pickerFrame:Hide(); state.pickerFrame:ClearAllPoints() end
         if state.pickerOverlay then state.pickerOverlay:Hide() end
         state.copyBtnContainer = nil
         state.controlsBar = nil
