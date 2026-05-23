@@ -197,6 +197,14 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
             else
                 card.title:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, C_TEXT.a)
             end
+            -- Refresh banner so the appended target name (if any other card
+            -- anchors TO this one) reflects the new label.
+            if card.UpdateMeta then card:UpdateMeta() end
+        end
+        -- Every OTHER card has an Anchor To dropdown that lists this element
+        -- by label — force a full rebuild so they pick up the new label.
+        if state and DF.TextDesigner.FullRebuildCards then
+            DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
         end
     end, 200)
     labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
@@ -266,17 +274,12 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         elem.groupItems = elem.groupItems or {}
         elem.groupSeparator = elem.groupSeparator or " / "
 
-        -- Helper to re-render the whole card list when items change.
+        -- Helper to re-render the whole card list when items change. Uses
+        -- the full rebuild path so every other card's Anchor To dropdown
+        -- and group items list refresh in lockstep.
         local function ReRender()
-            if state and DF.TextDesigner.RenderCardList then
-                -- Force a full card rebuild so the body's items list re-renders
-                if state.cardFrames and state.cardFrames[elem.id] then
-                    local oldCard = state.cardFrames[elem.id]
-                    state.cardFrames[elem.id] = nil
-                    oldCard:Hide()
-                    oldCard:SetParent(nil)
-                end
-                DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
+            if state and DF.TextDesigner.FullRebuildCards then
+                DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
             end
         end
 
@@ -413,7 +416,7 @@ local ANCHOR_GRID = {
     {"BOTTOMLEFT", "BOTTOM",   "BOTTOMRIGHT"},
 }
 
-local function CreateAnchorGrid(GUI, parent, elem)
+local function CreateAnchorGrid(GUI, parent, elem, card)
     local grid = CreateFrame("Frame", nil, parent)
     grid:SetSize(60, 60)
 
@@ -447,6 +450,7 @@ local function CreateAnchorGrid(GUI, parent, elem)
                 for p, bb in pairs(btns) do
                     ApplyButtonState(bb, p == point)
                 end
+                if card and card.UpdateMeta then card:UpdateMeta() end
             end)
         end
     end
@@ -560,7 +564,9 @@ local function BuildAnchorTargets(tdDB, currentElem)
 end
 
 -- Returns the y-offset where the next section should start (negative, goes down).
--- `card` is accepted for signature consistency with BuildContentSection; not used.
+-- `card` is forwarded into CreateAnchorGrid and into each position widget's
+-- callback so the header banner ("CENTER · 0,0 · → target") can refresh live
+-- whenever the user changes anchor / offsets / anchor target.
 local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Position"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
@@ -575,7 +581,7 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     elem.anchorTo = elem.anchorTo or "FRAME"
 
     -- Anchor grid on the left
-    local grid = CreateAnchorGrid(GUI, parent, elem)
+    local grid = CreateAnchorGrid(GUI, parent, elem, card)
     grid:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y - 4)
     local gridLabel = parent:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(gridLabel, 8, "")
@@ -583,13 +589,18 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     gridLabel:SetPoint("TOP", grid, "BOTTOM", 0, -2)
     gridLabel:SetTextColor(0.6, 0.6, 0.6)
 
+    -- Shared callback: every position-related widget needs to refresh the
+    -- card's header banner so the "ANCHOR · X,Y · → target" summary stays
+    -- in sync with the live values.
+    local function metaCB() if card and card.UpdateMeta then card:UpdateMeta() end end
+
     -- Offsets / frame settings on the right
     local rightX = 100
-    local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", function() end)
+    local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", metaCB)
     xSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
     y = y - FIELD_ROW_HEIGHT
 
-    local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", function() end)
+    local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", metaCB)
     ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -611,7 +622,7 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     -- Anchor To: target element (or the unit frame). Options are computed
     -- dynamically and exclude self + transitive descendants to prevent cycles.
     local anchorTargets = BuildAnchorTargets(tdDB, elem)
-    local anchorToDrop = GUI:CreateDropdown(parent, L["Anchor To"], anchorTargets, elem, "anchorTo", function() end)
+    local anchorToDrop = GUI:CreateDropdown(parent, L["Anchor To"], anchorTargets, elem, "anchorTo", metaCB)
     anchorToDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -1163,11 +1174,10 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
                 break
             end
         end
-        capturedState.cardFrames[elem.id] = nil
-        card:Hide()
-        card:SetParent(nil)
-        if DF.TextDesigner.RenderCardList then
-            DF.TextDesigner.RenderCardList(capturedGUI, capturedPage, capturedTdDB, capturedState)
+        -- Full rebuild so every other card's Anchor To dropdown drops the
+        -- deleted target (and any descendants get reparented sanely).
+        if DF.TextDesigner.FullRebuildCards then
+            DF.TextDesigner.FullRebuildCards(capturedGUI, capturedPage, capturedTdDB, capturedState)
         end
         DF:Debug("TD", "Deleted element id=%d (remaining=%d)",
             elem.id, #capturedTdDB.elements)
@@ -1353,9 +1363,35 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         bodyBackdrop:Hide()
     end
 
-    -- Update the header meta line with current anchor + offset summary
+    -- Update the header meta line with current anchor + offset summary,
+    -- plus the anchor target's name if anchored to another element. Read
+    -- from card._tdDB so the lookup always sees the current element list.
     function card:UpdateMeta()
-        meta:SetText((elem.anchor or "CENTER") .. " · " .. (elem.offsetX or 0) .. "," .. (elem.offsetY or 0))
+        local anchor = elem.anchor or "CENTER"
+        local x = elem.offsetX or 0
+        local y = elem.offsetY or 0
+        local s = anchor .. " · " .. x .. "," .. y
+
+        if elem.anchorTo and elem.anchorTo ~= "FRAME" then
+            local targetID = tonumber(elem.anchorTo)
+            if targetID and card._tdDB and card._tdDB.elements then
+                for _, e in ipairs(card._tdDB.elements) do
+                    if e.id == targetID then
+                        local targetName
+                        if e.label and e.label ~= "" then
+                            targetName = e.label
+                        else
+                            local ct2 = FindContentType(e.contentType)
+                            targetName = (ct2 and ct2.label or e.contentType) .. " #" .. e.id
+                        end
+                        s = s .. " · → " .. targetName
+                        break
+                    end
+                end
+            end
+        end
+
+        meta:SetText(s)
     end
     card:UpdateMeta()
 
@@ -1416,6 +1452,22 @@ end
 
 DF.TextDesigner.RenderCardList = RenderCardList  -- exposed for Task 6+
 
+-- Tear down every cached card frame and re-render from scratch. Used by any
+-- mutation that changes the SET of elements (add / delete) or any displayed
+-- label, because the Anchor To dropdown options are built once per card from
+-- the current element list and won't refresh otherwise.
+local function FullRebuildCards(GUI, page, tdDB, state)
+    if state.cardFrames then
+        for _, card in pairs(state.cardFrames) do
+            card:Hide()
+            card:SetParent(nil)
+        end
+        wipe(state.cardFrames)
+    end
+    RenderCardList(GUI, page, tdDB, state)
+end
+DF.TextDesigner.FullRebuildCards = FullRebuildCards
+
 -- The page state across builder invocations. Cached on the page frame.
 local function GetState(page)
     page.dfTD = page.dfTD or {
@@ -1449,15 +1501,70 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         end
     end
 
+    -- Detect mode change: if the page was previously built against a different
+    -- db (party vs raid), tear down every cached widget so the rebuild below
+    -- runs fresh against the new mode's data. Without this, switching modes
+    -- via the existing mode buttons would leave the UI bound to whichever
+    -- mode loaded first.
+    if state.built and state.activeDB ~= db then
+        if state.cardFrames then
+            for _, card in pairs(state.cardFrames) do
+                card:Hide()
+                card:SetParent(nil)
+            end
+            wipe(state.cardFrames)
+        end
+        if state.copyBtnContainer then state.copyBtnContainer:Hide(); state.copyBtnContainer:SetParent(nil) end
+        if state.controlsBar then state.controlsBar:Hide(); state.controlsBar:SetParent(nil) end
+        if state.listHeader then state.listHeader:Hide() end
+        if state.listPanel then state.listPanel:Hide(); state.listPanel:SetParent(nil) end
+        if state.pickerFrame then state.pickerFrame:Hide(); state.pickerFrame:SetParent(nil) end
+        if state.pickerOverlay then state.pickerOverlay:Hide() end
+        state.copyBtnContainer = nil
+        state.controlsBar = nil
+        state.listHeader = nil
+        state.listPanel = nil
+        state.listContainer = nil
+        state.listChild = nil
+        state.emptyMsg = nil
+        state.emptyHint = nil
+        state.addBtn = nil
+        state.pickerFrame = nil
+        state.pickerOverlay = nil
+        state.cardFrames = {}
+        state.built = false
+    end
+
     if state.built then return end
     state.built = true
+    state.activeDB = db
+
+    -- ── COPY / SYNC / RESET TRIO (top of page) ───────────────
+    -- Standard cross-mode trio that every settings page exposes. Allows the
+    -- user to copy / sync / reset the Text Designer block between party and
+    -- raid modes. The helper anchors its sync + reset buttons internally;
+    -- we just need to position the returned Copy button (which is the
+    -- right-most of the trio).
+    local copyBtnContainer
+    if GUI.CreateCopyButton then
+        copyBtnContainer = GUI.CreateCopyButton(page.child, {"textDesigner"}, L["Text Designer"], "text_designer")
+        copyBtnContainer:ClearAllPoints()
+        copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+        state.copyBtnContainer = copyBtnContainer
+    end
 
     -- ── TAB-LEVEL CONTROLS BAR ───────────────────────────────
     -- Master enable toggle + Add Element button, side by side at top.
     local controlsBar = CreateFrame("Frame", nil, page.child)
     controlsBar:SetHeight(32)
-    controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
-    controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+    if copyBtnContainer then
+        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
+        controlsBar:SetPoint("TOPRIGHT", copyBtnContainer, "BOTTOMRIGHT", 0, -8)
+    else
+        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
+        controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+    end
+    state.controlsBar = controlsBar
 
     -- Master toggle
     local enableCheck = GUI:CreateCheckbox(
@@ -1488,8 +1595,11 @@ function DF.BuildTextDesignerPage(GUI, page, db)
                 -- Hide empty state if it's still visible
                 if state.emptyMsg then state.emptyMsg:Hide() end
                 if state.emptyHint then state.emptyHint:Hide() end
-                RenderCardList(GUI, page, tdDB, state)
+                -- Full rebuild so every other card's Anchor To dropdown
+                -- picks up the new element as a valid anchor target.
+                FullRebuildCards(GUI, page, tdDB, state)
             end)
+            state.pickerOverlay = state.pickerFrame._overlay
         end
         if state.pickerFrame:IsShown() then
             state.pickerFrame:Hide()
@@ -1528,6 +1638,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     listHeader:SetText(L["Text Elements"]:upper())
     listHeader:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
     listHeader:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 12, -6)
+    state.listHeader = listHeader
 
     local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
     listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", -12, -4)
