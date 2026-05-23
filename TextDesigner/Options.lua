@@ -1352,7 +1352,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- padding before placing the header, which a fixed offset from
     -- card:TOPLEFT would miss).
     local bodyBg = card:CreateTexture(nil, "BORDER")
-    bodyBg:SetPoint("TOP", header, "BOTTOM", 0, -2)
+    bodyBg:SetPoint("TOP", header, "BOTTOM", 0, -6)
     bodyBg:SetPoint("LEFT", card, "LEFT", 1, 0)
     bodyBg:SetPoint("RIGHT", card, "RIGHT", -1, 0)
     bodyBg:SetPoint("BOTTOM", card, "BOTTOM", 0, 16)
