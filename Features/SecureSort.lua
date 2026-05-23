@@ -3683,11 +3683,20 @@ function SecureSort:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGr
     -- Apply row/column growth direction (use full 8-group grid so Row 1 never jumps)
     local fullRowsCols = math.ceil(8 / groupsPerRowCol)
     local groupRowGrowth = lp.groupRowGrowth or "START"
-    -- XOR with playerAnchor: with TOPLEFT (playerAnchor=START) the row index
-    -- increases downward, so groupRowGrowth=END needs to flip rcIndex. With
-    -- BOTTOMLEFT (playerAnchor=END) y already grows upward, so the flip needs
-    -- to invert direction to avoid double-flipping when both are END. (#876)
-    local needsRowFlip = (groupRowGrowth == "END") ~= ((lp.playerAnchor or "START") == "END")
+    -- The XOR with playerAnchor only applies in horizontal mode. There, rcIndex
+    -- maps to the Y (row) axis, and playerAnchor=END triggers the test-mode
+    -- BOTTOMLEFT conversion that already flips Y — so the rcIndex flip must be
+    -- counter-inverted to avoid double-flipping when both are END. (#876)
+    -- In vertical mode rcIndex maps to the X (column) axis, there is no Y-flip
+    -- conversion, and playerAnchor=END only right-aligns within a group row, so
+    -- the flip must depend on groupRowGrowth alone — matching the live secure
+    -- snippet (Headers.lua), which flips purely on groupRowGrowth=="END".
+    local needsRowFlip
+    if lp.horizontal then
+        needsRowFlip = (groupRowGrowth == "END") ~= ((lp.playerAnchor or "START") == "END")
+    else
+        needsRowFlip = (groupRowGrowth == "END")
+    end
     if needsRowFlip then
         rcIndex = fullRowsCols - rcIndex + 1
     end
@@ -3880,7 +3889,14 @@ function SecureSort:PositionRaidFrameToGroupSlot(frame, groupNum, posInGroup, pl
     -- offset to its BOTTOMLEFT equivalent so the visible layout matches live.
     -- (#875)
     local lp = layoutParams
-    local useBottomLeft = lp and lp.testMode and (lp.playerAnchor or "START") == "END"
+    -- The BOTTOMLEFT conversion below only applies in horizontal mode, where
+    -- playerAnchor=END means players stack upward inside a tall 5-frame group.
+    -- In vertical mode playerAnchor=END only right-aligns a partial group row
+    -- (handled via groupX in CalculateRaidGroupPosition); the vertical axis is
+    -- the group-stacking axis and must stay TOPLEFT-anchored. Without the
+    -- horizontal guard the conversion fires in vertical mode and pushes every
+    -- group below the container. (#875 context, vertical-mode regression)
+    local useBottomLeft = lp and lp.testMode and lp.horizontal and (lp.playerAnchor or "START") == "END"
 
     local bx, by = x, y
     if useBottomLeft then
