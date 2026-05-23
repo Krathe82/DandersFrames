@@ -1446,6 +1446,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                     DF:UpdateRaidGroupLabels()
                 end
             end)
+            -- Rebuild the page so orientation-dependent dropdowns refresh their
+            -- labels AND their option text (e.g. Columns/Rows Grow From, Players
+            -- Grow From values) live, without needing to reopen the settings
+            -- window. Dropdowns bake options at build time, so a rebuild is the
+            -- only way to update the menu entries. Deferred so it runs after the
+            -- triggering dropdown's own click handler has finished unwinding.
+            C_Timer.After(0, function()
+                if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+            end)
         end
         
         -- ===== FRAME SIZE GROUP (Column 1) =====
@@ -1537,7 +1546,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         groupLayoutGroup:AddWidget(GUI:CreateHeader(self.child, L["Group Layout Settings"]), 40)
         groupLayoutGroup.hideOn = function() return GUI.SelectedMode ~= "raid" or not db.raidUseGroups end
         
-        groupLayoutGroup:AddWidget(GUI:CreateLabel(self.child, L["Horizontal: Players stack vertically, groups grow left-to-right."], 250), 25)
+        local groupLayoutHint = db.growDirection == "VERTICAL" and L["Players stack horizontally, groups grow top-to-bottom."] or L["Players stack vertically, groups grow left-to-right."]
+        groupLayoutGroup:AddWidget(GUI:CreateLabel(self.child, groupLayoutHint, 250), 25)
         
         groupLayoutGroup:AddWidget(GUI:CreateSlider(self.child, L["Group Spacing"], -5, 100, 1, db, "raidGroupSpacing", UpdateFrames, function() DF:LightweightUpdateRaidLayout() end, true), 55)
         
@@ -1547,13 +1557,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local groupsLabel = db.growDirection == "VERTICAL" and L["Groups Per Column"] or L["Groups Per Row"]
         groupsPerRowSlider = groupLayoutGroup:AddWidget(GUI:CreateSlider(self.child, groupsLabel, 1, 8, 1, db, "raidGroupsPerRow", UpdateFrames, function() DF:LightweightUpdateRaidLayout() end, true), 55)
         
-        groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Groups Grow From"], anchorOptions, db, "raidGroupAnchor", UpdateFrames), 55)
+        groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Group Alignment"], anchorOptions, db, "raidGroupAnchor", UpdateFrames), 55)
 
         local rowGrowLabel = db.growDirection == "VERTICAL" and L["Columns Grow From"] or L["Rows Grow From"]
         local rowGrowOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
         groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, rowGrowLabel, rowGrowOptions, db, "raidGroupRowGrowth", UpdateFrames), 55)
 
-        local playerAnchorOptions = { START= L["Start"], END= L["End"] }
+        -- Players Grow From = the direction players fill the group's main axis.
+        -- HORIZONTAL groups stack players vertically (Top/Bottom); VERTICAL groups
+        -- stack players horizontally (Left/Right). Values map to START/END.
+        local playerAnchorOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
         groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Players Grow From"], playerAnchorOptions, db, "raidPlayerAnchor", UpdateFrames), 55)
         
         Add(groupLayoutGroup, nil, 1)
@@ -1641,15 +1654,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         playersPerRowSlider = flatGridGroup:AddWidget(GUI:CreateSlider(self.child, playersPerLabel, 1, 40, 1, db, "raidPlayersPerRow", UpdateFlatLayoutFull, UpdateFlatLayoutFull, true), 55)
         
         local growthAnchorOptions = { START= L["Start"], CENTER= L["Center"], END= L["End"] }
-        flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frames Grow From"], growthAnchorOptions, db, "raidFlatGrowthAnchor", UpdateFrames), 55)
-        
-        local columnAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
-        flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Columns Grow From"], columnAnchorOptions, db, "raidFlatColumnAnchor", UpdateFrames), 55)
-        
-        flatGridGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Reverse Order"], db, "raidFlatFrameAnchor", UpdateFrames, 
-            function() return db.raidFlatFrameAnchor == "END" end,
-            function(val) db.raidFlatFrameAnchor = val and "END" or "START" end
-        ), 30)
+        flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Grid Alignment"], growthAnchorOptions, db, "raidFlatGrowthAnchor", UpdateFrames), 55)
+
+        -- Columns/Rows Grow From = the direction the grid wraps (secondary axis).
+        -- VERTICAL (Columns) wraps left/right; HORIZONTAL (Rows) wraps top/bottom.
+        local flatColumnLabel = db.growDirection == "VERTICAL" and L["Columns Grow From"] or L["Rows Grow From"]
+        local flatColumnOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
+        flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, flatColumnLabel, flatColumnOptions, db, "raidFlatColumnAnchor", UpdateFrames), 55)
+
+        -- Players Grow From = the direction players fill the grid's main axis.
+        -- HORIZONTAL (Rows) fills Left/Right; VERTICAL (Columns) fills Top/Bottom.
+        -- Replaces the old "Reverse Order" checkbox; START/END values are identical.
+        local flatFillOptions = db.growDirection == "VERTICAL" and { START= L["Top"], END= L["Bottom"] } or { START= L["Left"], END= L["Right"] }
+        flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Players Grow From"], flatFillOptions, db, "raidFlatFrameAnchor", UpdateFrames), 55)
         
         flatGridGroup:AddWidget(GUI:CreateSlider(self.child, L["Horizontal Spacing"], -5, 100, 1, db, "raidFlatHorizontalSpacing", UpdateFrames, function() DF:LightweightUpdateFrameSize() end, true), 55)
         flatGridGroup:AddWidget(GUI:CreateSlider(self.child, L["Vertical Spacing"], -5, 100, 1, db, "raidFlatVerticalSpacing", UpdateFrames, function() DF:LightweightUpdateFrameSize() end, true), 55)
