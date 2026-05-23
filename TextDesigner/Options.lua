@@ -55,7 +55,7 @@ local pairs, ipairs = pairs, ipairs
 -- ============================================================
 
 local CONTENT_CATEGORIES = {
-    "identity", "health", "power", "shields", "status", "threat", "group",
+    "group", "identity", "health", "power", "shields", "status", "threat",
 }
 
 local CONTENT_CATEGORY_LABELS = {
@@ -138,13 +138,32 @@ local BuildPicker
 -- Returns the y-offset where the next section should start (negative, goes down).
 -- tdDB / state / page are needed by the Text Group branch so its nested
 -- add/remove callbacks can trigger a card-list re-render.
-local function BuildContentSection(GUI, parent, elem, tdDB, state, page, yStart)
+-- `card` is the parent settings group; the Label edit box updates card.title.
+local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Content"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
     local y = yStart - SECTION_LABEL_HEIGHT
 
     local ct = FindContentType(elem.contentType)
     if not ct then return y end
+
+    -- ── Label (optional) ─────────────────────────────────────
+    -- A user-friendly name for this element. Falls back to the content type
+    -- name when empty. Used in the card header title and the Anchor To
+    -- dropdown's options.
+    elem.label = elem.label or ""
+    local labelEdit = GUI:CreateEditBox(parent, L["Label (optional)"], elem, "label", function()
+        if card and card.title then
+            local activeCT = FindContentType(elem.contentType)
+            local displayName = (elem.label and elem.label ~= "" and elem.label)
+                or (activeCT and activeCT.label)
+                or elem.contentType
+            card.title:SetText(displayName)
+        end
+    end, 200)
+    labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    -- CreateEditBox is label-above style; row is taller than other widgets.
+    y = y - 56
 
     -- Numeric types: abbreviate checkbox
     if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "hp_deficit"
@@ -273,15 +292,26 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, yStart)
         end
 
         -- Add Item button — opens a picker that excludes the "group" type
-        -- (no nested groups).
+        -- (no nested groups). The picker is cached on the card so repeated
+        -- clicks reuse the same frame instead of spawning new offscreen ones.
         local addItemBtn
         addItemBtn = GUI:CreateButton(parent, "+ " .. L["Add Item"], 100, 22, function()
             if not BuildPicker then return end
-            local picker = BuildPicker(GUI, parent, tdDB, function(typeKey)
-                table.insert(elem.groupItems, typeKey)
-                ReRender()
-            end, "group")
-            picker:Open(addItemBtn)
+            if card and not card._addItemPicker then
+                card._addItemPicker = BuildPicker(GUI, parent, tdDB, function(typeKey)
+                    table.insert(elem.groupItems, typeKey)
+                    ReRender()
+                end, "group")
+            end
+            local picker = card and card._addItemPicker
+            if not picker then return end
+            if picker:IsShown() then
+                picker:Hide()
+            else
+                -- Anchor left-aligned: the Add Item button sits on the LEFT
+                -- of the card body, so the dropdown extends RIGHT and DOWN.
+                picker:Open(addItemBtn, "left")
+            end
         end)
         addItemBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
         y = y - 32
@@ -352,7 +382,8 @@ local function CreateAnchorGrid(GUI, parent, elem)
 end
 
 -- Returns the y-offset where the next section should start (negative, goes down).
-local function BuildAppearanceSection(GUI, parent, elem, yStart)
+-- `card` is accepted for signature consistency with BuildContentSection; not used.
+local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Appearance"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
     local y = yStart - SECTION_LABEL_HEIGHT
@@ -436,16 +467,22 @@ local function BuildAnchorTargets(tdDB, currentElem)
     local opts = { FRAME = L["Frame"] }
     for _, other in ipairs(tdDB.elements) do
         if other.id ~= currentElem.id and not descendants[other.id] then
-            local ct = FindContentType(other.contentType)
-            local typeName = ct and ct.label or other.contentType
-            opts[tostring(other.id)] = typeName .. " #" .. other.id
+            local optLabel
+            if other.label and other.label ~= "" then
+                optLabel = other.label
+            else
+                local ct = FindContentType(other.contentType)
+                optLabel = (ct and ct.label or other.contentType) .. " #" .. other.id
+            end
+            opts[tostring(other.id)] = optLabel
         end
     end
     return opts
 end
 
 -- Returns the y-offset where the next section should start (negative, goes down).
-local function BuildPositionSection(GUI, parent, elem, tdDB, yStart)
+-- `card` is accepted for signature consistency with BuildContentSection; not used.
+local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Position"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
     local y = yStart - SECTION_LABEL_HEIGHT
@@ -518,6 +555,31 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     drop:SetSize(280, 380)
     ApplyBackdrop(drop, C_BACKGROUND, C_BORDER)
     drop:Hide()
+
+    -- ── Click-outside overlay ────────────────────────────────
+    -- A transparent fullscreen catcher that closes the picker when the user
+    -- clicks anywhere outside it. Pattern mirrors AuraDesigner's picker.
+    local overlay = CreateFrame("Button", nil, UIParent)
+    overlay:SetAllPoints(UIParent)
+    overlay:SetFrameStrata("FULLSCREEN")  -- below FULLSCREEN_DIALOG so drop stays on top
+    overlay:EnableMouse(true)
+    overlay:Hide()
+    overlay:SetScript("OnClick", function()
+        drop:Hide()
+    end)
+    drop._overlay = overlay
+
+    -- ESC closes the picker as well.
+    drop:EnableKeyboard(true)
+    drop:SetPropagateKeyboardInput(true)
+    drop:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            drop:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
 
     -- ── Search input ─────────────────────────────────────────
     local searchBox = CreateFrame("EditBox", nil, drop, "InputBoxTemplate")
@@ -702,21 +764,31 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
         end)
     end
 
-    function drop:Open(anchor)
+    -- `side` is optional. "right" (default) anchors TOPRIGHT-to-BOTTOMRIGHT
+    -- so the dropdown extends LEFT and DOWN — correct for buttons on the right
+    -- side of the controls bar. "left" anchors TOPLEFT-to-BOTTOMLEFT so the
+    -- dropdown extends RIGHT and DOWN — correct for the in-card Add Item
+    -- button which sits on the LEFT of the card body.
+    function drop:Open(anchor, side)
         searchBox:SetText("")
         activePill = "_all"
         ApplyPillState()
         RenderList()
         drop:ClearAllPoints()
-        -- Anchor the dropdown's TOPRIGHT to the Add button's BOTTOMRIGHT.
-        -- The dropdown extends LEFT and DOWN from that corner so it stays inside
-        -- the settings panel regardless of where in the page the button sits.
-        drop:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+        if side == "left" then
+            drop:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4)
+        else
+            drop:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+        end
         drop:Show()
+        if overlay then overlay:Show() end
         searchBox:SetFocus()
     end
 
-    drop:SetScript("OnHide", function() searchBox:ClearFocus() end)
+    drop:SetScript("OnHide", function()
+        if overlay then overlay:Hide() end
+        searchBox:ClearFocus()
+    end)
 
     return drop
 end
@@ -753,10 +825,15 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     header:SetHeight(28)
 
     local ct = FindContentType(elem.contentType)
+    -- Prefer the user-supplied label if set; otherwise fall back to the
+    -- content type's display name. Same rule as BuildAnchorTargets.
+    local displayName = (elem.label and elem.label ~= "" and elem.label)
+        or (ct and ct.label)
+        or elem.contentType
     local title = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(title, 11, "OUTLINE")
     title:SetPoint("LEFT", header, "LEFT", 24, 0)  -- 24 leaves room for the arrow icon
-    title:SetText(ct and ct.label or elem.contentType)
+    title:SetText(displayName)
     title:SetTextColor(0.95, 0.95, 0.95)
     header.text = title  -- helper requires this to wire the collapse arrow
     card.title = title
@@ -992,19 +1069,19 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- reparents the widget to the group, so each section needs to be a
     -- self-contained Frame that holds its own widgets.
     local contentFrame = CreateFrame("Frame", nil, card)
-    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, -4)
+    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, card, -4)
     local contentHeight = math.max(1, -contentY + 4)
     contentFrame:SetHeight(contentHeight)
     card:AddWidget(contentFrame, contentHeight)
 
     local appearanceFrame = CreateFrame("Frame", nil, card)
-    local appearanceY = BuildAppearanceSection(GUI, appearanceFrame, elem, -4)
+    local appearanceY = BuildAppearanceSection(GUI, appearanceFrame, elem, card, -4)
     local appearanceHeight = math.max(1, -appearanceY + 4)
     appearanceFrame:SetHeight(appearanceHeight)
     card:AddWidget(appearanceFrame, appearanceHeight)
 
     local positionFrame = CreateFrame("Frame", nil, card)
-    local positionY = BuildPositionSection(GUI, positionFrame, elem, tdDB, -4)
+    local positionY = BuildPositionSection(GUI, positionFrame, elem, tdDB, card, -4)
     local positionHeight = math.max(1, -positionY + 4)
     positionFrame:SetHeight(positionHeight)
     card:AddWidget(positionFrame, positionHeight)

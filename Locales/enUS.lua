@@ -881,6 +881,7 @@ L["Join a raid group (2-5 players works best)"] = true
 L["Just Reload"] = true
 L["Keep when offline/left"] = true
 L["Language"] = true
+L["Label (optional)"] = true
 L["Label Color"] = true
 L["Label Format"] = true
 L["Label Name"] = true
