@@ -381,7 +381,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     -- Display > Visibility
     local pageVisibility = CreateSubTab("display", "display_visibility", L["Visibility"])
     BuildPage(pageVisibility, function(self, db, Add, AddSpace, AddSyncPoint)
-        Add(CreateCopyButton(self.child, {"soloMode", "hidePlayerFrame", "hideDefaultPlayerFrame", "showMinimapButton", "restedIndicator"}, L["Visibility"], "display_visibility"), 25, 2)
+        Add(CreateCopyButton(self.child, {"soloMode", "hidePlayerFrame", "restedIndicator"}, L["Visibility"], "display_visibility"), 25, 2)
 
         -- ===== FRAME DISPLAY GROUP (Column 1) =====
         local frameDisplayGroup = GUI:CreateSettingsGroup(self.child, 280)
@@ -392,10 +392,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF:UpdateDefaultPlayerFrame()
         end), 30)
         soloMode.hideOn = function() return GUI.SelectedMode == "raid" end
-        
-        frameDisplayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Minimap Button"], db, "showMinimapButton", function()
-            DF:UpdateMinimapButton()
-        end), 30)
         
         local restedIndicator = frameDisplayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Rested Indicator"], db, "restedIndicator", function()
             DF:UpdateRestedIndicator()
@@ -435,13 +431,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         hidePlayer.hideOn = function() return GUI.SelectedMode == "raid" end
         hidePlayer.tooltip = L["Removes your player frame from the DandersFrames party display."]
 
-        local hideDefaultPlayer = frameDisplayGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Blizzard Player Frame"], db, "hideDefaultPlayerFrame", function()
-            DF:UpdateDefaultPlayerFrame()
-        end), 30)
-        hideDefaultPlayer.tooltip = L["Hides the default Blizzard player portrait and health bar."]
-
         Add(frameDisplayGroup, nil, 1)
     end)
+    -- The Visibility tab is entirely party/solo-oriented, so hide it in raid mode.
+    if GUI.Tabs and GUI.Tabs["display_visibility"] then
+        GUI.Tabs["display_visibility"].partyOnly = true
+    end
     
     -- Display > Tooltips (moved from General)
     local pageTooltips = CreateSubTab("display", "display_tooltips", L["Tooltips"])
@@ -1272,6 +1267,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         ), 30)
         disableRaidCheck.tooltip = L["Hides and unregisters all events on the default Blizzard raid frames so they consume no performance."]
 
+        local disablePlayerCheck = blizzardGroup:AddWidget(GUI:CreateCheckbox(
+            self.child, L["Hide Blizzard Player Frame"],
+            nil, nil,
+            function() DF:UpdateDefaultPlayerFrame() end,
+            makeBlizGet("hideDefaultPlayerFrame"),
+            makeBlizSet("hideDefaultPlayerFrame", function() DF:UpdateDefaultPlayerFrame() end),
+            "hideDefaultPlayerFrame"
+        ), 30)
+        disablePlayerCheck.tooltip = L["Hides the default Blizzard player portrait and health bar."]
+
         -- Visual divider + small caption to separate the related sub-option
         -- (Show Side Menu only applies once a Blizzard frame is disabled)
         local divider = CreateFrame("Frame", nil, self.child)
@@ -1297,6 +1302,17 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         sideMenuCheck.tooltip = L["Shows the ping wheel & party management menu when Blizzard frames are disabled."]
 
         Add(blizzardGroup, nil, 1)
+
+        -- ===== MINIMAP GROUP (Column 1) =====
+        -- The minimap button is a single global UI element (no mode), so it lives
+        -- here rather than the per-mode Visibility page. Reads party-canonical and
+        -- writes both dbs so it stays consistent regardless of selected mode.
+        local minimapGroup = GUI:CreateSettingsGroup(self.child, 280)
+        minimapGroup:AddWidget(GUI:CreateHeader(self.child, L["Minimap"]), 40)
+        minimapGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Minimap Button"], nil, nil, function()
+            DF:UpdateMinimapButton()
+        end, makeBlizGet("showMinimapButton"), makeBlizSet("showMinimapButton"), "showMinimapButton"), 30)
+        Add(minimapGroup, nil, 1)
 
         -- ===== SETTINGS PANEL APPEARANCE GROUP (Column 2, Top) =====
         -- Controls the look of this settings panel itself — does NOT affect
