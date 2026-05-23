@@ -623,6 +623,34 @@ local TYPE_DEFAULTS = {
         durationHideAboveEnabled = false, durationHideAboveThreshold = 10,
         frameLevel = 30, frameStrata = "INHERIT",
     },
+    -- Frame-level types: mirror the inline literals in EnsureTypeConfig so the
+    -- colour-picker Default button (and any other consumer of __dfDefaults) can
+    -- resolve a default value for keys like "color" and "expiringColor".
+    healthbar = {
+        mode = "Replace", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        expiringPulsate = false,
+        showWhenMissing = false,
+    },
+    nametext = {
+        color = {r = 1, g = 1, b = 1, a = 1},
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        showWhenMissing = false,
+    },
+    healthtext = {
+        color = {r = 1, g = 1, b = 1, a = 1},
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        showWhenMissing = false,
+    },
+    framealpha = {
+        alpha = 0.5,
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringAlpha = 1.0,
+        showWhenMissing = false,
+    },
 }
 
 -- ============================================================
@@ -803,7 +831,12 @@ local GLOBAL_DEFAULT_MAP = {
 -- Create a proxy table that maps flat key access to an indicator instance
 -- Fallback chain: instance value → global defaults → TYPE_DEFAULTS
 local function CreateInstanceProxy(auraName, indicatorID)
-    return setmetatable({ _skipOverrideIndicators = true }, {
+    -- Resolve current type to expose TYPE_DEFAULTS to GUI:CreateColorPicker's
+    -- Default button. Type changes rebuild the panel (RefreshPage) which makes
+    -- a fresh proxy, so stashing at construction time is safe.
+    local _inst = GetIndicatorByID(auraName, indicatorID)
+    local _typeDefaults = _inst and TYPE_DEFAULTS[_inst.type] or nil
+    return setmetatable({ _skipOverrideIndicators = true, __dfDefaults = _typeDefaults }, {
         __index = function(_, k)
             local inst = GetIndicatorByID(auraName, indicatorID)
             if inst then
@@ -851,7 +884,9 @@ end
 -- Create a proxy table that maps flat key access to nested aura config
 local function CreateProxy(auraName, typeKey)
     local defaults = TYPE_DEFAULTS[typeKey]
-    return setmetatable({ _skipOverrideIndicators = true }, {
+    -- Expose defaults to GUI:CreateColorPicker so its Default button can resolve
+    -- AD-specific keys (color/expiringColor/etc.) that aren't in PartyDefaults.
+    return setmetatable({ _skipOverrideIndicators = true, __dfDefaults = defaults }, {
         __index = function(_, k)
             local auraCfg = GetSpecAuras()[auraName]
             if auraCfg and auraCfg[typeKey] then
@@ -3124,8 +3159,9 @@ local function BuildGlobalView(parent)
     local rawDefaults = adDB.defaults
     -- Proxy so every write triggers a full preview rebuild
     -- (global defaults affect ALL indicators, need full teardown/rebuild)
-    -- Falls back to GLOBAL_DEFAULTS_FALLBACK for keys missing from existing profiles
-    local defaults = setmetatable({ _skipOverrideIndicators = true }, {
+    -- Falls back to GLOBAL_DEFAULTS_FALLBACK for keys missing from existing profiles.
+    -- __dfDefaults exposes the fallback table to GUI:CreateColorPicker's Default button.
+    local defaults = setmetatable({ _skipOverrideIndicators = true, __dfDefaults = GLOBAL_DEFAULTS_FALLBACK }, {
         __index = function(_, k)
             local v = rawDefaults[k]
             if v ~= nil then return v end
