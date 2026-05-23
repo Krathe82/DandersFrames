@@ -1016,16 +1016,13 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     local card = GUI:CreateSettingsGroup(parent, parent:GetWidth() - 4, {
         collapsible = true,
         onCollapseChanged = function(group)
-            -- Hide the darker body backdrop when collapsed so it doesn't bleed
-            -- through as a 1-pixel border line at the header's bottom edge.
-            -- (The anchors invert to zero/negative height when the card shrinks
-            -- to header-only, but the border edge can still render.)
-            if group.bodyBackdrop then
-                if group.collapsed then
-                    group.bodyBackdrop:Hide()
-                else
-                    group.bodyBackdrop:Show()
-                end
+            -- Hide the darker body backdrop (and its border lines) when
+            -- collapsed so they don't bleed through as a 1-pixel border line
+            -- at the header's bottom edge. (The anchors invert to zero/
+            -- negative height when the card shrinks to header-only, but the
+            -- border edges can still render.)
+            if group.ShowBody then
+                group.ShowBody(not group.collapsed)
             end
             if DF.TextDesigner.RenderCardList then
                 DF.TextDesigner.RenderCardList(group._GUI, group._page, group._tdDB, group._state)
@@ -1337,30 +1334,53 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- ~0.18 grey). Mirrors AD's two-layer card chrome
     -- (AuraDesigner/Options.lua:4463-4468).
     --
-    -- Anchored TOPLEFT to the header's BOTTOMLEFT and BOTTOMRIGHT to the card,
-    -- leaving ~16px at the bottom for the helper's collapse bar. When the helper
-    -- collapses the card to just the header, onCollapseChanged hides this frame.
-    local bodyBackdrop = CreateFrame("Frame", nil, card, "BackdropTemplate")
-    bodyBackdrop:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
-    bodyBackdrop:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -1, 16)
-    bodyBackdrop:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    bodyBackdrop:SetBackdropColor(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
-    bodyBackdrop:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
-    -- Lower frame level so section content (Content/Appearance/Position frames)
-    -- renders ON TOP of this backdrop. CreateFrame defaults children to
-    -- parent:GetFrameLevel()+1, which is also where AddWidget'd section frames
-    -- live; setting this to card:GetFrameLevel() puts the backdrop one level
-    -- below them.
-    bodyBackdrop:SetFrameLevel(card:GetFrameLevel())
-    card.bodyBackdrop = bodyBackdrop
+    -- Body backdrop as a Texture at BORDER draw layer (above the card's
+    -- BACKGROUND-layer chrome). Section content frames render at card+1 frame
+    -- level so they draw on top of this texture.
+    local bodyBg = card:CreateTexture(nil, "BORDER")
+    bodyBg:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
+    bodyBg:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -1, 16)
+    bodyBg:SetColorTexture(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
+    card.bodyBackdrop = bodyBg
+
+    -- Subtle border around the body — four 1-px line textures at BORDER layer
+    local borderAlpha = 0.3
+    local function MakeBorderLine()
+        local t = card:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(C_BORDER.r, C_BORDER.g, C_BORDER.b, borderAlpha)
+        return t
+    end
+    local bTop, bBottom, bLeft, bRight = MakeBorderLine(), MakeBorderLine(), MakeBorderLine(), MakeBorderLine()
+    bTop:SetPoint("TOPLEFT", bodyBg, "TOPLEFT", 0, 0)
+    bTop:SetPoint("TOPRIGHT", bodyBg, "TOPRIGHT", 0, 0)
+    bTop:SetHeight(1)
+    bBottom:SetPoint("BOTTOMLEFT", bodyBg, "BOTTOMLEFT", 0, 0)
+    bBottom:SetPoint("BOTTOMRIGHT", bodyBg, "BOTTOMRIGHT", 0, 0)
+    bBottom:SetHeight(1)
+    bLeft:SetPoint("TOPLEFT", bodyBg, "TOPLEFT", 0, 0)
+    bLeft:SetPoint("BOTTOMLEFT", bodyBg, "BOTTOMLEFT", 0, 0)
+    bLeft:SetWidth(1)
+    bRight:SetPoint("TOPRIGHT", bodyBg, "TOPRIGHT", 0, 0)
+    bRight:SetPoint("BOTTOMRIGHT", bodyBg, "BOTTOMRIGHT", 0, 0)
+    bRight:SetWidth(1)
+    card.bodyBorderLines = {bTop, bBottom, bLeft, bRight}
+
+    -- Helper to show/hide the body backdrop + its 4 border lines together.
+    local function ShowBody(visible)
+        if card.bodyBackdrop then
+            if visible then card.bodyBackdrop:Show() else card.bodyBackdrop:Hide() end
+        end
+        if card.bodyBorderLines then
+            for _, line in ipairs(card.bodyBorderLines) do
+                if visible then line:Show() else line:Hide() end
+            end
+        end
+    end
+    card.ShowBody = ShowBody
 
     -- Match the helper's initial collapsed state on first build.
     if card.collapsed then
-        bodyBackdrop:Hide()
+        ShowBody(false)
     end
 
     -- Update the header meta line with current anchor + offset summary,
