@@ -2063,11 +2063,14 @@ local function RefreshPreviewEffects()
         if auraCfg.healthbar.mode == "Replace" then
             framePreview.healthFill:SetVertexColor(clr.r, clr.g, clr.b, clr.a or 1)
         else
-            -- Tint: blend original green with the configured color
-            local r = 0.18 * (1 - blend) + clr.r * blend
-            local g = 0.80 * (1 - blend) + clr.g * blend
-            local b = 0.44 * (1 - blend) + clr.b * blend
-            framePreview.healthFill:SetVertexColor(r, g, b, 0.85)
+            -- Tint: blend original green with the configured color, scaled by alpha
+            -- so dragging the colour picker's alpha visibly weakens the tint
+            -- (matches ApplyHealthBar in Indicators.lua: overlay = blend × alpha).
+            local effBlend = blend * (clr.a or 1)
+            local r = 0.18 * (1 - effBlend) + clr.r * effBlend
+            local g = 0.80 * (1 - effBlend) + clr.g * effBlend
+            local b = 0.44 * (1 - effBlend) + clr.b * effBlend
+            framePreview.healthFill:SetVertexColor(r, g, b, 1)
         end
     end
 
@@ -2818,17 +2821,18 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
     elseif typeKey == "healthbar" then
         -- Appearance
         AddGroup(L["Appearance"], function(g)
-            local blendSlider
             g:AddWidget(GUI:CreateDropdown(parent, L["Mode"], HEALTHBAR_MODE_OPTIONS, proxy, "mode", function()
-                if blendSlider then
-                    local isReplace = (proxy.mode or "Replace") == "Replace"
-                    if isReplace then blendSlider:Hide() else blendSlider:Show() end
-                end
+                -- Rebuild so the Blend % slider's hideOn re-evaluates and the
+                -- group's height recomputes for the new visible-widget set.
+                DF:AuraDesigner_RefreshPage()
             end), 54)
             g:AddWidget(GUI:CreateColorPicker(parent, L["Color"], proxy, "color", true, RPL, RPL, true), 28)
-            blendSlider = GUI:CreateSlider(parent, L["Blend %"], 0, 1, 0.05, proxy, "blend")
+            local blendSlider = GUI:CreateSlider(parent, L["Blend %"], 0, 1, 0.05, proxy, "blend")
+            -- hideOn is re-evaluated on every LayoutChildren pass, so the slider
+            -- stays correctly hidden in Replace mode across GUI reopens. A manual
+            -- :Hide() would be clobbered by LayoutChildren's unconditional :Show().
+            blendSlider.hideOn = function() return (proxy.mode or "Replace") == "Replace" end
             g:AddWidget(blendSlider, 54)
-            if (proxy.mode or "Replace") == "Replace" then blendSlider:Hide() end
             g:AddWidget(GUI:CreateCheckbox(parent, L["Show When Missing"], proxy, "showWhenMissing", function()
                 DF.AuraDesigner.Engine:ForceRefreshAllFrames()
             end), 28)

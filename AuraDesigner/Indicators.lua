@@ -1032,9 +1032,12 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     if not color then return end
 
     local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
+    local a = color[4] or color.a or 1
     local mode = string.lower(config.mode or "replace")
-    -- Replace: full opacity overlay; Tint: blend slider controls mix strength
-    local blend = (mode == "replace") and 1 or (config.blend or 0.5)
+    -- Replace: colour picker alpha controls overlay (and underlying bar) opacity.
+    -- Tint:    overlay opacity = blend slider × colour picker alpha (alpha scales
+    --          tint intensity so the class colour shows through more at low alpha).
+    local blend = (mode == "replace") and a or ((config.blend or 0.5) * a)
 
     -- Store on state so UpdateAuraDesignerAppearance / UpdateHealthBarAppearance
     -- can access these for OOR handling and the replace/tint mode gate.
@@ -1073,7 +1076,10 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
         if mode == "replace" then
             local hbTex = healthBar:GetStatusBarTexture()
             if hbTex then
-                hbTex:SetVertexColor(r, g, b)
+                -- Fade the underlying bar texture with the same alpha so the bar
+                -- itself becomes transparent at low alpha (without this the solid
+                -- texture shows through and the overlay's alpha has no visual effect).
+                hbTex:SetVertexColor(r, g, b, a)
             end
         else
             -- Tint mode: the underlying bar must show its normal colour through the overlay.
