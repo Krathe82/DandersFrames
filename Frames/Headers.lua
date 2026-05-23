@@ -684,10 +684,13 @@ function DF:InitializeHeaderChild(frame)
             -- occupant's faded appearance. dfInRange is immediately repopulated
             -- by UpdateRange below for accurate OOR state before first render.
             self.dfInRange = nil
-            -- Clear private aura unit tracking so next reanchor won't skip
-            if not actualUnit then
-                self.bossDebuffAnchoredUnit = nil
-            end
+            -- Clear private aura unit tracking so next reanchor won't skip.
+            -- Always nil here — if the unit token is unchanged but a new player
+            -- occupies the slot (same-token/new-GUID fall-through from LEVEL 1),
+            -- the idempotency guard in ReanchorPrivateAuras would otherwise
+            -- short-circuit on the matching token string and leave anchors bound
+            -- to the previous occupant for the rest of the session.
+            self.bossDebuffAnchoredUnit = nil
             -- Cache new unit's GUID
             if actualUnit then
                 -- Clear stale aura/range data that may belong to old occupant of this slot
