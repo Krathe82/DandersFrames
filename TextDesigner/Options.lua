@@ -1312,7 +1312,10 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- reparents the widget to the group, so each section needs to be a
     -- self-contained Frame that holds its own widgets.
     local contentFrame = CreateFrame("Frame", nil, card)
-    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, card, -4)
+    -- Larger top inset (-16) on the first section gives the "CONTENT" label
+    -- breathing room from the header. Subsequent sections chain off yEnd of
+    -- the previous one and don't need their own bump.
+    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, card, -16)
     local contentHeight = math.max(1, -contentY + 4)
     contentFrame:SetHeight(contentHeight)
     card:AddWidget(contentFrame, contentHeight)
@@ -1340,8 +1343,13 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- Body backdrop as a Texture at BORDER draw layer (above the card's
     -- BACKGROUND-layer chrome). Section content frames render at card+1 frame
     -- level so they draw on top of this texture.
+    -- Anchor bodyBg to card edges directly (not via header) so the body
+    -- backdrop spans the full card width. Anchoring to header:BOTTOMLEFT
+    -- inherits the helper's left padding (10px), leaving a grey strip of
+    -- the underlying C_ELEMENT chrome showing on the left edge.
+    local HEADER_HEIGHT = 30  -- matches card:AddWidget(header, 30) above
     local bodyBg = card:CreateTexture(nil, "BORDER")
-    bodyBg:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
+    bodyBg:SetPoint("TOPLEFT", card, "TOPLEFT", 1, -(HEADER_HEIGHT + 2))
     bodyBg:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -1, 16)
     bodyBg:SetColorTexture(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
     card.bodyBackdrop = bodyBg
