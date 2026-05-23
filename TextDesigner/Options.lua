@@ -55,7 +55,7 @@ local pairs, ipairs = pairs, ipairs
 -- ============================================================
 
 local CONTENT_CATEGORIES = {
-    "identity", "health", "power", "shields", "status", "threat",
+    "identity", "health", "power", "shields", "status", "threat", "group",
 }
 
 local CONTENT_CATEGORY_LABELS = {
@@ -65,6 +65,7 @@ local CONTENT_CATEGORY_LABELS = {
     shields  = L["Shields & Heals"],
     status   = L["Status"],
     threat   = L["Threat & Range"],
+    group    = L["Group"],
 }
 
 local CONTENT_TYPES = {
@@ -97,6 +98,8 @@ local CONTENT_TYPES = {
     { key = "aggro_flag",        label = L["Aggro Flag"],                 category = "threat"   },
     { key = "threat_percent",    label = L["Threat %"],                   category = "threat"   },
     { key = "range_text",        label = L["In-Range / OOR Text"],        category = "threat"   },
+    -- Group
+    { key = "group",             label = L["Text Group"],                 category = "group"    },
 }
 
 local function FindContentType(key)
@@ -128,8 +131,14 @@ local function CreateSectionLabel(GUI, parent, text)
     return fs
 end
 
+-- Forward-declared so BuildContentSection's group branch can reference the
+-- picker that's defined later in the file.
+local BuildPicker
+
 -- Returns the y-offset where the next section should start (negative, goes down).
-local function BuildContentSection(GUI, parent, elem, yStart)
+-- tdDB / state / page are needed by the Text Group branch so its nested
+-- add/remove callbacks can trigger a card-list re-render.
+local function BuildContentSection(GUI, parent, elem, tdDB, state, page, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Content"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
     local y = yStart - SECTION_LABEL_HEIGHT
@@ -192,6 +201,90 @@ local function BuildContentSection(GUI, parent, elem, yStart)
         local fmtDrop = GUI:CreateDropdown(parent, L["Format"], opts, elem, "groupFormat", function() end)
         fmtDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
+
+    -- Text Group: concatenates 2+ child content values with a user separator.
+    -- Phase 1 stores groupItems / groupSeparator on the element; Phase 2 will
+    -- wire the runtime renderer.
+    elseif ct.key == "group" then
+        elem.groupItems = elem.groupItems or {}
+        elem.groupSeparator = elem.groupSeparator or " / "
+
+        -- Helper to re-render the whole card list when items change.
+        local function ReRender()
+            if state and DF.TextDesigner.RenderCardList then
+                DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
+            end
+        end
+
+        -- Separator input (CreateEditBox renders its label ABOVE the input)
+        local sepEdit = GUI:CreateEditBox(parent, L["Separator"], elem, "groupSeparator", function() end, 120)
+        sepEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - 56
+
+        -- Items label
+        local itemsLabel = parent:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(itemsLabel, 9, "OUTLINE")
+        itemsLabel:SetText(L["Items"]:upper())
+        itemsLabel:SetTextColor(0.5, 0.7, 1, 0.9)
+        itemsLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - 16
+
+        -- Items list — one row per item in elem.groupItems
+        local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
+        if #elem.groupItems == 0 then
+            local emptyLbl = parent:CreateFontString(nil, "OVERLAY")
+            GUI:SetSettingsFont(emptyLbl, 10, "")
+            emptyLbl:SetText(L["No items yet"])
+            emptyLbl:SetTextColor(0.5, 0.5, 0.5)
+            emptyLbl:SetPoint("TOPLEFT", parent, "TOPLEFT", 26, y)
+            y = y - 18
+        else
+            for itemIdx, itemKey in ipairs(elem.groupItems) do
+                local itemCT = FindContentType(itemKey)
+                local itemRow = CreateFrame("Frame", nil, parent)
+                itemRow:SetHeight(20)
+                itemRow:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
+                itemRow:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -22, y)
+
+                local itemLabel = itemRow:CreateFontString(nil, "OVERLAY")
+                GUI:SetSettingsFont(itemLabel, 10, "")
+                itemLabel:SetPoint("LEFT", itemRow, "LEFT", 4, 0)
+                itemLabel:SetText(itemIdx .. ". " .. (itemCT and itemCT.label or itemKey))
+                itemLabel:SetTextColor(0.9, 0.9, 0.9)
+
+                -- Remove button
+                local removeBtn = CreateFrame("Button", nil, itemRow)
+                removeBtn:SetSize(16, 16)
+                removeBtn:SetPoint("RIGHT", itemRow, "RIGHT", -4, 0)
+                local removeIcon = removeBtn:CreateTexture(nil, "OVERLAY")
+                removeIcon:SetAllPoints()
+                removeIcon:SetTexture(mediaPath .. "delete")
+                removeIcon:SetVertexColor(0.85, 0.4, 0.4)
+                removeBtn:SetScript("OnEnter", function() removeIcon:SetVertexColor(1, 0.6, 0.6) end)
+                removeBtn:SetScript("OnLeave", function() removeIcon:SetVertexColor(0.85, 0.4, 0.4) end)
+                local capturedIdx = itemIdx
+                removeBtn:SetScript("OnClick", function()
+                    table.remove(elem.groupItems, capturedIdx)
+                    ReRender()
+                end)
+
+                y = y - 22
+            end
+        end
+
+        -- Add Item button — opens a picker that excludes the "group" type
+        -- (no nested groups).
+        local addItemBtn
+        addItemBtn = GUI:CreateButton(parent, "+ " .. L["Add Item"], 100, 22, function()
+            if not BuildPicker then return end
+            local picker = BuildPicker(GUI, parent, tdDB, function(typeKey)
+                table.insert(elem.groupItems, typeKey)
+                ReRender()
+            end, "group")
+            picker:Open(addItemBtn)
+        end)
+        addItemBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
+        y = y - 32
     end
     -- Types with no Content-section fields fall through:
     -- class, status_text, aggro_flag, range_text, power_type_string, race_level_faction.
@@ -324,8 +417,35 @@ local function BuildAppearanceSection(GUI, parent, elem, yStart)
     return y - SECTION_GAP
 end
 
+-- Build the Anchor To dropdown's options table. Returns {key=label} where
+-- the FRAME sentinel anchors to the unit frame and integer-string keys
+-- anchor to another element's id. Excludes self and any transitive
+-- descendant (cycle prevention).
+local function BuildAnchorTargets(tdDB, currentElem)
+    local descendants = {}
+    local function MarkDescendants(rootID)
+        for _, e in ipairs(tdDB.elements) do
+            if e.anchorTo and tostring(e.anchorTo) == tostring(rootID) and not descendants[e.id] then
+                descendants[e.id] = true
+                MarkDescendants(e.id)
+            end
+        end
+    end
+    MarkDescendants(currentElem.id)
+
+    local opts = { FRAME = L["Frame"] }
+    for _, other in ipairs(tdDB.elements) do
+        if other.id ~= currentElem.id and not descendants[other.id] then
+            local ct = FindContentType(other.contentType)
+            local typeName = ct and ct.label or other.contentType
+            opts[tostring(other.id)] = typeName .. " #" .. other.id
+        end
+    end
+    return opts
+end
+
 -- Returns the y-offset where the next section should start (negative, goes down).
-local function BuildPositionSection(GUI, parent, elem, yStart)
+local function BuildPositionSection(GUI, parent, elem, tdDB, yStart)
     local label = CreateSectionLabel(GUI, parent, L["Position"])
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
     local y = yStart - SECTION_LABEL_HEIGHT
@@ -336,6 +456,7 @@ local function BuildPositionSection(GUI, parent, elem, yStart)
     elem.offsetY = elem.offsetY or 0
     elem.frameLevel = elem.frameLevel or 25
     elem.frameStrata = elem.frameStrata or "INHERIT"
+    elem.anchorTo = elem.anchorTo or "FRAME"
 
     -- Anchor grid on the left
     local grid = CreateAnchorGrid(GUI, parent, elem)
@@ -371,6 +492,13 @@ local function BuildPositionSection(GUI, parent, elem, yStart)
     strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
     y = y - FIELD_ROW_HEIGHT
 
+    -- Anchor To: target element (or the unit frame). Options are computed
+    -- dynamically and exclude self + transitive descendants to prevent cycles.
+    local anchorTargets = BuildAnchorTargets(tdDB, elem)
+    local anchorToDrop = GUI:CreateDropdown(parent, L["Anchor To"], anchorTargets, elem, "anchorTo", function() end)
+    anchorToDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    y = y - FIELD_ROW_HEIGHT
+
     return y - SECTION_GAP
 end
 
@@ -381,7 +509,9 @@ end
 -- Click the Add Element button again to dismiss without picking.
 -- ============================================================
 
-local function BuildPicker(GUI, parent, tdDB, onPick)
+-- BuildPicker is forward-declared above so BuildContentSection's group
+-- branch can reference it. Assign the implementation to the upvalue.
+function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
     local drop = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     drop:SetFrameStrata("FULLSCREEN_DIALOG")
     drop:SetClampedToScreen(true)
@@ -530,7 +660,7 @@ local function BuildPicker(GUI, parent, tdDB, onPick)
             if activePill == "_all" or activePill == cat then
                 local matches = {}
                 for _, t in ipairs(CONTENT_TYPES) do
-                    if t.category == cat then
+                    if t.category == cat and t.key ~= excludeKey then
                         if query == "" or t.label:lower():find(query, 1, true) then
                             matches[#matches+1] = t
                         end
@@ -862,7 +992,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     -- reparents the widget to the group, so each section needs to be a
     -- self-contained Frame that holds its own widgets.
     local contentFrame = CreateFrame("Frame", nil, card)
-    local contentY = BuildContentSection(GUI, contentFrame, elem, -4)
+    local contentY = BuildContentSection(GUI, contentFrame, elem, tdDB, state, page, -4)
     local contentHeight = math.max(1, -contentY + 4)
     contentFrame:SetHeight(contentHeight)
     card:AddWidget(contentFrame, contentHeight)
@@ -874,7 +1004,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     card:AddWidget(appearanceFrame, appearanceHeight)
 
     local positionFrame = CreateFrame("Frame", nil, card)
-    local positionY = BuildPositionSection(GUI, positionFrame, elem, -4)
+    local positionY = BuildPositionSection(GUI, positionFrame, elem, tdDB, -4)
     local positionHeight = math.max(1, -positionY + 4)
     positionFrame:SetHeight(positionHeight)
     card:AddWidget(positionFrame, positionHeight)
