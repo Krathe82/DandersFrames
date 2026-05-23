@@ -23,6 +23,9 @@ local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
 local C_PANEL_VISIBLE  = {r = 1, g = 1, b = 1, a = 0.05}
 local C_BORDER_VISIBLE = {r = 1, g = 1, b = 1, a = 0.2}
+-- Recessed dark backdrop for the list panel — distinctly darker than C_ELEMENT
+-- (the card color) so cards visibly sit "on top" of the panel surface.
+local C_LIST_PANEL     = {r = 0.04, g = 0.04, b = 0.04, a = 1}
 
 -- Destructive action red — matches Aura Designer's delete X cross palette.
 local C_DESTRUCTIVE       = {r = 0.55, g = 0.20, b = 0.20, a = 1}
@@ -1661,9 +1664,9 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.listHeader = listHeader
 
     local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
-    listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", -12, -4)
-    listPanel:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -10, 10)
-    ApplyBackdrop(listPanel, C_PANEL_VISIBLE, C_BORDER_VISIBLE)
+    listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 0, -4)
+    listPanel:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -12, 10)
+    ApplyBackdrop(listPanel, C_LIST_PANEL, {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.4})
 
     local listContainer = CreateFrame("ScrollFrame", nil, listPanel, "ScrollFrameTemplate")
     listContainer:SetPoint("TOPLEFT", listPanel, "TOPLEFT", 6, -6)
