@@ -128,6 +128,12 @@ AuraDesigner\Indicators.lua
 AuraDesigner\SoundEngine.lua
 AuraDesigner\Options.lua
 
+# Text Designer (alpha-only)
+#@alpha@
+TextDesigner\TextDesigner.lua
+TextDesigner\Options.lua
+#@end-alpha@
+
 # Aura Blacklist
 AuraBlacklist\Config.lua
 AuraBlacklist\Options.lua

@@ -386,11 +386,12 @@ function GUI:GetCollapsedGroups()
 end
 
 function GUI:CreateSettingsGroup(parent, width, opts)
-    -- opts can be a boolean (legacy: collapsible) or a table { collapsible, showSummary }
+    -- opts can be a boolean (legacy: collapsible) or a table { collapsible, showSummary, onCollapseChanged }
     if type(opts) == "boolean" then opts = { collapsible = opts } end
     opts = opts or {}
 
     local group = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    group.onCollapseChanged = opts.onCollapseChanged
     group:SetSize(width or 280, 10)  -- Height will be calculated dynamically
     group.groupChildren = {}
     group.isSettingsGroup = true
@@ -452,6 +453,7 @@ function GUI:CreateSettingsGroup(parent, width, opts)
             if DF.AuraDesigner_RefreshPage then
                 DF:AuraDesigner_RefreshPage()
             end
+            if group.onCollapseChanged then group.onCollapseChanged(group) end
         end)
 
         collapseBar:Hide()
@@ -517,6 +519,7 @@ function GUI:CreateSettingsGroup(parent, width, opts)
                 if DF.AuraDesigner_RefreshPage then
                     DF:AuraDesigner_RefreshPage()
                 end
+                if self.onCollapseChanged then self.onCollapseChanged(self) end
             end)
 
             -- Highlight arrow on hover to indicate clickable
