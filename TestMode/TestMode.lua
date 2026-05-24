@@ -720,7 +720,10 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
     local powerBarAlpha = 1.0
     local dispelAlpha = 1.0
     local targetedSpellAlpha = 1.0
-    
+    -- Border stays 1.0 in whole-frame mode (the frame's SetAlpha cascade fades
+    -- it); only element-specific mode needs its own border alpha.
+    local borderAlpha = 1.0
+
     if isOutOfRange then
         if db.oorEnabled then
             -- Element-specific alpha mode
@@ -733,6 +736,7 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
             powerBarAlpha = db.oorPowerBarAlpha or 0.55
             dispelAlpha = db.oorDispelOverlayAlpha or 0.55
             targetedSpellAlpha = db.oorTargetedSpellAlpha or 0.5
+            borderAlpha = db.oorBorderAlpha or 0.55
         else
             -- Simple frame-level alpha mode
             local alpha = db.rangeFadeAlpha or db.rangeAlpha or 0.55
@@ -968,7 +972,14 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
     else
         frame:SetAlpha(1)
     end
-    
+
+    -- Frame border OOR fade (mirrors live DF:UpdateBorderAppearance). borderAlpha
+    -- is 1.0 in whole-frame mode so this is a no-op there (the frame cascade fades
+    -- it); in element-specific mode it carries the border's own OOR alpha.
+    if frame.border then
+        frame.border:SetAlpha(borderAlpha)
+    end
+
     -- Apply alpha to health text
     if frame.healthText then
         if db.healthTextUseClassColor then
