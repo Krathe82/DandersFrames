@@ -1576,6 +1576,8 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         if state.listPanel then state.listPanel:Hide(); state.listPanel:ClearAllPoints() end
         if state.pickerFrame then state.pickerFrame:Hide(); state.pickerFrame:ClearAllPoints() end
         if state.pickerOverlay then state.pickerOverlay:Hide() end
+        if state.previewPanel then state.previewPanel:Hide(); state.previewPanel:ClearAllPoints() end
+        if state.rightAnchorFrame then state.rightAnchorFrame:Hide(); state.rightAnchorFrame:ClearAllPoints() end
         state.copyBtnContainer = nil
         state.controlsBar = nil
         state.listHeader = nil
@@ -1587,6 +1589,8 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.addBtn = nil
         state.pickerFrame = nil
         state.pickerOverlay = nil
+        state.previewPanel = nil
+        state.rightAnchorFrame = nil
         state.cardFrames = {}
         state.built = false
     end
@@ -1594,6 +1598,148 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     if state.built then return end
     state.built = true
     state.activeDB = db
+
+    -- ── 50/50 SPLIT: LEFT PREVIEW PANEL + RIGHT EDITOR ──────
+    -- Visual mockup mirroring Aura Designer's layout. The preview panel is
+    -- purely cosmetic right now (no live wiring) — it shows what TD would
+    -- look like with a real frame preview docked to the left half. The
+    -- right anchor frame hosts the actual editor UI (Copy trio, controls
+    -- bar, card list) so it lives in the right half.
+    local previewPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
+    previewPanel:SetPoint("TOPLEFT", page.child, "TOPLEFT", 0, 0)
+    previewPanel:SetPoint("BOTTOMLEFT", page.child, "BOTTOMLEFT", 0, 0)
+    previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
+    ApplyBackdrop(previewPanel, C_PANEL, C_BORDER)
+    state.previewPanel = previewPanel
+
+    -- "Frame Preview" label (matches AD's preview label)
+    local previewLabel = previewPanel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    previewLabel:SetPoint("TOPLEFT", 8, -4)
+    previewLabel:SetText(L["FRAME PREVIEW"] or "FRAME PREVIEW")
+    previewLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    -- Mock unit frame (centred in panel) — visual clone of AD's mockFrame.
+    -- Pulls width/height/power from current frame settings just like AD does
+    -- so the chrome looks proportional. Static fill values (72% / 85%) are
+    -- placeholders only — nothing here updates with edits.
+    do
+        local mode = (GUI and GUI.SelectedMode) or "party"
+        local frameDB = (DF.GetDB and DF:GetDB(mode)) or DF.PartyDefaults or {}
+        local FRAME_W = frameDB.frameWidth or 125
+        local FRAME_H = frameDB.frameHeight or 64
+        local POWER_H = frameDB.powerBarHeight or 4
+        local showPower = frameDB.showPowerBar
+
+        local mockFrame = CreateFrame("Frame", nil, previewPanel, "BackdropTemplate")
+        mockFrame:SetSize(FRAME_W, FRAME_H)
+        mockFrame:SetPoint("CENTER", previewPanel, "CENTER", 0, -4)
+        ApplyBackdrop(mockFrame, {r = 0.07, g = 0.07, b = 0.07, a = 1}, {r = 0.27, g = 0.27, b = 0.27, a = 1})
+        previewPanel.mockFrame = mockFrame
+
+        local healthTexPath = frameDB.healthTexture or "Interface\\Buttons\\WHITE8x8"
+
+        -- Health bar background
+        local healthBg = mockFrame:CreateTexture(nil, "BACKGROUND")
+        healthBg:SetPoint("TOPLEFT", 1, -1)
+        if showPower then
+            healthBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H + 1)
+        else
+            healthBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 1)
+        end
+        healthBg:SetColorTexture(0, 0, 0, 0.4)
+
+        -- Health bar fill (72% health, placeholder)
+        local healthFill = mockFrame:CreateTexture(nil, "ARTWORK")
+        healthFill:SetPoint("TOPLEFT", 1, -1)
+        if showPower then
+            healthFill:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, POWER_H + 1)
+        else
+            healthFill:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, 1)
+        end
+        healthFill:SetWidth(FRAME_W * 0.72)
+        healthFill:SetTexture(healthTexPath)
+        healthFill:SetVertexColor(0.18, 0.80, 0.44, 0.85)
+
+        -- Missing health region
+        local missingHealth = mockFrame:CreateTexture(nil, "ARTWORK")
+        missingHealth:SetPoint("TOPRIGHT", mockFrame, "TOPRIGHT", -1, -1)
+        if showPower then
+            missingHealth:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H + 1)
+        else
+            missingHealth:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 1)
+        end
+        missingHealth:SetWidth(FRAME_W * 0.28)
+        missingHealth:SetColorTexture(0, 0, 0, 0.4)
+
+        -- Power bar (only if enabled in current frame settings)
+        if showPower then
+            local powerBg = mockFrame:CreateTexture(nil, "ARTWORK")
+            powerBg:SetPoint("BOTTOMLEFT", 1, 1)
+            powerBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 0)
+            powerBg:SetHeight(POWER_H)
+            powerBg:SetColorTexture(0.07, 0.07, 0.07, 1)
+
+            local powerFill = mockFrame:CreateTexture(nil, "ARTWORK", nil, 1)
+            powerFill:SetPoint("BOTTOMLEFT", 1, 1)
+            powerFill:SetHeight(POWER_H)
+            powerFill:SetWidth(FRAME_W * 0.85)
+            powerFill:SetColorTexture(0.27, 0.53, 1, 0.9)
+
+            local powerBorder = mockFrame:CreateTexture(nil, "ARTWORK", nil, 2)
+            powerBorder:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, POWER_H)
+            powerBorder:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H)
+            powerBorder:SetHeight(1)
+            powerBorder:SetColorTexture(0.2, 0.2, 0.2, 1)
+        end
+
+        -- Placeholder name + HP text (static — does NOT respect TD elements)
+        local nameText = mockFrame:CreateFontString(nil, "OVERLAY")
+        local nameFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.nameFont)) or "Fonts\\FRIZQT__.TTF"
+        nameText:SetFont(nameFontPath, frameDB.nameFontSize or 11, "OUTLINE")
+        nameText:SetPoint("TOP", mockFrame, "TOP", 0, -10)
+        nameText:SetText("Danders")
+        nameText:SetTextColor(0.18, 0.80, 0.44, 1)
+
+        local hpText = mockFrame:CreateFontString(nil, "OVERLAY")
+        local healthFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.healthFont)) or "Fonts\\FRIZQT__.TTF"
+        hpText:SetFont(healthFontPath, frameDB.healthFontSize or 10, "OUTLINE")
+        hpText:SetPoint("CENTER", mockFrame, "CENTER", 0, 4)
+        hpText:SetText("72%")
+        hpText:SetTextColor(0.87, 0.87, 0.87, 1)
+
+        -- Static anchor dots — 9 positions, decorative only (no drag handlers).
+        local ANCHOR_POSITIONS = {
+            TOPLEFT     = "TOPLEFT",
+            TOP         = "TOP",
+            TOPRIGHT    = "TOPRIGHT",
+            LEFT        = "LEFT",
+            CENTER      = "CENTER",
+            RIGHT       = "RIGHT",
+            BOTTOMLEFT  = "BOTTOMLEFT",
+            BOTTOM      = "BOTTOM",
+            BOTTOMRIGHT = "BOTTOMRIGHT",
+        }
+        for _, anchorName in pairs(ANCHOR_POSITIONS) do
+            local dot = mockFrame:CreateTexture(nil, "OVERLAY")
+            dot:SetSize(6, 6)
+            dot:SetPoint("CENTER", mockFrame, anchorName, 0, 0)
+            dot:SetColorTexture(0.45, 0.45, 0.95, 0.3)
+        end
+    end
+
+    -- Placeholder note so users know this panel is purely cosmetic for now.
+    local previewNote = previewPanel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    previewNote:SetPoint("BOTTOM", previewPanel, "BOTTOM", 0, 10)
+    previewNote:SetText("Preview placeholder (visual mockup)")
+    previewNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
+
+    -- Right-side anchor frame — invisible container that the existing editor
+    -- UI (copy trio, controls bar, list panel) anchors against, so the editor
+    -- lives in the right half of the page.
+    local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
+    rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 4, 0)
+    rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
+    state.rightAnchorFrame = rightAnchorFrame
 
     -- ── COPY / SYNC / RESET TRIO (top of page) ───────────────
     -- Standard cross-mode trio that every settings page exposes. Allows the
@@ -1604,27 +1750,27 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     local copyBtnContainer
     if GUI.CreateCopyButton then
         copyBtnContainer = GUI.CreateCopyButton(
-            page.child,
+            rightAnchorFrame,
             {"textDesigner"},
             L["Text Designer"],
             "text_designer",
             true  -- omitReset: hide the Reset Page button for now
         )
         copyBtnContainer:ClearAllPoints()
-        copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+        copyBtnContainer:SetPoint("TOPRIGHT", rightAnchorFrame, "TOPRIGHT", -10, -10)
         state.copyBtnContainer = copyBtnContainer
     end
 
     -- ── TAB-LEVEL CONTROLS BAR ───────────────────────────────
     -- Master enable toggle + Add Element button, side by side at top.
-    local controlsBar = CreateFrame("Frame", nil, page.child)
+    local controlsBar = CreateFrame("Frame", nil, rightAnchorFrame)
     controlsBar:SetHeight(32)
     if copyBtnContainer then
-        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
+        controlsBar:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 10, -42)
         controlsBar:SetPoint("TOPRIGHT", copyBtnContainer, "BOTTOMRIGHT", 0, -8)
     else
-        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
-        controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+        controlsBar:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 10, -10)
+        controlsBar:SetPoint("TOPRIGHT", rightAnchorFrame, "TOPRIGHT", -10, -10)
     end
     state.controlsBar = controlsBar
 
@@ -1697,16 +1843,16 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- ── CARD LIST AREA ───────────────────────────────────────
     -- A bordered panel hosts the section header and the scrollable card list.
     -- Empty-state message centers inside the panel when no elements exist.
-    local listHeader = page.child:CreateFontString(nil, "OVERLAY")
+    local listHeader = rightAnchorFrame:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(listHeader, 9, "")
     listHeader:SetText(L["Text Elements"]:upper())
     listHeader:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
     listHeader:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 12, -6)
     state.listHeader = listHeader
 
-    local listPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
+    local listPanel = CreateFrame("Frame", nil, rightAnchorFrame, "BackdropTemplate")
     listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 0, -4)
-    listPanel:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", -12, 10)
+    listPanel:SetPoint("BOTTOMRIGHT", rightAnchorFrame, "BOTTOMRIGHT", -12, 10)
     ApplyBackdrop(listPanel, C_LIST_PANEL, {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.4})
 
     local listContainer = CreateFrame("ScrollFrame", nil, listPanel, "ScrollFrameTemplate")
@@ -1720,13 +1866,17 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     end)
 
     local listChild = CreateFrame("Frame", nil, listContainer)
-    -- Compute initial width from page.child (which is sized correctly thanks to
-    -- the RefreshStates override above). listContainer:GetWidth() returns 0 at
-    -- creation time because layout hasn't run yet, so we can't rely on it.
-    -- Fall back to a sane default if page.child isn't sized yet.
-    local initialW = page.child:GetWidth()
+    -- Compute initial width. listContainer:GetWidth() returns 0 at creation
+    -- time because layout hasn't run yet, so we derive it from the right
+    -- anchor frame (or page.child halved as a fallback) and the OnSizeChanged
+    -- hook below corrects it once layout settles.
+    local initialW = rightAnchorFrame:GetWidth()
     if initialW < 100 then
-        initialW = (GUI.contentFrame and GUI.contentFrame:GetWidth() or 600) - 30
+        local pageW = page.child:GetWidth()
+        if pageW < 100 then
+            pageW = (GUI.contentFrame and GUI.contentFrame:GetWidth() or 600) - 30
+        end
+        initialW = pageW * 0.5
     end
     listChild:SetSize(math.max(1, initialW - 40), 1)
     listContainer:SetScrollChild(listChild)
