@@ -1773,11 +1773,6 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     local card = CreateFrame("Frame", nil, parent)
     card:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, yPos)
     card:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, yPos)
-    card._tdDB = tdDB
-    card._state = state
-    card._GUI = GUI
-    card._page = page
-    card._elem = elem
 
     -- ── HEADER (group-themed accent) ─────────────────────────
     local header = CreateFrame("Button", nil, card, "BackdropTemplate")
@@ -1806,7 +1801,7 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     local arrow = header:CreateTexture(nil, "OVERLAY")
     arrow:SetSize(10, 10)
     arrow:SetPoint("LEFT", header, "LEFT", 8, 0)
-    local groupColor = CATEGORY_COLORS.group or {r = 0.91, g = 0.66, b = 0.25, a = 1}
+    local groupColor = CATEGORY_COLORS.group
     arrow:SetVertexColor(groupColor.r, groupColor.g, groupColor.b)
     card.collapseArrow = arrow
 
