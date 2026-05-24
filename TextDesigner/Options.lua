@@ -561,19 +561,24 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     elem.color = elem.color or {r = 1, g = 1, b = 1, a = 1}
     if elem.useClassColor == nil then elem.useClassColor = false end
 
+    -- Override tracking — the Phase 2 renderer falls back to globalDefaults
+    -- for any Appearance field this element hasn't explicitly overridden.
+    -- Each callback below sets the matching flag the first time a user edits it.
+    elem.overrides = elem.overrides or {}
+
     -- Font (LSM-aware dropdown). Use GUI:CreateFontDropdown if available;
     -- otherwise fall back to a generic dropdown listing the current font only.
     local fontDrop
     if GUI.CreateFontDropdown then
-        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], elem, "font", function() end)
+        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], elem, "font", function() elem.overrides.font = true end)
     else
-        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[elem.font] = elem.font}, elem, "font", function() end)
+        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[elem.font] = elem.font}, elem, "font", function() elem.overrides.font = true end)
     end
     fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Size
-    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function() end)
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function() elem.overrides.fontSize = true end)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -584,18 +589,19 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
         THICKOUTLINE = L["Thick Outline"],
         SHADOW = L["Shadow"],
     }
-    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, elem, "outline", function() end)
+    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, elem, "outline", function() elem.overrides.outline = true end)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Color picker + Use Class Color toggle (stacked vertically so they
     -- don't overflow the now-narrower card body).
     -- CreateColorPicker signature: (parent, label, dbTable, dbKey, hasAlpha, callback, ...)
-    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function() end)
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function() elem.overrides.color = true end)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], elem, "useClassColor", function()
+        elem.overrides.useClassColor = true
         if elem.useClassColor then
             if colorPicker.Disable then colorPicker:Disable() end
             colorPicker:SetAlpha(0.4)
@@ -2104,13 +2110,58 @@ local function BuildGroupsTab(GUI, parent, state, tdDB, page)
     end
 end
 
--- Stub — filled in Phase 4
+-- Global tab — defaults shared by every text element that hasn't overridden
+-- the corresponding Appearance field. Phase 4 only stores the defaults and
+-- the per-element overrides table; the resolver that falls back to these
+-- values lands in Phase 2 of the larger TD work.
 local function BuildGlobalTab(GUI, parent, state, tdDB, page)
-    local placeholder = parent:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(placeholder, 12, "")
-    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
-    placeholder:SetText("(Global tab — filled in Phase 4)")
-    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    local defaults = tdDB.globalDefaults
+
+    local label = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(label, 9, "")
+    label:SetText(L["Global Defaults"]:upper())
+    label:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, -14)
+
+    local desc = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(desc, 10, "")
+    desc:SetText(L["These defaults apply to all text elements that haven't been individually customized."])
+    desc:SetWidth(parent:GetWidth() - 28)
+    desc:SetJustifyH("LEFT")
+    desc:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -6)
+    desc:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    local y = -60
+
+    local fontDrop
+    if GUI.CreateFontDropdown then
+        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], defaults, "font", function() end)
+    else
+        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[defaults.font] = defaults.font}, defaults, "font", function() end)
+    end
+    fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, defaults, "fontSize", function() end)
+    sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    local outlineOpts = {
+        NONE = L["None"],
+        OUTLINE = L["Outline"],
+        THICKOUTLINE = L["Thick Outline"],
+        SHADOW = L["Shadow"],
+    }
+    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, defaults, "outline", function() end)
+    outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, function() end)
+    colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], defaults, "useClassColor", function() end)
+    classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
 end
 
 -- ============================================================
