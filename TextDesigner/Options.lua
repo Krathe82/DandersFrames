@@ -1603,7 +1603,13 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- right-most of the trio).
     local copyBtnContainer
     if GUI.CreateCopyButton then
-        copyBtnContainer = GUI.CreateCopyButton(page.child, {"textDesigner"}, L["Text Designer"], "text_designer")
+        copyBtnContainer = GUI.CreateCopyButton(
+            page.child,
+            {"textDesigner"},
+            L["Text Designer"],
+            "text_designer",
+            true  -- omitReset: hide the Reset Page button for now
+        )
         copyBtnContainer:ClearAllPoints()
         copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
         state.copyBtnContainer = copyBtnContainer
