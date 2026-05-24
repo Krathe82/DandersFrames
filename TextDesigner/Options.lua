@@ -233,8 +233,13 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         end
         -- Every OTHER card has an Anchor To dropdown that lists this element
         -- by label — force a full rebuild so they pick up the new label.
+        -- Defer to the next frame so the rebuild happens AFTER the current
+        -- click event finishes resolving (focus-loss fires mid-click; rebuilding
+        -- synchronously here destroys the frames the click is still landing on).
         if state and DF.TextDesigner.FullRebuildCards then
-            DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+            C_Timer.After(0, function()
+                DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+            end)
         end
     end, 200)
     labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
@@ -307,9 +312,14 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         -- Helper to re-render the whole card list when items change. Uses
         -- the full rebuild path so every other card's Anchor To dropdown
         -- and group items list refresh in lockstep.
+        -- Deferred via C_Timer.After(0, ...) so the rebuild happens AFTER the
+        -- current click event finishes — synchronous rebuilds mid-click destroy
+        -- the frames the click is still landing on.
         local function ReRender()
             if state and DF.TextDesigner.FullRebuildCards then
-                DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+                C_Timer.After(0, function()
+                    DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+                end)
             end
         end
 
