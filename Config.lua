@@ -50,7 +50,13 @@ local function RegisterCustomMedia()
     LSM:Register(LSM.MediaType.STATUSBAR, "DF Soft", "Interface\\AddOns\\DandersFrames\\Media\\DF_Soft")
     LSM:Register(LSM.MediaType.STATUSBAR, "DF Beveled", "Interface\\AddOns\\DandersFrames\\Media\\DF_Beveled")
     LSM:Register(LSM.MediaType.STATUSBAR, "DF Minimalist", "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist")
-    
+
+    -- Frame border textures (edgeFiles for the Texture border style)
+    LSM:Register(LSM.MediaType.BORDER, "DF Glow", "Interface\\AddOns\\DandersFrames\\Media\\DF_Glow")
+    LSM:Register(LSM.MediaType.BORDER, "DF Bevel", "Interface\\AddOns\\DandersFrames\\Media\\DF_Bevel")
+    LSM:Register(LSM.MediaType.BORDER, "DF Inset", "Interface\\AddOns\\DandersFrames\\Media\\DF_Inset")
+    LSM:Register(LSM.MediaType.BORDER, "DF Double", "Interface\\AddOns\\DandersFrames\\Media\\DF_Double")
+
     -- Register callback to clear font cache when new fonts are added
     LSM:RegisterCallback("LibSharedMedia_Registered", function(_, mediaType)
         if mediaType == LSM.MediaType.FONT then
