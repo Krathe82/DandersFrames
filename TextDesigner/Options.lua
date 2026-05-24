@@ -1069,6 +1069,8 @@ end
 --   BuildAppearanceSection(GUI, parent, elem, card, yStart)
 --   BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
 local function CreateTextElementCard(GUI, parent, yPos, elem, tdDB, state, page)
+    local HEADER_HEIGHT = 30
+
     -- Outer card: layout-only, no backdrop
     local card = CreateFrame("Frame", nil, parent)
     card:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, yPos)
@@ -1084,7 +1086,7 @@ local function CreateTextElementCard(GUI, parent, yPos, elem, tdDB, state, page)
     local header = CreateFrame("Button", nil, card, "BackdropTemplate")
     header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
-    header:SetHeight(30)
+    header:SetHeight(HEADER_HEIGHT)
     header:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1255,16 +1257,15 @@ local function CreateTextElementCard(GUI, parent, yPos, elem, tdDB, state, page)
     card.collapsed = savedStates[cardKey] == true
     card.cardKey = cardKey
 
-    local headerHeight = 30
     local function ApplyCollapseState()
         if card.collapsed then
             body:Hide()
             arrow:SetTexture(mediaPath .. "chevron_right")
-            card:SetHeight(headerHeight)
+            card:SetHeight(HEADER_HEIGHT)
         else
             body:Show()
             arrow:SetTexture(mediaPath .. "expand_more")
-            card:SetHeight(headerHeight + bodyHeight)
+            card:SetHeight(HEADER_HEIGHT + bodyHeight)
         end
     end
     card.ApplyCollapseState = ApplyCollapseState
@@ -1311,7 +1312,7 @@ local function CreateTextElementCard(GUI, parent, yPos, elem, tdDB, state, page)
     card:UpdateMeta()
 
     -- ── RETURN ───────────────────────────────────────────────
-    local totalCardH = card.collapsed and headerHeight or (headerHeight + bodyHeight)
+    local totalCardH = card.collapsed and HEADER_HEIGHT or (HEADER_HEIGHT + bodyHeight)
     return card, totalCardH
 end
 
@@ -1341,9 +1342,8 @@ local function RenderCardList(GUI, page, tdDB, state)
 
     -- Destroy ALL existing cards from any previous render. We can't actually
     -- free WoW frames (CreateFrame has no destructor), so we hide them,
-    -- detach them from anchors, and nil out their per-frame OnUpdate so the
-    -- drag loop closure doesn't keep this card animating against an old
-    -- elements array.
+    -- detach them from anchors, and nil out OnUpdate so any leftover
+    -- per-frame closures don't keep running against this orphan card.
     if state.cardFrames then
         for _, card in pairs(state.cardFrames) do
             card:Hide()
