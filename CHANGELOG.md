@@ -7,6 +7,7 @@
 * (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments. (PR #109 by Krathe)
 * Added a `/df attached` command that lists other addons attaching castbars, cooldowns or auras to your frames — handy for telling apart DF features from another addon's. (PR #104 by Krathe)
 * (Frames) Added border customization under Frame → Appearance: a **Border Style** option (Solid or Texture), where the Texture style can use any border registered with SharedMedia (the built-in set, or ones added by other media addons), plus a **Border Size** slider to adjust thickness. (PR #119 by Krathe)
+* (Frames) Added a **Use Class Color** option for the frame border, colouring each frame's border by the unit's class. (PR #120 by Krathe, suggested by maelareth)
 
 ### Bug Fixes
 

@@ -1474,6 +1474,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Frame Border"], db, "showFrameBorder", UpdateFrames), 30)
         local borderColorPicker = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "borderColor", true, UpdateFrames, function() DF:LightweightUpdateBorderColor() end, true), 35)
         borderColorPicker.hideOn = function(d) return not d.showFrameBorder end
+        local borderClassColorCheck = appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use Class Color"], db, "borderClassColor", function() UpdateFrames() DF:LightweightUpdateBorderColor() end), 30)
+        borderClassColorCheck.hideOn = function(d) return not d.showFrameBorder end
         local borderStyleDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Border Style"], { SOLID = L["Solid"], TEXTURE = L["Texture"] }, db, "borderStyle", function()
             -- Switching to Texture with no valid texture chosen would show a blank
             -- dropdown and keep rendering the solid border. Seed the first available

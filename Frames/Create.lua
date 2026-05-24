@@ -103,8 +103,7 @@ function DF:ApplyFrameBorder(frame, db)
 
     local size = db.borderSize or 1
     if db.pixelPerfect and DF.PixelPerfect then size = DF:PixelPerfect(size) end
-    local c = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
-    local cr, cg, cb, ca = c.r or 0, c.g or 0, c.b or 0, c.a or 1
+    local cr, cg, cb, ca = DF:GetFrameBorderColor(frame, db)
     -- Only resolve an LSM edgeFile when the Texture style is selected; otherwise
     -- fall through to the built-in solid four-edge border below.
     local style = db.borderStyle or "SOLID"

@@ -864,6 +864,7 @@ DF.PartyDefaults = {
     borderSize = 1,
     borderStyle = "SOLID",
     borderTexture = "SOLID",
+    borderClassColor = false,
     showFrameBorder = true,
 
     -- Boss Debuffs
@@ -2185,6 +2186,7 @@ DF.RaidDefaults = {
     borderSize = 1,
     borderStyle = "SOLID",
     borderTexture = "SOLID",
+    borderClassColor = false,
     showFrameBorder = true,
 
     -- Boss Debuffs
