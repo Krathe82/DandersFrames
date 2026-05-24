@@ -545,10 +545,12 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    -- Color picker + Use Class Color toggle.
+    -- Color picker + Use Class Color toggle (stacked vertically so they
+    -- don't overflow the now-narrower card body).
     -- CreateColorPicker signature: (parent, label, dbTable, dbKey, hasAlpha, callback, ...)
     local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function() end)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
 
     local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], elem, "useClassColor", function()
         if elem.useClassColor then
@@ -559,14 +561,14 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
             colorPicker:SetAlpha(1)
         end
     end)
-    classColorCheck:SetPoint("LEFT", colorPicker, "RIGHT", 16, 0)
+    classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
 
     -- Apply initial grayed state if class color is on
     if elem.useClassColor then
         if colorPicker.Disable then colorPicker:Disable() end
         colorPicker:SetAlpha(0.4)
     end
-    y = y - FIELD_ROW_HEIGHT
 
     return y - SECTION_GAP
 end
@@ -620,7 +622,14 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     elem.frameStrata = elem.frameStrata or "INHERIT"
     elem.anchorTo = elem.anchorTo or "FRAME"
 
-    -- Anchor grid on the left
+    -- Shared callback: every position-related widget needs to refresh the
+    -- card's header banner so the "ANCHOR · X,Y · → target" summary stays
+    -- in sync with the live values.
+    local function metaCB() if card and card.UpdateMeta then card:UpdateMeta() end end
+
+    -- Anchor grid first (stacked, not side-by-side). The card body is now
+    -- ~half the page width so the previous side-by-side layout would overflow.
+    -- Grid is 60×60, with a small label beneath; advance y by grid + label + gap.
     local grid = CreateAnchorGrid(GUI, parent, elem, card)
     grid:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y - 4)
     local gridLabel = parent:CreateFontString(nil, "OVERLAY")
@@ -628,24 +637,20 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     gridLabel:SetText(L["Anchor"])
     gridLabel:SetPoint("TOP", grid, "BOTTOM", 0, -2)
     gridLabel:SetTextColor(0.6, 0.6, 0.6)
+    -- Grid (60) + label gap (2) + label (10) + bottom gap (8) ≈ 80
+    y = y - 80
 
-    -- Shared callback: every position-related widget needs to refresh the
-    -- card's header banner so the "ANCHOR · X,Y · → target" summary stays
-    -- in sync with the live values.
-    local function metaCB() if card and card.UpdateMeta then card:UpdateMeta() end end
-
-    -- Offsets / frame settings on the right
-    local rightX = 100
+    -- Stacked sliders + dropdowns (full body width)
     local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", metaCB)
-    xSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    xSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", metaCB)
-    ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", function() end)
-    lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     local strataOpts = {
@@ -656,14 +661,14 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
         DIALOG = "DIALOG",
     }
     local strataDrop = GUI:CreateDropdown(parent, L["Frame Strata"], strataOpts, elem, "frameStrata", function() end)
-    strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Anchor To: target element (or the unit frame). Options are computed
     -- dynamically and exclude self + transitive descendants to prevent cycles.
     local anchorTargets = BuildAnchorTargets(tdDB, elem)
     local anchorToDrop = GUI:CreateDropdown(parent, L["Anchor To"], anchorTargets, elem, "anchorTo", metaCB)
-    anchorToDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", rightX, y)
+    anchorToDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     return y - SECTION_GAP
@@ -1599,16 +1604,17 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.built = true
     state.activeDB = db
 
-    -- ── 50/50 SPLIT: LEFT PREVIEW PANEL + RIGHT EDITOR ──────
-    -- Visual mockup mirroring Aura Designer's layout. The preview panel is
-    -- purely cosmetic right now (no live wiring) — it shows what TD would
-    -- look like with a real frame preview docked to the left half. The
-    -- right anchor frame hosts the actual editor UI (Copy trio, controls
-    -- bar, card list) so it lives in the right half.
+    -- ── LAYOUT OVERVIEW ─────────────────────────────────────
+    -- Top: full-width banner hosting the copy/sync trio (top-right) and the
+    -- controls bar (Enable + Add Element button) spanning the full width
+    -- below the trio.
+    -- Below: 50/50 split — left half is the preview panel, right half hosts
+    -- the text-elements list (header + scrollable card list). Both halves
+    -- extend to the bottom of page.child.
+    --
+    -- previewPanel is created here but its anchors are set AFTER the
+    -- controls bar is positioned (so it can anchor below the banner).
     local previewPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
-    previewPanel:SetPoint("TOPLEFT", page.child, "TOPLEFT", 0, 0)
-    previewPanel:SetPoint("BOTTOMLEFT", page.child, "BOTTOMLEFT", 0, 0)
-    previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
     ApplyBackdrop(previewPanel, C_PANEL, C_BORDER)
     state.previewPanel = previewPanel
 
@@ -1733,46 +1739,53 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     previewNote:SetText("Preview placeholder (visual mockup)")
     previewNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
 
-    -- Right-side anchor frame — invisible container that the existing editor
-    -- UI (copy trio, controls bar, list panel) anchors against, so the editor
-    -- lives in the right half of the page.
-    local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
-    rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 4, 0)
-    rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
-    state.rightAnchorFrame = rightAnchorFrame
-
-    -- ── COPY / SYNC / RESET TRIO (top of page) ───────────────
+    -- ── COPY / SYNC / RESET TRIO (top of page, full width) ────
     -- Standard cross-mode trio that every settings page exposes. Allows the
     -- user to copy / sync / reset the Text Designer block between party and
-    -- raid modes. The helper anchors its sync + reset buttons internally;
-    -- we just need to position the returned Copy button (which is the
-    -- right-most of the trio).
+    -- raid modes. Anchored to page.child's TOPRIGHT so it spans the full
+    -- width context.
     local copyBtnContainer
     if GUI.CreateCopyButton then
         copyBtnContainer = GUI.CreateCopyButton(
-            rightAnchorFrame,
+            page.child,
             {"textDesigner"},
             L["Text Designer"],
             "text_designer",
             true  -- omitReset: hide the Reset Page button for now
         )
         copyBtnContainer:ClearAllPoints()
-        copyBtnContainer:SetPoint("TOPRIGHT", rightAnchorFrame, "TOPRIGHT", -10, -10)
+        copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
         state.copyBtnContainer = copyBtnContainer
     end
 
-    -- ── TAB-LEVEL CONTROLS BAR ───────────────────────────────
-    -- Master enable toggle + Add Element button, side by side at top.
-    local controlsBar = CreateFrame("Frame", nil, rightAnchorFrame)
+    -- ── TAB-LEVEL CONTROLS BAR (full width, below the trio) ──
+    -- Master enable toggle + Add Element button. Spans the entire page width
+    -- below the copy trio so it forms part of the top banner.
+    local controlsBar = CreateFrame("Frame", nil, page.child)
     controlsBar:SetHeight(32)
     if copyBtnContainer then
-        controlsBar:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 10, -42)
+        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
         controlsBar:SetPoint("TOPRIGHT", copyBtnContainer, "BOTTOMRIGHT", 0, -8)
     else
-        controlsBar:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 10, -10)
-        controlsBar:SetPoint("TOPRIGHT", rightAnchorFrame, "TOPRIGHT", -10, -10)
+        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
+        controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
     end
     state.controlsBar = controlsBar
+
+    -- ── PREVIEW PANEL ANCHORS (left half, below the banner) ───
+    -- Set after the controls bar exists so we can anchor to its bottom.
+    previewPanel:ClearAllPoints()
+    previewPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
+    previewPanel:SetPoint("BOTTOM", page.child, "BOTTOM", 0, 10)
+    previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
+
+    -- Right-side anchor frame — invisible container for the list header +
+    -- list panel. Sits in the right half, starting at the same y as the
+    -- preview panel (i.e. just below the controls bar).
+    local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
+    rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 6, 0)
+    rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
+    state.rightAnchorFrame = rightAnchorFrame
 
     -- Master toggle
     local enableCheck = GUI:CreateCheckbox(
@@ -1847,7 +1860,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     GUI:SetSettingsFont(listHeader, 9, "")
     listHeader:SetText(L["Text Elements"]:upper())
     listHeader:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
-    listHeader:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 12, -6)
+    listHeader:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 12, -6)
     state.listHeader = listHeader
 
     local listPanel = CreateFrame("Frame", nil, rightAnchorFrame, "BackdropTemplate")
