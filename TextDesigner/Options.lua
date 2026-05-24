@@ -1060,22 +1060,27 @@ end
 -- Body sections: Content / Appearance / Position.
 -- ============================================================
 
-local function BuildCard(GUI, parent, elem, tdDB, state, page)
-    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
-
-    -- Outer card: layout-only Frame. NO backdrop — header + body each own
-    -- their own chrome so there's no underlying surface to bleed through.
-    -- Height is set explicitly in ApplyCollapseState below.
+-- AD-style card builder. Returns (card, totalCardH). Caller advances its
+-- y-cursor with totalCardH. The card is layout-only; the header and body each
+-- own their own backdrop so there's no underlying surface bleeding through.
+--
+-- Section builder signatures (preserved from before the AD-clone refactor):
+--   BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart)
+--   BuildAppearanceSection(GUI, parent, elem, card, yStart)
+--   BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
+local function CreateTextElementCard(GUI, parent, yPos, elem, tdDB, state, page)
+    -- Outer card: layout-only, no backdrop
     local card = CreateFrame("Frame", nil, parent)
-    card:SetHeight(30)
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, yPos)
+    card:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, yPos)
 
-    -- Context for callbacks (used by delete + reorder + meta updates)
     card._tdDB = tdDB
     card._state = state
     card._GUI = GUI
     card._page = page
+    card._elem = elem
 
-    -- ── HEADER ──────────────────────────────────────────────
+    -- ── HEADER ───────────────────────────────────────────────
     local header = CreateFrame("Button", nil, card, "BackdropTemplate")
     header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
@@ -1088,7 +1093,6 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     header:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
     header:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
 
-    -- Hover state mirrors AD's pattern (AuraDesigner/Options.lua:4453-4458).
     header:SetScript("OnEnter", function(self)
         self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, C_HOVER.a)
     end)
@@ -1097,7 +1101,8 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     end)
     card.header = header
 
-    -- Collapse arrow on the LEFT, theme-tinted (like AD).
+    -- Collapse arrow on the LEFT
+    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
     local arrow = header:CreateTexture(nil, "OVERLAY")
     arrow:SetSize(10, 10)
     arrow:SetPoint("LEFT", header, "LEFT", 8, 0)
@@ -1107,83 +1112,72 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     end
     card.collapseArrow = arrow
 
-    -- Title text
+    -- Category-color chip (replaces AD's spell icon)
     local ct = FindContentType(elem.contentType)
-    local displayName = (elem.label and elem.label ~= "" and elem.label)
-        or (ct and ct.label)
-        or elem.contentType
+    local catColor = ct and CATEGORY_COLORS[ct.category]
+    local chip = header:CreateTexture(nil, "OVERLAY")
+    chip:SetSize(4, 18)
+    chip:SetPoint("LEFT", arrow, "RIGHT", 6, 0)
+    if catColor then
+        chip:SetColorTexture(catColor.r, catColor.g, catColor.b, catColor.a)
+    else
+        chip:SetColorTexture(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    end
+
+    -- Title text
     local title = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(title, 11, "OUTLINE")
-    title:SetPoint("LEFT", arrow, "RIGHT", 6, 0)
+    title:SetPoint("LEFT", chip, "RIGHT", 8, 0)
+    local displayName = (elem.label and elem.label ~= "" and elem.label) or (ct and ct.label) or elem.contentType
     title:SetText(displayName)
-    -- Tint title by content category so the type identity reads at a glance.
-    local catColor = ct and CATEGORY_COLORS[ct.category]
     if catColor then
         title:SetTextColor(catColor.r, catColor.g, catColor.b, catColor.a)
+        card.titleCatColor = catColor
     else
         title:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, C_TEXT.a)
     end
     card.title = title
-    card.titleCatColor = catColor  -- so label-edit callback can re-apply it
 
-    -- Meta line (anchor / offset / target summary)
+    -- Meta line
     local meta = header:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(meta, 9, "")
     meta:SetPoint("LEFT", title, "RIGHT", 8, 0)
-    meta:SetText("")
     meta:SetTextColor(0.55, 0.6, 0.7)
     card.meta = meta
 
     -- ── ACTION ICONS (right side of header) ──────────────────
+    -- Hand-drawn X delete (matches AD pattern)
     local ICON_SIZE = 18
     local ICON_GAP = 4
 
-    -- Delete (rightmost) — hand-drawn X cross matching AuraDesigner.
-    -- Two rotated SetColorTexture lines (AuraDesigner/Options.lua:4412-4433).
-    local deleteBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
-    deleteBtn:SetSize(ICON_SIZE, ICON_SIZE)
-    deleteBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
-    local xSize, xThick = 12, 2
-    local xLine1 = deleteBtn:CreateTexture(nil, "OVERLAY")
-    xLine1:SetSize(xSize, xThick)
-    xLine1:SetPoint("CENTER", 0, 0)
-    xLine1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
-    xLine1:SetRotation(math.rad(45))
-    local xLine2 = deleteBtn:CreateTexture(nil, "OVERLAY")
-    xLine2:SetSize(xSize, xThick)
-    xLine2:SetPoint("CENTER", 0, 0)
-    xLine2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
-    xLine2:SetRotation(math.rad(-45))
+    local deleteBtn = CreateFrame("Button", nil, header)
+    deleteBtn:SetSize(22, 22)
+    deleteBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+    local dxSize, dxThick = 12, 2
+    local dline1 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    dline1:SetSize(dxSize, dxThick)
+    dline1:SetPoint("CENTER")
+    dline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    dline1:SetRotation(math.rad(45))
+    local dline2 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    dline2:SetSize(dxSize, dxThick)
+    dline2:SetPoint("CENTER")
+    dline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    dline2:SetRotation(math.rad(-45))
     deleteBtn:SetScript("OnEnter", function()
-        xLine1:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
-        xLine2:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+        dline1:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+        dline2:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
     end)
     deleteBtn:SetScript("OnLeave", function()
-        xLine1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
-        xLine2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+        dline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+        dline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
     end)
     card.deleteBtn = deleteBtn
 
-    -- Drag handle
-    local dragBtn = CreateFrame("Button", nil, header)
-    dragBtn:SetSize(ICON_SIZE, ICON_SIZE)
-    dragBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -ICON_GAP, 0)
-    local dragIcon = dragBtn:CreateTexture(nil, "OVERLAY")
-    dragIcon:SetAllPoints()
-    dragIcon:SetTexture(mediaPath .. "menu")
-    dragIcon:SetVertexColor(0.7, 0.7, 0.7)
-    dragBtn:SetScript("OnEnter", function()
-        if not card._dragging then dragIcon:SetVertexColor(1, 1, 1) end
-    end)
-    dragBtn:SetScript("OnLeave", function()
-        if not card._dragging then dragIcon:SetVertexColor(0.7, 0.7, 0.7) end
-    end)
-    card.dragBtn = dragBtn
-
-    -- Visibility toggle (eye)
+    -- Eye icon (visibility toggle) — TD-specific, left of delete
     local eyeBtn = CreateFrame("Button", nil, header)
     eyeBtn:SetSize(ICON_SIZE, ICON_SIZE)
-    eyeBtn:SetPoint("RIGHT", dragBtn, "LEFT", -ICON_GAP, 0)
+    eyeBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -ICON_GAP, 0)
     local eyeIcon = eyeBtn:CreateTexture(nil, "OVERLAY")
     eyeIcon:SetAllPoints()
     local function updateEyeIcon()
@@ -1196,24 +1190,24 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
         end
     end
     updateEyeIcon()
+    eyeBtn:SetScript("OnEnter", function() if elem.enabled then eyeIcon:SetVertexColor(1,1,1) end end)
+    eyeBtn:SetScript("OnLeave", function() updateEyeIcon() end)
     card.eyeBtn = eyeBtn
 
-    -- Lift action icons above the header's OnClick collapse handler so
-    -- clicks on them don't toggle the card. RegisterForClicks + a higher
-    -- frame level keep them isolated from the header.
-    for _, btn in ipairs({eyeBtn, dragBtn, deleteBtn}) do
+    -- Click-through prevention on action icons
+    for _, btn in ipairs({eyeBtn, deleteBtn}) do
         btn:RegisterForClicks("LeftButtonUp")
         btn:SetFrameLevel(header:GetFrameLevel() + 5)
     end
 
-    -- Wire visibility toggle
+    -- Eye OnClick
     eyeBtn:SetScript("OnClick", function()
         elem.enabled = not elem.enabled
         updateEyeIcon()
         DF:Debug("TD", "Element %d enabled=%s", elem.id, tostring(elem.enabled))
     end)
 
-    -- Wire delete (instant — no confirmation popup)
+    -- Delete OnClick (instant, no popup)
     deleteBtn:SetScript("OnClick", function()
         local capturedTdDB = card._tdDB
         local capturedState = card._state
@@ -1226,8 +1220,6 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
                 break
             end
         end
-        -- Full rebuild so every other card's Anchor To dropdown drops the
-        -- deleted target (and any descendants get reparented sanely).
         if DF.TextDesigner.FullRebuildCards then
             DF.TextDesigner.FullRebuildCards(capturedGUI, capturedPage, capturedTdDB, capturedState)
         end
@@ -1235,9 +1227,7 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
             elem.id, #capturedTdDB.elements)
     end)
 
-    -- ── BODY ────────────────────────────────────────────────
-    -- Real Frame with real backdrop. Touches header's bottom (zero gap).
-    -- Content goes INSIDE this frame, chained via y-offset.
+    -- ── BODY ─────────────────────────────────────────────────
     local body = CreateFrame("Frame", nil, card, "BackdropTemplate")
     body:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
@@ -1250,32 +1240,22 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     body:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
     card.body = body
 
-    -- Build content sections INSIDE the body frame, chaining via y-offset.
-    -- Section builder signatures (preserved):
-    --   BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart)
-    --   BuildAppearanceSection(GUI, parent, elem, card, yStart)
-    --   BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
+    -- Build content sections inside body. BuildAppearanceSection's signature
+    -- is (GUI, parent, elem, card, yStart) — the section builders were not
+    -- changed in Phase 2.1.
     local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
     yEnd = BuildAppearanceSection(GUI, body, elem, card, yEnd)
     yEnd = BuildPositionSection(GUI, body, elem, tdDB, card, yEnd)
-    -- Compute body height as a local so we never have to round-trip through
-    -- body:GetHeight() (which can return stale values mid-frame, the same way
-    -- AD's CreateEffectCard accumulates totalCardH locally).
     local bodyHeight = math.max(1, -yEnd + 10)
     body:SetHeight(bodyHeight)
 
-    -- ── COLLAPSE STATE ──────────────────────────────────────
-    -- Persisted across reloads via GUI:GetCollapsedGroups(), keyed by element
-    -- id so each card remembers its own state.
+    -- ── COLLAPSE STATE ───────────────────────────────────────
     local cardKey = "td_elem_" .. tostring(elem.id)
     local savedStates = GUI:GetCollapsedGroups()
     card.collapsed = savedStates[cardKey] == true
     card.cardKey = cardKey
 
     local headerHeight = 30
-
-    -- ApplyCollapseState sources heights from the local `bodyHeight` rather
-    -- than `body:GetHeight()` so collapse toggles are always authoritative.
     local function ApplyCollapseState()
         if card.collapsed then
             body:Hide()
@@ -1289,138 +1269,25 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
     end
     card.ApplyCollapseState = ApplyCollapseState
 
-    -- Header click → toggle collapse
     header:RegisterForClicks("LeftButtonUp")
     header:SetScript("OnClick", function()
         card.collapsed = not card.collapsed
         GUI:GetCollapsedGroups()[cardKey] = card.collapsed or nil
         ApplyCollapseState()
+        -- Trigger full re-render so the list reflows
         if DF.TextDesigner.RenderCardList then
             DF.TextDesigner.RenderCardList(card._GUI, card._page, card._tdDB, card._state)
         end
     end)
 
-    -- Initial state
     ApplyCollapseState()
 
-    -- ── DRAG-TO-REORDER ─────────────────────────────────────
-    -- Mirrors the OnMouseDown / OnMouseUp / OnUpdate pattern used by
-    -- GUI:CreateRoleOrderList (GUI/GUI.lua:4438-4518) so the dragged card
-    -- follows the cursor live and other cards reflow underneath it as the
-    -- drop position changes. The drag handle is the grip icon (dragBtn);
-    -- the card itself owns the OnUpdate that moves it with the cursor.
-    local dragOffsetY = 0
-    local CARD_GAP_DRAG = 5  -- must match CARD_GAP in RenderCardList
-
-    dragBtn:SetScript("OnMouseDown", function(self, button)
-        if button ~= "LeftButton" then return end
-        card._dragging = true
-        local cursorY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
-        local cardTop = card:GetTop()
-        if cardTop then
-            dragOffsetY = cardTop - cursorY
-        else
-            dragOffsetY = 0
-        end
-        local listChild = card._state and card._state.listChild
-        local baseLevel = (listChild and listChild:GetFrameLevel()) or card:GetFrameLevel()
-        card:SetFrameLevel(baseLevel + 10)
-        card:SetAlpha(0.85)
-        dragIcon:SetVertexColor(1, 1, 1)
-        DF:Debug("TD", "Drag start id=%d", elem.id)
-    end)
-
-    dragBtn:SetScript("OnMouseUp", function(self, button)
-        if button ~= "LeftButton" then return end
-        if not card._dragging then return end
-        card._dragging = false
-        card:SetAlpha(1)
-        dragIcon:SetVertexColor(0.7, 0.7, 0.7)
-        -- RenderCardList re-anchors every card to its index position and
-        -- restores frame level / visibility, so we don't need to undo
-        -- anything manually here.
-        if DF.TextDesigner.RenderCardList then
-            DF.TextDesigner.RenderCardList(card._GUI, card._page, card._tdDB, card._state)
-        end
-    end)
-
-    card:SetScript("OnUpdate", function(self, elapsed)
-        if not card._dragging then return end
-        local capturedTdDB = card._tdDB
-        local capturedState = card._state
-        if not capturedTdDB or not capturedState or not capturedState.listChild then return end
-
-        local cursorY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
-        local listChildTop = capturedState.listChild:GetTop()
-        if not listChildTop then return end
-
-        -- Position the dragged card under the cursor (preserving the click
-        -- offset so it doesn't snap to the cursor origin).
-        local targetY = cursorY + dragOffsetY
-        local offsetFromTop = listChildTop - targetY
-        -- Clamp so the card stays inside the list child bounds.
-        local listHeight = capturedState.listChild:GetHeight()
-        local cardHeight = card:GetHeight()
-        local maxOffset = math.max(0, listHeight - cardHeight)
-        offsetFromTop = math.max(0, math.min(offsetFromTop, maxOffset))
-
-        card:ClearAllPoints()
-        card:SetPoint("TOPLEFT", capturedState.listChild, "TOPLEFT", 2, -offsetFromTop)
-        card:SetPoint("TOPRIGHT", capturedState.listChild, "TOPRIGHT", -2, -offsetFromTop)
-
-        -- Compute the target drop index from cursor position relative to
-        -- the other cards.
-        local dropIndex
-        for i, e in ipairs(capturedTdDB.elements) do
-            local other = capturedState.cardFrames[e.id]
-            if other and other ~= card and other:IsShown() then
-                local otherTop = other:GetTop()
-                if otherTop and cursorY > otherTop then
-                    dropIndex = i
-                    break
-                end
-            end
-        end
-        if not dropIndex then dropIndex = #capturedTdDB.elements end
-
-        -- Find the dragged card's current index in the db.
-        local currentIdx
-        for i, e in ipairs(capturedTdDB.elements) do
-            if e.id == elem.id then currentIdx = i; break end
-        end
-        if not currentIdx then return end
-
-        -- If the drop slot has moved, reorder the db live and reflow the
-        -- OTHER cards. The dragged card itself stays under the cursor —
-        -- the next OnUpdate tick re-sets its position from the cursor, so
-        -- we deliberately don't reposition it here.
-        if currentIdx ~= dropIndex then
-            local moved = table.remove(capturedTdDB.elements, currentIdx)
-            table.insert(capturedTdDB.elements, math.min(dropIndex, #capturedTdDB.elements + 1), moved)
-            local y = 0
-            for _, e in ipairs(capturedTdDB.elements) do
-                local sibling = capturedState.cardFrames[e.id]
-                if sibling then
-                    if sibling ~= card then
-                        sibling:ClearAllPoints()
-                        sibling:SetPoint("TOPLEFT", capturedState.listChild, "TOPLEFT", 2, y)
-                        sibling:SetPoint("TOPRIGHT", capturedState.listChild, "TOPRIGHT", -2, y)
-                    end
-                    y = y - sibling:GetHeight() - CARD_GAP_DRAG
-                end
-            end
-        end
-    end)
-
-    -- Update the header meta line with current anchor + offset summary,
-    -- plus the anchor target's name if anchored to another element. Read
-    -- from card._tdDB so the lookup always sees the current element list.
+    -- ── UpdateMeta ───────────────────────────────────────────
     function card:UpdateMeta()
         local anchor = elem.anchor or "CENTER"
         local x = elem.offsetX or 0
         local y = elem.offsetY or 0
         local s = anchor .. " · " .. x .. "," .. y
-
         if elem.anchorTo and elem.anchorTo ~= "FRAME" then
             local targetID = tonumber(elem.anchorTo)
             if targetID and card._tdDB and card._tdDB.elements then
@@ -1430,8 +1297,8 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
                         if e.label and e.label ~= "" then
                             targetName = e.label
                         else
-                            local ct2 = FindContentType(e.contentType)
-                            targetName = (ct2 and ct2.label or e.contentType) .. " #" .. e.id
+                            local tct = FindContentType(e.contentType)
+                            targetName = (tct and tct.label or e.contentType) .. " #" .. e.id
                         end
                         s = s .. " · → " .. targetName
                         break
@@ -1439,18 +1306,12 @@ local function BuildCard(GUI, parent, elem, tdDB, state, page)
                 end
             end
         end
-
         meta:SetText(s)
     end
     card:UpdateMeta()
 
-    -- Compute total card height based on the current collapse state. This
-    -- mirrors AD's CreateEffectCard (AuraDesigner/Options.lua:4843+) which
-    -- accumulates totalCardH locally and returns the new y-cursor. Sourcing
-    -- this from a local instead of card:GetHeight() eliminates a class of
-    -- "card height stale during render" bugs.
+    -- ── RETURN ───────────────────────────────────────────────
     local totalCardH = card.collapsed and headerHeight or (headerHeight + bodyHeight)
-
     return card, totalCardH
 end
 
@@ -1469,9 +1330,13 @@ local function RenderCardList(GUI, page, tdDB, state)
     -- to listChild, so if its width is 0/1 (e.g. before lazy sizing kicks in)
     -- they'll end up with negative width and render invisibly.
     -- Guard against transient 0: don't overwrite a good width with nothing.
-    local cw = state.listContainer:GetWidth()
-    if cw and cw > 1 then
-        state.listChild:SetWidth(cw)
+    -- Nil-guard: during Phase 2.1 the Texts tab is still a stub, so
+    -- state.listContainer / state.listChild may not exist yet.
+    if state.listContainer and state.listChild then
+        local cw = state.listContainer:GetWidth()
+        if cw and cw > 1 then
+            state.listChild:SetWidth(cw)
+        end
     end
 
     -- Destroy ALL existing cards from any previous render. We can't actually
@@ -1490,28 +1355,37 @@ local function RenderCardList(GUI, page, tdDB, state)
         state.cardFrames = {}
     end
 
-    if #tdDB.elements == 0 then
+    -- Filter: only render non-group elements on Texts tab. Groups will get
+    -- their own UI on the Groups tab (Task 3.x).
+    local elementsToShow = {}
+    for _, elem in ipairs(tdDB.elements) do
+        if elem.contentType ~= "group" then
+            table.insert(elementsToShow, elem)
+        end
+    end
+
+    if #elementsToShow == 0 then
         if state.emptyMsg then state.emptyMsg:Show() end
         if state.emptyHint then state.emptyHint:Show() end
-        state.listChild:SetHeight(1)
+        if state.listChild then state.listChild:SetHeight(1) end
         return
     end
 
     if state.emptyMsg then state.emptyMsg:Hide() end
     if state.emptyHint then state.emptyHint:Hide() end
 
-    -- Build fresh cards. BuildCard returns the total card height it occupies,
-    -- so we advance the y-cursor with that local rather than card:GetHeight()
+    -- Build fresh cards. CreateTextElementCard returns (card, totalCardH);
+    -- we advance the y-cursor with that local rather than card:GetHeight()
     -- — same pattern as AD's BuildEffectsTab caller (AuraDesigner/Options.lua:5147).
+    -- Skip building cards entirely if listChild isn't available yet (Phase 2.1
+    -- stub state). Task 2.2 wires listChild up in BuildTextsTab.
+    if not state.listChild then return end
+
     local y = 0
     local CARD_GAP = 5
-    for _, elem in ipairs(tdDB.elements) do
-        local card, totalCardH = BuildCard(GUI, state.listChild, elem, tdDB, state, page)
+    for _, elem in ipairs(elementsToShow) do
+        local card, totalCardH = CreateTextElementCard(GUI, state.listChild, y, elem, tdDB, state, page)
         state.cardFrames[elem.id] = card
-        card:ClearAllPoints()
-        card:SetPoint("TOPLEFT", state.listChild, "TOPLEFT", 2, y)
-        card:SetPoint("TOPRIGHT", state.listChild, "TOPRIGHT", -2, y)
-        card:Show()
         y = y - totalCardH - CARD_GAP
     end
     state.listChild:SetHeight(math.max(1, -y + 4))
