@@ -1538,6 +1538,52 @@ local function GetState(page)
 end
 
 -- ============================================================
+-- TAB STRIP / TAB CONTENT STUBS
+-- Phase 1.1 wires up the outer shell. The stubs below get fleshed out in
+-- subsequent tasks:
+--   BuildTabStrip   → Task 1.3 (tab strip + state.SelectTab)
+--   BuildTextsTab   → Phase 2  (master toggle, list, cards, picker)
+--   BuildGroupsTab  → Phase 3  (text-group definitions)
+--   BuildGlobalTab  → Phase 4  (global text settings)
+-- ============================================================
+
+-- Stub — filled in Task 1.3
+local function BuildTabStrip(GUI, parent, state, tdDB, page)
+    local strip = CreateFrame("Frame", nil, parent)
+    strip:SetHeight(28)
+    strip:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    strip:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    state.tabStrip = strip
+end
+
+-- Stub — filled in Phase 2
+local function BuildTextsTab(GUI, parent, state, tdDB, page)
+    local placeholder = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(placeholder, 12, "")
+    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    placeholder:SetText("(Texts tab — filled in Phase 2)")
+    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+end
+
+-- Stub — filled in Phase 3
+local function BuildGroupsTab(GUI, parent, state, tdDB, page)
+    local placeholder = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(placeholder, 12, "")
+    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    placeholder:SetText("(Text Groups tab — filled in Phase 3)")
+    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+end
+
+-- Stub — filled in Phase 4
+local function BuildGlobalTab(GUI, parent, state, tdDB, page)
+    local placeholder = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(placeholder, 12, "")
+    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    placeholder:SetText("(Global tab — filled in Phase 4)")
+    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+end
+
+-- ============================================================
 -- BUILD ENTRYPOINT
 -- ============================================================
 
@@ -1575,28 +1621,25 @@ function DF.BuildTextDesignerPage(GUI, page, db)
             end
             wipe(state.cardFrames)
         end
-        if state.copyBtnContainer then state.copyBtnContainer:Hide(); state.copyBtnContainer:ClearAllPoints() end
-        if state.controlsBar then state.controlsBar:Hide(); state.controlsBar:ClearAllPoints() end
-        if state.listHeader then state.listHeader:Hide() end
-        if state.listPanel then state.listPanel:Hide(); state.listPanel:ClearAllPoints() end
-        if state.pickerFrame then state.pickerFrame:Hide(); state.pickerFrame:ClearAllPoints() end
-        if state.pickerOverlay then state.pickerOverlay:Hide() end
-        if state.previewPanel then state.previewPanel:Hide(); state.previewPanel:ClearAllPoints() end
-        if state.rightAnchorFrame then state.rightAnchorFrame:Hide(); state.rightAnchorFrame:ClearAllPoints() end
-        state.copyBtnContainer = nil
-        state.controlsBar = nil
-        state.listHeader = nil
-        state.listPanel = nil
-        state.listContainer = nil
-        state.listChild = nil
-        state.emptyMsg = nil
-        state.emptyHint = nil
-        state.addBtn = nil
-        state.pickerFrame = nil
-        state.pickerOverlay = nil
-        state.previewPanel = nil
-        state.rightAnchorFrame = nil
-        state.cardFrames = {}
+        if state.copyBtnContainer  then state.copyBtnContainer:Hide();  state.copyBtnContainer:ClearAllPoints()  end
+        if state.controlsBar       then state.controlsBar:Hide();       state.controlsBar:ClearAllPoints()       end
+        if state.previewPanel      then state.previewPanel:Hide();      state.previewPanel:ClearAllPoints()      end
+        if state.rightAnchorFrame  then state.rightAnchorFrame:Hide();  state.rightAnchorFrame:ClearAllPoints()  end
+        if state.tabStrip          then state.tabStrip:Hide();          state.tabStrip:ClearAllPoints()          end
+        if state.tabContents       then
+            for _, frame in pairs(state.tabContents) do
+                frame:Hide()
+                frame:ClearAllPoints()
+            end
+            wipe(state.tabContents)
+        end
+        state.copyBtnContainer  = nil
+        state.controlsBar       = nil
+        state.previewPanel      = nil
+        state.rightAnchorFrame  = nil
+        state.tabStrip          = nil
+        state.tabContents       = nil
+        state.activeTab         = nil
         state.built = false
     end
 
@@ -1604,30 +1647,46 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.built = true
     state.activeDB = db
 
-    -- ── LAYOUT OVERVIEW ─────────────────────────────────────
-    -- Top: full-width banner hosting the copy/sync trio (top-right) and the
-    -- controls bar (Enable + Add Element button) spanning the full width
-    -- below the trio.
-    -- Below: 50/50 split — left half is the preview panel, right half hosts
-    -- the text-elements list (header + scrollable card list). Both halves
-    -- extend to the bottom of page.child.
-    --
-    -- previewPanel is created here but its anchors are set AFTER the
-    -- controls bar is positioned (so it can anchor below the banner).
+    -- ── TOP BANNER (full width) ───────────────────────────────
+    -- Copy / Sync trio top-right. omitReset = true matches the prior decision
+    -- to hide the Reset Page button until we have a dedicated reset flow.
+    local copyBtnContainer = GUI.CreateCopyButton(
+        page.child,
+        {"textDesigner"},
+        L["Text Designer"],
+        "text_designer",
+        true
+    )
+    copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+    state.copyBtnContainer = copyBtnContainer
+
+    -- Full-width controls bar below the copy trio. Content is added in
+    -- Task 1.2 (master toggle, etc.); for now it's just an empty anchor row
+    -- so the preview / right panel below can anchor under it.
+    local controlsBar = CreateFrame("Frame", nil, page.child)
+    controlsBar:SetHeight(32)
+    controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
+    controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -42)
+    state.controlsBar = controlsBar
+
+    -- ── PREVIEW PANEL (left half, below banner) ────────────────
+    -- Visual clone of AD's frame preview. The mockFrame mirrors the current
+    -- frame settings (width / height / power) so the chrome looks proportional;
+    -- fill values are static placeholders.
     local previewPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
     ApplyBackdrop(previewPanel, C_PANEL, C_BORDER)
+    previewPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
+    previewPanel:SetPoint("BOTTOM", page.child, "BOTTOM", 0, 10)
+    previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
     state.previewPanel = previewPanel
 
-    -- "Frame Preview" label (matches AD's preview label)
+    -- "Frame Preview" label
     local previewLabel = previewPanel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     previewLabel:SetPoint("TOPLEFT", 8, -4)
     previewLabel:SetText(L["FRAME PREVIEW"] or "FRAME PREVIEW")
     previewLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
     -- Mock unit frame (centred in panel) — visual clone of AD's mockFrame.
-    -- Pulls width/height/power from current frame settings just like AD does
-    -- so the chrome looks proportional. Static fill values (72% / 85%) are
-    -- placeholders only — nothing here updates with edits.
     do
         local mode = (GUI and GUI.SelectedMode) or "party"
         local frameDB = (DF.GetDB and DF:GetDB(mode)) or DF.PartyDefaults or {}
@@ -1739,185 +1798,35 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     previewNote:SetText("Preview placeholder (visual mockup)")
     previewNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
 
-    -- ── COPY / SYNC / RESET TRIO (top of page, full width) ────
-    -- Standard cross-mode trio that every settings page exposes. Allows the
-    -- user to copy / sync / reset the Text Designer block between party and
-    -- raid modes. Anchored to page.child's TOPRIGHT so it spans the full
-    -- width context.
-    local copyBtnContainer
-    if GUI.CreateCopyButton then
-        copyBtnContainer = GUI.CreateCopyButton(
-            page.child,
-            {"textDesigner"},
-            L["Text Designer"],
-            "text_designer",
-            true  -- omitReset: hide the Reset Page button for now
-        )
-        copyBtnContainer:ClearAllPoints()
-        copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
-        state.copyBtnContainer = copyBtnContainer
-    end
-
-    -- ── TAB-LEVEL CONTROLS BAR (full width, below the trio) ──
-    -- Master enable toggle + Add Element button. Spans the entire page width
-    -- below the copy trio so it forms part of the top banner.
-    local controlsBar = CreateFrame("Frame", nil, page.child)
-    controlsBar:SetHeight(32)
-    if copyBtnContainer then
-        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
-        controlsBar:SetPoint("TOPRIGHT", copyBtnContainer, "BOTTOMRIGHT", 0, -8)
-    else
-        controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
-        controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
-    end
-    state.controlsBar = controlsBar
-
-    -- ── PREVIEW PANEL ANCHORS (left half, below the banner) ───
-    -- Set after the controls bar exists so we can anchor to its bottom.
-    previewPanel:ClearAllPoints()
-    previewPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
-    previewPanel:SetPoint("BOTTOM", page.child, "BOTTOM", 0, 10)
-    previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
-
-    -- Right-side anchor frame — invisible container for the list header +
-    -- list panel. Sits in the right half, starting at the same y as the
-    -- preview panel (i.e. just below the controls bar).
+    -- ── RIGHT-SIDE CONTAINER ───────────────────────────────────
+    -- Invisible host for the tab strip + per-tab content frames.
     local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
-    rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 6, 0)
+    rightAnchorFrame:SetPoint("TOPLEFT", state.previewPanel, "TOPRIGHT", 6, 0)
     rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
     state.rightAnchorFrame = rightAnchorFrame
 
-    -- Master toggle
-    local enableCheck = GUI:CreateCheckbox(
-        controlsBar,
-        L["Enable Text Designer"],
-        tdDB,
-        "enabled",
-        function() DF:Debug("TD", "Enable Text Designer = %s", tostring(tdDB.enabled)) end
-    )
-    enableCheck:SetPoint("LEFT", controlsBar, "LEFT", 0, 0)
+    -- ── TAB STRIP (filled in Task 1.3 — empty frame for now) ──
+    BuildTabStrip(GUI, rightAnchorFrame, state, tdDB, page)
 
-    -- Add Element button — opens the picker dropdown.
-    local addBtn
-    addBtn = GUI:CreateButton(controlsBar, "+ " .. L["Add Text Element"], 160, 22, function()
-        if not state.pickerFrame then
-            state.pickerFrame = BuildPicker(GUI, page, tdDB, function(typeKey)
-                -- Create a new element instance
-                local id = tdDB.nextElementID
-                tdDB.nextElementID = id + 1
-                local pickedCT = FindContentType(typeKey)
-                local elem = {
-                    id = id,
-                    contentType = typeKey,
-                    enabled = true,
-                    label = ComputeAutoLabel(tdDB, pickedCT),
-                }
-                table.insert(tdDB.elements, elem)
-                DF:Debug("TD", "Added element id=%d type=%s (total=%d)",
-                    id, typeKey, #tdDB.elements)
-                -- Hide empty state if it's still visible
-                if state.emptyMsg then state.emptyMsg:Hide() end
-                if state.emptyHint then state.emptyHint:Hide() end
-                -- Full rebuild so every other card's Anchor To dropdown
-                -- picks up the new element as a valid anchor target.
-                FullRebuildCards(GUI, page, tdDB, state)
-            end)
-            state.pickerOverlay = state.pickerFrame._overlay
-        end
-        if state.pickerFrame:IsShown() then
-            state.pickerFrame:Hide()
-        else
-            state.pickerFrame:Open(addBtn)
-        end
-    end)
-    addBtn:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
-    state.addBtn = addBtn
-
-    -- Theme-tint the primary CTA to match AuraDesigner's "+ Add Indicator"
-    -- pattern (AuraDesigner/Options.lua:4889-4915).
-    do
-        local tc = GUI:GetThemeColor()
-        if addBtn.SetBackdropColor then
-            addBtn:SetBackdropColor(tc.r * CTA_BG_RESTING, tc.g * CTA_BG_RESTING, tc.b * CTA_BG_RESTING, 1)
-            addBtn:SetBackdropBorderColor(tc.r * CTA_BORDER_RESTING, tc.g * CTA_BORDER_RESTING, tc.b * CTA_BORDER_RESTING, 1)
-            addBtn:HookScript("OnEnter", function(self)
-                local c = GUI:GetThemeColor()
-                self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
-                self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
-            end)
-            addBtn:HookScript("OnLeave", function(self)
-                local c = GUI:GetThemeColor()
-                self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
-                self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
-            end)
-        end
+    -- ── TAB CONTENT FRAMES (one per tab) ───────────────────────
+    state.tabContents = {}
+    local function CreateTabContentFrame()
+        local f = CreateFrame("Frame", nil, rightAnchorFrame)
+        f:SetPoint("TOPLEFT", state.tabStrip, "BOTTOMLEFT", 0, -4)
+        f:SetPoint("BOTTOMRIGHT", rightAnchorFrame, "BOTTOMRIGHT", 0, 0)
+        f:Hide()
+        return f
     end
+    state.tabContents.texts  = CreateTabContentFrame()
+    state.tabContents.groups = CreateTabContentFrame()
+    state.tabContents.global = CreateTabContentFrame()
 
-    -- ── CARD LIST AREA ───────────────────────────────────────
-    -- A bordered panel hosts the section header and the scrollable card list.
-    -- Empty-state message centers inside the panel when no elements exist.
-    local listHeader = rightAnchorFrame:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(listHeader, 9, "")
-    listHeader:SetText(L["Text Elements"]:upper())
-    listHeader:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, C_TEXT_DIM.a)
-    listHeader:SetPoint("TOPLEFT", rightAnchorFrame, "TOPLEFT", 12, -6)
-    state.listHeader = listHeader
+    state.activeTab = state.activeTab or "texts"
 
-    local listPanel = CreateFrame("Frame", nil, rightAnchorFrame, "BackdropTemplate")
-    listPanel:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 0, -4)
-    listPanel:SetPoint("BOTTOMRIGHT", rightAnchorFrame, "BOTTOMRIGHT", -12, 10)
-    ApplyBackdrop(listPanel, C_LIST_PANEL, {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.4})
+    BuildTextsTab(GUI, state.tabContents.texts, state, tdDB, page)
+    BuildGroupsTab(GUI, state.tabContents.groups, state, tdDB, page)
+    BuildGlobalTab(GUI, state.tabContents.global, state, tdDB, page)
 
-    local listContainer = CreateFrame("ScrollFrame", nil, listPanel, "ScrollFrameTemplate")
-    listContainer:SetPoint("TOPLEFT", listPanel, "TOPLEFT", 6, -6)
-    listContainer:SetPoint("BOTTOMRIGHT", listPanel, "BOTTOMRIGHT", -22, 8)
-    DF.GUI.StyleScrollBar(listContainer)
-    listContainer:EnableMouseWheel(true)
-    listContainer:SetScript("OnMouseWheel", function(self, delta)
-        local current = self:GetVerticalScroll()
-        self:SetVerticalScroll(math.max(0, math.min(current - delta * 20, self:GetVerticalScrollRange())))
-    end)
-
-    local listChild = CreateFrame("Frame", nil, listContainer)
-    -- Compute initial width. listContainer:GetWidth() returns 0 at creation
-    -- time because layout hasn't run yet, so we derive it from the right
-    -- anchor frame (or page.child halved as a fallback) and the OnSizeChanged
-    -- hook below corrects it once layout settles.
-    local initialW = rightAnchorFrame:GetWidth()
-    if initialW < 100 then
-        local pageW = page.child:GetWidth()
-        if pageW < 100 then
-            pageW = (GUI.contentFrame and GUI.contentFrame:GetWidth() or 600) - 30
-        end
-        initialW = pageW * 0.5
-    end
-    listChild:SetSize(math.max(1, initialW - 40), 1)
-    listContainer:SetScrollChild(listChild)
-    -- Keep listChild width in sync with listContainer when its size changes.
-    -- Guard against transient 0 values that would wipe out a good width.
-    listContainer:HookScript("OnSizeChanged", function(self, w, h)
-        if w and w > 1 then
-            listChild:SetWidth(w)
-        end
-    end)
-    state.listPanel = listPanel
-    state.listContainer = listContainer
-    state.listChild = listChild
-
-    local emptyMsg = listPanel:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(emptyMsg, 12, "")
-    emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
-    emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
-    emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
-    state.emptyMsg = emptyMsg
-
-    local emptyHint = listPanel:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(emptyHint, 10, "")
-    emptyHint:SetText(L["Use the + button above to add your first element."])
-    emptyHint:SetPoint("TOP", emptyMsg, "BOTTOM", 0, -8)
-    emptyHint:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
-    state.emptyHint = emptyHint
-
-    -- Initial render — populate any existing elements
-    RenderCardList(GUI, page, tdDB, state)
+    -- Show only the active tab
+    state.tabContents[state.activeTab]:Show()
 end
