@@ -1695,6 +1695,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.previewPanel      = nil
         state.rightAnchorFrame  = nil
         state.tabStrip          = nil
+        state.SelectTab         = nil
         state.tabContents       = nil
         state.activeTab         = nil
         state.built = false
