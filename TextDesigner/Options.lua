@@ -1356,11 +1356,19 @@ local function RenderCardList(GUI, page, tdDB, state)
     end
 
     -- Filter: only render non-group elements on Texts tab. Groups will get
-    -- their own UI on the Groups tab (Task 3.x).
+    -- their own UI on the Groups tab (Task 3.x). Additionally honor the
+    -- per-category filter chip selected on the Texts tab. When activeFilter is
+    -- nil (e.g. RenderCardList called before BuildTextsTab has wired chips up)
+    -- behave as if "_all" is selected so the pre-2.2 all-pass behavior holds.
+    local activeFilter = state.activeFilter
     local elementsToShow = {}
     for _, elem in ipairs(tdDB.elements) do
         if elem.contentType ~= "group" then
-            table.insert(elementsToShow, elem)
+            local ct = FindContentType(elem.contentType)
+            local cat = ct and ct.category
+            if activeFilter == nil or activeFilter == "_all" or activeFilter == cat then
+                table.insert(elementsToShow, elem)
+            end
         end
     end
 
@@ -1485,13 +1493,212 @@ local function BuildTabStrip(GUI, parent, state, tdDB, page)
     return strip
 end
 
--- Stub — filled in Phase 2
+-- Texts tab content: "+ Add Text Element" hero CTA, filter chip row, and a
+-- scrolling card list below. Mirrors AD's BuildEffectsTab structure
+-- (AuraDesigner/Options.lua:4882+).
 local function BuildTextsTab(GUI, parent, state, tdDB, page)
-    local placeholder = parent:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(placeholder, 12, "")
-    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
-    placeholder:SetText("(Texts tab — filled in Phase 2)")
-    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    -- ── "+ Add Text Element" hero CTA (theme-tinted) ──
+    -- Raw BackdropTemplate Button so we get the same look as AD's hero CTA
+    -- (theme-colored text + theme-tinted backdrop) without GUI:CreateButton's
+    -- white text / default OnEnter handlers fighting us.
+    local addBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    addBtn:SetHeight(32)
+    addBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -10)
+    addBtn:SetPoint("RIGHT", parent, "RIGHT", -8, 0)
+    do
+        local tc = GUI:GetThemeColor()
+        ApplyBackdrop(addBtn,
+            {r = tc.r * CTA_BG_RESTING,     g = tc.g * CTA_BG_RESTING,     b = tc.b * CTA_BG_RESTING,     a = 1},
+            {r = tc.r * CTA_BORDER_RESTING, g = tc.g * CTA_BORDER_RESTING, b = tc.b * CTA_BORDER_RESTING, a = 1})
+
+        local addBtnText = addBtn:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(addBtnText, 11, "OUTLINE")
+        addBtnText:SetPoint("CENTER", 0, 0)
+        addBtnText:SetText("+ " .. L["Add Text Element"])
+        addBtnText:SetTextColor(tc.r, tc.g, tc.b)
+        addBtn._text = addBtnText
+
+        addBtn:SetScript("OnEnter", function(self)
+            local c = GUI:GetThemeColor()
+            self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
+            self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
+            addBtnText:SetTextColor(1, 1, 1)
+        end)
+        addBtn:SetScript("OnLeave", function(self)
+            local c = GUI:GetThemeColor()
+            self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
+            self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
+            addBtnText:SetTextColor(c.r, c.g, c.b)
+        end)
+    end
+    state.addBtn = addBtn
+
+    -- ── Filter chip row ──
+    local chipRow = CreateFrame("Frame", nil, parent)
+    chipRow:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -8)
+    chipRow:SetPoint("RIGHT", parent, "RIGHT", -8, 0)
+    chipRow:SetHeight(24)
+    state.chipRow = chipRow
+
+    state.activeFilter = state.activeFilter or "_all"
+
+    local CHIP_H, CHIP_GAP, CHIP_ROW_GAP = 24, 4, 4
+    local chips = {}
+
+    local function MakeChip(label, key)
+        local c = CreateFrame("Button", nil, chipRow, "BackdropTemplate")
+        c:SetHeight(CHIP_H)
+        ApplyBackdrop(c, C_PANEL, C_BORDER)
+        local fs = c:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(fs, 10, "OUTLINE")
+        fs:SetPoint("CENTER")
+        fs:SetText(label)
+        c:SetWidth(fs:GetStringWidth() + 18)
+        c.key = key
+        c.fs = fs
+        return c
+    end
+
+    local function ApplyChipState()
+        local tc = GUI:GetThemeColor()
+        for _, c in ipairs(chips) do
+            if c.key == state.activeFilter then
+                c:SetBackdropColor(tc.r, tc.g, tc.b, 0.20)
+                c:SetBackdropBorderColor(tc.r, tc.g, tc.b, 0.50)
+                c.fs:SetTextColor(1, 1, 1)
+            else
+                c:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, C_PANEL.a)
+                c:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
+                c.fs:SetTextColor(0.75, 0.75, 0.75)
+            end
+        end
+    end
+    state.ApplyChipState = ApplyChipState
+
+    local function LayoutChips()
+        local maxW = chipRow:GetWidth()
+        if maxW <= 0 then maxW = 260 end
+        local cx, cy = 0, 0
+        for _, c in ipairs(chips) do
+            local bw = c:GetWidth()
+            if cx > 0 and (cx + bw) > maxW then
+                cx = 0
+                cy = cy - (CHIP_H + CHIP_ROW_GAP)
+            end
+            c:ClearAllPoints()
+            c:SetPoint("TOPLEFT", chipRow, "TOPLEFT", cx, cy)
+            cx = cx + bw + CHIP_GAP
+        end
+        chipRow:SetHeight(math.max(-cy + CHIP_H, CHIP_H))
+    end
+
+    local function AddChip(label, key)
+        local c = MakeChip(label, key)
+        chips[#chips+1] = c
+        c:SetScript("OnClick", function(self)
+            state.activeFilter = self.key
+            ApplyChipState()
+            if DF.TextDesigner.RenderCardList then
+                DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
+            end
+        end)
+        c:SetScript("OnEnter", function(self)
+            if self.key ~= state.activeFilter then
+                self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1)
+            end
+        end)
+        c:SetScript("OnLeave", function(self)
+            if self.key ~= state.activeFilter then
+                self:SetBackdropColor(C_PANEL.r, C_PANEL.g, C_PANEL.b, C_PANEL.a)
+            end
+        end)
+    end
+
+    AddChip(L["All"], "_all")
+    for _, cat in ipairs(CONTENT_CATEGORIES) do
+        if cat ~= "group" then  -- groups have their own tab
+            AddChip(CONTENT_CATEGORY_LABELS[cat], cat)
+        end
+    end
+    LayoutChips()
+    chipRow:SetScript("OnSizeChanged", LayoutChips)
+    ApplyChipState()
+
+    -- ── Scrolling card list container ──
+    local listContainer = CreateFrame("ScrollFrame", nil, parent, "ScrollFrameTemplate")
+    listContainer:SetPoint("TOPLEFT", chipRow, "BOTTOMLEFT", 0, -6)
+    listContainer:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -22, 8)
+    if DF.GUI and DF.GUI.StyleScrollBar then DF.GUI.StyleScrollBar(listContainer) end
+    listContainer:EnableMouseWheel(true)
+    listContainer:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        self:SetVerticalScroll(math.max(0, math.min(current - delta * 20, self:GetVerticalScrollRange())))
+    end)
+
+    local listChild = CreateFrame("Frame", nil, listContainer)
+    listChild:SetSize(listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300, 1)
+    listContainer:SetScrollChild(listChild)
+    listContainer:HookScript("OnSizeChanged", function(self, w, h)
+        if w and w > 1 then listChild:SetWidth(w) end
+    end)
+
+    state.listContainer = listContainer
+    state.listChild = listChild
+    state.cardFrames = state.cardFrames or {}
+
+    -- ── Empty-state placeholder ──
+    local emptyMsg = listChild:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(emptyMsg, 12, "")
+    emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
+    emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
+    emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
+    emptyMsg:SetJustifyH("CENTER")
+    state.emptyMsg = emptyMsg
+
+    -- ── Wire the Add button to the picker ──
+    -- Reuse BuildPicker (the same one used by group-item adds). Caches the
+    -- picker on state.addPicker so repeated clicks reuse the same frame.
+    addBtn:SetScript("OnClick", function(self)
+        if not BuildPicker then return end
+        if not state.addPicker then
+            state.addPicker = BuildPicker(GUI, parent, tdDB, function(typeKey)
+                local ct = FindContentType(typeKey)
+                if not ct then return end
+                tdDB.nextElementID = tdDB.nextElementID or 1
+                local id = tdDB.nextElementID
+                tdDB.nextElementID = id + 1
+                local newElem = {
+                    id          = id,
+                    contentType = typeKey,
+                    enabled     = true,
+                    label       = ComputeAutoLabel(tdDB, ct),
+                }
+                table.insert(tdDB.elements, newElem)
+
+                -- Reset filter so the new card is visible regardless of which
+                -- category chip is active.
+                state.activeFilter = "_all"
+                if state.ApplyChipState then state.ApplyChipState() end
+
+                DF:Debug("TD", "Added element id=%d type=%s", id, typeKey)
+
+                if DF.TextDesigner.FullRebuildCards then
+                    DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+                end
+            end, "group")  -- exclude "group" — groups have their own tab
+        end
+        local picker = state.addPicker
+        if picker:IsShown() then
+            picker:Hide()
+        else
+            picker:Open(self, "right")
+        end
+    end)
+
+    -- Initial render — RenderCardList will hide emptyMsg if there are elements.
+    if DF.TextDesigner.RenderCardList then
+        DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
+    end
 end
 
 -- Stub — filled in Phase 3
@@ -1556,6 +1763,18 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         if state.previewPanel      then state.previewPanel:Hide();      state.previewPanel:ClearAllPoints()      end
         if state.rightAnchorFrame  then state.rightAnchorFrame:Hide();  state.rightAnchorFrame:ClearAllPoints()  end
         if state.tabStrip          then state.tabStrip:Hide();          state.tabStrip:ClearAllPoints()          end
+        -- Texts tab Phase 2.2 fields. The chipRow / emptyMsg / listContainer /
+        -- listChild are children of state.tabContents.texts so they'll go down
+        -- with their parent below, but we explicitly Hide+ClearAllPoints them
+        -- here so the state references can be nil'd without leaks. addPicker
+        -- is parented to UIParent (see BuildPicker), so it needs its own
+        -- teardown — otherwise it would survive the mode swap.
+        if state.addBtn        then state.addBtn:Hide();        state.addBtn:ClearAllPoints()        end
+        if state.chipRow       then state.chipRow:Hide();       state.chipRow:ClearAllPoints()       end
+        if state.listContainer then state.listContainer:Hide(); state.listContainer:ClearAllPoints() end
+        if state.listChild     then state.listChild:Hide();     state.listChild:ClearAllPoints()     end
+        if state.emptyMsg      then state.emptyMsg:Hide();      state.emptyMsg:ClearAllPoints()      end
+        if state.addPicker     then state.addPicker:Hide();     state.addPicker:ClearAllPoints()     end
         if state.tabContents       then
             for _, frame in pairs(state.tabContents) do
                 frame:Hide()
@@ -1572,6 +1791,14 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.SelectTab         = nil
         state.tabContents       = nil
         state.activeTab         = nil
+        state.addBtn            = nil
+        state.chipRow           = nil
+        state.ApplyChipState    = nil
+        state.activeFilter      = nil
+        state.listContainer     = nil
+        state.listChild         = nil
+        state.emptyMsg          = nil
+        state.addPicker         = nil
         state.built = false
     end
 
