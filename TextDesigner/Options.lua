@@ -863,7 +863,13 @@ function BuildPicker(GUI, parent, tdDB, onPick, excludeKey)
 
     pills[#pills+1] = MakePill(L["All"], "_all")
     for _, cat in ipairs(CONTENT_CATEGORIES) do
-        pills[#pills+1] = MakePill(CONTENT_CATEGORY_LABELS[cat], cat)
+        -- Skip the category pill if it matches the excluded content type.
+        -- When the picker is invoked with excludeKey = "group" (e.g. from
+        -- inside a group's add-item flow), the Group pill would show zero
+        -- items because the only group-category type is the excluded one.
+        if cat ~= excludeKey then
+            pills[#pills+1] = MakePill(CONTENT_CATEGORY_LABELS[cat], cat)
+        end
     end
 
     -- Flow-layout: position pills with wrapping on parent resize
@@ -1437,13 +1443,11 @@ local function RenderCardList(GUI, page, tdDB, state)
             end
             state.emptyMsg:Show()
         end
-        if state.emptyHint then state.emptyHint:Show() end
         if state.listChild then state.listChild:SetHeight(1) end
         return
     end
 
     if state.emptyMsg then state.emptyMsg:Hide() end
-    if state.emptyHint then state.emptyHint:Hide() end
 
     -- Build fresh cards. CreateTextElementCard returns (card, totalCardH);
     -- we advance the y-cursor with that local rather than card:GetHeight()
@@ -2251,7 +2255,11 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.tabStrip          = nil
         state.SelectTab         = nil
         state.tabContents       = nil
-        state.activeTab         = nil
+        -- NOTE: state.activeTab intentionally preserved across mode switches.
+        -- It's a plain string (not a frame) so it doesn't need teardown, and
+        -- preserving it keeps the user on their current tab (e.g. Text Groups)
+        -- when switching between party and raid modes. The rebuild path uses
+        -- `state.activeTab = state.activeTab or "texts"` to default on first build.
         state.addBtn            = nil
         state.chipRow           = nil
         state.ApplyChipState    = nil
