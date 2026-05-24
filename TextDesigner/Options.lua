@@ -309,6 +309,8 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         elem.groupItems = elem.groupItems or {}
         elem.groupSeparator = elem.groupSeparator or " / "
 
+        local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
+
         -- Helper to re-render the whole card list when items change. Uses
         -- the full rebuild path so every other card's Anchor To dropdown
         -- and group items list refresh in lockstep.
@@ -388,6 +390,47 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                     table.remove(elem.groupItems, capturedIdx)
                     ReRender()
                 end)
+
+                -- Up arrow — moves this item one slot earlier in the list.
+                -- Hidden on the first row (nothing to swap into).
+                local upBtn = CreateFrame("Button", nil, itemRow)
+                upBtn:SetSize(14, 14)
+                upBtn:SetPoint("RIGHT", removeBtn, "LEFT", -8, 0)
+                local upIcon = upBtn:CreateTexture(nil, "OVERLAY")
+                upIcon:SetAllPoints()
+                upIcon:SetTexture(mediaPath .. "expand_more")
+                upIcon:SetRotation(math.pi)  -- 180° = up
+                upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+                upBtn:SetScript("OnEnter", function() upIcon:SetVertexColor(1, 1, 1) end)
+                upBtn:SetScript("OnLeave", function() upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
+                upBtn:SetScript("OnClick", function()
+                    if capturedIdx > 1 then
+                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx - 1] =
+                            elem.groupItems[capturedIdx - 1], elem.groupItems[capturedIdx]
+                        ReRender()
+                    end
+                end)
+                if capturedIdx == 1 then upBtn:Hide() end
+
+                -- Down arrow — moves this item one slot later in the list.
+                -- Hidden on the last row.
+                local downBtn = CreateFrame("Button", nil, itemRow)
+                downBtn:SetSize(14, 14)
+                downBtn:SetPoint("RIGHT", upBtn, "LEFT", -2, 0)
+                local downIcon = downBtn:CreateTexture(nil, "OVERLAY")
+                downIcon:SetAllPoints()
+                downIcon:SetTexture(mediaPath .. "expand_more")
+                downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+                downBtn:SetScript("OnEnter", function() downIcon:SetVertexColor(1, 1, 1) end)
+                downBtn:SetScript("OnLeave", function() downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
+                downBtn:SetScript("OnClick", function()
+                    if capturedIdx < #elem.groupItems then
+                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx + 1] =
+                            elem.groupItems[capturedIdx + 1], elem.groupItems[capturedIdx]
+                        ReRender()
+                    end
+                end)
+                if capturedIdx == #elem.groupItems then downBtn:Hide() end
 
                 y = y - 22
             end
@@ -1712,6 +1755,223 @@ local function BuildTextsTab(GUI, parent, state, tdDB, page)
     if DF.TextDesigner.RenderCardList then
         DF.TextDesigner.RenderCardList(GUI, page, tdDB, state)
     end
+end
+
+-- ============================================================
+-- GROUP CARD
+-- A collapsible card representing one Text Group element (elem.contentType
+-- == "group"). Structural clone of CreateTextElementCard but stripped down:
+-- the group body shows ONLY the Content section (which already renders the
+-- separator + item list + add-item picker). Groups are layout containers, so
+-- there's no Appearance or Position section.
+-- ============================================================
+
+local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
+    local HEADER_HEIGHT = 30
+
+    -- Outer card: layout-only, no backdrop (matches CreateTextElementCard).
+    local card = CreateFrame("Frame", nil, parent)
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, yPos)
+    card:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, yPos)
+    card._tdDB = tdDB
+    card._state = state
+    card._GUI = GUI
+    card._page = page
+    card._elem = elem
+
+    -- ── HEADER (group-themed accent) ─────────────────────────
+    local header = CreateFrame("Button", nil, card, "BackdropTemplate")
+    header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
+    header:SetHeight(HEADER_HEIGHT)
+    header:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    header:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+    header:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
+
+    header:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, C_HOVER.a)
+    end)
+    header:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+    end)
+    card.header = header
+
+    local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
+
+    -- Collapse arrow on the LEFT (tinted with the group category color).
+    local arrow = header:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(10, 10)
+    arrow:SetPoint("LEFT", header, "LEFT", 8, 0)
+    local groupColor = CATEGORY_COLORS.group or {r = 0.91, g = 0.66, b = 0.25, a = 1}
+    arrow:SetVertexColor(groupColor.r, groupColor.g, groupColor.b)
+    card.collapseArrow = arrow
+
+    -- Category-color chip
+    local chip = header:CreateTexture(nil, "OVERLAY")
+    chip:SetSize(4, 18)
+    chip:SetPoint("LEFT", arrow, "RIGHT", 6, 0)
+    chip:SetColorTexture(groupColor.r, groupColor.g, groupColor.b, groupColor.a or 1)
+
+    -- Title text
+    local title = header:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(title, 11, "OUTLINE")
+    title:SetPoint("LEFT", chip, "RIGHT", 8, 0)
+    local displayName = (elem.label and elem.label ~= "" and elem.label) or L["Text Group"]
+    title:SetText(displayName)
+    title:SetTextColor(groupColor.r, groupColor.g, groupColor.b)
+    card.title = title
+    card.titleCatColor = groupColor
+
+    -- Meta line (item count — populated after BuildContentSection runs below)
+    local meta = header:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(meta, 9, "")
+    meta:SetPoint("LEFT", title, "RIGHT", 8, 0)
+    meta:SetTextColor(0.55, 0.6, 0.7)
+    card.meta = meta
+
+    -- ── ACTION ICONS (right side of header) ──────────────────
+    -- Hand-drawn X delete (matches CreateTextElementCard).
+    local ICON_SIZE = 18
+    local ICON_GAP = 4
+
+    local deleteBtn = CreateFrame("Button", nil, header)
+    deleteBtn:SetSize(22, 22)
+    deleteBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+    local dxSize, dxThick = 12, 2
+    local dline1 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    dline1:SetSize(dxSize, dxThick)
+    dline1:SetPoint("CENTER")
+    dline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    dline1:SetRotation(math.rad(45))
+    local dline2 = deleteBtn:CreateTexture(nil, "OVERLAY")
+    dline2:SetSize(dxSize, dxThick)
+    dline2:SetPoint("CENTER")
+    dline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    dline2:SetRotation(math.rad(-45))
+    deleteBtn:SetScript("OnEnter", function()
+        dline1:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+        dline2:SetColorTexture(C_DESTRUCTIVE_HOVER.r, C_DESTRUCTIVE_HOVER.g, C_DESTRUCTIVE_HOVER.b, C_DESTRUCTIVE_HOVER.a)
+    end)
+    deleteBtn:SetScript("OnLeave", function()
+        dline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+        dline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
+    end)
+    card.deleteBtn = deleteBtn
+
+    -- Eye icon (visibility toggle) — left of delete.
+    local eyeBtn = CreateFrame("Button", nil, header)
+    eyeBtn:SetSize(ICON_SIZE, ICON_SIZE)
+    eyeBtn:SetPoint("RIGHT", deleteBtn, "LEFT", -ICON_GAP, 0)
+    local eyeIcon = eyeBtn:CreateTexture(nil, "OVERLAY")
+    eyeIcon:SetAllPoints()
+    local function updateEyeIcon()
+        if elem.enabled then
+            eyeIcon:SetTexture(mediaPath .. "visibility")
+            eyeIcon:SetVertexColor(0.95, 0.95, 0.95)
+        else
+            eyeIcon:SetTexture(mediaPath .. "visibility_off")
+            eyeIcon:SetVertexColor(0.45, 0.45, 0.45)
+        end
+    end
+    updateEyeIcon()
+    eyeBtn:SetScript("OnEnter", function() if elem.enabled then eyeIcon:SetVertexColor(1,1,1) end end)
+    eyeBtn:SetScript("OnLeave", function() updateEyeIcon() end)
+    eyeBtn:SetScript("OnClick", function()
+        elem.enabled = not elem.enabled
+        updateEyeIcon()
+        DF:Debug("TD", "Group %d enabled=%s", elem.id, tostring(elem.enabled))
+    end)
+    card.eyeBtn = eyeBtn
+
+    -- Click-through prevention on action icons
+    for _, btn in ipairs({eyeBtn, deleteBtn}) do
+        btn:RegisterForClicks("LeftButtonUp")
+        btn:SetFrameLevel(header:GetFrameLevel() + 5)
+    end
+
+    -- Delete OnClick (instant, no popup)
+    deleteBtn:SetScript("OnClick", function()
+        for i, e in ipairs(tdDB.elements) do
+            if e.id == elem.id then
+                table.remove(tdDB.elements, i)
+                break
+            end
+        end
+        if DF.TextDesigner.FullRebuildCards then
+            DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+        end
+        DF:Debug("TD", "Deleted group id=%d", elem.id)
+    end)
+
+    -- ── BODY ─────────────────────────────────────────────────
+    local body = CreateFrame("Frame", nil, card, "BackdropTemplate")
+    body:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    body:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    body:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    body:SetBackdropColor(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
+    body:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
+    card.body = body
+
+    -- Ensure default fields exist before BuildContentSection runs.
+    elem.groupItems = elem.groupItems or {}
+    elem.groupSeparator = elem.groupSeparator or " / "
+
+    -- Reuse BuildContentSection's group branch — it handles the separator
+    -- input, items list (with up/down/remove buttons), and Add Item picker.
+    -- Groups don't get Appearance/Position sections.
+    local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
+    local bodyHeight = math.max(1, -yEnd + 10)
+    body:SetHeight(bodyHeight)
+
+    -- Update meta line: show item count.
+    meta:SetText(("(%d %s)"):format(#elem.groupItems, (#elem.groupItems == 1) and L["item"] or L["items"]))
+
+    -- ── COLLAPSE STATE ───────────────────────────────────────
+    -- Distinct key prefix from text elements so a group and a text element
+    -- with the same numeric id never share collapse state.
+    local cardKey = "td_group_" .. tostring(elem.id)
+    local savedStates = GUI:GetCollapsedGroups()
+    card.collapsed = savedStates[cardKey] == true
+    card.cardKey = cardKey
+
+    local function ApplyCollapseState()
+        if card.collapsed then
+            body:Hide()
+            arrow:SetTexture(mediaPath .. "chevron_right")
+            card:SetHeight(HEADER_HEIGHT)
+        else
+            body:Show()
+            arrow:SetTexture(mediaPath .. "expand_more")
+            card:SetHeight(HEADER_HEIGHT + bodyHeight)
+        end
+    end
+    card.ApplyCollapseState = ApplyCollapseState
+
+    header:RegisterForClicks("LeftButtonUp")
+    header:SetScript("OnClick", function()
+        card.collapsed = not card.collapsed
+        GUI:GetCollapsedGroups()[cardKey] = card.collapsed or nil
+        ApplyCollapseState()
+        -- RenderGroupCardList is defined in Task 3.2. Resolving via
+        -- DF.TextDesigner.* at click-time means the nil at function-define
+        -- time is harmless; once the function lands, clicks pick it up.
+        if DF.TextDesigner.RenderGroupCardList then
+            DF.TextDesigner.RenderGroupCardList(GUI, page, tdDB, state)
+        end
+    end)
+
+    ApplyCollapseState()
+
+    local totalCardH = card.collapsed and HEADER_HEIGHT or (HEADER_HEIGHT + bodyHeight)
+    return card, totalCardH
 end
 
 -- Stub — filled in Phase 3
