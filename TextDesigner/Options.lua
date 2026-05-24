@@ -1458,12 +1458,16 @@ end
 
 DF.TextDesigner.RenderCardList = RenderCardList  -- exposed for Task 6+
 
--- FullRebuildCards is now an alias for RenderCardList: every render is a full
+-- FullRebuildCards rebuilds the Texts tab card list and (if the Groups tab
+-- has been built) the Groups tab card list too. Every render is a full
 -- rebuild now that the pool is gone. Kept as a named export so existing
 -- callers (delete button, picker onPick, label edit, group-item add/remove,
 -- mode swap teardown logic, etc.) continue to work without churn.
 local function FullRebuildCards(GUI, page, tdDB, state)
     RenderCardList(GUI, page, tdDB, state)
+    if state.groupListChild and DF.TextDesigner.RenderGroupCardList then
+        DF.TextDesigner.RenderGroupCardList(GUI, page, tdDB, state)
+    end
 end
 DF.TextDesigner.FullRebuildCards = FullRebuildCards
 
@@ -1969,13 +1973,135 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     return card, totalCardH
 end
 
--- Stub — filled in Phase 3
+-- ============================================================
+-- GROUP CARD LIST RENDERER
+-- Modeled on RenderCardList. Filters tdDB.elements to entries with
+-- contentType == "group" and renders each via CreateGroupCard into
+-- state.groupListChild. Full-rebuild pattern: every render destroys
+-- the previous card frames (Hide + ClearAllPoints) and creates fresh ones.
+-- ============================================================
+local function RenderGroupCardList(GUI, page, tdDB, state)
+    if not state.groupListChild or not state.groupListContainer then return end
+
+    state.groupListChild:SetWidth(state.groupListContainer:GetWidth())
+
+    if state.groupCardFrames then
+        for _, card in pairs(state.groupCardFrames) do
+            card:Hide()
+            card:ClearAllPoints()
+            card:SetScript("OnUpdate", nil)
+        end
+        wipe(state.groupCardFrames)
+    else
+        state.groupCardFrames = {}
+    end
+
+    local groupsToShow = {}
+    for _, elem in ipairs(tdDB.elements) do
+        if elem.contentType == "group" then
+            table.insert(groupsToShow, elem)
+        end
+    end
+
+    if #groupsToShow == 0 then
+        if state.groupEmptyMsg then state.groupEmptyMsg:Show() end
+        state.groupListChild:SetHeight(1)
+        return
+    end
+
+    if state.groupEmptyMsg then state.groupEmptyMsg:Hide() end
+
+    local y = 0
+    local CARD_GAP = 5
+    for _, elem in ipairs(groupsToShow) do
+        local card, totalCardH = CreateGroupCard(GUI, state.groupListChild, y, elem, tdDB, state, page)
+        state.groupCardFrames[elem.id] = card
+        y = y - totalCardH - CARD_GAP
+    end
+    state.groupListChild:SetHeight(math.max(1, -y + 4))
+end
+DF.TextDesigner.RenderGroupCardList = RenderGroupCardList
+
+-- Text Groups tab: "+ Add Group" CTA top-left + scrolling list of group cards.
+-- No picker: there's only one element type on this tab ("group"), so clicking
+-- the button adds a new group element directly.
 local function BuildGroupsTab(GUI, parent, state, tdDB, page)
-    local placeholder = parent:CreateFontString(nil, "OVERLAY")
-    GUI:SetSettingsFont(placeholder, 12, "")
-    placeholder:SetPoint("CENTER", parent, "CENTER", 0, 0)
-    placeholder:SetText("(Text Groups tab — filled in Phase 3)")
-    placeholder:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+    -- "+ Add Group" CTA top-left
+    local addBtn = GUI:CreateButton(parent, "+ " .. L["Add Group"], 200, 32, function() end)
+    addBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -10)
+    do
+        local tc = GUI:GetThemeColor()
+        addBtn:SetBackdropColor(tc.r * CTA_BG_RESTING, tc.g * CTA_BG_RESTING, tc.b * CTA_BG_RESTING, 1)
+        addBtn:SetBackdropBorderColor(tc.r * CTA_BORDER_RESTING, tc.g * CTA_BORDER_RESTING, tc.b * CTA_BORDER_RESTING, 1)
+        addBtn:HookScript("OnEnter", function(self)
+            local c = GUI:GetThemeColor()
+            self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
+            self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
+        end)
+        addBtn:HookScript("OnLeave", function(self)
+            local c = GUI:GetThemeColor()
+            self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
+            self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
+        end)
+    end
+
+    addBtn:SetScript("OnClick", function()
+        -- Add a new group element directly (no picker — only one type)
+        tdDB.nextElementID = tdDB.nextElementID or 1
+        local id = tdDB.nextElementID
+        tdDB.nextElementID = id + 1
+        local groupCT = FindContentType("group")
+        local elem = {
+            id = id,
+            contentType = "group",
+            enabled = true,
+            label = ComputeAutoLabel(tdDB, groupCT),
+            groupItems = {},
+            groupSeparator = " / ",
+        }
+        table.insert(tdDB.elements, elem)
+        if DF.TextDesigner.FullRebuildCards then
+            DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+        end
+        DF:Debug("TD", "Added group id=%d", id)
+    end)
+
+    -- Scrolling list of group cards
+    local listContainer = CreateFrame("ScrollFrame", nil, parent, "ScrollFrameTemplate")
+    listContainer:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -10)
+    listContainer:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -22, 8)
+    if DF.GUI and DF.GUI.StyleScrollBar then DF.GUI.StyleScrollBar(listContainer) end
+    listContainer:EnableMouseWheel(true)
+    listContainer:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        self:SetVerticalScroll(math.max(0, math.min(current - delta * 20, self:GetVerticalScrollRange())))
+    end)
+
+    local listChild = CreateFrame("Frame", nil, listContainer)
+    listChild:SetSize(listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300, 1)
+    listContainer:SetScrollChild(listChild)
+    listContainer:HookScript("OnSizeChanged", function(self, w, h)
+        if w and w > 1 then listChild:SetWidth(w) end
+    end)
+
+    state.groupAddBtn = addBtn
+    state.groupListContainer = listContainer
+    state.groupListChild = listChild
+    state.groupCardFrames = state.groupCardFrames or {}
+
+    -- Empty state
+    local emptyMsg = listChild:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(emptyMsg, 12, "")
+    emptyMsg:SetPoint("CENTER", listContainer, "CENTER", 0, 0)
+    emptyMsg:SetText(L["No groups yet. Click '+ Add Group' to create one."])
+    emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
+    emptyMsg:SetJustifyH("CENTER")
+    state.groupEmptyMsg = emptyMsg
+
+    -- Initial render
+    if DF.TextDesigner.RenderGroupCardList then
+        DF.TextDesigner.RenderGroupCardList(GUI, page, tdDB, state)
+    end
 end
 
 -- Stub — filled in Phase 4
@@ -2043,6 +2169,22 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         if state.listChild     then state.listChild:Hide();     state.listChild:ClearAllPoints()     end
         if state.emptyMsg      then state.emptyMsg:Hide();      state.emptyMsg:ClearAllPoints()      end
         if state.addPicker     then state.addPicker:Hide();     state.addPicker:ClearAllPoints()     end
+        -- Groups tab (Phase 3.2) fields. groupCardFrames is iterated like
+        -- cardFrames above; the remaining frames are children of
+        -- state.tabContents.groups so they go down with their parent below,
+        -- but we explicitly Hide+ClearAllPoints them so state refs can be nil'd.
+        if state.groupCardFrames then
+            for _, card in pairs(state.groupCardFrames) do
+                card:Hide()
+                card:ClearAllPoints()
+                card:SetScript("OnUpdate", nil)
+            end
+            wipe(state.groupCardFrames)
+        end
+        if state.groupAddBtn        then state.groupAddBtn:Hide();        state.groupAddBtn:ClearAllPoints()        end
+        if state.groupListContainer then state.groupListContainer:Hide(); state.groupListContainer:ClearAllPoints() end
+        if state.groupListChild     then state.groupListChild:Hide();     state.groupListChild:ClearAllPoints()     end
+        if state.groupEmptyMsg      then state.groupEmptyMsg:Hide();      state.groupEmptyMsg:ClearAllPoints()      end
         if state.tabContents       then
             for _, frame in pairs(state.tabContents) do
                 frame:Hide()
@@ -2067,6 +2209,11 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.listChild         = nil
         state.emptyMsg          = nil
         state.addPicker         = nil
+        state.groupAddBtn        = nil
+        state.groupListContainer = nil
+        state.groupListChild     = nil
+        state.groupEmptyMsg      = nil
+        state.groupCardFrames    = nil
         state.built = false
     end
 
