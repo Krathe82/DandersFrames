@@ -984,6 +984,7 @@ L["No changelog available."] = true
 L["No custom wizards yet. Click 'New Wizard' to create one!"] = true
 L["No data to export"] = true
 L["No layout set. Using global settings."] = true
+L["No matching text elements. Try a different filter or click '+ Add Text Element'."] = true
 L["No saved position to reset to."] = true
 L["No spells available for this class"] = true
 L["No text elements yet. Click '+ Add Text Element' to create one."] = true

@@ -1373,7 +1373,21 @@ local function RenderCardList(GUI, page, tdDB, state)
     end
 
     if #elementsToShow == 0 then
-        if state.emptyMsg then state.emptyMsg:Show() end
+        if state.emptyMsg then
+            -- Distinguish "filtered out" from "truly empty": if the user has any
+            -- non-group elements at all but the active filter chip excludes them
+            -- all, show a filter-aware hint instead of the generic empty-state.
+            local hasAnyNonGroup = false
+            for _, e in ipairs(tdDB.elements) do
+                if e.contentType ~= "group" then hasAnyNonGroup = true; break end
+            end
+            if hasAnyNonGroup and activeFilter and activeFilter ~= "_all" then
+                state.emptyMsg:SetText(L["No matching text elements. Try a different filter or click '+ Add Text Element'."])
+            else
+                state.emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
+            end
+            state.emptyMsg:Show()
+        end
         if state.emptyHint then state.emptyHint:Show() end
         if state.listChild then state.listChild:SetHeight(1) end
         return
@@ -1516,7 +1530,6 @@ local function BuildTextsTab(GUI, parent, state, tdDB, page)
         addBtnText:SetPoint("CENTER", 0, 0)
         addBtnText:SetText("+ " .. L["Add Text Element"])
         addBtnText:SetTextColor(tc.r, tc.g, tc.b)
-        addBtn._text = addBtnText
 
         addBtn:SetScript("OnEnter", function(self)
             local c = GUI:GetThemeColor()
