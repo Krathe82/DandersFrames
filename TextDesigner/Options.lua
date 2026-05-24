@@ -1547,13 +1547,68 @@ end
 --   BuildGlobalTab  → Phase 4  (global text settings)
 -- ============================================================
 
--- Stub — filled in Task 1.3
+-- Three-tab strip (Texts / Text Groups / Global). Returns the strip frame so
+-- callers can anchor content frames directly to it instead of going through
+-- state.tabStrip. SelectTab is also exposed on state for external callers.
 local function BuildTabStrip(GUI, parent, state, tdDB, page)
     local strip = CreateFrame("Frame", nil, parent)
     strip:SetHeight(28)
     strip:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     strip:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
     state.tabStrip = strip
+
+    local tabDefs = {
+        { id = "texts",  label = L["Texts"],       color = GUI.GetThemeColor() },
+        { id = "groups", label = L["Text Groups"], color = {r = 0.91, g = 0.66, b = 0.25, a = 1} },  -- orange-ish (matches AD's layout-groups accent)
+        { id = "global", label = L["Global"],      color = {r = 0.51, g = 0.86, b = 0.51, a = 1} },  -- green (matches AD's global accent)
+    }
+
+    local function SelectTab(tabID)
+        state.activeTab = tabID
+        for _, def in ipairs(tabDefs) do
+            local btn = strip[def.id]
+            if def.id == tabID then
+                btn.text:SetTextColor(def.color.r, def.color.g, def.color.b, 1)
+                btn.accent:Show()
+            else
+                btn.text:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+                btn.accent:Hide()
+            end
+        end
+        for id, contentFrame in pairs(state.tabContents or {}) do
+            if id == tabID then contentFrame:Show() else contentFrame:Hide() end
+        end
+    end
+    state.SelectTab = SelectTab
+
+    local btnWidth = 100
+    local btnGap = 4
+    local x = 0
+    for _, def in ipairs(tabDefs) do
+        local btn = CreateFrame("Button", nil, strip)
+        btn:SetSize(btnWidth, 28)
+        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
+        local text = btn:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(text, 11, "OUTLINE")
+        text:SetPoint("CENTER", btn, "CENTER", 0, 2)
+        text:SetText(def.label)
+        text:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 1)
+        btn.text = text
+        local accent = btn:CreateTexture(nil, "ARTWORK")
+        accent:SetHeight(2)
+        accent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 8, 0)
+        accent:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -8, 0)
+        accent:SetColorTexture(def.color.r, def.color.g, def.color.b, 1)
+        accent:Hide()
+        btn.accent = accent
+        btn:SetScript("OnClick", function() SelectTab(def.id) end)
+        strip[def.id] = btn
+        x = x + btnWidth + btnGap
+    end
+
+    SelectTab(state.activeTab or "texts")
+
+    return strip
 end
 
 -- Stub — filled in Phase 2
@@ -1814,18 +1869,18 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- ── RIGHT-SIDE CONTAINER ───────────────────────────────────
     -- Invisible host for the tab strip + per-tab content frames.
     local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
-    rightAnchorFrame:SetPoint("TOPLEFT", state.previewPanel, "TOPRIGHT", 6, 0)
+    rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 6, 0)
     rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
     state.rightAnchorFrame = rightAnchorFrame
 
-    -- ── TAB STRIP (filled in Task 1.3 — empty frame for now) ──
-    BuildTabStrip(GUI, rightAnchorFrame, state, tdDB, page)
+    -- ── TAB STRIP ──────────────────────────────────────────────
+    local tabStrip = BuildTabStrip(GUI, rightAnchorFrame, state, tdDB, page)
 
     -- ── TAB CONTENT FRAMES (one per tab) ───────────────────────
     state.tabContents = {}
     local function CreateTabContentFrame()
         local f = CreateFrame("Frame", nil, rightAnchorFrame)
-        f:SetPoint("TOPLEFT", state.tabStrip, "BOTTOMLEFT", 0, -4)
+        f:SetPoint("TOPLEFT", tabStrip, "BOTTOMLEFT", 0, -4)
         f:SetPoint("BOTTOMRIGHT", rightAnchorFrame, "BOTTOMRIGHT", 0, 0)
         f:Hide()
         return f
