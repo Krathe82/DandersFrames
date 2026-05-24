@@ -1623,6 +1623,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         end
         if state.copyBtnContainer  then state.copyBtnContainer:Hide();  state.copyBtnContainer:ClearAllPoints()  end
         if state.controlsBar       then state.controlsBar:Hide();       state.controlsBar:ClearAllPoints()       end
+        if state.enableCheck       then state.enableCheck:Hide();       state.enableCheck:ClearAllPoints()       end
         if state.previewPanel      then state.previewPanel:Hide();      state.previewPanel:ClearAllPoints()      end
         if state.rightAnchorFrame  then state.rightAnchorFrame:Hide();  state.rightAnchorFrame:ClearAllPoints()  end
         if state.tabStrip          then state.tabStrip:Hide();          state.tabStrip:ClearAllPoints()          end
@@ -1635,6 +1636,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         end
         state.copyBtnContainer  = nil
         state.controlsBar       = nil
+        state.enableCheck       = nil
         state.previewPanel      = nil
         state.rightAnchorFrame  = nil
         state.tabStrip          = nil
@@ -1660,14 +1662,25 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
     state.copyBtnContainer = copyBtnContainer
 
-    -- Full-width controls bar below the copy trio. Content is added in
-    -- Task 1.2 (master toggle, etc.); for now it's just an empty anchor row
-    -- so the preview / right panel below can anchor under it.
+    -- Full-width controls bar below the copy trio. Holds the master toggle
+    -- (and future top-banner controls). The "+ Add Text Element" button now
+    -- belongs to the Texts tab (Phase 2), not this bar.
     local controlsBar = CreateFrame("Frame", nil, page.child)
     controlsBar:SetHeight(32)
     controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
     controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -42)
     state.controlsBar = controlsBar
+
+    -- Master "Enable Text Designer" toggle, top-left of the banner.
+    local enableCheck = GUI:CreateCheckbox(
+        controlsBar,
+        L["Enable Text Designer"],
+        tdDB,
+        "enabled",
+        function() DF:Debug("TD", "Enable Text Designer = %s", tostring(tdDB.enabled)) end
+    )
+    enableCheck:SetPoint("LEFT", controlsBar, "LEFT", 0, 0)
+    state.enableCheck = enableCheck
 
     -- ── PREVIEW PANEL (left half, below banner) ────────────────
     -- Visual clone of AD's frame preview. The mockFrame mirrors the current
