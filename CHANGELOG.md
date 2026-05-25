@@ -16,6 +16,7 @@
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
 * (Click Casting) Trinket and item keybinds now cast on mouseover, target, or self when those fallbacks are enabled — previously they always cast on your current target regardless of fallback settings.
+* (Frame Movers) Fix the raid frames' unlock "Drag to move" text using a fixed fallback font instead of your Settings Font, so it now matches the party mover. (PR #122 by Krathe)
 * (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
 * (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)

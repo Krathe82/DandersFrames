@@ -716,7 +716,9 @@ function DF:CreateRaidMoverFrame()
     
     local label = mover:CreateFontString(nil, "OVERLAY")
     label:SetPoint("CENTER", mover, "CENTER", 0, 0)
-    DF:SafeSetFont(label, nil, 14, "OUTLINE")
+    -- Use the settings font (matches the party mover) so the unlock label
+    -- follows the user's Settings Font instead of the fixed fallback.
+    DF.GUI:SetSettingsFont(label, 14, "OUTLINE")
     label:SetText("Raid Frames\nDrag to move")
     label:SetTextColor(1, 0.7, 0.3, 1)
     
