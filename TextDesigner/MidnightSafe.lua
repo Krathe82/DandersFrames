@@ -15,10 +15,16 @@ DF.TextDesigner.MidnightSafe = MS
 -- exist on older clients (we still want TD to load and degrade
 -- gracefully, even though it's alpha-gated to Midnight).
 local issecretvalue = _G.issecretvalue
+local type, tostring, pcall = type, tostring, pcall
+local format = string.format
 local AbbreviateLargeNumbers = _G.AbbreviateLargeNumbers or tostring
 local TruncateWhenZero = (_G.C_StringUtil and _G.C_StringUtil.TruncateWhenZero) or AbbreviateLargeNumbers
 local RoundToNearestString = (_G.C_StringUtil and _G.C_StringUtil.RoundToNearestString) or function(v) return tostring(v) end
-local ScaleTo100 = _G.CurveConstants and _G.CurveConstants.ScaleTo100 or true
+
+-- The Midnight curve constant for percent calls. Falls back to `true`
+-- (which UnitHealthPercent etc. accept as "use default curve") if
+-- CurveConstants is missing.
+MS.ScaleTo100 = _G.CurveConstants and _G.CurveConstants.ScaleTo100 or true
 
 -- Returns true if v is a Midnight secret value.
 function MS.IsSecret(v)
@@ -67,7 +73,7 @@ function MS.PctText(pct, decimals)
         return RoundToNearestString(pct, precision) .. "%"
     end
     -- Non-secret path — standard format
-    return string.format("%." .. decimals .. "f%%", pct or 0)
+    return format("%." .. decimals .. "f%%", pct)
 end
 
 -- Format a number as a display string respecting "abbreviate" setting.
@@ -76,11 +82,6 @@ function MS.FormatNumber(v, abbreviate)
     if v == nil then return "" end
     if abbreviate then return MS.Abbr(v) end
     return MS.SafeText(v)
-end
-
--- Returns the Midnight curve constant for percent calls.
-function MS.ScaleTo100()
-    return ScaleTo100
 end
 
 -- Wraps issecretvalue + pcall around a boolean read.
