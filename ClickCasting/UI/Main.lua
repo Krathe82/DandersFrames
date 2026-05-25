@@ -391,13 +391,20 @@ function CC:CreateClickCastUI(parent)
     
     local downLabel = row2:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     downLabel:SetPoint("LEFT", downCb, "RIGHT", 3, 0)
-    downLabel:SetText(L["Cast on DOWN"])
+    downLabel:SetText(L["Cast on mouse down"])
     downLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-    
+
     downCb:SetScript("OnClick", function(self)
         CC.db.options.castOnDown = self:GetChecked()
         CC:ApplyBindings()
     end)
+    downCb:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(L["Cast on mouse down"], 1, 1, 1)
+        GameTooltip:AddLine(L["Click-casting on a unit frame fires when you press the mouse button (down) instead of releasing it (up). Applies to mouse clicks on frames only — keyboard binds are unaffected."], 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    downCb:SetScript("OnLeave", function() GameTooltip:Hide() end)
     
     -- Quick Bind toggle
     local quickBindCb = CreateFrame("CheckButton", nil, row2, "BackdropTemplate")

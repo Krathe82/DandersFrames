@@ -16,6 +16,7 @@
 * (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon. (PR #103 by Krathe)
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
+* (Click Casting) Renamed the "Cast on DOWN" option to "Cast on mouse down" and added a tooltip, clarifying that it only affects mouse clicks on frames (keyboard binds are unaffected). (PR #118 by Krathe)
 * (Click Casting) Trinket and item keybinds now cast on mouseover, target, or self when those fallbacks are enabled — previously they always cast on your current target regardless of fallback settings.
 * (Frame Movers) Fix the raid frames' unlock "Drag to move" text using a fixed fallback font instead of your Settings Font, so it now matches the party mover. (PR #122 by Krathe)
 * (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
