@@ -589,6 +589,12 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
     frame.healthBar:ClearAllPoints()
     frame.healthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", padding, -padding)
     frame.healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+    -- Keep the missing-health overlay inside the padding too (matches live frames).
+    if frame.missingHealthBar then
+        frame.missingHealthBar:ClearAllPoints()
+        frame.missingHealthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", padding, -padding)
+        frame.missingHealthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+    end
 
     if db.testShowReducedMaxHealth ~= false then
         frame.dfTestReducedMaxPct = testData.reducedMaxPct or 0
