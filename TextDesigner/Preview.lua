@@ -23,7 +23,6 @@ local POWER_BAR_H = 12
 -- The active preview frame instance (singleton — there's only one
 -- preview mock at a time).
 local activePreviewFrame = nil
-local activeState = nil
 local activeTdDB = nil
 
 -- ============================================================
@@ -113,7 +112,7 @@ local function applyChrome(frame, db)
     if chrome.showPowerBar then
         if chrome.powerBarTexture then frame._powerBar:SetStatusBarTexture(chrome.powerBarTexture) end
         -- Power color: derived from mock token "MANA"
-        local powerColor = DF.GetPowerColor and DF:GetPowerColor("MANA", 0) or {r=0.27, g=0.53, b=1, a=1}
+        local powerColor = DF.GetPowerColor and DF:GetPowerColor("MANA") or {r=0.27, g=0.53, b=1, a=1}
         frame._powerBar:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b, powerColor.a or 1)
         frame._powerBar:Show()
     else
