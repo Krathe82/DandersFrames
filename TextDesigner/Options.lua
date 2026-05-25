@@ -1766,9 +1766,6 @@ local function BuildTextsTab(GUI, parent, state, tdDB, page)
     local listChild = CreateFrame("Frame", nil, listContainer)
     listChild:SetSize(listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300, 1)
     listContainer:SetScrollChild(listChild)
-    listContainer:HookScript("OnSizeChanged", function(self, w, h)
-        if w and w > 1 then listChild:SetWidth(w) end
-    end)
 
     state.listContainer = listContainer
     state.listChild = listChild
@@ -1781,7 +1778,18 @@ local function BuildTextsTab(GUI, parent, state, tdDB, page)
     emptyMsg:SetText(L["No text elements yet. Click '+ Add Text Element' to create one."])
     emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
     emptyMsg:SetJustifyH("CENTER")
+    emptyMsg:SetWidth((listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300) - 20)
     state.emptyMsg = emptyMsg
+
+    -- Keep listChild and the empty-state message in sync with the container width.
+    -- emptyMsg needs SetWidth for wrapping; otherwise the long localized string
+    -- renders as a single clipped line.
+    listContainer:HookScript("OnSizeChanged", function(self, w, h)
+        if w and w > 1 then
+            listChild:SetWidth(w)
+            emptyMsg:SetWidth(w - 20)
+        end
+    end)
 
     -- ── Wire the Add button to the picker ──
     -- Reuse BuildPicker (the same one used by group-item adds). Caches the
@@ -2191,9 +2199,6 @@ local function BuildGroupsTab(GUI, parent, state, tdDB, page)
     local listChild = CreateFrame("Frame", nil, listContainer)
     listChild:SetSize(listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300, 1)
     listContainer:SetScrollChild(listChild)
-    listContainer:HookScript("OnSizeChanged", function(self, w, h)
-        if w and w > 1 then listChild:SetWidth(w) end
-    end)
 
     state.groupAddBtn = addBtn
     state.groupListContainer = listContainer
@@ -2207,7 +2212,18 @@ local function BuildGroupsTab(GUI, parent, state, tdDB, page)
     emptyMsg:SetText(L["No groups yet. Click '+ Add Group' to create one."])
     emptyMsg:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b, 0.8)
     emptyMsg:SetJustifyH("CENTER")
+    emptyMsg:SetWidth((listContainer:GetWidth() > 1 and listContainer:GetWidth() or 300) - 20)
     state.groupEmptyMsg = emptyMsg
+
+    -- Keep listChild and the empty-state message in sync with the container width.
+    -- emptyMsg needs SetWidth for wrapping; otherwise the long localized string
+    -- renders as a single clipped line.
+    listContainer:HookScript("OnSizeChanged", function(self, w, h)
+        if w and w > 1 then
+            listChild:SetWidth(w)
+            emptyMsg:SetWidth(w - 20)
+        end
+    end)
 
     -- Initial render
     if DF.TextDesigner.RenderGroupCardList then
