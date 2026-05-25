@@ -24,6 +24,11 @@ local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
 -- Recessed dark backdrop for the list panel — distinctly darker than C_ELEMENT
 -- (the card color) so cards visibly sit "on top" of the panel surface.
 local C_LIST_PANEL     = {r = 0.04, g = 0.04, b = 0.04, a = 1}
+-- Right-side settings panel chrome. Mirrors AD's rightPanel backdrop
+-- (AuraDesigner/Options.lua:5989-5993) — dark fill + dim translucent border —
+-- so the tab strip + per-tab content sit on a visible panel surface.
+local C_RIGHT_PANEL_BG     = {r = 0.10, g = 0.10, b = 0.10, a = 1}
+local C_RIGHT_PANEL_BORDER = {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.5}
 
 -- Destructive action red — matches Aura Designer's delete X cross palette.
 local C_DESTRUCTIVE       = {r = 0.55, g = 0.20, b = 0.20, a = 1}
@@ -1935,8 +1940,11 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
 
     -- Reuse BuildContentSection's group branch — it handles the separator
     -- input, items list (with up/down/remove buttons), and Add Item picker.
-    -- Groups don't get Appearance/Position sections.
+    -- Groups also get an Appearance section so the rendered group text can be
+    -- styled (font / size / color / outline / class color). Groups do NOT get
+    -- a Position section — they are layout-only containers.
     local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
+    yEnd = BuildAppearanceSection(GUI, body, elem, card, yEnd)
     local bodyHeight = math.max(1, -yEnd + 10)
     body:SetHeight(bodyHeight)
 
@@ -2036,22 +2044,35 @@ DF.TextDesigner.RenderGroupCardList = RenderGroupCardList
 -- No picker: there's only one element type on this tab ("group"), so clicking
 -- the button adds a new group element directly.
 local function BuildGroupsTab(GUI, parent, state, tdDB, page)
-    -- "+ Add Group" CTA top-left
-    local addBtn = GUI:CreateButton(parent, "+ " .. L["Add Group"], 200, 32, function() end)
-    addBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -10)
+    -- "+ Add Group" hero CTA — full-width, theme-tinted. Matches BuildTextsTab's
+    -- "+ Add Text Element" CTA construction so the two tabs look identical.
+    local addBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    addBtn:SetHeight(32)
+    addBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -10)
+    addBtn:SetPoint("RIGHT", parent, "RIGHT", -8, 0)
     do
         local tc = GUI:GetThemeColor()
-        addBtn:SetBackdropColor(tc.r * CTA_BG_RESTING, tc.g * CTA_BG_RESTING, tc.b * CTA_BG_RESTING, 1)
-        addBtn:SetBackdropBorderColor(tc.r * CTA_BORDER_RESTING, tc.g * CTA_BORDER_RESTING, tc.b * CTA_BORDER_RESTING, 1)
-        addBtn:HookScript("OnEnter", function(self)
+        ApplyBackdrop(addBtn,
+            {r = tc.r * CTA_BG_RESTING,     g = tc.g * CTA_BG_RESTING,     b = tc.b * CTA_BG_RESTING,     a = 1},
+            {r = tc.r * CTA_BORDER_RESTING, g = tc.g * CTA_BORDER_RESTING, b = tc.b * CTA_BORDER_RESTING, a = 1})
+
+        local addBtnText = addBtn:CreateFontString(nil, "OVERLAY")
+        GUI:SetSettingsFont(addBtnText, 11, "OUTLINE")
+        addBtnText:SetPoint("CENTER", 0, 0)
+        addBtnText:SetText("+ " .. L["Add Group"])
+        addBtnText:SetTextColor(tc.r, tc.g, tc.b)
+
+        addBtn:SetScript("OnEnter", function(self)
             local c = GUI:GetThemeColor()
             self:SetBackdropColor(c.r * CTA_BG_HOVER, c.g * CTA_BG_HOVER, c.b * CTA_BG_HOVER, 1)
             self:SetBackdropBorderColor(c.r * CTA_BORDER_HOVER, c.g * CTA_BORDER_HOVER, c.b * CTA_BORDER_HOVER, 1)
+            addBtnText:SetTextColor(1, 1, 1)
         end)
-        addBtn:HookScript("OnLeave", function(self)
+        addBtn:SetScript("OnLeave", function(self)
             local c = GUI:GetThemeColor()
             self:SetBackdropColor(c.r * CTA_BG_RESTING, c.g * CTA_BG_RESTING, c.b * CTA_BG_RESTING, 1)
             self:SetBackdropBorderColor(c.r * CTA_BORDER_RESTING, c.g * CTA_BORDER_RESTING, c.b * CTA_BORDER_RESTING, 1)
+            addBtnText:SetTextColor(c.r, c.g, c.b)
         end)
     end
 
@@ -2443,10 +2464,12 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     previewNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
 
     -- ── RIGHT-SIDE CONTAINER ───────────────────────────────────
-    -- Invisible host for the tab strip + per-tab content frames.
-    local rightAnchorFrame = CreateFrame("Frame", nil, page.child)
+    -- Dark panel chrome wrapping the tab strip + per-tab content frames.
+    -- Mirrors AD's rightPanel (AuraDesigner/Options.lua:5989-5993).
+    local rightAnchorFrame = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
     rightAnchorFrame:SetPoint("TOPLEFT", previewPanel, "TOPRIGHT", 6, 0)
     rightAnchorFrame:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
+    ApplyBackdrop(rightAnchorFrame, C_RIGHT_PANEL_BG, C_RIGHT_PANEL_BORDER)
     state.rightAnchorFrame = rightAnchorFrame
 
     -- ── TAB STRIP ──────────────────────────────────────────────
