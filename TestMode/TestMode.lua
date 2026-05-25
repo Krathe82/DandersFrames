@@ -579,6 +579,17 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
         frame.healthBar:SetValue(healthValue)
     end
 
+    -- Re-anchor the health bar with the frame padding inset, matching what
+    -- UpdateUnitFrame does unconditionally for live frames. Without this the
+    -- test path only re-anchored as a side effect of UpdateReducedMaxHealth,
+    -- so frames with no active reduced-max clipping kept a stale inset and the
+    -- padding looked inconsistent across test frames. UpdateReducedMaxHealth
+    -- below may re-clip the right edge afterwards.
+    local padding = db.framePadding or 0
+    frame.healthBar:ClearAllPoints()
+    frame.healthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", padding, -padding)
+    frame.healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+
     if db.testShowReducedMaxHealth ~= false then
         frame.dfTestReducedMaxPct = testData.reducedMaxPct or 0
     else

@@ -22,6 +22,7 @@
 * (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode. (PR #110 by Krathe)
 * (Settings) Made the raid layout positioning options consistent between Group and Flat modes: Start/Center/End options are now labelled "Alignment", directional options use real directions (Left/Right or Top/Bottom), and these labels and their values now update live when you change the layout direction instead of needing the settings window reopened. (PR #114 by Krathe)
 * (Test Mode) Fix grouped raid frames in vertical layout with Players Grow From set to End: frames no longer overflow below the anchor box, and the column growth direction is no longer inverted, so test mode now matches live frames. (PR #113 by Krathe)
+* (Test Mode) Fix frame padding not applying consistently to test frames — the health bar inset now updates on every test frame like it does on live frames, instead of only on frames with reduced-max health. (PR #127 by Krathe)
 
 ## [4.3.11] - 2026-05-21
 
