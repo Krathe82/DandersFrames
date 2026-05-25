@@ -1046,6 +1046,11 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     state.healthbarG        = g
     state.healthbarB        = b
     state.healthbarBlend    = blend
+    -- Alpha for the currently displayed colour. The expiring ticker swaps this to
+    -- the expiring colour's own blend so its alpha is respected rather than the
+    -- base colour's. healthbarOOR lets the ticker preserve the OOR fade.
+    state.healthbarCurrentBlend = blend
+    state.healthbarOOR      = false
     -- Track the currently displayed color (may differ from healthbarR/G/B when
     -- the expiring ticker has switched the overlay to the expiring color).
     -- UpdateAuraDesignerAppearance reads this so it doesn't reset the expiring
@@ -1115,6 +1120,10 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     if expiringEnabled then
         local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
         local oc = {r = r, g = g, b = b}
+        -- Expiring colour's own alpha, run through the same mode formula as the
+        -- base blend (replace = alpha; tint = blend slider × alpha).
+        local ea = ec.a or ec[4] or 1
+        local expiringBlend = (mode == "replace") and ea or ((config.blend or 0.5) * ea)
         RegisterExpiring(overlay, {
             unit = frame.unit,
             auraInstanceID = auraData and auraData.auraInstanceID,
@@ -1122,22 +1131,35 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
             duration = auraData and auraData.duration,
             expirationTime = auraData and auraData.expirationTime,
             blend = blend,
+            expiringBlend = expiringBlend,
             colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
             thresholdMode = config.expiringThresholdMode,
             color = ec, originalColor = oc,
             applyResult = function(el, result, entry)
                 local adState = frame.dfAD
-                -- Use OOR-aware blend if UpdateAuraDesignerAppearance has set one.
-                local effectiveBlend = (adState and adState.healthbarEffectiveBlend) or entry.blend
-                el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
                 local oc2 = entry.originalColor
                 local isExp = IsColorExpiring(result, oc2)
-                -- Keep current-color in sync so UpdateAuraDesignerAppearance
-                -- (OOR handler) uses the expiring color rather than the active one.
+                -- Alpha follows the displayed colour: expiring colour uses its own
+                -- blend, active colour uses the base blend.
+                local curBlend = (isExp and entry.expiringBlend) or entry.blend
+                -- Out of range, keep the OOR fade; in range use the colour's blend.
+                local effectiveBlend = (adState and adState.healthbarOOR
+                    and (adState.healthbarEffectiveBlend or curBlend)) or curBlend
+                el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
+                -- Keep current-color/blend in sync so UpdateAuraDesignerAppearance
+                -- (OOR handler) uses the expiring color/alpha rather than the active one.
                 if adState then
                     adState.healthbarCurrentR = result.r
                     adState.healthbarCurrentG = result.g
                     adState.healthbarCurrentB = result.b
+                    adState.healthbarCurrentBlend = curBlend
+                    -- Replace mode: fade the underlying bar texture to match so the
+                    -- expiring colour's alpha shows on the bar itself, not just the overlay.
+                    if adState.healthbarMode == "replace" then
+                        local hb = frame.healthBar
+                        local hbTex = hb and hb:GetStatusBarTexture()
+                        if hbTex then hbTex:SetVertexColor(result.r, result.g, result.b, curBlend) end
+                    end
                 end
                 UpdatePulseState(el, isExp)
             end,
@@ -1145,15 +1167,26 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                 local c = isExp and entry.color or entry.originalColor
                 local cr, cg, cb = c.r or 1, c.g or 1, c.b or 1
                 local adState = frame.dfAD
-                -- Use OOR-aware blend if UpdateAuraDesignerAppearance has set one.
-                local effectiveBlend = (adState and adState.healthbarEffectiveBlend) or entry.blend
+                -- Alpha follows the displayed colour: expiring colour uses its own
+                -- blend, active colour uses the base blend.
+                local curBlend = (isExp and entry.expiringBlend) or entry.blend
+                -- Out of range, keep the OOR fade; in range use the colour's blend.
+                local effectiveBlend = (adState and adState.healthbarOOR
+                    and (adState.healthbarEffectiveBlend or curBlend)) or curBlend
                 el:SetStatusBarColor(cr, cg, cb, effectiveBlend)
-                -- Keep current-color in sync so UpdateAuraDesignerAppearance
-                -- (OOR handler) uses the expiring color rather than the active one.
+                -- Keep current-color/blend in sync so UpdateAuraDesignerAppearance
+                -- (OOR handler) uses the expiring color/alpha rather than the active one.
                 if adState then
                     adState.healthbarCurrentR = cr
                     adState.healthbarCurrentG = cg
                     adState.healthbarCurrentB = cb
+                    adState.healthbarCurrentBlend = curBlend
+                    -- Replace mode: fade the underlying bar texture to match.
+                    if adState.healthbarMode == "replace" then
+                        local hb = frame.healthBar
+                        local hbTex = hb and hb:GetStatusBarTexture()
+                        if hbTex then hbTex:SetVertexColor(cr, cg, cb, curBlend) end
+                    end
                 end
                 UpdatePulseState(el, isExp)
             end,
@@ -1187,6 +1220,8 @@ function Indicators:RevertHealthBar(frame)
     state.healthbarCurrentR      = nil
     state.healthbarCurrentG      = nil
     state.healthbarCurrentB      = nil
+    state.healthbarCurrentBlend  = nil
+    state.healthbarOOR           = nil
     state.healthbarEffectiveBlend = nil
 
     -- Refresh health bar color so the bar shows the correct color

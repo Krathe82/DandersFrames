@@ -1126,7 +1126,10 @@ function DF:UpdateAuraDesignerAppearance(frame)
             local r = adState.healthbarCurrentR or adState.healthbarR or 1
             local g = adState.healthbarCurrentG or adState.healthbarG or 1
             local b = adState.healthbarCurrentB or adState.healthbarB or 1
-            local blend   = adState.healthbarBlend or 0.5
+            -- Use the blend matching the currently displayed colour (the expiring
+            -- ticker swaps this to the expiring colour's alpha) so OOR handling
+            -- doesn't reset it back to the base alpha.
+            local blend   = adState.healthbarCurrentBlend or adState.healthbarBlend or 0.5
 
             local effectiveBlend
             if issecretvalue and issecretvalue(inRange) then
@@ -1134,8 +1137,10 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 effectiveBlend = blend
             elseif inRange then
                 effectiveBlend = blend
+                adState.healthbarOOR = false
             else
                 effectiveBlend = oorAlpha
+                adState.healthbarOOR = true
             end
             tintOverlay:SetStatusBarColor(r, g, b, effectiveBlend)
             tintOverlay:SetAlpha(1.0)
@@ -1171,11 +1176,12 @@ function DF:UpdateAuraDesignerAppearance(frame)
             local r = adState.healthbarCurrentR or adState.healthbarR or 1
             local g = adState.healthbarCurrentG or adState.healthbarG or 1
             local b = adState.healthbarCurrentB or adState.healthbarB or 1
-            local blend = adState.healthbarBlend or 0.5
+            local blend = adState.healthbarCurrentBlend or adState.healthbarBlend or 0.5
             tintOverlay:SetStatusBarColor(r, g, b, blend)
             tintOverlay:SetAlpha(1.0)
             -- In frame-level mode the frame cascade handles OOR alpha, so the
             -- effective blend for this overlay is always the configured blend.
+            adState.healthbarOOR = false
             adState.healthbarEffectiveBlend = blend
         end
     end
