@@ -7743,6 +7743,12 @@ function DF:CreateGUI()
         -- Keep test mode active when switching modes (just switch which mode it runs in)
         if carryTest and DF.ShowTestFrames then
             DF:ShowTestFrames(true)  -- silent
+            -- ShowTestFrames (unlike ShowRaidTestFrames) doesn't refresh the GUI,
+            -- so the test panel's toggle label would stay on "Enable Test Mode".
+            -- Refresh it now that party test mode is active.
+            if DF.TestPanel and DF.TestPanel:IsShown() then
+                DF.TestPanel:UpdateStateNoCallback()
+            end
         end
     end)
     btnRaid:SetScript("OnClick", function()
