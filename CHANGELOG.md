@@ -9,6 +9,7 @@
 * (Click Casting) Added a **"Target unit when click-casting"** option — click-casting a spell on a frame can now also make that unit your target. Set it globally in the Click Casting profiles panel, or override it per-binding under Advanced → Macro Options. (PR #116 by Krathe)
 * (Frames) Added border customization under Frame → Appearance: a **Border Style** option (Solid or Texture), where the Texture style can use any border registered with SharedMedia (the built-in set, or ones added by other media addons), plus a **Border Size** slider to adjust thickness. (PR #119 by Krathe)
 * (Frames) Added a **Use Class Color** option for the frame border, colouring each frame's border by the unit's class. (PR #120 by Krathe, suggested by maelareth)
+* (Frames) Added bundled frame border textures — **DF Glow**, **DF Bevel**, **DF Inset**, and **DF Double** — selectable under the Texture border style (and shared with other media-aware addons). Designed with square corners for rectangular frames; the bevel/inset shade with the chosen border colour for a 3D edge. (PR #121 by Krathe)
 
 ### Bug Fixes
 

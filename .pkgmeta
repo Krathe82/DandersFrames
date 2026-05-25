@@ -5,6 +5,7 @@ ignore:
   - CHANGELOG.md
   - README.md
   - generate_changelog.sh
+  - Tools
   - .github
   - .gitignore
 
