@@ -1627,6 +1627,36 @@ function DF:GetClassColor(class)
     return RAID_CLASS_COLORS[class] or DEFAULT_CLASS_COLOR
 end
 
+-- Resolve the frame border colour: the static borderColor by default, or the
+-- unit's class colour (RGB) with the static colour's alpha when borderClassColor
+-- is enabled. Non-player / unknown-class units fall back to the static colour.
+-- Handles test frames via their fake class data.
+function DF:GetFrameBorderColor(frame, db)
+    local base = db.borderColor or DEFAULT_CLASS_COLOR
+    local br, bg, bb, ba = base.r or 0, base.g or 0, base.b or 0, base.a or 1
+    if not (frame and db.borderClassColor) then
+        return br, bg, bb, ba
+    end
+
+    local class
+    if frame.dfIsTestFrame then
+        local testData = DF.GetTestUnitData and DF:GetTestUnitData(frame.index, frame.isRaidFrame)
+        class = testData and testData.class
+    elseif frame.unit and UnitExists(frame.unit) then
+        -- No UnitIsPlayer gate: class-based NPC party members (e.g. follower
+        -- dungeon companions) have a class token too, and the class-coloured
+        -- health bars colour them, so the border should match. Units with no
+        -- class token (RAID_CLASS_COLORS miss) fall back to the static colour.
+        class = select(2, UnitClass(frame.unit))
+    end
+
+    if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+        local c = DF:GetClassColor(class)
+        return c.r, c.g, c.b, ba
+    end
+    return br, bg, bb, ba
+end
+
 -- Returns custom power color if set, otherwise falls back to
 -- Blizzard's PowerBarColor. Checks token first, then numeric type.
 function DF:GetPowerColor(powerToken, powerType)
@@ -1970,14 +2000,13 @@ function DF:LightweightUpdateBorderColor()
     local db = DF.db[mode]
     if not db then return end
     
-    local borderColor = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
-    
     local function UpdateFrame(frame)
         if not frame or not frame.border then return end
         -- Route through SetBorderColor so it recolours whichever mode (solid
-        -- edges or texture backdrop) is currently active.
+        -- edges or texture backdrop) is currently active. Resolved per-frame so
+        -- class-coloured borders pick up each unit's colour.
         if frame.border.SetBorderColor then
-            frame.border:SetBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
+            frame.border:SetBorderColor(DF:GetFrameBorderColor(frame, db))
         end
     end
     

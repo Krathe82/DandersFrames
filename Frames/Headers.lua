@@ -4465,7 +4465,15 @@ function DF:FullFrameRefresh(frame)
     -- Core frame update - handles health, name, power, dead/offline state, AND colors
     -- NOTE: Do NOT call ApplyHealthColors separately - UpdateUnitFrame handles it via ElementAppearance
     if DF.UpdateUnitFrame then DF:UpdateUnitFrame(frame, "FullFrameRefresh") end
-    
+
+    -- A class-coloured border depends on this slot's unit, which is only known
+    -- now (UpdateUnitFrame doesn't touch the border, and the heavier UpdateFrame
+    -- that sets it doesn't run on roster/unit changes). Refresh the colour so
+    -- every member's border tracks their class, not just the player's.
+    if frame.border and frame.border.SetBorderColor and DF.GetFrameBorderColor then
+        frame.border:SetBorderColor(DF:GetFrameBorderColor(frame, DF:GetFrameDB(frame)))
+    end
+
     -- Auras (buffs/debuffs)
     if DF.UpdateAuras then DF:UpdateAuras(frame) end
     

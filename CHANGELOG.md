@@ -8,6 +8,7 @@
 * Added a `/df attached` command that lists other addons attaching castbars, cooldowns or auras to your frames — handy for telling apart DF features from another addon's. (PR #104 by Krathe)
 * (Click Casting) Added a **"Target unit when click-casting"** option — click-casting a spell on a frame can now also make that unit your target. Set it globally in the Click Casting profiles panel, or override it per-binding under Advanced → Macro Options. (PR #116 by Krathe)
 * (Frames) Added border customization under Frame → Appearance: a **Border Style** option (Solid or Texture), where the Texture style can use any border registered with SharedMedia (the built-in set, or ones added by other media addons), plus a **Border Size** slider to adjust thickness. (PR #119 by Krathe)
+* (Frames) Added a **Use Class Color** option for the frame border, colouring each frame's border by the unit's class. (PR #120 by Krathe, suggested by maelareth)
 
 ### Bug Fixes
 
