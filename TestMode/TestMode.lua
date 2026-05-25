@@ -3751,36 +3751,7 @@ function DF:ApplyTestFrameLayout(frame)
     
     -- Apply frame border
     if frame.border then
-        local showBorder = db.showFrameBorder ~= false
-        local borderSize = db.borderSize or 1
-        local borderColor = db.borderColor or {r = 0, g = 0, b = 0, a = 1}
-        
-        if db.pixelPerfect then
-            borderSize = DF:PixelPerfect(borderSize)
-        end
-        
-        if showBorder and frame.border.top then
-            frame.border.top:SetHeight(borderSize)
-            frame.border.top:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            frame.border.top:Show()
-            
-            frame.border.bottom:SetHeight(borderSize)
-            frame.border.bottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            frame.border.bottom:Show()
-            
-            frame.border.left:SetWidth(borderSize)
-            frame.border.left:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            frame.border.left:Show()
-            
-            frame.border.right:SetWidth(borderSize)
-            frame.border.right:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            frame.border.right:Show()
-        elseif frame.border.top then
-            frame.border.top:Hide()
-            frame.border.bottom:Hide()
-            frame.border.left:Hide()
-            frame.border.right:Hide()
-        end
+        DF:ApplyFrameBorder(frame, db)
     end
     
     -- Apply fonts using ApplyFrameStyle (handles name, health, status text fonts)
