@@ -33,7 +33,7 @@ function DF.TextDesigner:EnsureDB(db)
         font = "DF Roboto SemiBold",
         fontSize = 10,
         color = {r = 1, g = 1, b = 1, a = 1},
-        outline = "SHADOW",
+        outline = "SHADOW;NONE",
         useClassColor = false,
     }
     return db.textDesigner

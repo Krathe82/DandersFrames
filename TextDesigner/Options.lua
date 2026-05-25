@@ -2266,14 +2266,12 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local outlineOpts = {
-        NONE = L["None"],
-        OUTLINE = L["Outline"],
-        THICKOUTLINE = L["Thick Outline"],
-        SHADOW = L["Shadow"],
-    }
-    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, defaults, "outline", function() end)
+    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], defaults, "outline", function() end)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], defaults, "outline", function() end)
+    shadowCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
     local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, function() end)
