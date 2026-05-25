@@ -142,7 +142,11 @@ function LiveSource:GetClassToken()
 end
 
 function LiveSource:GetClassLocalized()
-    return UnitClass(self.unit) or ""
+    local localized = UnitClass(self.unit)
+    if localized and localized ~= "" then return localized end
+    -- Match GetClassToken's "WARRIOR" fallback so downstream gets
+    -- consistent class info even on missing unit data.
+    return (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE.WARRIOR) or "Warrior"
 end
 
 function LiveSource:GetLevel()
@@ -226,7 +230,8 @@ end
 
 function LiveSource:GetPowerTypeString()
     local _, token = UnitPowerType(self.unit)
-    return _G["POWER_TYPE_" .. (token or "MANA")] or token or ""
+    if not token then return "" end
+    return _G["POWER_TYPE_" .. token] or token
 end
 
 function LiveSource:GetAbsorbAmount()
@@ -234,15 +239,22 @@ function LiveSource:GetAbsorbAmount()
 end
 
 function LiveSource:GetOvershieldAmount()
-    -- Uses the calculator's clamp-mode trick. Requires the frame's
-    -- absorb calculator to be populated, which UpdateAbsorb does
-    -- before our LiveHooks fire in Phase C.
+    -- Uses the calculator's clamp-mode trick to compute the overshield
+    -- (amount of absorb beyond missing HP). See Frames/Bars.lua:495-503
+    -- for the canonical absorb-calculator usage. The calculator returns
+    -- (clampedAmount, isClamped) — overshield = total - clamped.
     local calc = self.frame and self.frame.absorbCalculator
-    if not calc or not _G.UnitGetDetailedHealPrediction then return 0 end
-    pcall(calc.SetDamageAbsorbClampMode, calc, 1)
-    pcall(UnitGetDetailedHealPrediction, self.unit, "player", calc)
-    local _, excess = pcall(calc.GetDamageAbsorbs, calc)
-    return excess or 0
+    if not calc or not _G.UnitGetDetailedHealPrediction or not calc.GetDamageAbsorbs then return 0 end
+    pcall(calc.SetDamageAbsorbClampMode, calc, 1)  -- 1 = Clamp to Missing Health
+    pcall(UnitGetDetailedHealPrediction, self.unit, nil, calc)
+    local ok, clamped = pcall(calc.GetDamageAbsorbs, calc)
+    if not ok or not clamped then return 0 end
+    local total = UnitGetTotalAbsorbs(self.unit) or 0
+    -- Arithmetic on secret values throws — pcall the subtraction so we
+    -- silently degrade to "no overshield" in restricted contexts.
+    local subOk, excess = pcall(function() return total - clamped end)
+    if not subOk or not excess or excess <= 0 then return 0 end
+    return excess
 end
 
 function LiveSource:GetHealAbsorbAmount()
