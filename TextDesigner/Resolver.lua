@@ -11,6 +11,8 @@ DF.TextDesigner = DF.TextDesigner or {}
 local Resolver = {}
 DF.TextDesigner.Resolver = Resolver
 
+local L = DF.L
+
 local MS  -- lazy resolve
 local function getMS()
     if not MS then MS = DF.TextDesigner.MidnightSafe end
@@ -169,10 +171,10 @@ end
 -- ───── Status / Threat / Range ─────
 
 RESOLVERS.status_text = function(elem, source)
-    if not source:IsConnected() then return "Offline" end
-    if source:IsFeignDeath() then return "FD" end
-    if source:IsGhost() then return "Ghost" end
-    if source:IsDead() then return "Dead" end
+    if not source:IsConnected() then return L["Offline"] end
+    if source:IsFeignDeath() then return L["FD"] end
+    if source:IsGhost() then return L["Ghost"] end
+    if source:IsDead() then return L["Dead"] end
     return ""
 end
 
@@ -181,19 +183,23 @@ RESOLVERS.aggro_flag = function(elem, source)
     if s == 0 then return ""
     elseif s == 1 then return "+"
     elseif s == 2 then return "++"
-    elseif s == 3 then return "AGGRO"
+    elseif s == 3 then return L["AGGRO"]
     end
     return ""
 end
 
 RESOLVERS.threat_percent = function(elem, source)
     local pct = source:GetThreatPercent()
-    if not pct or pct == 0 then return "" end
-    return string.format("%.0f%%", pct)
+    if not pct then return "" end
+    -- Skip "0%" display when not threatening. For secret values we can't
+    -- compare to 0, so pass through (the display will show "0%" rather
+    -- than blank, which is acceptable).
+    if not getMS().IsSecret(pct) and pct == 0 then return "" end
+    return getMS().PctText(pct, elem.decimals or 0)
 end
 
 RESOLVERS.range_text = function(elem, source)
-    return source:IsInRange() and "" or "OOR"
+    return source:IsInRange() and "" or L["OOR"]
 end
 
 -- ───── Group (meta) ─────
