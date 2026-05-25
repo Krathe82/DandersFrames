@@ -206,6 +206,23 @@ function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
             updateOne(frame, elem, source, globalDefaults)
         end
     end
+
+    -- Sweep: hide FontStrings for elements that no longer exist in tdDB.
+    -- This handles the delete case (an element was removed; its FontString
+    -- is still cached on the frame but should not display). Cached entries
+    -- are intentionally left in place so a subsequent add reusing the id
+    -- recovers the same FontString instead of leaking another one.
+    if frame._tdFontStrings then
+        local liveIds = {}
+        for _, elem in ipairs(tdDB.elements or {}) do
+            liveIds[elem.id] = true
+        end
+        for id, fs in pairs(frame._tdFontStrings) do
+            if not liveIds[id] then
+                fs:Hide()
+            end
+        end
+    end
 end
 
 -- Tears down all FontStrings on a frame (mode switch, profile change).

@@ -246,6 +246,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                 DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
             end)
         end
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
     end, 200)
     labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     -- CreateEditBox is label-above style; row is taller than other widgets.
@@ -260,7 +261,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     then
         elem.abbreviate = elem.abbreviate
         if elem.abbreviate == nil then elem.abbreviate = true end
-        local abbrev = GUI:CreateCheckbox(parent, L["Abbreviate"], elem, "abbreviate", function() end)
+        local abbrev = GUI:CreateCheckbox(parent, L["Abbreviate"], elem, "abbreviate", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
         abbrev:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
@@ -268,27 +271,35 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     elseif ct.key == "hp_percent" or ct.key == "power_percent"
            or ct.key == "hp_max_reduction" or ct.key == "threat_percent" then
         elem.decimals = elem.decimals or 0
-        local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", function() end)
+        local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
         dec:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
     -- Name: length cap + truncate mode
     elseif ct.key == "name" then
         elem.nameLength = elem.nameLength or 12
-        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", function() end)
+        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
         lenSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
         elem.truncateMode = elem.truncateMode or "ELLIPSIS"
         local truncOpts = { ELLIPSIS = L["Ellipsis"], CUT = L["Cut"] }
-        local truncDrop = GUI:CreateDropdown(parent, L["Truncate Mode"], truncOpts, elem, "truncateMode", function() end)
+        local truncDrop = GUI:CreateDropdown(parent, L["Truncate Mode"], truncOpts, elem, "truncateMode", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
         truncDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
     -- Custom static text: a plain edit box
     elseif ct.key == "custom_static" then
         elem.staticText = elem.staticText or ""
-        local edit = GUI:CreateEditBox(parent, L["Text"], elem, "staticText", function() end, 240)
+        local edit = GUI:CreateEditBox(parent, L["Text"], elem, "staticText", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end, 240)
         edit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         -- CreateEditBox renders its label ABOVE the input, so the row is
         -- taller than other widgets. Use a custom y-decrement instead of
@@ -303,7 +314,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
             SUFFIX = L["Suffix"],
             STANDALONE = L["Standalone"],
         }
-        local fmtDrop = GUI:CreateDropdown(parent, L["Format"], opts, elem, "groupFormat", function() end)
+        local fmtDrop = GUI:CreateDropdown(parent, L["Format"], opts, elem, "groupFormat", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
         fmtDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
@@ -331,7 +344,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         end
 
         -- Separator input (CreateEditBox renders its label ABOVE the input)
-        local sepEdit = GUI:CreateEditBox(parent, L["Separator"], elem, "groupSeparator", function() end, 120)
+        local sepEdit = GUI:CreateEditBox(parent, L["Separator"], elem, "groupSeparator", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end, 120)
         sepEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - EDIT_BOX_ROW_H
 
@@ -539,6 +554,7 @@ local function CreateAnchorGrid(GUI, parent, elem, card)
                     ApplyButtonState(bb, p == point)
                 end
                 if card and card.UpdateMeta then card:UpdateMeta() end
+                if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
             end)
         end
     end
@@ -575,32 +591,50 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     -- otherwise fall back to a generic dropdown listing the current font only.
     local fontDrop
     if GUI.CreateFontDropdown then
-        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], elem, "font", function() elem.overrides.font = true end)
+        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], elem, "font", function()
+            elem.overrides.font = true
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
     else
-        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[elem.font] = elem.font}, elem, "font", function() elem.overrides.font = true end)
+        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[elem.font] = elem.font}, elem, "font", function()
+            elem.overrides.font = true
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
     end
     fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Size
-    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function() elem.overrides.fontSize = true end)
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function()
+        elem.overrides.fontSize = true
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Outline + Shadow (both bind to the composite "outline" field, so both
     -- mark elem.overrides.outline when changed)
-    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], elem, "outline", function() elem.overrides.outline = true end)
+    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], elem, "outline", function()
+        elem.overrides.outline = true
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], elem, "outline", function() elem.overrides.outline = true end)
+    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], elem, "outline", function()
+        elem.overrides.outline = true
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     shadowCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Color picker + Use Class Color toggle (stacked vertically so they
     -- don't overflow the now-narrower card body).
     -- CreateColorPicker signature: (parent, label, dbTable, dbKey, hasAlpha, callback, ...)
-    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function() elem.overrides.color = true end)
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function()
+        elem.overrides.color = true
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -613,6 +647,7 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
             if colorPicker.Enable then colorPicker:Enable() end
             colorPicker:SetAlpha(1)
         end
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
     end)
     classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
@@ -677,8 +712,12 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
 
     -- Shared callback: every position-related widget needs to refresh the
     -- card's header banner so the "ANCHOR · X,Y · → target" summary stays
-    -- in sync with the live values.
-    local function metaCB() if card and card.UpdateMeta then card:UpdateMeta() end end
+    -- in sync with the live values. Also refresh the preview so anchor /
+    -- offset / target changes show immediately on the mock frame.
+    local function metaCB()
+        if card and card.UpdateMeta then card:UpdateMeta() end
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end
 
     -- Anchor grid first (stacked, not side-by-side). The card body is now
     -- ~half the page width so the previous side-by-side layout would overflow.
@@ -702,7 +741,9 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", function() end)
+    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", function()
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -713,7 +754,9 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
         HIGH = "HIGH",
         DIALOG = "DIALOG",
     }
-    local strataDrop = GUI:CreateDropdown(parent, L["Frame Strata"], strataOpts, elem, "frameStrata", function() end)
+    local strataDrop = GUI:CreateDropdown(parent, L["Frame Strata"], strataOpts, elem, "frameStrata", function()
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
     strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -2258,32 +2301,39 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
 
     local y = -60
 
+    -- Shared callback: every globalDefaults widget refreshes the preview so
+    -- elements that haven't overridden the matching field reflect the new
+    -- default immediately on the mock frame.
+    local function refreshCB()
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end
+
     local fontDrop
     if GUI.CreateFontDropdown then
-        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], defaults, "font", function() end)
+        fontDrop = GUI:CreateFontDropdown(parent, L["Font"], defaults, "font", refreshCB)
     else
-        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[defaults.font] = defaults.font}, defaults, "font", function() end)
+        fontDrop = GUI:CreateDropdown(parent, L["Font"], {[defaults.font] = defaults.font}, defaults, "font", refreshCB)
     end
     fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, defaults, "fontSize", function() end)
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, defaults, "fontSize", refreshCB)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], defaults, "outline", function() end)
+    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], defaults, "outline", refreshCB)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], defaults, "outline", function() end)
+    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], defaults, "outline", refreshCB)
     shadowCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, function() end)
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, refreshCB)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], defaults, "useClassColor", function() end)
+    local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], defaults, "useClassColor", refreshCB)
     classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
 end
 
