@@ -7709,6 +7709,8 @@ function DF:CreateGUI()
     btnParty:SetScript("OnClick", function()
         DF:SyncLinkedSections()
 
+        -- Carry test mode across the mode switch (raid test -> party test)
+        local carryTest = false
         -- Before switching tabs, clean up current mode's test mode and unlock state
         if GUI.SelectedMode == "raid" then
             -- Lock raid frames if unlocked
@@ -7723,10 +7725,11 @@ function DF:CreateGUI()
             end
             -- Disable raid test mode if active
             if DF.raidTestMode then
+                carryTest = true
                 DF:HideRaidTestFrames(true)  -- silent
             end
         end
-        
+
         GUI.SelectedMode = "party"
         if DF.Search then
             DF.Search:InvalidateRegistry()
@@ -7736,10 +7739,17 @@ function DF:CreateGUI()
         GUI:ShowNormalContent()
         GUI:UpdateTabAvailability()
         GUI:RefreshCurrentPage()
+
+        -- Keep test mode active when switching modes (just switch which mode it runs in)
+        if carryTest and DF.ShowTestFrames then
+            DF:ShowTestFrames(true)  -- silent
+        end
     end)
     btnRaid:SetScript("OnClick", function()
         DF:SyncLinkedSections()
 
+        -- Carry test mode across the mode switch (party test -> raid test)
+        local carryTest = false
         -- Before switching tabs, clean up current mode's test mode and unlock state
         if GUI.SelectedMode == "party" then
             -- Lock party frames if unlocked
@@ -7754,10 +7764,11 @@ function DF:CreateGUI()
             end
             -- Disable party test mode if active
             if DF.testMode then
+                carryTest = true
                 DF:HideTestFrames(true)  -- silent
             end
         end
-        
+
         GUI.SelectedMode = "raid"
         if DF.Search then
             DF.Search:InvalidateRegistry()
@@ -7767,6 +7778,11 @@ function DF:CreateGUI()
         GUI:ShowNormalContent()
         GUI:UpdateTabAvailability()
         GUI:RefreshCurrentPage()
+
+        -- Keep test mode active when switching modes (just switch which mode it runs in)
+        if carryTest and DF.ShowRaidTestFrames then
+            DF:ShowRaidTestFrames()
+        end
     end)
     
     -- Click Casting tab click handler
