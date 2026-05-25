@@ -587,15 +587,14 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    -- Outline
-    local outlineOpts = {
-        NONE = L["None"],
-        OUTLINE = L["Outline"],
-        THICKOUTLINE = L["Thick Outline"],
-        SHADOW = L["Shadow"],
-    }
-    local outlineDrop = GUI:CreateDropdown(parent, L["Outline"], outlineOpts, elem, "outline", function() elem.overrides.outline = true end)
+    -- Outline + Shadow (both bind to the composite "outline" field, so both
+    -- mark elem.overrides.outline when changed)
+    local outlineDrop = GUI:CreateOutlineDropdown(parent, L["Outline"], elem, "outline", function() elem.overrides.outline = true end)
     outlineDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - FIELD_ROW_HEIGHT
+
+    local shadowCheck = GUI:CreateShadowCheckbox(parent, L["Shadow"], elem, "outline", function() elem.overrides.outline = true end)
+    shadowCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Color picker + Use Class Color toggle (stacked vertically so they
