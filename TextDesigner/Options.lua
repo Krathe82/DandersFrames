@@ -2469,20 +2469,119 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     previewLabel:SetText(L["FRAME PREVIEW"] or "FRAME PREVIEW")
     previewLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
-    -- ── MOCK PREVIEW FRAME (via Preview.lua) ─────────────────────
-    -- Replaces the previously-hardcoded green mock. The new mock is
-    -- built from the user's actual db settings so changes to health
-    -- bar texture/color/etc. show up immediately in the preview.
-    -- The Preview module handles its own lifecycle.
-    if DF.TextDesigner.Preview then
-        DF.TextDesigner.Preview:Init(state.previewPanel, tdDB)
-        state.mockFrame = DF.TextDesigner.Preview:GetFrame()
-    end
+    -- Mock unit frame (centred in panel) — visual clone of AD's mockFrame.
+    local mockFrame
+    do
+        local mode = (GUI and GUI.SelectedMode) or "party"
+        local frameDB = (DF.GetDB and DF:GetDB(mode)) or DF.PartyDefaults or {}
+        local FRAME_W = frameDB.frameWidth or 125
+        local FRAME_H = frameDB.frameHeight or 64
+        local POWER_H = frameDB.powerBarHeight or 4
+        local showPower = frameDB.showPowerBar
 
-    -- Apply initial scale from tdDB.previewScale (existing Preview Scale slider
-    -- targets state.mockFrame:SetScale so we keep the same field reference).
-    if state.mockFrame and tdDB.previewScale then
-        state.mockFrame:SetScale(tdDB.previewScale)
+        mockFrame = CreateFrame("Frame", nil, previewPanel, "BackdropTemplate")
+        mockFrame:SetSize(FRAME_W, FRAME_H)
+        mockFrame:SetPoint("CENTER", previewPanel, "CENTER", 0, -4)
+        mockFrame:SetScale(tdDB.previewScale or 1.0)
+        ApplyBackdrop(mockFrame, {r = 0.07, g = 0.07, b = 0.07, a = 1}, {r = 0.27, g = 0.27, b = 0.27, a = 1})
+        previewPanel.mockFrame = mockFrame
+        state.mockFrame = mockFrame
+
+        if DF.TextDesigner.Preview then
+            DF.TextDesigner.Preview:Init(state.mockFrame, tdDB)
+        end
+
+        local healthTexPath = frameDB.healthTexture or "Interface\\Buttons\\WHITE8x8"
+
+        -- Health bar background
+        local healthBg = mockFrame:CreateTexture(nil, "BACKGROUND")
+        healthBg:SetPoint("TOPLEFT", 1, -1)
+        if showPower then
+            healthBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H + 1)
+        else
+            healthBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 1)
+        end
+        healthBg:SetColorTexture(0, 0, 0, 0.4)
+
+        -- Health bar fill (72% health, placeholder)
+        local healthFill = mockFrame:CreateTexture(nil, "ARTWORK")
+        healthFill:SetPoint("TOPLEFT", 1, -1)
+        if showPower then
+            healthFill:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, POWER_H + 1)
+        else
+            healthFill:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, 1)
+        end
+        healthFill:SetWidth(FRAME_W * 0.72)
+        healthFill:SetTexture(healthTexPath)
+        healthFill:SetVertexColor(0.18, 0.80, 0.44, 0.85)
+
+        -- Missing health region
+        local missingHealth = mockFrame:CreateTexture(nil, "ARTWORK")
+        missingHealth:SetPoint("TOPRIGHT", mockFrame, "TOPRIGHT", -1, -1)
+        if showPower then
+            missingHealth:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H + 1)
+        else
+            missingHealth:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 1)
+        end
+        missingHealth:SetWidth(FRAME_W * 0.28)
+        missingHealth:SetColorTexture(0, 0, 0, 0.4)
+
+        -- Power bar (only if enabled in current frame settings)
+        if showPower then
+            local powerBg = mockFrame:CreateTexture(nil, "ARTWORK")
+            powerBg:SetPoint("BOTTOMLEFT", 1, 1)
+            powerBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 0)
+            powerBg:SetHeight(POWER_H)
+            powerBg:SetColorTexture(0.07, 0.07, 0.07, 1)
+
+            local powerFill = mockFrame:CreateTexture(nil, "ARTWORK", nil, 1)
+            powerFill:SetPoint("BOTTOMLEFT", 1, 1)
+            powerFill:SetHeight(POWER_H)
+            powerFill:SetWidth(FRAME_W * 0.85)
+            powerFill:SetColorTexture(0.27, 0.53, 1, 0.9)
+
+            local powerBorder = mockFrame:CreateTexture(nil, "ARTWORK", nil, 2)
+            powerBorder:SetPoint("BOTTOMLEFT", mockFrame, "BOTTOMLEFT", 1, POWER_H)
+            powerBorder:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, POWER_H)
+            powerBorder:SetHeight(1)
+            powerBorder:SetColorTexture(0.2, 0.2, 0.2, 1)
+        end
+
+        -- Placeholder name + HP text (static — does NOT respect TD elements)
+        local nameText = mockFrame:CreateFontString(nil, "OVERLAY")
+        local nameFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.nameFont)) or "Fonts\\FRIZQT__.TTF"
+        nameText:SetFont(nameFontPath, frameDB.nameFontSize or 11, "OUTLINE")
+        nameText:SetPoint("TOP", mockFrame, "TOP", 0, -10)
+        nameText:SetText("Danders")
+        nameText:SetTextColor(0.18, 0.80, 0.44, 1)
+
+        local hpText = mockFrame:CreateFontString(nil, "OVERLAY")
+        local healthFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.healthFont)) or "Fonts\\FRIZQT__.TTF"
+        hpText:SetFont(healthFontPath, frameDB.healthFontSize or 10, "OUTLINE")
+        hpText:SetPoint("CENTER", mockFrame, "CENTER", 0, 4)
+        hpText:SetText("72%")
+        hpText:SetTextColor(0.87, 0.87, 0.87, 1)
+
+        -- Anchor dots disabled until drag-to-place is implemented (Phase 2).
+        if false then
+            local ANCHOR_POSITIONS = {
+                TOPLEFT     = "TOPLEFT",
+                TOP         = "TOP",
+                TOPRIGHT    = "TOPRIGHT",
+                LEFT        = "LEFT",
+                CENTER      = "CENTER",
+                RIGHT       = "RIGHT",
+                BOTTOMLEFT  = "BOTTOMLEFT",
+                BOTTOM      = "BOTTOM",
+                BOTTOMRIGHT = "BOTTOMRIGHT",
+            }
+            for _, anchorName in pairs(ANCHOR_POSITIONS) do
+                local dot = mockFrame:CreateTexture(nil, "OVERLAY")
+                dot:SetSize(6, 6)
+                dot:SetPoint("CENTER", mockFrame, anchorName, 0, 0)
+                dot:SetColorTexture(0.45, 0.45, 0.95, 0.3)
+            end
+        end
     end
 
     -- Preview Scale slider (top-left of preview panel, below the FRAME PREVIEW
