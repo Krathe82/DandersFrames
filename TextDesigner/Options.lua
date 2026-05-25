@@ -271,18 +271,20 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     elseif ct.key == "hp_percent" or ct.key == "power_percent"
            or ct.key == "hp_max_reduction" or ct.key == "threat_percent" then
         elem.decimals = elem.decimals or 0
-        local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", function()
+        local function decCB()
             if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-        end)
+        end
+        local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", decCB, decCB)
         dec:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
     -- Name: length cap + truncate mode
     elseif ct.key == "name" then
         elem.nameLength = elem.nameLength or 12
-        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", function()
+        local function lenCB()
             if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-        end)
+        end
+        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", lenCB, lenCB)
         lenSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
@@ -605,10 +607,11 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     y = y - FIELD_ROW_HEIGHT
 
     -- Size
-    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", function()
+    local function sizeCB()
         elem.overrides.fontSize = true
         if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-    end)
+    end
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, elem, "fontSize", sizeCB, sizeCB)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -733,17 +736,18 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     y = y - 80
 
     -- Stacked sliders + dropdowns (full body width)
-    local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", metaCB)
+    local xSlider = GUI:CreateSlider(parent, L["Offset X"], -200, 200, 1, elem, "offsetX", metaCB, metaCB)
     xSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", metaCB)
+    local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", metaCB, metaCB)
     ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
-    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", function()
+    local function lvlCB()
         if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-    end)
+    end
+    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", lvlCB, lvlCB)
     lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -2317,7 +2321,7 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     fontDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, defaults, "fontSize", refreshCB)
+    local sizeSlider = GUI:CreateSlider(parent, L["Size"], 6, 40, 1, defaults, "fontSize", refreshCB, refreshCB)
     sizeSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
