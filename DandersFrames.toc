@@ -135,6 +135,7 @@ TextDesigner\MidnightSafe.lua
 TextDesigner\DataSource.lua
 TextDesigner\Resolver.lua
 TextDesigner\Render.lua
+TextDesigner\Preview.lua
 TextDesigner\Options.lua
 #@end-alpha@
 
