@@ -1,0 +1,225 @@
+local addonName, DF = ...
+
+-- ============================================================
+-- TEXT DESIGNER — RENDER LAYER
+-- FontString lifecycle: create one per element per frame,
+-- anchor + style per elem fields, call Resolver on refresh,
+-- handle visibility (eye icon + master toggle).
+-- ============================================================
+
+DF.TextDesigner = DF.TextDesigner or {}
+local Render = {}
+DF.TextDesigner.Render = Render
+
+local function getResolver() return DF.TextDesigner.Resolver end
+local function getMS() return DF.TextDesigner.MidnightSafe end
+
+-- ============================================================
+-- HINT CATEGORIES — which content types refresh on which hints
+-- ============================================================
+
+local CONTENT_HINTS = {
+    -- name (identity)
+    name              = "name",
+    class             = "name",
+    race_level_faction= "name",
+    group_number      = "name",
+    custom_static     = "name",  -- static, refreshes only on settings change
+    -- health
+    hp_current        = "health",
+    hp_max            = "health",
+    hp_percent        = "health",
+    hp_deficit        = "health",
+    hp_max_reduction  = "health",
+    status_text       = "health",
+    -- power
+    power_current     = "power",
+    power_percent     = "power",
+    power_deficit     = "power",
+    power_type_string = "power",
+    -- absorbs / heals
+    absorb_amount     = "absorb",
+    overshield_amount = "absorb",
+    heal_absorb_amount= "absorb",
+    incoming_heal     = "heal",
+    incoming_heal_mine= "heal",
+    -- threat / range
+    aggro_flag        = "threat",
+    threat_percent    = "threat",
+    range_text        = "range",
+    -- group (refreshes on any hint since it can mix categories)
+    group             = "all",
+}
+
+-- ============================================================
+-- FONT/COLOR RESOLUTION (overrides + globalDefaults)
+-- ============================================================
+
+local function resolveAppearance(elem, globalDefaults)
+    globalDefaults = globalDefaults or {}
+    local overrides = elem.overrides or {}
+    return {
+        font          = (overrides.font          and elem.font)          or globalDefaults.font          or "DF Roboto SemiBold",
+        fontSize      = (overrides.fontSize      and elem.fontSize)      or globalDefaults.fontSize      or 10,
+        color         = (overrides.color         and elem.color)         or globalDefaults.color         or {r=1, g=1, b=1, a=1},
+        outline       = (overrides.outline       and elem.outline)       or globalDefaults.outline       or "SHADOW;NONE",
+        useClassColor = (overrides.useClassColor and elem.useClassColor) or globalDefaults.useClassColor or false,
+    }
+end
+
+-- ============================================================
+-- LSM FONT LOOKUP
+-- ============================================================
+
+local LSM_FALLBACK = "Fonts\\FRIZQT__.TTF"
+local function fontPath(name)
+    if not name then return LSM_FALLBACK end
+    if name:sub(1, 1) == "\\" or name:find("^Fonts\\") then return name end
+    local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+    if LSM then
+        local path = LSM:Fetch("font", name, true)
+        if path then return path end
+    end
+    return LSM_FALLBACK
+end
+
+-- ============================================================
+-- ANCHOR RESOLUTION
+-- ============================================================
+
+-- Returns the frame to anchor to. anchorTo == "FRAME" → parent frame.
+-- anchorTo == <element id string> → that element's FontString on the same frame.
+local function resolveAnchorTarget(elem, frame, fontStringsById)
+    local target = elem.anchorTo or "FRAME"
+    if target == "FRAME" then return frame end
+    local targetId = tonumber(target)
+    if targetId and fontStringsById and fontStringsById[targetId] then
+        return fontStringsById[targetId]
+    end
+    return frame  -- fallback
+end
+
+-- ============================================================
+-- FONTSTRING LIFECYCLE
+-- ============================================================
+
+-- Acquires (creating if needed) the FontString for a given element on a frame.
+local function acquireFontString(frame, elem)
+    frame._tdFontStrings = frame._tdFontStrings or {}
+    local fs = frame._tdFontStrings[elem.id]
+    if fs then return fs end
+    fs = frame:CreateFontString(nil, "OVERLAY")
+    frame._tdFontStrings[elem.id] = fs
+    return fs
+end
+
+-- Applies anchor / font / color to the FontString.
+local function applyAppearance(fs, frame, elem, globalDefaults)
+    local app = resolveAppearance(elem, globalDefaults)
+    -- Font
+    DF:SafeSetFont(fs, fontPath(app.font), app.fontSize, app.outline)
+    -- Color
+    if app.useClassColor then
+        -- For LiveSource we'd read source:GetClassToken() — but Render doesn't
+        -- have the source. Defer class-color application to UpdateOne (which
+        -- has the source) by storing a flag on the FontString.
+        fs._useClassColor = true
+        -- Initial color from globalDefaults until UpdateOne re-applies.
+        fs:SetTextColor(app.color.r, app.color.g, app.color.b, app.color.a or 1)
+    else
+        fs._useClassColor = false
+        fs:SetTextColor(app.color.r, app.color.g, app.color.b, app.color.a or 1)
+    end
+    -- Frame strata / level
+    if elem.frameStrata and elem.frameStrata ~= "INHERIT" then
+        fs:SetDrawLayer("OVERLAY", 7)  -- WoW FontStrings honor draw layer
+    end
+end
+
+-- Applies position to the FontString (separate from appearance so we can
+-- update position when anchorTo's target moves).
+local function applyPosition(fs, frame, elem, fontStringsById)
+    fs:ClearAllPoints()
+    local target = resolveAnchorTarget(elem, frame, fontStringsById)
+    fs:SetPoint(elem.anchor or "CENTER", target,
+        (elem.anchorTo and elem.anchorTo ~= "FRAME") and (elem.anchor or "CENTER") or (elem.anchor or "CENTER"),
+        elem.offsetX or 0, elem.offsetY or 0)
+end
+
+-- ============================================================
+-- RENDER ONE ELEMENT
+-- ============================================================
+
+-- Renders a single elem on a frame. Called per-element from UpdateFrame.
+-- source is a DataSource (Live or Mock).
+local function updateOne(frame, elem, source, globalDefaults)
+    if not elem.enabled then
+        local existing = frame._tdFontStrings and frame._tdFontStrings[elem.id]
+        if existing then existing:Hide() end
+        return
+    end
+    local fs = acquireFontString(frame, elem)
+    applyAppearance(fs, frame, elem, globalDefaults)
+    applyPosition(fs, frame, elem, frame._tdFontStrings)
+    -- Apply class color if requested
+    if fs._useClassColor then
+        local token = source:GetClassToken()
+        local color = token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+        if color then
+            local app = resolveAppearance(elem, globalDefaults)
+            fs:SetTextColor(color.r, color.g, color.b, (app.color and app.color.a) or 1)
+        end
+    end
+    local text = getResolver():Resolve(elem, source)
+    fs:SetText(getMS().SafeText(text))
+    fs:Show()
+end
+
+-- ============================================================
+-- PUBLIC ENTRY POINTS
+-- ============================================================
+
+-- Renders all (or hint-filtered) elements on a frame.
+-- frame is any frame (preview mock frame or real unit frame).
+-- tdDB is the textDesigner db table (DF.db.party.textDesigner or .raid).
+-- source is the DataSource.
+-- hint is one of "all" / "name" / "health" / "power" / "absorb" / "heal" / "range" / "threat".
+function Render:UpdateFrame(frame, tdDB, source, hint)
+    if not frame or not tdDB then return end
+    if not tdDB.enabled then
+        -- Master toggle off — hide all FontStrings
+        if frame._tdFontStrings then
+            for _, fs in pairs(frame._tdFontStrings) do fs:Hide() end
+        end
+        return
+    end
+    hint = hint or "all"
+    local globalDefaults = tdDB.globalDefaults
+    for _, elem in ipairs(tdDB.elements or {}) do
+        local elemHint = CONTENT_HINTS[elem.contentType]
+        if hint == "all" or elemHint == "all" or elemHint == hint then
+            updateOne(frame, elem, source, globalDefaults)
+        end
+    end
+end
+
+-- Tears down all FontStrings on a frame (mode switch, profile change).
+function Render:Teardown(frame)
+    if not frame._tdFontStrings then return end
+    for _, fs in pairs(frame._tdFontStrings) do
+        fs:Hide()
+        fs:ClearAllPoints()
+        fs:SetScript("OnUpdate", nil)
+    end
+    wipe(frame._tdFontStrings)
+end
+
+-- For Phase C: called from existing update functions to refresh TD elements
+-- on a unit frame. Phase B leaves this stubbed — Phase C will populate it.
+function DF:UpdateTextDesigner(frame, hint)
+    if not frame or not frame.unit then return end
+    local db = DF:GetFrameDB(frame)
+    if not db or not db.textDesigner then return end
+    local source = DF.TextDesigner.DataSource.Live(frame)
+    Render:UpdateFrame(frame, db.textDesigner, source, hint)
+end
