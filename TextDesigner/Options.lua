@@ -1509,10 +1509,13 @@ end
 -- callers can anchor content frames directly to it instead of going through
 -- state.tabStrip. SelectTab is also exposed on state for external callers.
 local function BuildTabStrip(GUI, parent, state, tdDB, page)
-    local strip = CreateFrame("Frame", nil, parent)
+    -- BackdropTemplate so the strip gets a darker fill than the right-panel
+    -- chrome — mirrors AuraDesigner/Options.lua:5996-6000 (its tabBar).
+    local strip = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     strip:SetHeight(28)
     strip:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     strip:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    ApplyBackdrop(strip, {r = 0.09, g = 0.09, b = 0.09, a = 1}, C_RIGHT_PANEL_BORDER)
     state.tabStrip = strip
 
     local tabDefs = {
@@ -1559,6 +1562,10 @@ local function BuildTabStrip(GUI, parent, state, tdDB, page)
         accent:SetColorTexture(def.color.r, def.color.g, def.color.b, 1)
         accent:Hide()
         btn.accent = accent
+        -- Subtle white hover highlight (matches AD tabBar buttons:6037-6039).
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.03)
         btn:SetScript("OnClick", function() SelectTab(def.id) end)
         strip[def.id] = btn
         x = x + btnWidth + btnGap
@@ -1608,9 +1615,19 @@ local function BuildTextsTab(GUI, parent, state, tdDB, page)
     end
     state.addBtn = addBtn
 
+    -- ── Section caption ──
+    -- Mirrors AuraDesigner/Options.lua:5025-5030 (the ACTIVE INDICATORS heading
+    -- between the Add CTA and the chip row).
+    local textsCaption = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(textsCaption, 9, "")
+    textsCaption:SetText(L["Text Elements"]:upper())
+    textsCaption:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    textsCaption:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -10)
+    state.textsCaption = textsCaption
+
     -- ── Filter chip row ──
     local chipRow = CreateFrame("Frame", nil, parent)
-    chipRow:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -8)
+    chipRow:SetPoint("TOPLEFT", textsCaption, "BOTTOMLEFT", 0, -4)
     chipRow:SetPoint("RIGHT", parent, "RIGHT", -8, 0)
     chipRow:SetHeight(24)
     state.chipRow = chipRow
@@ -1793,6 +1810,23 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     card:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, yPos)
     card:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, yPos)
 
+    -- Group accent color used by both header (chip, arrow, title) and the
+    -- header/body border tints — mirrors AuraDesigner/Options.lua:5245 and
+    -- 5317-5318 (gc * 0.35 for header border, gc * 0.20 for body border).
+    local groupColor = CATEGORY_COLORS.group
+    local headerBorder = {
+        r = groupColor.r * 0.35,
+        g = groupColor.g * 0.35,
+        b = groupColor.b * 0.35,
+        a = 0.5,
+    }
+    local bodyBorder = {
+        r = groupColor.r * 0.20,
+        g = groupColor.g * 0.20,
+        b = groupColor.b * 0.20,
+        a = 0.3,
+    }
+
     -- ── HEADER (group-themed accent) ─────────────────────────
     local header = CreateFrame("Button", nil, card, "BackdropTemplate")
     header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
@@ -1804,13 +1838,14 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
         edgeSize = 1,
     })
     header:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
-    header:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
+    header:SetBackdropBorderColor(headerBorder.r, headerBorder.g, headerBorder.b, headerBorder.a)
 
     header:SetScript("OnEnter", function(self)
         self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, C_HOVER.a)
     end)
     header:SetScript("OnLeave", function(self)
         self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
+        self:SetBackdropBorderColor(headerBorder.r, headerBorder.g, headerBorder.b, headerBorder.a)
     end)
     card.header = header
 
@@ -1820,7 +1855,6 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     local arrow = header:CreateTexture(nil, "OVERLAY")
     arrow:SetSize(10, 10)
     arrow:SetPoint("LEFT", header, "LEFT", 8, 0)
-    local groupColor = CATEGORY_COLORS.group
     arrow:SetVertexColor(groupColor.r, groupColor.g, groupColor.b)
     card.collapseArrow = arrow
 
@@ -1931,7 +1965,7 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
         edgeSize = 1,
     })
     body:SetBackdropColor(C_BODY_BG.r, C_BODY_BG.g, C_BODY_BG.b, C_BODY_BG.a)
-    body:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.3)
+    body:SetBackdropBorderColor(bodyBorder.r, bodyBorder.g, bodyBorder.b, bodyBorder.a)
     card.body = body
 
     -- Ensure default fields exist before BuildContentSection runs.
@@ -2097,9 +2131,19 @@ local function BuildGroupsTab(GUI, parent, state, tdDB, page)
         DF:Debug("TD", "Added group id=%d", id)
     end)
 
+    -- ── Section caption ──
+    -- Mirrors AuraDesigner/Options.lua:5025-5030 (small dim heading between
+    -- the Add CTA and the list).
+    local groupsCaption = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(groupsCaption, 9, "")
+    groupsCaption:SetText(L["Text Groups"]:upper())
+    groupsCaption:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    groupsCaption:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -10)
+    state.groupsCaption = groupsCaption
+
     -- Scrolling list of group cards
     local listContainer = CreateFrame("ScrollFrame", nil, parent, "ScrollFrameTemplate")
-    listContainer:SetPoint("TOPLEFT", addBtn, "BOTTOMLEFT", 0, -10)
+    listContainer:SetPoint("TOPLEFT", groupsCaption, "BOTTOMLEFT", 0, -4)
     listContainer:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -22, 8)
     if DF.GUI and DF.GUI.StyleScrollBar then DF.GUI.StyleScrollBar(listContainer) end
     listContainer:EnableMouseWheel(true)
@@ -2261,6 +2305,8 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         if state.groupListContainer then state.groupListContainer:Hide(); state.groupListContainer:ClearAllPoints() end
         if state.groupListChild     then state.groupListChild:Hide();     state.groupListChild:ClearAllPoints()     end
         if state.groupEmptyMsg      then state.groupEmptyMsg:Hide();      state.groupEmptyMsg:ClearAllPoints()      end
+        if state.disabledOverlay    then state.disabledOverlay:Hide();    state.disabledOverlay:ClearAllPoints()    end
+        if state.scaleSlider        then state.scaleSlider:Hide();        state.scaleSlider:ClearAllPoints()        end
         if state.tabContents       then
             for _, frame in pairs(state.tabContents) do
                 frame:Hide()
@@ -2294,6 +2340,9 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         state.groupListChild     = nil
         state.groupEmptyMsg      = nil
         state.groupCardFrames    = nil
+        state.disabledOverlay    = nil
+        state.scaleSlider        = nil
+        state.mockFrame          = nil
         state.built = false
     end
 
@@ -2323,13 +2372,20 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -42)
     state.controlsBar = controlsBar
 
+    -- Local refresher for the "disabled" overlay — defined after the overlay
+    -- is created below, but referenced from the master toggle's callback.
+    local RefreshDisabledOverlay
+
     -- Master "Enable Text Designer" toggle, top-left of the banner.
     local enableCheck = GUI:CreateCheckbox(
         controlsBar,
         L["Enable Text Designer"],
         tdDB,
         "enabled",
-        function() DF:Debug("TD", "Enable Text Designer = %s", tostring(tdDB.enabled)) end
+        function()
+            DF:Debug("TD", "Enable Text Designer = %s", tostring(tdDB.enabled))
+            if RefreshDisabledOverlay then RefreshDisabledOverlay() end
+        end
     )
     enableCheck:SetPoint("LEFT", controlsBar, "LEFT", 0, 0)
     state.enableCheck = enableCheck
@@ -2352,6 +2408,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     previewLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
     -- Mock unit frame (centred in panel) — visual clone of AD's mockFrame.
+    local mockFrame
     do
         local mode = (GUI and GUI.SelectedMode) or "party"
         local frameDB = (DF.GetDB and DF:GetDB(mode)) or DF.PartyDefaults or {}
@@ -2360,11 +2417,13 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         local POWER_H = frameDB.powerBarHeight or 4
         local showPower = frameDB.showPowerBar
 
-        local mockFrame = CreateFrame("Frame", nil, previewPanel, "BackdropTemplate")
+        mockFrame = CreateFrame("Frame", nil, previewPanel, "BackdropTemplate")
         mockFrame:SetSize(FRAME_W, FRAME_H)
         mockFrame:SetPoint("CENTER", previewPanel, "CENTER", 0, -4)
+        mockFrame:SetScale(tdDB.previewScale or 1.0)
         ApplyBackdrop(mockFrame, {r = 0.07, g = 0.07, b = 0.07, a = 1}, {r = 0.27, g = 0.27, b = 0.27, a = 1})
         previewPanel.mockFrame = mockFrame
+        state.mockFrame = mockFrame
 
         local healthTexPath = frameDB.healthTexture or "Interface\\Buttons\\WHITE8x8"
 
@@ -2437,25 +2496,42 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         hpText:SetText("72%")
         hpText:SetTextColor(0.87, 0.87, 0.87, 1)
 
-        -- Static anchor dots — 9 positions, decorative only (no drag handlers).
-        local ANCHOR_POSITIONS = {
-            TOPLEFT     = "TOPLEFT",
-            TOP         = "TOP",
-            TOPRIGHT    = "TOPRIGHT",
-            LEFT        = "LEFT",
-            CENTER      = "CENTER",
-            RIGHT       = "RIGHT",
-            BOTTOMLEFT  = "BOTTOMLEFT",
-            BOTTOM      = "BOTTOM",
-            BOTTOMRIGHT = "BOTTOMRIGHT",
-        }
-        for _, anchorName in pairs(ANCHOR_POSITIONS) do
-            local dot = mockFrame:CreateTexture(nil, "OVERLAY")
-            dot:SetSize(6, 6)
-            dot:SetPoint("CENTER", mockFrame, anchorName, 0, 0)
-            dot:SetColorTexture(0.45, 0.45, 0.95, 0.3)
+        -- Anchor dots disabled until drag-to-place is implemented (Phase 2).
+        if false then
+            local ANCHOR_POSITIONS = {
+                TOPLEFT     = "TOPLEFT",
+                TOP         = "TOP",
+                TOPRIGHT    = "TOPRIGHT",
+                LEFT        = "LEFT",
+                CENTER      = "CENTER",
+                RIGHT       = "RIGHT",
+                BOTTOMLEFT  = "BOTTOMLEFT",
+                BOTTOM      = "BOTTOM",
+                BOTTOMRIGHT = "BOTTOMRIGHT",
+            }
+            for _, anchorName in pairs(ANCHOR_POSITIONS) do
+                local dot = mockFrame:CreateTexture(nil, "OVERLAY")
+                dot:SetSize(6, 6)
+                dot:SetPoint("CENTER", mockFrame, anchorName, 0, 0)
+                dot:SetColorTexture(0.45, 0.45, 0.95, 0.3)
+            end
         end
     end
+
+    -- Preview Scale slider (top-left of preview panel, below the FRAME PREVIEW
+    -- label). Mirrors AuraDesigner/Options.lua:3872-3885 — release callback +
+    -- lightweight per-tick callback so the mockFrame scales live during drag.
+    local scaleSlider = GUI:CreateSlider(previewPanel, L["Preview Scale"], 0.75, 2.5, 0.05, tdDB, "previewScale",
+        function()
+            if state.mockFrame then state.mockFrame:SetScale(tdDB.previewScale or 1.0) end
+        end,
+        function()
+            if state.mockFrame then state.mockFrame:SetScale(tdDB.previewScale or 1.0) end
+        end
+    )
+    scaleSlider:SetPoint("TOPLEFT", previewLabel, "BOTTOMLEFT", -4, -4)
+    scaleSlider:SetSize(220, 30)
+    state.scaleSlider = scaleSlider
 
     -- Placeholder note so users know this panel is purely cosmetic for now.
     local previewNote = previewPanel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -2496,4 +2572,40 @@ function DF.BuildTextDesignerPage(GUI, page, db)
 
     -- Show only the active tab
     state.tabContents[state.activeTab]:Show()
+
+    -- ── DISABLED OVERLAY ──────────────────────────────────────
+    -- Semi-opaque grey overlay covering both the preview panel and the right
+    -- panel when tdDB.enabled is false. Mirrors AuraDesigner/Options.lua:
+    -- 6266-6297 (AD's splitContainer overlay).
+    local disabledOverlay = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
+    disabledOverlay:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, 0)
+    disabledOverlay:SetPoint("BOTTOMRIGHT", page.child, "BOTTOMRIGHT", 0, 0)
+    disabledOverlay:SetFrameLevel(page.child:GetFrameLevel() + 50)
+    disabledOverlay:EnableMouse(true)
+
+    local overlayBg = disabledOverlay:CreateTexture(nil, "BACKGROUND")
+    overlayBg:SetAllPoints()
+    overlayBg:SetColorTexture(0.08, 0.08, 0.08, 0.85)
+
+    local overlayLabel = disabledOverlay:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+    overlayLabel:SetPoint("CENTER", 0, 10)
+    overlayLabel:SetText(L["Text Designer is disabled"])
+    overlayLabel:SetTextColor(0.6, 0.6, 0.6, 1)
+
+    local overlaySub = disabledOverlay:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    overlaySub:SetPoint("TOP", overlayLabel, "BOTTOM", 0, -4)
+    overlaySub:SetText(L["Enable the checkbox above to use"])
+    overlaySub:SetTextColor(0.45, 0.45, 0.45, 1)
+
+    state.disabledOverlay = disabledOverlay
+
+    RefreshDisabledOverlay = function()
+        if not state.disabledOverlay then return end
+        if tdDB.enabled then
+            state.disabledOverlay:Hide()
+        else
+            state.disabledOverlay:Show()
+        end
+    end
+    RefreshDisabledOverlay()
 end

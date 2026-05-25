@@ -1383,6 +1383,7 @@ L["Text"] = true
 L["Text Color"] = true
 L["Text Colors:"] = true
 L["Text Designer"] = true
+L["Text Designer is disabled"] = true
 L["Text Elements"] = true
 L["Text Format"] = true
 L["Text Group"] = true

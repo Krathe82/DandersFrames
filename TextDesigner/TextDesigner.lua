@@ -28,6 +28,7 @@ function DF.TextDesigner:EnsureDB(db)
     if db.textDesigner.enabled == nil then db.textDesigner.enabled = false end
     db.textDesigner.nextElementID = db.textDesigner.nextElementID or 1
     db.textDesigner.elements = db.textDesigner.elements or {}
+    db.textDesigner.previewScale = db.textDesigner.previewScale or 1.0
     db.textDesigner.globalDefaults = db.textDesigner.globalDefaults or {
         font = "DF Roboto SemiBold",
         fontSize = 10,
