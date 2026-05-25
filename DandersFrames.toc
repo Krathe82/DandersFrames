@@ -131,6 +131,7 @@ AuraDesigner\Options.lua
 # Text Designer (alpha-only)
 #@alpha@
 TextDesigner\TextDesigner.lua
+TextDesigner\MidnightSafe.lua
 TextDesigner\Options.lua
 #@end-alpha@
 
