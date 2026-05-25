@@ -9,6 +9,7 @@
 
 ### Bug Fixes
 
+* (Absorbs) Fix the absorb / heal-absorb / heal-prediction bars leaving a sliver of the health bar showing when Reduced Max Health (Clip Health Bar) and a frame border were both enabled. The bars were inset by the border width even at the internal clip edge, where there is no border. (PR #124 by Krathe)
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
 * (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one. (PR #111 by Krathe)
 * (Aura Designer) Fix the colour picker's alpha not affecting the health bar indicator on live frames, and fix the Blend % slider reappearing in Replace mode after closing and reopening the GUI. (PR #102 by Krathe)

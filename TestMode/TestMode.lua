@@ -2424,7 +2424,7 @@ function DF:UpdateTestAbsorb(frame, testData)
             
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -2607,7 +2607,7 @@ function DF:UpdateTestAbsorb(frame, testData)
             
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -2794,7 +2794,7 @@ function DF:UpdateTestAbsorb(frame, testData)
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
             customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
@@ -2964,7 +2964,7 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -3090,7 +3090,7 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
             customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
@@ -3250,7 +3250,7 @@ function DF:UpdateTestHealPrediction(frame, testData)
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
             if db.showFrameBorder ~= false then
-                inset = db.borderSize or 1
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
