@@ -1542,13 +1542,28 @@ local function BuildTabStrip(GUI, parent, state, tdDB, page)
     end
     state.SelectTab = SelectTab
 
-    local btnWidth = 100
-    local btnGap = 4
-    local x = 0
-    for _, def in ipairs(tabDefs) do
+    -- Tabs share the strip width equally. Mirrors AD's tabBar layout
+    -- (AuraDesigner/Options.lua:6017-6021 + 6051-6057): each button gets
+    -- (stripWidth / #tabs) on every OnSizeChanged pass so resizing the parent
+    -- (or first paint when strip width is finally non-zero) keeps tabs
+    -- proportional.
+    local tabButtons = {}
+    for i, def in ipairs(tabDefs) do
         local btn = CreateFrame("Button", nil, strip)
-        btn:SetSize(btnWidth, 28)
-        btn:SetPoint("LEFT", strip, "LEFT", x, 0)
+        btn:SetHeight(28)
+        if i == 1 then
+            btn:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
+        else
+            btn:SetPoint("TOPLEFT", tabButtons[i-1], "TOPRIGHT", 0, 0)
+        end
+        -- Provisional width so SelectTab() has accurate dimensions before
+        -- the first OnSizeChanged fires (parent may have 0 width on first
+        -- build). Mirrors AD:6017-6021.
+        local provW = parent:GetWidth()
+        if provW < 100 and GUI and GUI.contentFrame then provW = GUI.contentFrame:GetWidth() end
+        if provW < 100 then provW = 600 end
+        btn:SetWidth(math.max(60, math.floor((provW / 2) / #tabDefs)))
+
         local text = btn:CreateFontString(nil, "OVERLAY")
         GUI:SetSettingsFont(text, 11, "OUTLINE")
         text:SetPoint("CENTER", btn, "CENTER", 0, 2)
@@ -1568,10 +1583,31 @@ local function BuildTabStrip(GUI, parent, state, tdDB, page)
         hl:SetColorTexture(1, 1, 1, 0.03)
         btn:SetScript("OnClick", function() SelectTab(def.id) end)
         strip[def.id] = btn
-        x = x + btnWidth + btnGap
+        tabButtons[i] = btn
     end
 
+    -- Resize tabs equally when the strip is resized (e.g. mode swap,
+    -- first paint). Mirrors AD:6051-6057.
+    strip:SetScript("OnSizeChanged", function(self, w, h)
+        local tabW = w / #tabDefs
+        for _, btn in ipairs(tabButtons) do
+            btn:SetWidth(tabW)
+        end
+    end)
+
     SelectTab(state.activeTab or "texts")
+
+    -- Belt-and-braces post-build sync: OnSizeChanged may not fire if the
+    -- strip's geometry is already known at this point. Schedule a deferred
+    -- resync the same way AD does (AuraDesigner/Options.lua:6173-6182).
+    C_Timer.After(0, function()
+        if strip and strip:IsVisible() and strip:GetWidth() > 10 then
+            local tabW = strip:GetWidth() / #tabDefs
+            for _, btn in ipairs(tabButtons) do
+                btn:SetWidth(tabW)
+            end
+        end
+    end)
 
     return strip
 end
@@ -2350,27 +2386,28 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.built = true
     state.activeDB = db
 
-    -- ── TOP BANNER (full width) ───────────────────────────────
-    -- Copy / Sync trio top-right. omitReset = true matches the prior decision
-    -- to hide the Reset Page button until we have a dedicated reset flow.
+    -- ── TOP BANNER (one compact row) ───────────────────────────
+    -- Single-row banner: master toggle on the left, Copy / Sync trio on the
+    -- right. Saves vertical space vs. the original two-row layout (trio above
+    -- an otherwise empty bar).
+    local controlsBar = CreateFrame("Frame", nil, page.child)
+    controlsBar:SetHeight(32)
+    controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -10)
+    controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+    state.controlsBar = controlsBar
+
+    -- Copy / Sync trio anchored to the right edge of the controls bar.
+    -- omitReset = true matches the prior decision to hide the Reset Page
+    -- button until we have a dedicated reset flow.
     local copyBtnContainer = GUI.CreateCopyButton(
-        page.child,
+        controlsBar,
         {"textDesigner"},
         L["Text Designer"],
         "text_designer",
         true
     )
-    copyBtnContainer:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -10)
+    copyBtnContainer:SetPoint("RIGHT", controlsBar, "RIGHT", 0, 0)
     state.copyBtnContainer = copyBtnContainer
-
-    -- Full-width controls bar below the copy trio. Holds the master toggle
-    -- (and future top-banner controls). The "+ Add Text Element" button now
-    -- belongs to the Texts tab (Phase 2), not this bar.
-    local controlsBar = CreateFrame("Frame", nil, page.child)
-    controlsBar:SetHeight(32)
-    controlsBar:SetPoint("TOPLEFT", page.child, "TOPLEFT", 10, -42)
-    controlsBar:SetPoint("TOPRIGHT", page.child, "TOPRIGHT", -10, -42)
-    state.controlsBar = controlsBar
 
     -- Local refresher for the "disabled" overlay — defined after the overlay
     -- is created below, but referenced from the master toggle's callback.
@@ -2395,9 +2432,15 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- frame settings (width / height / power) so the chrome looks proportional;
     -- fill values are static placeholders.
     local previewPanel = CreateFrame("Frame", nil, page.child, "BackdropTemplate")
-    ApplyBackdrop(previewPanel, C_PANEL, C_BORDER)
+    -- Backdrop matches rightAnchorFrame so the two side-by-side panels share
+    -- the same chrome (mirrors AD's split: leftPanel uses C_PANEL while
+    -- rightPanel uses {0.10,0.10,0.10}; here we keep both panels visually
+    -- identical to avoid the "two different boxes" look from the screenshot).
+    ApplyBackdrop(previewPanel, C_RIGHT_PANEL_BG, C_RIGHT_PANEL_BORDER)
     previewPanel:SetPoint("TOPLEFT", controlsBar, "BOTTOMLEFT", 0, -10)
-    previewPanel:SetPoint("BOTTOM", page.child, "BOTTOM", 0, 10)
+    -- Bottom anchor matches rightAnchorFrame:BOTTOMRIGHT page.child 0,0 so
+    -- the two panels end at exactly the same Y.
+    previewPanel:SetPoint("BOTTOM", page.child, "BOTTOM", 0, 0)
     previewPanel:SetPoint("RIGHT", page.child, "CENTER", -2, 0)
     state.previewPanel = previewPanel
 
