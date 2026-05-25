@@ -184,10 +184,15 @@ end
 -- tdDB is the textDesigner db table (DF.db.party.textDesigner or .raid).
 -- source is the DataSource.
 -- hint is one of "all" / "name" / "health" / "power" / "absorb" / "heal" / "range" / "threat".
-function Render:UpdateFrame(frame, tdDB, source, hint)
+-- isPreview: if true, ignore tdDB.enabled (master toggle) so the preview always
+-- renders. Live frames pass nil/false so the master toggle still hides them.
+function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
     if not frame or not tdDB then return end
-    if not tdDB.enabled then
-        -- Master toggle off — hide all FontStrings
+    DF:Debug("TD", "Render:UpdateFrame frame=%s enabled=%s elements=%d",
+        tostring(frame), tostring(tdDB and tdDB.enabled),
+        tdDB and #(tdDB.elements or {}) or -1)
+    if not isPreview and not tdDB.enabled then
+        -- Master toggle off (live mode only) — hide all FontStrings
         if frame._tdFontStrings then
             for _, fs in pairs(frame._tdFontStrings) do fs:Hide() end
         end

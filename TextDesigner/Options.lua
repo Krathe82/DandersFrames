@@ -2547,21 +2547,6 @@ function DF.BuildTextDesignerPage(GUI, page, db)
             powerBorder:SetColorTexture(0.2, 0.2, 0.2, 1)
         end
 
-        -- Placeholder name + HP text (static — does NOT respect TD elements)
-        local nameText = mockFrame:CreateFontString(nil, "OVERLAY")
-        local nameFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.nameFont)) or "Fonts\\FRIZQT__.TTF"
-        nameText:SetFont(nameFontPath, frameDB.nameFontSize or 11, "OUTLINE")
-        nameText:SetPoint("TOP", mockFrame, "TOP", 0, -10)
-        nameText:SetText("Danders")
-        nameText:SetTextColor(0.18, 0.80, 0.44, 1)
-
-        local hpText = mockFrame:CreateFontString(nil, "OVERLAY")
-        local healthFontPath = (DF.GetFontPath and DF:GetFontPath(frameDB.healthFont)) or "Fonts\\FRIZQT__.TTF"
-        hpText:SetFont(healthFontPath, frameDB.healthFontSize or 10, "OUTLINE")
-        hpText:SetPoint("CENTER", mockFrame, "CENTER", 0, 4)
-        hpText:SetText("72%")
-        hpText:SetTextColor(0.87, 0.87, 0.87, 1)
-
         -- Anchor dots disabled until drag-to-place is implemented (Phase 2).
         if false then
             local ANCHOR_POSITIONS = {

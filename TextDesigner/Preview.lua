@@ -33,12 +33,17 @@ end
 -- synthetic mock data. Called on settings changes (FullRebuildCards,
 -- eye-icon toggle, master toggle).
 function Preview:RefreshAll()
+    DF:Debug("TD", "Preview:RefreshAll called, mockFrame=%s tdDB=%s",
+        tostring(activeMockFrame), tostring(activeTdDB))
     if not activeMockFrame or not activeTdDB then return end
     local Render = DF.TextDesigner.Render
     local DataSource = DF.TextDesigner.DataSource
     if not Render or not DataSource then return end
     local source = DataSource.Mock()
-    Render:UpdateFrame(activeMockFrame, activeTdDB, source, "all")
+    -- isPreview=true so the master "Enable Text Designer" toggle does NOT
+    -- hide preview text — the preview is for "see what your text will look
+    -- like when enabled".
+    Render:UpdateFrame(activeMockFrame, activeTdDB, source, "all", true)
 end
 
 -- Returns the currently bound mock frame.
