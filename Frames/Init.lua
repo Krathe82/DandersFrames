@@ -473,21 +473,13 @@ local function GetOrCreateGroupLabel(groupNum, container)
         -- Re-parent if needed (switching between live/test mode)
         if label:GetParent() ~= parentContainer then
             label:SetParent(parentContainer)
-            if label.shadow then
-                label.shadow:SetParent(parentContainer)
-            end
         end
         return label
     end
-    
+
     local label = parentContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetDrawLayer("OVERLAY", 7)
-    
-    -- Add shadow
-    label.shadow = parentContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label.shadow:SetDrawLayer("OVERLAY", 6)
-    label.shadow:SetTextColor(0, 0, 0, 0.8)
-    
+
     DF.raidGroupLabels[groupNum] = label
     return label
 end
@@ -562,41 +554,35 @@ function DF:UpdateRaidGroupLabels(activeGroupsTable, db, horizontal)
             -- Hide label if disabled or group not active
             if label then
                 label:Hide()
-                if label.shadow then label.shadow:Hide() end
             end
         else
             -- Create label if needed (pass container for proper parenting in test mode)
             if not label then
                 label = GetOrCreateGroupLabel(g, container)
             end
-            
+
             if label then
                 -- Ensure label is parented to the correct container
                 if label:GetParent() ~= container then
                     label:SetParent(container)
-                    if label.shadow then label.shadow:SetParent(container) end
                 end
-                
-                -- Apply font settings
+
+                -- Apply font settings (composite outline encoding handles shadow via SafeSetFont)
                 local font = db.groupLabelFont or "Fonts\\FRIZQT__.TTF"
                 local fontSize = db.groupLabelFontSize or 12
                 local outline = db.groupLabelOutline or "OUTLINE"
                 if outline == "NONE" then outline = "" end
-                
+
                 DF:SafeSetFont(label, font, fontSize, outline)
-                if label.shadow then
-                    DF:SafeSetFont(label.shadow, font, fontSize, outline)
-                end
-                
+
                 -- Apply color
                 local color = db.groupLabelColor or {r = 1, g = 1, b = 1, a = 1}
                 label:SetTextColor(color.r, color.g, color.b, color.a or 1)
-                
+
                 -- Set text
                 local format = db.groupLabelFormat or "GROUP_NUM"
                 local text = FormatGroupLabelText(g, format)
                 label:SetText(text)
-                if label.shadow then label.shadow:SetText(text) end
                 
                 -- Determine anchor frame and points based on mode and layout
                 local anchorFrame
@@ -648,24 +634,11 @@ function DF:UpdateRaidGroupLabels(activeGroupsTable, db, horizontal)
                     -- Position label relative to anchor frame
                     label:ClearAllPoints()
                     label:SetPoint(labelAnchor, anchorFrame, frameAnchor, anchorOffsetX, anchorOffsetY)
-                    
-                    -- Position shadow slightly offset from label
-                    if label.shadow then
-                        label.shadow:ClearAllPoints()
-                        label.shadow:SetPoint(labelAnchor, anchorFrame, frameAnchor, anchorOffsetX + 1, anchorOffsetY - 1)
-                        
-                        if db.groupLabelShadow then
-                            label.shadow:Show()
-                        else
-                            label.shadow:Hide()
-                        end
-                    end
-                    
+
                     label:Show()
                 else
                     -- No anchor frame available, hide label
                     label:Hide()
-                    if label.shadow then label.shadow:Hide() end
                 end
             end
         end

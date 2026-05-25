@@ -3200,6 +3200,9 @@ DF._MainEventDispatcher = function(self, event, arg1)
         if DF.db.settingsFont        == nil then DF.db.settingsFont        = "Friz Quadrata TT" end
         if DF.db.settingsFontOutline == nil then DF.db.settingsFontOutline = "" end
 
+        -- Ensure top-level font preferences exist (SDF rendering toggle from PR #115)
+        if DF.db.fontSlug == nil then DF.db.fontSlug = false end
+
         -- Snapshot the enable-flag state at load time. After profile switches
         -- or imports, we compare against this to decide whether to prompt for
         -- a UI reload. The actual headers are created based on this state and
@@ -3350,6 +3353,32 @@ DF._MainEventDispatcher = function(self, event, arg1)
             for _, profile in pairs(DandersFramesDB_v2.profiles) do
                 for _, mode in ipairs({"party", "raid"}) do
                     migrateBorderStyle(profile[mode])
+                end
+            end
+        end
+
+        -- Migrate the legacy `groupLabelShadow` (duplicate-fontstring shadow) into
+        -- the new composite outline encoding from PR #115. If the user previously
+        -- had the legacy shadow on, prepend "SHADOW;" to groupLabelOutline so they
+        -- keep a shadow (now via SetShadowOffset on the primary fontstring).
+        local function migrateGroupLabelShadow(modeDb)
+            if modeDb and modeDb.groupLabelShadow ~= nil then
+                if modeDb.groupLabelShadow == true then
+                    local outline = modeDb.groupLabelOutline or ""
+                    if not outline:find("^SHADOW") then
+                        modeDb.groupLabelOutline = "SHADOW;" .. outline
+                    end
+                end
+                modeDb.groupLabelShadow = nil
+            end
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            migrateGroupLabelShadow(DF.db[mode])
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    migrateGroupLabelShadow(profile[mode])
                 end
             end
         end

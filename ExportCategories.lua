@@ -511,7 +511,6 @@ DF.ExportCategories = {
         "groupLabelOffsetY",
         "groupLabelOutline",
         "groupLabelPosition",
-        "groupLabelShadow",
     },
     
     -- ===========================================

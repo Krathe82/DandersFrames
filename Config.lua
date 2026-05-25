@@ -1292,7 +1292,6 @@ DF.PartyDefaults = {
     groupLabelOffsetY = 5,
     groupLabelOutline = "SHADOW",
     groupLabelPosition = "START",
-    groupLabelShadow = false,
 
     -- GUI State
     guiHeight = 693.33349609375,
@@ -2614,7 +2613,6 @@ DF.RaidDefaults = {
     groupLabelOffsetY = 5,
     groupLabelOutline = "SHADOW",
     groupLabelPosition = "START",
-    groupLabelShadow = false,
 
     -- GUI State
     guiHeight = 693.33349609375,
