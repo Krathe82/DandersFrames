@@ -4190,6 +4190,18 @@ function DF:ApplyRaidGroupSorting()
     -- which causes visible frame jumping even though positions ultimately resolve correctly.
     DF._lastGroupSortKey = DF._lastGroupSortKey or {}
 
+    -- Snapshot per-group sort keys + a layout signature BEFORE configuring the
+    -- groups, so we can detect afterwards whether anything that affects the
+    -- grouped layout actually changed and skip a redundant (jittery) reposition.
+    local prevSortKeys = {}
+    for gi = 1, 8 do prevSortKeys[gi] = DF._lastGroupSortKey[gi] end
+    local layoutSig = table.concat({
+        db.frameWidth or 80, db.frameHeight or 40, db.frameSpacing or 2,
+        db.raidRowColSpacing or 30, db.raidGroupsPerRow or 8,
+        db.growDirection or "HORIZONTAL", db.raidGroupAnchor or "START",
+        db.raidAnchorX or 0, db.raidAnchorY or 0, db.frameScale or 1,
+    }, ":")
+
     -- Configure each group header (SORTING ONLY - positioning handled by secure handler)
     for i = 1, 8 do
         local header = DF.raidSeparatedHeaders[i]
@@ -4330,6 +4342,54 @@ function DF:ApplyRaidGroupSorting()
         end
     end
     
+    -- ── Skip redundant repositions ──────────────────────────────────────────
+    -- Re-firing the secure snippet when nothing about the grouped layout changed
+    -- makes the grid visibly snap/settle. That happened on unrelated GUI
+    -- interaction (any refresh that re-runs the raid layout), producing a stream
+    -- of identical no-op repositions. Bail out here — after restoring suppression
+    -- so nothing gets stuck — unless sort order, populated counts, or the layout
+    -- signature actually changed.
+    do
+        DF._lastGroupCount = DF._lastGroupCount or {}
+        local counts, countChanged = {}, false
+        for gi = 1, 8 do
+            local header = DF.raidSeparatedHeaders[gi]
+            local count = 0
+            if header then
+                for ci = 1, 5 do
+                    local ch = header:GetAttribute("child" .. ci)
+                    if ch and ch:IsShown() then count = count + 1 end
+                end
+            end
+            counts[gi] = count
+            if DF._lastGroupCount[gi] ~= count then countChanged = true end
+        end
+
+        local sortChangedAny = false
+        for gi = 1, 8 do
+            if DF._lastGroupSortKey[gi] ~= prevSortKeys[gi] then
+                sortChangedAny = true
+                break
+            end
+        end
+
+        local changed = sortChangedAny or countChanged
+            or (DF._lastRaidLayoutSig ~= layoutSig)
+            or (not DF._raidSortApplied)
+
+        if not changed then
+            if DF.raidPositionHandler then
+                DF.raidPositionHandler:SetAttribute("suppressreposition", 0)
+            end
+            DF:Debug("ROSTER", "ApplyRaidGroupSorting: no positional change, skipping reposition")
+            return
+        end
+
+        for gi = 1, 8 do DF._lastGroupCount[gi] = counts[gi] end
+        DF._lastRaidLayoutSig = layoutSig
+        DF._raidSortApplied = true
+    end
+
     -- Update layout attributes and position handler settings WHILE suppress is still on.
     -- UpdateRaidHeaderLayoutAttributes clears child anchor points, which causes
     -- SecureGroupHeaderTemplate to re-anchor children (firing OnShow). If suppress
