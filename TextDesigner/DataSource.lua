@@ -21,6 +21,17 @@ end
 
 -- ============================================================
 -- MOCK DATA — synthetic values for the preview
+--
+-- The unit is alive, connected, in-range, with a slight max-HP debuff,
+-- a small overshield + heal absorb, and some threat. This exercises
+-- as many content types as possible in a single static state.
+--
+-- Content types that INTENTIONALLY render empty in this baseline:
+--   - status_text  (the unit is alive + connected — no status to show)
+--   - range_text   (in range — no "OOR" prefix)
+--   - custom_static (defaults to empty user-supplied text)
+--
+-- For full state coverage, see /df test (whole-frame multi-state preview).
 -- ============================================================
 
 local MOCK_DATA = {
@@ -33,12 +44,12 @@ local MOCK_DATA = {
     raceLocalized    = "Draenei",
     faction          = "Alliance",
     groupNumber      = 2,
-    -- Health
+    -- Health (slight max-reduction added)
     hpCurrent        = 287456,
     hpMax            = 471140,
     hpPercent        = 61,
     hpDeficit        = 183684,
-    hpMaxReductionPct = 0,
+    hpMaxReductionPct = 0.05,  -- 5% reduction → -5%
     -- Power
     powerCurrent     = 154000,
     powerMax         = 278460,
@@ -46,19 +57,19 @@ local MOCK_DATA = {
     powerDeficit     = 124460,
     powerTypeToken   = "MANA",
     powerTypeString  = "Mana",
-    -- Shields & Heals
+    -- Shields & Heals (added overshield + heal_absorb)
     absorbAmount     = 25000,
-    overshieldAmount = 0,
-    healAbsorbAmount = 0,
+    overshieldAmount = 8000,
+    healAbsorbAmount = 5000,
     incomingHealTotal = 12000,
     incomingHealFromPlayer = 8000,
-    -- Status / Threat / Range
+    -- Status / Threat / Range (still alive/connected/in-range — those types are "" by design)
     isDead           = false,
     isGhost          = false,
     isConnected      = true,
     isFeignDeath     = false,
-    aggroFlag        = 0,
-    threatPercent    = 0,
+    aggroFlag        = 2,        -- "++"
+    threatPercent    = 75,       -- "75%"
     isInRange        = true,
 }
 
