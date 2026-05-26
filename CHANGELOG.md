@@ -17,6 +17,7 @@
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
 * (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
 * (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
+* (Performance) Reduce the frame-rate hitch when joining a group: spec/talent update events fire in bursts as the client syncs data, and each one was triggering a full frame relayout. These are now coalesced into a single refresh. (PR #128 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
 * (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
 * (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode. (PR #110 by Krathe)
