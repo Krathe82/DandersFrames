@@ -153,6 +153,8 @@ end
 -- Renders a single elem on a frame. Called per-element from UpdateFrame.
 -- source is a DataSource (Live or Mock).
 local function updateOne(frame, elem, source, globalDefaults)
+    DF:Debug("TD", "updateOne: id=%s type=%s enabled=%s",
+        tostring(elem.id), tostring(elem.contentType), tostring(elem.enabled))
     if not elem.enabled then
         local existing = frame._tdFontStrings and frame._tdFontStrings[elem.id]
         if existing then existing:Hide() end
@@ -187,11 +189,15 @@ end
 -- isPreview: if true, ignore tdDB.enabled (master toggle) so the preview always
 -- renders. Live frames pass nil/false so the master toggle still hides them.
 function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
-    if not frame or not tdDB then return end
-    DF:Debug("TD", "Render:UpdateFrame frame=%s enabled=%s elements=%d",
-        tostring(frame), tostring(tdDB and tdDB.enabled),
-        tdDB and #(tdDB.elements or {}) or -1)
+    if not frame or not tdDB then
+        DF:Debug("TD", "Render:UpdateFrame: nil frame or tdDB (isPreview=%s)", tostring(isPreview))
+        return
+    end
+    DF:Debug("TD", "Render:UpdateFrame: unit=%s hint=%s isPreview=%s enabled=%s elements=%d",
+        tostring(frame.unit), tostring(hint), tostring(isPreview),
+        tostring(tdDB.enabled), #(tdDB.elements or {}))
     if not isPreview and not tdDB.enabled then
+        DF:Debug("TD", "Render:UpdateFrame: master toggle OFF, hiding all fontstrings")
         -- Master toggle off (live mode only) — hide all FontStrings
         if frame._tdFontStrings then
             for _, fs in pairs(frame._tdFontStrings) do fs:Hide() end
@@ -239,9 +245,27 @@ end
 -- For Phase C: called from existing update functions to refresh TD elements
 -- on a unit frame. Phase B leaves this stubbed — Phase C will populate it.
 function DF:UpdateTextDesigner(frame, hint)
-    if not frame or not frame.unit then return end
+    if not frame then
+        DF:Debug("TD", "UpdateTextDesigner: no frame")
+        return
+    end
+    if not frame.unit then
+        DF:Debug("TD", "UpdateTextDesigner: frame has no .unit")
+        return
+    end
     local db = DF:GetFrameDB(frame)
-    if not db or not db.textDesigner then return end
+    if not db then
+        DF:Debug("TD", "UpdateTextDesigner: no db for frame.unit=%s", tostring(frame.unit))
+        return
+    end
+    if not db.textDesigner then
+        DF:Debug("TD", "UpdateTextDesigner: db.textDesigner missing for unit=%s", tostring(frame.unit))
+        return
+    end
+    DF:Debug("TD", "UpdateTextDesigner: unit=%s hint=%s enabled=%s elements=%d",
+        tostring(frame.unit), tostring(hint),
+        tostring(db.textDesigner.enabled),
+        db.textDesigner.elements and #db.textDesigner.elements or -1)
     local source = DF.TextDesigner.DataSource.Live(frame)
     Render:UpdateFrame(frame, db.textDesigner, source, hint)
 end
