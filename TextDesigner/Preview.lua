@@ -44,6 +44,28 @@ function Preview:RefreshAll()
     -- hide preview text — the preview is for "see what your text will look
     -- like when enabled".
     Render:UpdateFrame(activeMockFrame, activeTdDB, source, "all", true)
+
+    -- Also refresh live frames so settings changes take effect immediately
+    -- without waiting for the next UNIT_* event. Minor architectural
+    -- compromise (Preview knows about live frames) but keeps refresh logic
+    -- in one place.
+    if DF.UpdateTextDesigner and DF.unitFrameMap then
+        for _, frame in pairs(DF.unitFrameMap) do
+            DF:UpdateTextDesigner(frame, "all")
+        end
+    end
+    if DF.UpdateTextDesigner and DF.PinnedFrames and DF.PinnedFrames.bossFrames then
+        for _, frames in pairs(DF.PinnedFrames.bossFrames) do
+            if type(frames) == "table" then
+                for i = 1, 8 do
+                    local pinned = frames[i]
+                    if pinned and pinned.unit then
+                        DF:UpdateTextDesigner(pinned, "all")
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- Returns the currently bound mock frame.

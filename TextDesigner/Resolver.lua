@@ -221,8 +221,14 @@ RESOLVERS.group = function(elem, source)
             -- Pass a minimal elem-like table for per-item formatting
             local itemElem = { contentType = typeKey, abbreviate = true, decimals = 0 }
             local v = itemResolver(itemElem, source)
-            if v and v ~= "" then
-                parts[#parts+1] = v
+            if v then
+                local MS = getMS()
+                -- Secret strings can't be compared with == (taints execution);
+                -- skip the empty-string check when v is secret. Secret strings
+                -- are never empty in practice.
+                if MS.IsSecret(v) or v ~= "" then
+                    parts[#parts+1] = v
+                end
             end
         end
     end

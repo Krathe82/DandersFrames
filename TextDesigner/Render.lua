@@ -103,12 +103,28 @@ end
 -- FONTSTRING LIFECYCLE
 -- ============================================================
 
+-- Ensures (creating if needed) a high-level overlay Frame on the
+-- target unit frame. TD FontStrings live on this overlay so they
+-- render above health/power bars regardless of bar FrameLevels.
+-- (Bars are separate Frames at higher FrameLevels than the unit
+-- frame itself; anything drawn directly on the unit frame renders
+-- behind them. The overlay sidesteps that.)
+local function ensureTdOverlay(frame)
+    if frame._tdOverlay then return frame._tdOverlay end
+    local overlay = CreateFrame("Frame", nil, frame)
+    overlay:SetAllPoints(frame)
+    overlay:SetFrameLevel(frame:GetFrameLevel() + 100)
+    frame._tdOverlay = overlay
+    return overlay
+end
+
 -- Acquires (creating if needed) the FontString for a given element on a frame.
 local function acquireFontString(frame, elem)
     frame._tdFontStrings = frame._tdFontStrings or {}
     local fs = frame._tdFontStrings[elem.id]
     if fs then return fs end
-    fs = frame:CreateFontString(nil, "OVERLAY")
+    local overlay = ensureTdOverlay(frame)
+    fs = overlay:CreateFontString(nil, "OVERLAY")
     frame._tdFontStrings[elem.id] = fs
     return fs
 end
@@ -233,13 +249,19 @@ end
 
 -- Tears down all FontStrings on a frame (mode switch, profile change).
 function Render:Teardown(frame)
-    if not frame._tdFontStrings then return end
-    for _, fs in pairs(frame._tdFontStrings) do
-        fs:Hide()
-        fs:ClearAllPoints()
-        fs:SetScript("OnUpdate", nil)
+    if frame._tdFontStrings then
+        for _, fs in pairs(frame._tdFontStrings) do
+            fs:Hide()
+            fs:ClearAllPoints()
+            fs:SetScript("OnUpdate", nil)
+        end
+        wipe(frame._tdFontStrings)
     end
-    wipe(frame._tdFontStrings)
+    if frame._tdOverlay then
+        frame._tdOverlay:Hide()
+        frame._tdOverlay:ClearAllPoints()
+        frame._tdOverlay = nil
+    end
 end
 
 -- For Phase C: called from existing update functions to refresh TD elements
