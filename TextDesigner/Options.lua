@@ -2070,10 +2070,13 @@ local function CreateGroupCard(GUI, parent, yPos, elem, tdDB, state, page)
     -- Reuse BuildContentSection's group branch — it handles the separator
     -- input, items list (with up/down/remove buttons), and Add Item picker.
     -- Groups also get an Appearance section so the rendered group text can be
-    -- styled (font / size / color / outline / class color). Groups do NOT get
-    -- a Position section — they are layout-only containers.
+    -- styled (font / size / color / outline / class color), and a Position
+    -- section so the group anchor/offset can be configured like any text
+    -- element — groups behave exactly like text elements, except their content
+    -- is concatenated from multiple sources.
     local yEnd = BuildContentSection(GUI, body, elem, tdDB, state, page, card, -10)
     yEnd = BuildAppearanceSection(GUI, body, elem, card, yEnd)
+    yEnd = BuildPositionSection(GUI, body, elem, tdDB, card, yEnd)
     local bodyHeight = math.max(1, -yEnd + 10)
     body:SetHeight(bodyHeight)
 

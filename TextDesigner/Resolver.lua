@@ -213,25 +213,37 @@ RESOLVERS.group = function(elem, source)
     -- Each item resolves as if it were a standalone element (with
     -- default settings since group items don't have their own elem
     -- table). The group's separator joins them.
-    if not elem.groupItems or #elem.groupItems == 0 then return "" end
+    if not elem.groupItems or #elem.groupItems == 0 then
+        DF:Debug("TD", "group resolver: elem id=%s has no groupItems", tostring(elem.id))
+        return ""
+    end
+    DF:Debug("TD", "group resolver: elem id=%s items=%d separator=%q",
+        tostring(elem.id), #elem.groupItems, tostring(elem.groupSeparator or " / "))
     local parts = {}
-    for _, typeKey in ipairs(elem.groupItems) do
+    for i, typeKey in ipairs(elem.groupItems) do
         local itemResolver = RESOLVERS[typeKey]
-        if itemResolver then
+        if not itemResolver then
+            DF:Debug("TD", "  [%d] %s: NO RESOLVER", i, tostring(typeKey))
+        else
             -- Pass a minimal elem-like table for per-item formatting
             local itemElem = { contentType = typeKey, abbreviate = true, decimals = 0 }
             local v = itemResolver(itemElem, source)
+            local MS = getMS()
+            local isSec = MS.IsSecret(v)
+            DF:Debug("TD", "  [%d] %s: type=%s secret=%s raw=%s",
+                i, typeKey, type(v), tostring(isSec),
+                (isSec or type(v) ~= "string") and "<secret/other>" or tostring(v):sub(1, 40))
             if v then
-                local MS = getMS()
                 -- Secret strings can't be compared with == (taints execution);
                 -- skip the empty-string check when v is secret. Secret strings
                 -- are never empty in practice.
-                if MS.IsSecret(v) or v ~= "" then
+                if isSec or v ~= "" then
                     parts[#parts+1] = v
                 end
             end
         end
     end
+    DF:Debug("TD", "group resolver: parts collected=%d", #parts)
     return table.concat(parts, elem.groupSeparator or " / ")
 end
 
