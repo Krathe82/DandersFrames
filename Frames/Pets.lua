@@ -433,6 +433,8 @@ function DF:UpdatePetHealth(frame)
     
     -- Default green
     frame.healthBar:SetStatusBarColor(0, 0.8, 0)
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
 end
 
 -- Get or create a health gradient curve for pet frames
@@ -568,6 +570,8 @@ function DF:UpdatePetName(frame)
         end
         frame.nameText:SetText(name)
     end
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "name") end
 end
 
 function DF:UpdatePetFrame(frame)

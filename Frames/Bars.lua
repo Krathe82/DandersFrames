@@ -2116,6 +2116,11 @@ function DF:UpdateName(frame)
             end
         end
     end
+
+    -- TD live rendering: refresh name/class/race text elements for this frame.
+    -- Alpha-gated via runtime check — DF.UpdateTextDesigner only exists when
+    -- the TD module loaded.
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "name") end
 end
 
 function DF:UpdateRoleIcon(frame, source)

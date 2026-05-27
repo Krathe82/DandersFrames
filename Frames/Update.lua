@@ -939,6 +939,8 @@ function DF:UpdateUnitFrame(frame, source)
     -- Range checking is handled by Features/Range.lua using SetAlphaFromBoolean
     -- which properly handles "secret" values from UnitInRange() in raid contexts.
     -- See DF:UpdateRange() for the implementation.
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "all") end
 end
 
 -- ============================================================
@@ -1193,6 +1195,8 @@ function DF:UpdateHealthFast(frame)
     if DF.UpdateADTintHealth then
         DF:UpdateADTintHealth(frame)
     end
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
 end
 
 -- ============================================================
@@ -1417,6 +1421,8 @@ function DF:UpdateHealth(frame)
 
     -- Apply colors
     DF:ApplyHealthColors(frame)
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
 end
 
 -- ============================================================
