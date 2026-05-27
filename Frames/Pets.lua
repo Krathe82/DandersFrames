@@ -392,7 +392,9 @@ function DF:UpdatePetHealth(frame)
     elseif frame.healthText then
         frame.healthText:Hide()
     end
-    
+
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
+
     -- Color health bar based on settings
     if db.petHealthColorMode == "CLASS" then
         -- Try to get pet owner's class color
@@ -433,8 +435,6 @@ function DF:UpdatePetHealth(frame)
     
     -- Default green
     frame.healthBar:SetStatusBarColor(0, 0.8, 0)
-
-    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
 end
 
 -- Get or create a health gradient curve for pet frames
