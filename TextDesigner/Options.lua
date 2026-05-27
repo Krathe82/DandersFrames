@@ -2339,6 +2339,38 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
 
     local classColorCheck = GUI:CreateCheckbox(parent, L["Use Class Color"], defaults, "useClassColor", refreshCB)
     classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    -- ── LIVE TESTING SECTION ──────────────────────────────────
+    -- Hides the built-in name / health / status text widgets on every unit
+    -- frame so Phase C live TD rendering can be evaluated without overlap.
+    -- Toggle defaults OFF so non-alpha users (who can't see this tab) keep
+    -- their existing text widgets.
+    y = y - 12
+
+    local sectionLabel = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(sectionLabel, 9, "")
+    sectionLabel:SetText(L["Live Testing"]:upper())
+    sectionLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    sectionLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 22
+
+    local hideLegacyDesc = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(hideLegacyDesc, 10, "")
+    hideLegacyDesc:SetText(L["Hide the built-in name / health / status text on unit frames so only Text Designer elements render. Used while testing — turn off to restore your existing text widgets."])
+    hideLegacyDesc:SetWidth(parent:GetWidth() - 28)
+    hideLegacyDesc:SetJustifyH("LEFT")
+    hideLegacyDesc:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    hideLegacyDesc:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    y = y - 36
+
+    local hideLegacyCheck = GUI:CreateCheckbox(parent, L["Hide Legacy Text"], tdDB, "hideLegacyText", function()
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        -- Re-run the full-frame update so every live name/health/status text
+        -- widget responds immediately to the toggle.
+        if DF.UpdateAllFrames then DF:UpdateAllFrames() end
+    end)
+    hideLegacyCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
 end
 
 -- ============================================================

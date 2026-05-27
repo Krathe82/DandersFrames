@@ -509,9 +509,13 @@ function DF:UpdateUnitFrame(frame, source)
     
     local unit = frame.unit
     if not UnitExists(unit) then return end
-    
+
     local db = DF:GetFrameDB(frame)
-    
+
+    -- TD legacy-text suppression: when ON, hide name/status/health text on
+    -- every branch so Phase C live TD rendering can be tested without overlap.
+    local hideLegacyText = DF:IsLegacyTextHidden(frame)
+
     -- ========================================
     -- OFFLINE CHECK
     -- ========================================
@@ -528,26 +532,31 @@ function DF:UpdateUnitFrame(frame, source)
             -- frame.healthBar:SetStatusBarColor(0.5, 0.5, 0.5, 1)
         end
         if frame.nameText then
-            local name = DF:GetUnitName(unit) or unit
-            -- Truncate name if needed (UTF-8 aware)
-            local nameLength = db.nameTextLength or 0
-            if nameLength > 0 and DF:UTF8Len(name) > nameLength then
-                if db.nameTextTruncateMode == "ELLIPSIS" then
-                    name = DF:UTF8Sub(name, 1, nameLength) .. "..."
-                else
-                    name = DF:UTF8Sub(name, 1, nameLength)
+            if hideLegacyText then
+                frame.nameText:Hide()
+            else
+                local name = DF:GetUnitName(unit) or unit
+                -- Truncate name if needed (UTF-8 aware)
+                local nameLength = db.nameTextLength or 0
+                if nameLength > 0 and DF:UTF8Len(name) > nameLength then
+                    if db.nameTextTruncateMode == "ELLIPSIS" then
+                        name = DF:UTF8Sub(name, 1, nameLength) .. "..."
+                    else
+                        name = DF:UTF8Sub(name, 1, nameLength)
+                    end
                 end
+                frame.nameText:SetText(name)
+                frame.nameText:Show()
+                -- TODO CLEANUP: Color now handled by ElementAppearance via ApplyDeadFade
+                -- frame.nameText:SetTextColor(0.5, 0.5, 0.5, 1)
             end
-            frame.nameText:SetText(name)
-            -- TODO CLEANUP: Color now handled by ElementAppearance via ApplyDeadFade
-            -- frame.nameText:SetTextColor(0.5, 0.5, 0.5, 1)
         end
         if frame.statusText then
-            if db.statusTextEnabled ~= false then
+            if hideLegacyText or db.statusTextEnabled == false then
+                frame.statusText:Hide()
+            else
                 frame.statusText:SetText("Offline")
                 frame.statusText:Show()
-            else
-                frame.statusText:Hide()
             end
         end
         if frame.healthText then
@@ -586,26 +595,31 @@ function DF:UpdateUnitFrame(frame, source)
             -- frame.healthBar:SetStatusBarColor(0.3, 0.3, 0.3, 1)
         end
         if frame.nameText then
-            local name = DF:GetUnitName(unit) or unit
-            -- Truncate name if needed (UTF-8 aware)
-            local nameLength = db.nameTextLength or 0
-            if nameLength > 0 and DF:UTF8Len(name) > nameLength then
-                if db.nameTextTruncateMode == "ELLIPSIS" then
-                    name = DF:UTF8Sub(name, 1, nameLength) .. "..."
-                else
-                    name = DF:UTF8Sub(name, 1, nameLength)
+            if hideLegacyText then
+                frame.nameText:Hide()
+            else
+                local name = DF:GetUnitName(unit) or unit
+                -- Truncate name if needed (UTF-8 aware)
+                local nameLength = db.nameTextLength or 0
+                if nameLength > 0 and DF:UTF8Len(name) > nameLength then
+                    if db.nameTextTruncateMode == "ELLIPSIS" then
+                        name = DF:UTF8Sub(name, 1, nameLength) .. "..."
+                    else
+                        name = DF:UTF8Sub(name, 1, nameLength)
+                    end
                 end
+                frame.nameText:SetText(name)
+                frame.nameText:Show()
+                -- TODO CLEANUP: Color now handled by ElementAppearance via ApplyDeadFade
+                -- frame.nameText:SetTextColor(0.5, 0.5, 0.5, 1)
             end
-            frame.nameText:SetText(name)
-            -- TODO CLEANUP: Color now handled by ElementAppearance via ApplyDeadFade
-            -- frame.nameText:SetTextColor(0.5, 0.5, 0.5, 1)
         end
         if frame.statusText then
-            if db.statusTextEnabled ~= false then
+            if hideLegacyText or db.statusTextEnabled == false then
+                frame.statusText:Hide()
+            else
                 frame.statusText:SetText(isGhost and "Ghost" or "Dead")
                 frame.statusText:Show()
-            else
-                frame.statusText:Hide()
             end
         end
         if frame.healthText then
@@ -780,7 +794,7 @@ function DF:UpdateUnitFrame(frame, source)
     -- ========================================
     if frame.healthText then
         local format = db.healthTextFormat or "PERCENT"
-        if format == "NONE" then
+        if hideLegacyText or format == "NONE" then
             frame.healthText:Hide()
         else
             if format == "PERCENT" then
@@ -824,7 +838,7 @@ function DF:UpdateUnitFrame(frame, source)
             frame.healthText:Show()
         end
     end
-    
+
     -- ========================================
     -- POWER BAR
     -- ========================================
@@ -958,6 +972,11 @@ function DF:UpdateHealthFast(frame)
 
     local db = DF:GetFrameDB(frame)
 
+    -- TD legacy-text suppression: keep the health bar / absorbs / power
+    -- working, but force the text widgets hidden so Phase C live TD
+    -- rendering can be tested without visual overlap.
+    local hideLegacyText = DF:IsLegacyTextHidden(frame)
+
     -- ========================================
     -- OFFLINE CHECK
     -- ========================================
@@ -968,11 +987,11 @@ function DF:UpdateHealthFast(frame)
             frame.healthBar:SetValue(100)
         end
         if frame.statusText then
-            if db.statusTextEnabled ~= false then
+            if hideLegacyText or db.statusTextEnabled == false then
+                frame.statusText:Hide()
+            else
                 frame.statusText:SetText("Offline")
                 frame.statusText:Show()
-            else
-                frame.statusText:Hide()
             end
         end
         if frame.healthText then
@@ -1008,11 +1027,11 @@ function DF:UpdateHealthFast(frame)
             frame.healthBar:SetValue(0)
         end
         if frame.statusText then
-            if db.statusTextEnabled ~= false then
+            if hideLegacyText or db.statusTextEnabled == false then
+                frame.statusText:Hide()
+            else
                 frame.statusText:SetText(isGhost and "Ghost" or "Dead")
                 frame.statusText:Show()
-            else
-                frame.statusText:Hide()
             end
         end
         if frame.healthText then
@@ -1081,7 +1100,7 @@ function DF:UpdateHealthFast(frame)
     -- ========================================
     if frame.healthText then
         local fmt = db.healthTextFormat or "PERCENT"
-        if fmt == "NONE" then
+        if hideLegacyText or fmt == "NONE" then
             frame.healthText:Hide()
         else
             if fmt == "PERCENT" then
@@ -1256,57 +1275,69 @@ function DF:UpdateHealth(frame)
     if not frame or not frame.unit then return end
     
     local unit = frame.unit
-    
+
     -- Only process player and party units
     if unit ~= "player" and not unit:match("^party%d$") then
         return
     end
-    
+
     local db = DF:GetDB()
-    
+
+    -- TD legacy-text suppression: force statusText/healthText hidden when ON.
+    local hideLegacyText = DF:IsLegacyTextHidden(frame)
+
     -- Check for status conditions (Dead, Offline, AFK)
     local isDead = UnitIsDeadOrGhost(unit)
     local isOffline = not UnitIsConnected(unit)
-    
+
     if isDead or isOffline then
         -- Determine status type for dead-specific styling
         local statusType = isOffline and "Offline" or "Dead"
-        
+
         -- Show status text if enabled
         if db.statusTextEnabled and frame.statusText then
-            DF:StyleStatusText(frame)
-            if isOffline then
-                frame.statusText:SetText("Offline")
-            elseif isDead then
-                frame.statusText:SetText("Dead")
+            if hideLegacyText then
+                frame.statusText:Hide()
+                if frame.healthText then frame.healthText:Hide() end
+            else
+                DF:StyleStatusText(frame)
+                if isOffline then
+                    frame.statusText:SetText("Offline")
+                elseif isDead then
+                    frame.statusText:SetText("Dead")
+                end
+                frame.statusText:Show()
+                frame.healthText:Hide()
             end
-            frame.statusText:Show()
-            frame.healthText:Hide()
         end
-        
+
         -- Update health bar for dead/offline unit using helper
         DF.SetHealthBarValue(frame.healthBar, unit, frame)
         DF:ApplyHealthColors(frame)
-        
+
         -- Update missing health bar for dead/offline unit
         if frame.missingHealthBar then
             DF.SetMissingHealthBarValue(frame.missingHealthBar, unit, frame)
         end
-        
+
         -- Apply dead fade with status type
         DF:ApplyDeadFade(frame, statusType)
         return
     end
-    
+
     -- Unit is alive - reset dead fade if it was applied
     DF:ResetDeadFade(frame)
-    
+
     -- Hide status text, show health text
     if frame.statusText then
         frame.statusText:SetText("")
         frame.statusText:Hide()
     end
-    frame.healthText:Show()
+    if hideLegacyText then
+        if frame.healthText then frame.healthText:Hide() end
+    else
+        frame.healthText:Show()
+    end
     
     -- Update health bar using helper
     DF.SetHealthBarValue(frame.healthBar, unit, frame)
@@ -1318,8 +1349,8 @@ function DF:UpdateHealth(frame)
     
     -- Update health text
     local format = db.healthTextFormat or "PERCENT"
-    
-    if format == "NONE" then
+
+    if hideLegacyText or format == "NONE" then
         frame.healthText:SetText("")
     else
         -- Helper for abbreviation - uses Blizzard APIs which handle secret values

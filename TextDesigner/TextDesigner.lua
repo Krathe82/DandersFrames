@@ -26,6 +26,11 @@ function DF.TextDesigner:EnsureDB(db)
     db.textDesigner = db.textDesigner or {}
     db.textDesigner.enabled = db.textDesigner.enabled
     if db.textDesigner.enabled == nil then db.textDesigner.enabled = false end
+    -- Live-testing toggle: when ON, the built-in name / health / status text
+    -- widgets are hidden on every unit frame so Phase C live TD rendering can
+    -- be tested without visual overlap. Defaults OFF — existing user settings
+    -- govern when the toggle is off.
+    if db.textDesigner.hideLegacyText == nil then db.textDesigner.hideLegacyText = false end
     db.textDesigner.nextElementID = db.textDesigner.nextElementID or 1
     db.textDesigner.elements = db.textDesigner.elements or {}
     db.textDesigner.previewScale = db.textDesigner.previewScale or 1.0

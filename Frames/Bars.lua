@@ -2049,7 +2049,17 @@ end
 
 function DF:UpdateName(frame)
     if not frame or not frame.unit then return end
-    
+
+    -- TD legacy-text suppression: when ON, hide name + health text and skip.
+    -- Lets Phase C live TD rendering be tested without overlap.
+    if DF:IsLegacyTextHidden(frame) then
+        if frame.nameText then frame.nameText:Hide() end
+        if frame.healthText then frame.healthText:Hide() end
+        return
+    elseif frame.nameText and not frame.nameText:IsShown() then
+        frame.nameText:Show()
+    end
+
     -- Use raid DB for raid frames, party DB for party frames
     local db = DF:GetFrameDB(frame)
     local name = DF:GetUnitName(frame.unit)

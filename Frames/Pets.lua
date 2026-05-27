@@ -378,7 +378,9 @@ function DF:UpdatePetHealth(frame)
     
     -- Update health text if shown
     -- Pass secret value directly to SetFormattedText - it handles secrets internally
-    if db.petShowHealthText and frame.healthText then
+    -- TD legacy-text suppression: when ON, force pet health text hidden.
+    local hideLegacyText = DF:IsLegacyTextHidden(frame)
+    if db.petShowHealthText and frame.healthText and not hideLegacyText then
         local success = pcall(function()
             local pct = DF.GetSafeHealthPercent(unit)
             frame.healthText:SetFormattedText("%.0f%%", pct)
@@ -543,7 +545,15 @@ end
 function DF:UpdatePetName(frame)
     if not frame or not frame.unit then return end
     if not UnitExists(frame.unit) then return end
-    
+
+    -- TD legacy-text suppression: when ON, hide pet name and skip.
+    if DF:IsLegacyTextHidden(frame) then
+        if frame.nameText then frame.nameText:Hide() end
+        return
+    elseif frame.nameText and not frame.nameText:IsShown() then
+        frame.nameText:Show()
+    end
+
     local name = GetUnitName(frame.unit, true)
     if name then
         -- Truncate long names. Use secret-value-safe UTF-8 helpers — GetUnitName
@@ -606,7 +616,10 @@ end
 -- Update pet frame with test mode fake data
 function DF:UpdatePetFrameTestMode(frame)
     if not frame then return end
-    
+
+    -- TD legacy-text suppression for pet test frames.
+    local hideLegacyText = DF:IsLegacyTextHidden(frame)
+
     -- Set fake name
     local petNames = {"Wolf", "Cat", "Bear", "Imp", "Voidwalker", "Felguard", "Water Elemental", "Ghoul", "Treant", "Earth Elemental"}
     local index = 1
@@ -616,20 +629,27 @@ function DF:UpdatePetFrameTestMode(frame)
         index = tonumber(frame.unit:match("raidpet(%d+)")) or 1
     end
     local name = petNames[((index - 1) % #petNames) + 1]
-    frame.nameText:SetText(name)
-    
+    if frame.nameText then
+        if hideLegacyText then
+            frame.nameText:Hide()
+        else
+            frame.nameText:SetText(name)
+            frame.nameText:Show()
+        end
+    end
+
     -- Set fake health (random between 60-100%)
     local healthPercent = 0.6 + (math.random() * 0.4)
     frame.healthBar:SetMinMaxValues(0, 1)
     frame.healthBar:SetValue(healthPercent)
-    
+
     -- Set health bar color (green)
     frame.healthBar:SetStatusBarColor(0.2, 0.8, 0.2)
-    
+
     -- Update health text if shown
     if frame.healthText then
         local db = DF:GetFrameDB(frame)
-        if db.petShowHealth then
+        if db.petShowHealth and not hideLegacyText then
             local maxHealth = 50000
             local currentHealth = math.floor(maxHealth * healthPercent)
             frame.healthText:SetText(string.format("%d%%", math.floor(healthPercent * 100)))

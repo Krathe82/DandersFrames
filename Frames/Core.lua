@@ -423,6 +423,16 @@ function DF:GetFrameDB(frame)
     end
 end
 
+-- Returns true when the user has flipped the Text Designer
+-- "Hide Legacy Text" toggle on for the frame's mode (party/raid).
+-- Used by legacy text-widget update paths (nameText / healthText /
+-- statusText / pet equivalents) to early-return-with-Hide so Phase C
+-- live TD rendering can be tested without visual overlap.
+function DF:IsLegacyTextHidden(frame)
+    local db = DF:GetFrameDB(frame)
+    return db and db.textDesigner and db.textDesigner.hideLegacyText or false
+end
+
 -- Note: FormatNumber should only be used with known-accessible values
 -- For secret values from Unit APIs, use SetFormattedText with %s directly
 function DF:FormatNumber(num)
