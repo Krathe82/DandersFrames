@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "namespaces": ["DF"],
+
+  "_reserved": {
+    "events": {},
+    "xmlDirs": [],
+    "apiAllowlist": []
+  }
+}

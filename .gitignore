@@ -33,3 +33,11 @@ _Automation/
 
 # WoW CDN cache (TPR client data)
 cache/
+
+# GitNexus indexer artifacts (local code-knowledge graph)
+# The directory is local-only EXCEPT for wow-config.json, which is shared so
+# contributors can rebuild the graph by running `gitnexus analyze` themselves.
+# Note: pattern is `.gitnexus/*` (not `.gitnexus/`) so the ! exception works —
+# git ignores recursive contents but the directory itself stays traversable.
+.gitnexus/*
+!.gitnexus/wow-config.json
