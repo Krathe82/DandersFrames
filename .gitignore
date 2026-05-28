@@ -41,3 +41,4 @@ cache/
 # git ignores recursive contents but the directory itself stays traversable.
 .gitnexus/*
 !.gitnexus/wow-config.json
+!.gitnexus/wow-api.json
