@@ -98,12 +98,21 @@ function DF:UpdateReducedMaxHealth(frame)
         tex:SetBlendMode(db.reducedMaxHealthBlendMode or "BLEND")
     end
 
+    -- Re-anchor the bar to the current padding. It is otherwise positioned only
+    -- at creation (CreateReducedMaxHealthBar), so a padding change left it — and
+    -- the clipped health bar's right edge, which anchors to this bar's texture —
+    -- at the old inset, producing asymmetric padding (new on the left, old on
+    -- the right).
+    local padding = db.framePadding or 0
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", padding, -padding)
+    bar:SetPoint("BOTTOMRIGHT", -padding, padding)
+
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(pct)
     bar:Show()
 
     if db.reducedMaxHealthClipHealthBar and frame.healthBar and tex then
-        local padding = db.framePadding or 0
         frame.healthBar:ClearAllPoints()
         frame.healthBar:SetPoint("TOPLEFT", padding, -padding)
         frame.healthBar:SetPoint("BOTTOMLEFT", padding, padding)

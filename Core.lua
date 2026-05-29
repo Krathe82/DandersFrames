@@ -234,7 +234,16 @@ function DF:LightweightUpdateFrameSize()
         -- Party frames - resize frame and update health bar with padding
         local db = DF.db[mode]
         if not db then return end
-        
+
+        -- Party test frames: do the full layout refresh (mirroring the raid
+        -- branch above) so overlay bars (absorb, heal prediction, reduced-max)
+        -- re-position too. The lightweight path below only re-anchors the health
+        -- bar, leaving the overlays stale mid-drag until the slider is released.
+        if DF.testMode and DF.RefreshTestFramesWithLayout then
+            DF:RefreshTestFramesWithLayout()
+            return
+        end
+
         local frameWidth = db.frameWidth or 120
         local frameHeight = db.frameHeight or 50
         local padding = db.framePadding or 0

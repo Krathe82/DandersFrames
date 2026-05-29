@@ -850,6 +850,13 @@ function DF:UpdateUnitFrame(frame, source)
         frame.healthBar:ClearAllPoints()
         frame.healthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", padding, -padding)
         frame.healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+        -- Keep the missing-health overlay inside the padding too (anchored once
+        -- at creation, so it would otherwise sit over the padding after a change).
+        if frame.missingHealthBar then
+            frame.missingHealthBar:ClearAllPoints()
+            frame.missingHealthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", padding, -padding)
+            frame.missingHealthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+        end
     end
     
     if frame.dfPowerBar then
