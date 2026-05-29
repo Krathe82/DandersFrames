@@ -243,7 +243,18 @@ function DF:UpdateHealthBarAppearance(frame)
     -- ========================================
     -- APPLY ALPHA
     -- ========================================
-    if db.oorEnabled then
+    if adHealthBarMode == "replace" then
+        -- AD replace mode owns the underlying bar's opacity. Apply it through the
+        -- texture's FRAME alpha here (re-asserted on every health event) — the
+        -- companion SetVertexColor in ApplyHealthBar leaves vertex alpha at 1 so
+        -- StatusBar:SetValue can't flicker it to full. The AD effective blend already
+        -- encodes the OOR fade (kept in lockstep with the overlay by
+        -- UpdateAuraDesignerAppearance), so apply it directly and skip the normal OOR
+        -- path to avoid double-fading.
+        local ad = frame.dfAD
+        local adAlpha = ad.healthbarEffectiveBlend or ad.healthbarBlend or alpha
+        tex:SetAlpha(adAlpha)
+    elseif db.oorEnabled then
         -- Element-specific OOR mode
         local oorAlpha = db.oorHealthBarAlpha or 0.2
         ApplyOORAlpha(tex, inRange, alpha, oorAlpha)
