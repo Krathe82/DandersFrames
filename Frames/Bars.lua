@@ -1233,6 +1233,78 @@ function DF:UpdateAbsorb(frame, testIndex)
     CacheAbsorbLayoutState(frame, db)
 end
 
+-- Re-apply ATTACHED_OVERFLOW absorb visibility on every range tick.
+--
+-- Why this exists: in ATTACHED_OVERFLOW mode the attached/overflow bar alphas
+-- are written by UpdateAbsorb above, which only fires on UNIT_ABSORB events
+-- (and friends). Between those events, range transitions don't touch the
+-- overflow bar — so OOR fade can stay stuck at the last value UpdateAbsorb
+-- gave it (typically full opacity if the user was in range at the previous
+-- absorb tick). The range ticker (UpdateAbsorbBarAppearance in
+-- Features/ElementAppearance.lua) calls this on every tick to refresh.
+--
+-- We re-run the visibility helpers with a freshly-computed isClamped (cheap:
+-- the calculator object is already cached on the frame) and a freshly-
+-- computed visAlpha. We CANNOT cache isClamped as a number and read it back
+-- on the next tick to combine with a fresh visAlpha — a number obtained from
+-- SetAlphaFromBoolean(secretBool, ...) is itself secret and arithmetic on it
+-- taints execution.
+function DF:RefreshAbsorbBarVisibility(frame)
+    if not frame or not frame.dfAbsorbBar or not frame.absorbOverflowBar then return end
+    if not frame.dfAbsorbBar:IsShown() then return end
+    if DF.testMode or DF.raidTestMode then return end
+
+    local db
+    if frame.isRaidFrame and DF.GetRaidDB then
+        db = DF:GetRaidDB()
+    elseif DF.GetDB then
+        db = DF:GetDB()
+    end
+    if not db then return end
+    if (db.absorbBarMode or "OVERLAY") ~= "ATTACHED_OVERFLOW" then return end
+
+    -- Refresh isClamped via the cached calculator (same call UpdateAbsorb makes).
+    -- Mirror UpdateAbsorb's pattern exactly — gating the secret r2 assignment on
+    -- truthy r1 — to stay on a known-safe code path with secret return values.
+    local isClamped = false
+    local unit = frame.unit
+    if frame.absorbCalculator and unit and CreateUnitHealPredictionCalculator then
+        UnitGetDetailedHealPrediction(unit, nil, frame.absorbCalculator)
+        if frame.absorbCalculator.GetDamageAbsorbs then
+            local r1, r2 = frame.absorbCalculator:GetDamageAbsorbs()
+            if r1 then
+                isClamped = r2
+            end
+        end
+    end
+
+    -- visAlpha matches UpdateAbsorb's fast-path logic at the helper-apply step.
+    -- The secret-bool branch deliberately leaves visAlpha at 1: the safe path
+    -- there is frame-level OOR fade (set by the OOR system upstream); we'd need
+    -- a separate cascade to fade individually in element-specific mode for
+    -- secret-bool classes, which is a wider change than this fix.
+    local visAlpha = 1
+    if db.oorEnabled then
+        local inRange = frame.dfInRange
+        if not (issecretvalue and issecretvalue(inRange)) and inRange == false then
+            visAlpha = db.oorAbsorbBarAlpha or 0.5
+        end
+    end
+
+    -- Apply via the existing visibility helpers (created lazily by UpdateAbsorb's
+    -- full-rebuild path; if absent, this frame hasn't been laid out yet — skip).
+    local attachedHelper = frame.dfAbsorbBar.visibilityHelper
+    local overflowHelper = frame.absorbOverflowBar.visibilityHelper
+    if attachedHelper then
+        attachedHelper:SetAlphaFromBoolean(isClamped, 0, visAlpha)
+        frame.dfAbsorbBar:SetAlpha(attachedHelper:GetAlpha())
+    end
+    if overflowHelper then
+        overflowHelper:SetAlphaFromBoolean(isClamped, visAlpha, 0)
+        frame.absorbOverflowBar:SetAlpha(overflowHelper:GetAlpha())
+    end
+end
+
 -- ============================================================
 -- HEAL ABSORB BAR LOGIC (Necrotic, etc.)
 -- ============================================================
