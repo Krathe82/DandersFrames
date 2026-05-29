@@ -2513,8 +2513,12 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     end
     DF:Debug("LAYOUT", "EnterEditing: applied %d overrides for live preview", overrideCount)
     
-    -- Refresh pinned frames to show overridden settings in live preview
-    if DF.PinnedFrames then
+    -- Refresh pinned frames to show overridden settings in live preview.
+    -- Only when actually in a raid: PinnedFrames' methods key off live IsInRaid(),
+    -- so running them while not in a raid would apply this raid layout's pinned
+    -- state to the PARTY pinned set. When not in a raid the raid pinned preview is
+    -- handled by the mode-aware test-mode pinned frames instead.
+    if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
         for i = 1, 2 do
             local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
@@ -2714,8 +2718,10 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         DF:RefreshTestFramesWithLayout()
     end
     
-    -- Refresh pinned frames to show global settings again
-    if DF.PinnedFrames then
+    -- Refresh pinned frames to show global settings again. Guarded by IsInRaid()
+    -- for the same reason as on enter-editing: while not in a raid these methods
+    -- target the PARTY pinned set, so a raid layout edit must not touch them.
+    if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
         for i = 1, 2 do
             -- Restore enabled state first (hides containers if globally disabled)
