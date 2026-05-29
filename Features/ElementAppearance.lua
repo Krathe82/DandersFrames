@@ -577,6 +577,36 @@ function DF:UpdatePowerBarAppearance(frame)
 end
 
 -- ============================================================
+-- BORDER APPEARANCE
+-- In whole-frame OOR mode the border fades via the frame's alpha cascade.
+-- In element-specific mode the frame is pinned at 1.0, so the border needs its
+-- own alpha here — otherwise it stays full while every other element fades.
+-- ============================================================
+
+function DF:UpdateBorderAppearance(frame)
+    if not IsDandersFrame(frame) then return end
+    if not frame.border then return end
+
+    local db = GetDB(frame)
+    if not db then return end
+
+    -- Skip during test mode
+    if DF.testMode or DF.raidTestMode then return end
+
+    local inRange = GetInRange(frame)
+    local alpha = 1.0
+
+    if db.oorEnabled then
+        local oorAlpha = db.oorBorderAlpha or 0.2
+        ApplyOORAlpha(frame.border, inRange, alpha, oorAlpha)
+    else
+        -- Whole-frame mode: reset to full so a stale element-specific fade
+        -- doesn't linger; the frame's alpha cascade handles the OOR dim.
+        frame.border:SetAlpha(alpha)
+    end
+end
+
+-- ============================================================
 -- BUFF ICONS APPEARANCE
 -- ============================================================
 
@@ -1257,6 +1287,7 @@ function DF:UpdateAllElementAppearances(frame)
     DF:UpdateHealthBarAppearance(frame)
     DF:UpdateMissingHealthBarAppearance(frame)
     DF:UpdateBackgroundAppearance(frame)
+    DF:UpdateBorderAppearance(frame)
     DF:UpdateNameTextAppearance(frame)
     DF:UpdateHealthTextAppearance(frame)
     DF:UpdateStatusTextAppearance(frame)

@@ -393,6 +393,7 @@ L["Blizzard Frame Settings"] = true
 L["Blizzard Frames"] = true
 L["Boss NPCs"] = true
 L["Border"] = true
+L["Border Alpha"] = true
 L["Border Color"] = true
 L["Border Inset"] = true
 L["Border Opacity"] = true
