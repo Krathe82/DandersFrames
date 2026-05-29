@@ -1081,10 +1081,20 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
         if mode == "replace" then
             local hbTex = healthBar:GetStatusBarTexture()
             if hbTex then
-                -- Fade the underlying bar texture with the same alpha so the bar
-                -- itself becomes transparent at low alpha (without this the solid
-                -- texture shows through and the overlay's alpha has no visual effect).
-                hbTex:SetVertexColor(r, g, b, a)
+                -- Colour the underlying bar to match, and fade it with the same alpha
+                -- so the bar itself becomes transparent at low alpha (without this the
+                -- solid texture shows through and the overlay's alpha has no effect).
+                --
+                -- IMPORTANT: transparency goes through the texture's FRAME alpha
+                -- (SetAlpha), NOT the vertex alpha. StatusBar:SetValue (the health
+                -- fill, smooth or not) resets the fill texture's vertex alpha to full
+                -- on every health update while leaving RGB intact — that was the
+                -- "alpha flickers to 100% then back" bug. Vertex alpha is left at 1
+                -- here so SetValue's reset is a no-op; the frame alpha channel it
+                -- doesn't touch carries the real opacity, and UpdateHealthBarAppearance
+                -- re-asserts it on every health event (see ElementAppearance.lua).
+                hbTex:SetVertexColor(r, g, b)
+                hbTex:SetAlpha(a)
             end
         else
             -- Tint mode: the underlying bar must show its normal colour through the overlay.
