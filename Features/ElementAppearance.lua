@@ -948,19 +948,39 @@ end
 function DF:UpdateAbsorbBarAppearance(frame)
     if not IsDandersFrame(frame) then return end
     if not frame.dfAbsorbBar then return end
-    
+
     -- PERF: Skip if absorb bar isn't visible
     if not frame.dfAbsorbBar:IsShown() then return end
-    
+
     local db = GetDB(frame)
     if not db then return end
-    
+
     if DF.testMode or DF.raidTestMode then return end
-    
+    if not db.oorEnabled then return end
+
     local inRange = GetInRange(frame)
-    
-    if db.oorEnabled then
-        local oorAlpha = db.oorAbsorbBarAlpha or 0.5
+    local oorAlpha = db.oorAbsorbBarAlpha or 0.5
+    local mode = db.absorbBarMode or "OVERLAY"
+
+    if mode == "ATTACHED_OVERFLOW" then
+        -- The overflow bar's alpha is only written by UpdateAbsorb (Bars.lua) on
+        -- UNIT_ABSORB events; without intervention here, it stays at the last
+        -- alpha UpdateAbsorb gave it across range transitions, so it can be stuck
+        -- at full opacity OOR until the next absorb event refreshes things.
+        --
+        -- Delegate to Bars.lua: it recomputes isClamped via the cached absorb
+        -- calculator and re-drives the existing visibilityHelpers — the proven
+        -- secret-safe pattern. We CANNOT do the composition here by reading
+        -- helper alphas back as numbers and multiplying: a number that came
+        -- through SetAlphaFromBoolean(secretBool, ...) is itself a secret number
+        -- and arithmetic on it taints execution.
+        if DF.RefreshAbsorbBarVisibility then
+            DF:RefreshAbsorbBarVisibility(frame)
+        else
+            ApplyOORAlpha(frame.dfAbsorbBar, inRange, 1.0, oorAlpha)
+        end
+    else
+        -- OVERLAY / FLOATING / ATTACHED: a single visible bar, fade it directly.
         ApplyOORAlpha(frame.dfAbsorbBar, inRange, 1.0, oorAlpha)
     end
 end
