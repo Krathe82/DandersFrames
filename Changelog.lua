@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-05-23T14:26:59Z"
+DF.BUILD_DATE = "2026-05-29T21:37:20Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -10,22 +10,42 @@ DF.CHANGELOG_TEXT = [===[
 
 * (Heal Prediction) Added a "Show Heals From" option — All Incoming, My Heals, Others' Heals, or Split — letting you choose which incoming heals the bar shows. Split draws your heals and other healers' heals as separate coloured segments. (PR #109 by Krathe)
 * Added a `/df attached` command that lists other addons attaching castbars, cooldowns or auras to your frames — handy for telling apart DF features from another addon's. (PR #104 by Krathe)
+* (Click Casting) Added a **"Target unit when click-casting"** option — click-casting a spell on a frame can now also make that unit your target. Set it globally in the Click Casting profiles panel, or override it per-binding under Advanced → Macro Options. (PR #116 by Krathe)
+* (Fonts) Expanded text styling across every font setting: added **Monochrome**, **Monochrome Outline**, and **Monochrome Thick Outline** outline styles; a drop **shadow can now be combined with any outline** (each font now has its own Shadow checkbox) instead of being mutually exclusive; and a new **Crisp Font Rendering (SDF)** option in Global Fonts smooths text edges for sharper text. (PR #115 by Krathe)
+* (Frames) Added border customization under Frame → Appearance: a **Border Style** option (Solid or Texture), where the Texture style can use any border registered with SharedMedia (the built-in set, or ones added by other media addons), plus a **Border Size** slider to adjust thickness. (PR #119 by Krathe)
+* (Frames) Added a **Use Class Color** option for the frame border, colouring each frame's border by the unit's class. (PR #120 by Krathe, suggested by maelareth)
+* (Frames) Added bundled frame border textures — **DF Glow**, **DF Bevel**, **DF Inset**, and **DF Double** — selectable under the Texture border style (and shared with other media-aware addons). Designed with square corners for rectangular frames; the bevel/inset shade with the chosen border colour for a 3D edge. (PR #121 by Krathe)
+* (Text Designer) Added an Abbreviate toggle for number elements and groups, shortening large values (e.g. 287k, 1.2m); setting it on a group applies to all its numbers.
 
 ### Bug Fixes
 
+* (Absorbs) Fix the absorb / heal-absorb / heal-prediction bars leaving a sliver of the health bar showing when Reduced Max Health (Clip Health Bar) and a frame border were both enabled. The bars were inset by the border width even at the internal clip edge, where there is no border. (PR #124 by Krathe)
+* (Absorbs) Fix the overflow absorb bar not fading out of range when using the Attached + Overflow absorb style. (by Krathe)
 * (Aura Blacklist) Replaced the unclear "OOC" toggle label with clear "Combat" and "Out of Combat" column headers. (PR #111 by Krathe)
 * (Aura Blacklist) The class dropdown now uses the standard arrow instead of a stray yellow one. (PR #111 by Krathe)
 * (Aura Designer) Fix the colour picker's alpha not affecting the health bar indicator on live frames, and fix the Blend % slider reappearing in Replace mode after closing and reopening the GUI. (PR #102 by Krathe)
+* (Aura Designer) Fix the health bar indicator's expiring colour ignoring its own alpha — it reused the base colour's alpha instead. The expiring colour now uses its configured transparency, in both Tint and Replace modes. (PR #117 by Krathe)
 * (Aura Designer) Colour pickers now offer a Default button that resets to the configured default, matching the rest of the addon. (PR #103 by Krathe)
+* (Aura Designer) Fix a custom Replace-mode health bar colour flickering to full opacity on every health change. (by Krathe)
+* (Auto Layouts) Fix editing a raid auto layout while not in a raid enabling the party Pinned Frames — the pinned-frame refresh targeted the live group's mode (party) instead of raid. (PR #125 by Krathe)
 * (Boss Debuffs) Fix private aura anchors remaining bound to the previous occupant of a unit slot after a roster change, causing icons to not appear on replacement players for the rest of the session. (PR #112 by Krathe)
 * (Class Colors) The class colour list is now a single section instead of being split into two columns. (PR #111 by Krathe)
+* (Click Casting) Renamed the "Cast on DOWN" option to "Cast on mouse down" and added a tooltip, clarifying that it only affects mouse clicks on frames (keyboard binds are unaffected). (PR #118 by Krathe)
+* (Click Casting) Trinket and item keybinds now cast on mouseover, target, or self when those fallbacks are enabled — previously they always cast on your current target regardless of fallback settings.
+* (Frame Movers) Fix the raid frames' unlock "Drag to move" text using a fixed fallback font instead of your Settings Font, so it now matches the party mover. (PR #122 by Krathe)
 * (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
 * (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
+* (Performance) Reduce the frame-rate hitch when joining a group: spec/talent update events fire in bursts as the client syncs data, and each one was triggering a full frame relayout. These are now coalesced into a single refresh. (PR #128 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
 * (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
+* (Raid Frames) Fix grouped raid frames briefly jumping when interacting with the settings window: a redundant layout pass was re-firing the secure reposition even when nothing about the raid had changed. It now skips the reposition unless the sort order, group population, or layout actually changed. (PR #129 by Krathe)
+* (Raid Frames) Fix the Rows/Columns Grow From setting not always taking effect immediately when changed. (PR #134 by Krathe)
+* (Range) Fix the frame border not fading out of range when Element-Specific Alpha is enabled — it was the only element the per-element fade didn't cover. Added a Border Alpha slider to control it. (PR #123 by Krathe)
 * (Settings) Fix the Show Minimap Button and Hide Blizzard Player Frame toggles doing nothing when changed in Raid settings. They are now single global options on the Settings page, and the Visibility tab (whose options only apply to party/solo frames) is hidden in Raid mode. (PR #110 by Krathe)
 * (Settings) Made the raid layout positioning options consistent between Group and Flat modes: Start/Center/End options are now labelled "Alignment", directional options use real directions (Left/Right or Top/Bottom), and these labels and their values now update live when you change the layout direction instead of needing the settings window reopened. (PR #114 by Krathe)
 * (Test Mode) Fix grouped raid frames in vertical layout with Players Grow From set to End: frames no longer overflow below the anchor box, and the column growth direction is no longer inverted, so test mode now matches live frames. (PR #113 by Krathe)
+* (Test Mode) Switching between Party and Raid in the settings window while test mode is on now keeps test mode active and moves it to the selected mode, instead of turning it off. (PR #126 by Krathe)
+* (Test Mode) Fix frame padding not applying consistently to test frames — the health bar inset now updates on every test frame like it does on live frames, instead of only on frames with reduced-max health. (PR #127 by Krathe)
 
 ## [4.3.11] - 2026-05-21
 
