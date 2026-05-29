@@ -1397,6 +1397,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         -- Function to update the correct frames based on mode
         local function UpdateFrames()
+            -- Invalidate the raid layoutSig optimization cache BEFORE
+            -- ApplyHeaderSettings runs, so this cycle's ApplyRaidGroupSorting
+            -- applies layout settings that aren't tracked by layoutSig (notably
+            -- raidGroupRowGrowth) instead of bailing. (PR #134)
+            if GUI.SelectedMode == "raid" then
+                DF._lastRaidLayoutSig = nil
+                DF._raidSortApplied   = false
+            end
             if DF.headersInitialized then
                 DF:ApplyHeaderSettings()
             end
