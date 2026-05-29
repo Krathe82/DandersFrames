@@ -250,21 +250,24 @@ function LiveSource:GetAbsorbAmount()
 end
 
 function LiveSource:GetOvershieldAmount()
-    -- Uses the calculator's clamp-mode trick to compute the overshield
-    -- (amount of absorb beyond missing HP). See Frames/Bars.lua:495-503
+    -- Uses the calculator's clamp-mode trick. See Frames/Bars.lua:495-503
     -- for the canonical absorb-calculator usage. The calculator returns
-    -- (clampedAmount, isClamped) — overshield = total - clamped.
+    -- (clampedAmount, isClamped).
+    --
+    -- KNOWN LIMITATION: computing overshield as `total - clamped` requires
+    -- arithmetic on two secret values, which throws on Midnight. There is
+    -- no current secret-safe path; this resolver will error in restricted
+    -- contexts. Listed as a TODO until a secret-safe alternative is found
+    -- (e.g. a calculator method that returns excess directly).
     local calc = self.frame and self.frame.absorbCalculator
     if not calc or not _G.UnitGetDetailedHealPrediction or not calc.GetDamageAbsorbs then return 0 end
-    pcall(calc.SetDamageAbsorbClampMode, calc, 1)  -- 1 = Clamp to Missing Health
-    pcall(UnitGetDetailedHealPrediction, self.unit, nil, calc)
-    local ok, clamped = pcall(calc.GetDamageAbsorbs, calc)
-    if not ok or not clamped then return 0 end
+    calc:SetDamageAbsorbClampMode(1)  -- 1 = Clamp to Missing Health
+    UnitGetDetailedHealPrediction(self.unit, nil, calc)
+    local clamped = calc:GetDamageAbsorbs()
+    if not clamped then return 0 end
     local total = UnitGetTotalAbsorbs(self.unit) or 0
-    -- Arithmetic on secret values throws — pcall the subtraction so we
-    -- silently degrade to "no overshield" in restricted contexts.
-    local subOk, excess = pcall(function() return total - clamped end)
-    if not subOk or not excess or excess <= 0 then return 0 end
+    local excess = total - clamped
+    if not excess or excess <= 0 then return 0 end
     return excess
 end
 

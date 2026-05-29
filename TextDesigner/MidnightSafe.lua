@@ -15,10 +15,14 @@ DF.TextDesigner.MidnightSafe = MS
 -- exist on older clients (we still want TD to load and degrade
 -- gracefully, even though it's alpha-gated to Midnight).
 local issecretvalue = _G.issecretvalue
-local type, tostring, pcall = type, tostring, pcall
+local type, tostring = type, tostring
 local format = string.format
+-- AbbreviateNumbers preferred (no space: "287k", "1.2m"); falls back to
+-- AbbreviateLargeNumbers (space-padded: "287 K") on older clients. Both
+-- are secret-safe in Midnight per Cell's reference implementation.
+local AbbreviateNumbers = _G.AbbreviateNumbers or _G.AbbreviateLargeNumbers or tostring
 local AbbreviateLargeNumbers = _G.AbbreviateLargeNumbers or tostring
-local TruncateWhenZero = (_G.C_StringUtil and _G.C_StringUtil.TruncateWhenZero) or AbbreviateLargeNumbers
+local TruncateWhenZero = (_G.C_StringUtil and _G.C_StringUtil.TruncateWhenZero) or AbbreviateNumbers
 local RoundToNearestString = (_G.C_StringUtil and _G.C_StringUtil.RoundToNearestString) or function(v) return tostring(v) end
 
 -- The Midnight curve constant for percent calls. Falls back to `true`
@@ -27,10 +31,11 @@ local RoundToNearestString = (_G.C_StringUtil and _G.C_StringUtil.RoundToNearest
 MS.ScaleTo100 = _G.CurveConstants and _G.CurveConstants.ScaleTo100 or true
 
 -- Returns true if v is a Midnight secret value.
+-- `issecretvalue` is Blizzard's sentinel API — it accepts any input
+-- (including secrets, userdata, nil) without throwing. Safe to call raw.
 function MS.IsSecret(v)
     if not issecretvalue then return false end
-    local ok, isSec = pcall(issecretvalue, v)
-    return ok and isSec or false
+    return issecretvalue(v) and true or false
 end
 
 -- Coerces any value to a string safely renderable via SetText.
@@ -45,11 +50,12 @@ function MS.SafeText(v)
     return ""
 end
 
--- AbbreviateLargeNumbers wrapper that accepts secrets natively.
--- Returns a string ready for SetText, or "" if v is nil.
+-- AbbreviateNumbers wrapper that accepts secrets natively.
+-- Returns a string ready for SetText (e.g. "287k"), or "" if v is nil.
+-- Matches the legacy DF format (no space between digits and suffix).
 function MS.Abbr(v)
     if v == nil then return "" end
-    return AbbreviateLargeNumbers(v)
+    return AbbreviateNumbers(v)
 end
 
 -- TruncateWhenZero wrapper that returns "" instead of nil on zero
@@ -84,10 +90,10 @@ function MS.FormatNumber(v, abbreviate)
     return MS.SafeText(v)
 end
 
--- Wraps issecretvalue + pcall around a boolean read.
+-- Wraps issecretvalue around a boolean read.
 -- Use this for UnitInRange which can return a secret boolean.
 -- Returns the boolean if safe to read, OR the fallbackValue
--- (default false) if secret/erroring.
+-- (default false) if secret.
 function MS.SafeBoolean(v, fallbackValue)
     if v == nil then return fallbackValue or false end
     if type(v) == "boolean" and not MS.IsSecret(v) then return v end

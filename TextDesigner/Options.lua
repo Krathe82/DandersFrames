@@ -328,6 +328,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     elseif ct.key == "group" then
         elem.groupItems = elem.groupItems or {}
         elem.groupSeparator = elem.groupSeparator or " / "
+        if elem.abbreviate == nil then elem.abbreviate = true end
 
         local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
@@ -351,6 +352,15 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         end, 120)
         sepEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - EDIT_BOX_ROW_H
+
+        -- Abbreviate toggle — applies to every numeric item in the group.
+        -- The group resolver passes elem.abbreviate to each item's resolver
+        -- so child values inherit the parent group's setting.
+        local groupAbbrev = GUI:CreateCheckbox(parent, L["Abbreviate"], elem, "abbreviate", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
+        groupAbbrev:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
 
         -- Items label
         local itemsLabel = parent:CreateFontString(nil, "OVERLAY")
@@ -2221,6 +2231,7 @@ local function BuildGroupsTab(GUI, parent, state, tdDB, page)
             label = ComputeAutoLabel(tdDB, groupCT),
             groupItems = {},
             groupSeparator = " / ",
+            abbreviate = true,
         }
         table.insert(tdDB.elements, elem)
         if DF.TextDesigner.FullRebuildCards then

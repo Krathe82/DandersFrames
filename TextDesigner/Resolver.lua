@@ -97,9 +97,13 @@ end
 RESOLVERS.hp_deficit = function(elem, source)
     local v = source:GetHPDeficit()
     if v == nil then return "" end
-    local s = getMS().Truncate(v)
-    if s == "" then return "" end
-    if elem.abbreviate then s = getMS().Abbr(v) end
+    local MS = getMS()
+    local s = MS.Truncate(v)
+    -- MS.Truncate returns "" when v was zero (nil from TruncateWhenZero).
+    -- A secret string is always non-zero by definition, so the IsSecret
+    -- short-circuit avoids the `s == ""` comparison throwing on secrets.
+    if not MS.IsSecret(s) and s == "" then return "" end
+    if elem.abbreviate then s = MS.Abbr(v) end
     return "-" .. s
 end
 
@@ -126,9 +130,11 @@ end
 RESOLVERS.power_deficit = function(elem, source)
     local v = source:GetPowerDeficit()
     if v == nil then return "" end
-    local s = getMS().Truncate(v)
-    if s == "" then return "" end
-    if elem.abbreviate then s = getMS().Abbr(v) end
+    local MS = getMS()
+    local s = MS.Truncate(v)
+    -- Same secret-safe pattern as hp_deficit (see above).
+    if not MS.IsSecret(s) and s == "" then return "" end
+    if elem.abbreviate then s = MS.Abbr(v) end
     return "-" .. s
 end
 
@@ -219,14 +225,19 @@ RESOLVERS.group = function(elem, source)
     end
     DF:Debug("TD", "group resolver: elem id=%s items=%d separator=%q",
         tostring(elem.id), #elem.groupItems, tostring(elem.groupSeparator or " / "))
+    -- Group's abbreviate setting cascades to every numeric child item.
+    -- Default to true for backward compat with pre-toggle groups.
+    local groupAbbrev = elem.abbreviate
+    if groupAbbrev == nil then groupAbbrev = true end
     local parts = {}
     for i, typeKey in ipairs(elem.groupItems) do
         local itemResolver = RESOLVERS[typeKey]
         if not itemResolver then
             DF:Debug("TD", "  [%d] %s: NO RESOLVER", i, tostring(typeKey))
         else
-            -- Pass a minimal elem-like table for per-item formatting
-            local itemElem = { contentType = typeKey, abbreviate = true, decimals = 0 }
+            -- Pass a minimal elem-like table for per-item formatting.
+            -- abbreviate inherits from the parent group element.
+            local itemElem = { contentType = typeKey, abbreviate = groupAbbrev, decimals = 0 }
             local v = itemResolver(itemElem, source)
             local MS = getMS()
             local isSec = MS.IsSecret(v)
@@ -244,7 +255,22 @@ RESOLVERS.group = function(elem, source)
         end
     end
     DF:Debug("TD", "group resolver: parts collected=%d", #parts)
-    return table.concat(parts, elem.groupSeparator or " / ")
+    -- IMPORTANT: cannot use table.concat() here — it throws on secret-tainted
+    -- entries ("invalid value (secret) at index N in table for 'concat'").
+    -- Manual `..` concat IS safe with secret strings as long as the final
+    -- result is passed straight to FontString:SetText (which it is, via
+    -- Render.lua → MS.SafeText → fs:SetText). The taint propagates through
+    -- the concat result; SetText accepts secret strings natively.
+    local separator = elem.groupSeparator or " / "
+    local result
+    for i, v in ipairs(parts) do
+        if i == 1 then
+            result = v
+        else
+            result = result .. separator .. v
+        end
+    end
+    return result or ""
 end
 
 -- ============================================================
@@ -252,6 +278,10 @@ end
 -- ============================================================
 
 -- Resolve(elem, source) -> string
+-- Note: pcall has been intentionally removed here. If a resolver errors,
+-- we want it to surface loudly so the underlying secret-value or API bug
+-- gets fixed rather than silently masked. The resolvers themselves are
+-- responsible for being secret-safe.
 function Resolver:Resolve(elem, source)
     if not elem or not elem.contentType then return "" end
     local fn = RESOLVERS[elem.contentType]
@@ -260,13 +290,7 @@ function Resolver:Resolve(elem, source)
             tostring(elem.contentType), tostring(elem.id))
         return ""
     end
-    local ok, result = pcall(fn, elem, source)
-    if not ok then
-        DF:Debug("TD", "Resolver error for contentType '%s' (elem id=%s): %s",
-            tostring(elem.contentType), tostring(elem.id), tostring(result))
-        return ""
-    end
-    return result or ""
+    return fn(elem, source) or ""
 end
 
 -- Expose for debugging
