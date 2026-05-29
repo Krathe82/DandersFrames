@@ -4706,30 +4706,40 @@ DF._MainEventDispatcher = function(self, event, arg1)
         return
         
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_TALENT_UPDATE" then
-        -- Spec or talents changed - check for profile auto-switch
-        if DF.CheckProfileAutoSwitch then
-            DF:CheckProfileAutoSwitch()
+        -- These fire in bursts (often 8+ times) on zone-in, login, and group
+        -- join as the client syncs talent/spec data. Doing a full UpdateAllFrames
+        -- + Aura Designer refresh on every fire caused a noticeable hitch when
+        -- joining a large raid. Coalesce the burst into a single deferred refresh.
+        if not DF._specTalentRefreshScheduled then
+            DF._specTalentRefreshScheduled = true
+            C_Timer.After(0.15, function()
+                DF._specTalentRefreshScheduled = false
+                -- Spec or talents changed - check for profile auto-switch
+                if DF.CheckProfileAutoSwitch then
+                    DF:CheckProfileAutoSwitch()
+                end
+                -- Update all frames (resource bar colors may change)
+                if DF.UpdateAllFrames then
+                    DF:UpdateAllFrames()
+                end
+                -- Re-anchor raid container — spec switch can change layout dimensions
+                -- Must be outside combat: SetScale on the container is protected
+                if DF.UpdateRaidContainerPosition and not InCombatLockdown() then
+                    DF:UpdateRaidContainerPosition()
+                end
+                -- Refresh Aura Designer (per-spec aura lists may differ)
+                -- Invalidate the adapter's per-spec spellId cache first — otherwise
+                -- stale entries prevent the new spec's spell IDs (e.g., Earth Shield
+                -- for Resto Shaman) from being recognized after a spec swap.
+                if DF.AuraDesigner and DF.AuraDesigner.Adapter and DF.AuraDesigner.Adapter.InvalidateSpecCache then
+                    DF.AuraDesigner.Adapter:InvalidateSpecCache()
+                end
+                if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
+                    DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+                end
+            end)
         end
-        -- Update all frames (resource bar colors may change)
-        if DF.UpdateAllFrames then
-            DF:UpdateAllFrames()
-        end
-        -- Re-anchor raid container — spec switch can change layout dimensions
-        -- Must be outside combat: SetScale on the container is protected
-        if DF.UpdateRaidContainerPosition and not InCombatLockdown() then
-            DF:UpdateRaidContainerPosition()
-        end
-        -- Refresh Aura Designer (per-spec aura lists may differ)
-        -- Invalidate the adapter's per-spec spellId cache first — otherwise
-        -- stale entries prevent the new spec's spell IDs (e.g., Earth Shield
-        -- for Resto Shaman) from being recognized after a spec swap.
-        if DF.AuraDesigner and DF.AuraDesigner.Adapter and DF.AuraDesigner.Adapter.InvalidateSpecCache then
-            DF.AuraDesigner.Adapter:InvalidateSpecCache()
-        end
-        if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
-            DF.AuraDesigner.Engine:ForceRefreshAllFrames()
-        end
-        
+
     elseif event == "UNIT_PET" then
         -- Pet summoned or dismissed - update pet frames
         if DF.HandleUnitPetEvent then

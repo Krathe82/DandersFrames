@@ -29,6 +29,7 @@
 * (Frame Movers) Fix the raid frames' unlock "Drag to move" text using a fixed fallback font instead of your Settings Font, so it now matches the party mover. (PR #122 by Krathe)
 * (Heal Prediction) Fix the incoming-heal bar not keeping its size accurate as a unit's health changes while being healed. (PR #105 by Krathe)
 * (Indicators) Renamed "Status Icon Text Settings" to "Icon Text Settings" for clarity. (PR #111 by Krathe)
+* (Performance) Reduce the frame-rate hitch when joining a group: spec/talent update events fire in bursts as the client syncs data, and each one was triggering a full frame relayout. These are now coalesced into a single refresh. (PR #128 by Krathe)
 * (Pet Frames) Fix pet frames not attaching to the correct owner when custom sorting is enabled. (PR #108 by Krathe)
 * (Pet Frames) Fix pet frames reappearing after being turned off until a reload. (PR #108 by Krathe)
 * (Range) Fix the frame border not fading out of range when Element-Specific Alpha is enabled — it was the only element the per-element fade didn't cover. Added a Border Alpha slider to control it. (PR #123 by Krathe)
