@@ -11,7 +11,6 @@
 * (Frames) Added border customization under Frame → Appearance: a **Border Style** option (Solid or Texture), where the Texture style can use any border registered with SharedMedia (the built-in set, or ones added by other media addons), plus a **Border Size** slider to adjust thickness. (PR #119 by Krathe)
 * (Frames) Added a **Use Class Color** option for the frame border, colouring each frame's border by the unit's class. (PR #120 by Krathe, suggested by maelareth)
 * (Frames) Added bundled frame border textures — **DF Glow**, **DF Bevel**, **DF Inset**, and **DF Double** — selectable under the Texture border style (and shared with other media-aware addons). Designed with square corners for rectangular frames; the bevel/inset shade with the chosen border colour for a 3D edge. (PR #121 by Krathe)
-* (Text Designer) Added an Abbreviate toggle for number elements and groups, shortening large values (e.g. 287k, 1.2m); setting it on a group applies to all its numbers.
 
 ### Bug Fixes
 
