@@ -651,6 +651,15 @@ local BLIZZARD_ROLE_COORDS = {
     DAMAGER = {0.296875, 0.59375, 0.296875, 0.65},
 }
 
+-- Modern micro role atlases — sharper than the legacy PORTRAITROLES texcoord
+-- crop. Preferred when present; GetRoleIconTexture falls back to the legacy
+-- texture below so older / edge-case clients still render.
+local BLIZZARD_ROLE_ATLAS = {
+    TANK    = "UI-LFG-RoleIcon-Tank-Micro",
+    HEALER  = "UI-LFG-RoleIcon-Healer-Micro",
+    DAMAGER = "UI-LFG-RoleIcon-DPS-Micro",
+}
+
 function DF:GetRoleIconTexture(db, role)
     local style = db.roleIconStyle or "BLIZZARD"
 
@@ -676,8 +685,79 @@ function DF:GetRoleIconTexture(db, role)
     if style == "CUSTOM" then
         return ROLE_ICON_TEXTURES[role], 0, 1, 0, 1
     else
-        -- BLIZZARD
+        -- BLIZZARD — prefer the modern micro role atlas, fall back to the legacy
+        -- portrait-roles texture + texcoords when the atlas isn't available.
+        local atlas = BLIZZARD_ROLE_ATLAS[role]
+        if atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+            return atlas  -- atlas name, no texcoords
+        end
         local c = BLIZZARD_ROLE_COORDS[role]
         return "Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES", c[1], c[2], c[3], c[4]
     end
+end
+
+-- Sets a texture region from EITHER a Blizzard atlas name or a texture file
+-- path, preferring the atlas (sharper, modern) when the name resolves and
+-- falling back to the file path otherwise. Mirrors oUF's approach so status
+-- icons render crisply on current clients but never break on older ones.
+--   value   : atlas name OR texture path
+--   l,r,t,b : optional tex coords, applied only on the texture-file path
+function DF:SetIconTextureOrAtlas(region, value, l, r, t, b)
+    if not region or not value then return end
+    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(value) then
+        region:SetAtlas(value)
+    else
+        region:SetTexture(value)
+        if l then
+            region:SetTexCoord(l, r, t, b)
+        else
+            region:SetTexCoord(0, 1, 0, 1)
+        end
+    end
+end
+
+-- Legacy raid-frame status icon textures → their modern atlas equivalents.
+-- The atlas versions (used by Blizzard's own raid frames) are sharper; we keep
+-- the legacy path as the lookup key AND the fallback so nothing breaks if an
+-- atlas is ever absent.
+local LEGACY_STATUS_ICON_ATLAS = {
+    ["Interface\\RaidFrame\\ReadyCheck-Ready"]         = "UI-LFG-ReadyMark-Raid",
+    ["Interface\\RaidFrame\\ReadyCheck-NotReady"]      = "UI-LFG-DeclineMark-Raid",
+    ["Interface\\RaidFrame\\ReadyCheck-Waiting"]       = "UI-LFG-PendingMark-Raid",
+    ["Interface\\RaidFrame\\Raid-Icon-SummonPending"]  = "RaidFrame-Icon-SummonPending",
+    ["Interface\\RaidFrame\\Raid-Icon-SummonAccepted"] = "RaidFrame-Icon-SummonAccepted",
+    ["Interface\\RaidFrame\\Raid-Icon-SummonDeclined"] = "RaidFrame-Icon-SummonDeclined",
+    ["Interface\\RaidFrame\\Raid-Icon-Rez"]            = "RaidFrame-Icon-Rez",
+    ["Interface\\TargetingFrame\\UI-PhasingIcon"]      = "RaidFrame-Icon-Phasing",
+    ["Interface\\LFGFrame\\LFG-Eye"]                   = "RaidFrame-Icon-LFR",
+    ["Interface\\FriendsFrame\\StatusIcon-Away"]       = "characterupdate_clock-icon",
+    ["Interface\\Vehicles\\UI-Vehicles-Raid-Icon"]     = "RaidFrame-Icon-Vehicle",
+    ["Interface\\GroupFrame\\UI-Group-MainTankIcon"]   = "RaidFrame-Icon-MainTank",
+    ["Interface\\GroupFrame\\UI-Group-MainAssistIcon"] = "RaidFrame-Icon-MainAssist",
+}
+
+-- Render a known legacy status-icon texture as its modern atlas (sharper),
+-- falling back to the legacy file when the atlas isn't available. Owns the
+-- texcoord state, so call sites must NOT add a trailing SetTexCoord — passing
+-- the legacy path as the single source of truth is enough.
+function DF:SetUpgradedStatusIcon(region, legacyTexture)
+    if not region or not legacyTexture then return end
+    local atlas = LEGACY_STATUS_ICON_ATLAS[legacyTexture]
+    if atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+        region:SetAtlas(atlas)
+    else
+        region:SetTexture(legacyTexture)
+        region:SetTexCoord(0, 1, 0, 1)
+    end
+end
+
+-- Icon-section header previews (options) register a refresher here. Hooked
+-- frame-update functions call DF:RefreshIconPreviews so previews track live
+-- setting changes (enable/text toggles). Each refresher self-guards on its
+-- section being visible, so this is nearly free when options are closed.
+DF.iconPreviewRefreshers = {}
+function DF:RefreshIconPreviews()
+    local list = self.iconPreviewRefreshers
+    if not list then return end
+    for i = 1, #list do list[i]() end
 end

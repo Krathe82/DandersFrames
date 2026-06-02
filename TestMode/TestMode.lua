@@ -1210,10 +1210,8 @@ function DF:UpdateTestIcons(frame, testData)
         end
         
         if shouldShow then
-            local tex, l, r, t, b = DF:GetRoleIconTexture(db, role)
-            frame.roleIcon.texture:SetTexture(tex)
-            frame.roleIcon.texture:SetTexCoord(l, r, t, b)
-            
+            DF:SetIconTextureOrAtlas(frame.roleIcon.texture, DF:GetRoleIconTexture(db, role))
+
             frame.roleIcon:Show()
             local scale = db.roleIconScale or 1.0
             local anchor = db.roleIconAnchor or "TOPLEFT"
@@ -1310,7 +1308,7 @@ function DF:UpdateTestIcons(frame, testData)
         if not db.readyCheckIconEnabled or db.testShowStatusIcons == false then
             frame.readyCheckIcon:Hide()
         elseif testData.isLeader then
-            frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+            DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-Ready")
             
             local scale = db.readyCheckIconScale or 1.0
             local anchor = db.readyCheckIconAnchor or "CENTER"
@@ -1344,7 +1342,7 @@ function DF:UpdateTestIcons(frame, testData)
             end
             
             if texture then
-                frame.centerStatusIcon.texture:SetTexture(texture)
+                DF:SetUpgradedStatusIcon(frame.centerStatusIcon.texture, texture)
                 
                 local scale = db.centerStatusIconScale or 1.0
                 local anchor = db.centerStatusIconAnchor or "CENTER"
@@ -1412,22 +1410,21 @@ local function ShowTestIconAsText(icon, text, showText, db, prefix)
                 local fontSize = db.statusIconFontSize or 12
                 local outline = db.statusIconFontOutline or "OUTLINE"
                 
-                -- Handle SHADOW and NONE outlines (WoW SetFont rejects "NONE")
-                local actualOutline = outline
-                if outline == "SHADOW" or outline == "NONE" then
-                    actualOutline = ""
-                end
-                
+                -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips
+                -- the shadow and returns the SetFont flag ("NONE" -> "" — SetFont rejects "NONE").
+                local flag = DF:OutlineFlag(outline)
+                local actualOutline = (flag == "NONE") and "" or flag
+
                 -- Get font path from SharedMedia if available
                 local fontPath = font
                 if DF.GetFont then
                     fontPath = DF:GetFont(font) or font
                 end
-                
+
                 icon.text:SetFont(fontPath, fontSize, actualOutline)
-                
+
                 -- Apply shadow if needed
-                if outline == "SHADOW" then
+                if DF:OutlineHasShadow(outline) then
                     local shadowX = db.fontShadowOffsetX or 1
                     local shadowY = db.fontShadowOffsetY or -1
                     local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
@@ -1456,51 +1453,19 @@ end
 
 -- Also apply font/color to timer text (for AFK icon)
 local function ApplyTestIconTimerFont(icon, db, prefix)
-    if not icon or not icon.timerText or not db then return end
-    
-    local font = db.statusIconFont or "Fonts\\FRIZQT__.TTF"
-    local fontSize = (db.statusIconFontSize or 12) - 2  -- Slightly smaller for timer
-    local outline = db.statusIconFontOutline or "OUTLINE"
-    
-    local actualOutline = outline
-    if outline == "SHADOW" or outline == "NONE" then
-        actualOutline = ""
-    end
-
-    local fontPath = font
-    if DF.GetFont then
-        fontPath = DF:GetFont(font) or font
-    end
-
-    icon.timerText:SetFont(fontPath, fontSize, actualOutline)
-
-    if outline == "SHADOW" then
-        local shadowX = db.fontShadowOffsetX or 1
-        local shadowY = db.fontShadowOffsetY or -1
-        local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-        icon.timerText:SetShadowOffset(shadowX, shadowY)
-        icon.timerText:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-    else
-        icon.timerText:SetShadowOffset(0, 0)
-    end
-    
-    -- Timer text uses same color as main text
-    if prefix then
-        local textColor = db[prefix .. "TextColor"]
-        if textColor then
-            icon.timerText:SetTextColor(textColor.r or 1, textColor.g or 1, textColor.b or 1, 1)
-        end
-    end
+    -- Shared with the live render so Test Mode previews the dedicated timer
+    -- text controls (font / size / outline / colour / position) exactly.
+    if DF.ApplyTimerTextSettings then DF:ApplyTimerTextSettings(icon, db, prefix) end
 end
 
 -- Format seconds as M:SS for AFK timer
 local function FormatTestAFKTime(seconds)
     if seconds < 3600 then
-        return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+        return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
     else
         local hours = math.floor(seconds / 3600)
         local mins = math.floor((seconds % 3600) / 60)
-        return string.format("%d:%02d:%02d", hours, mins, seconds % 60)
+        return string.format("%02d:%02d:%02d", hours, mins, seconds % 60)
     end
 end
 
@@ -1519,7 +1484,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.readyCheckIconEnabled or db.testShowStatusIcons == false then
             frame.readyCheckIcon:Hide()
         elseif testData.isLeader then
-            frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+            DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-Ready")
             
             local scale = db.readyCheckIconScale or 1.0
             local anchor = db.readyCheckIconAnchor or "CENTER"
@@ -1546,7 +1511,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.summonIconEnabled or db.testShowStatusIcons == false then
             frame.summonIcon:Hide()
         elseif testData.centerStatus == "summon" then
-            frame.summonIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-SummonPending")
+            DF:SetUpgradedStatusIcon(frame.summonIcon.texture, "Interface\\RaidFrame\\Raid-Icon-SummonPending")
             
             local scale = db.summonIconScale or 1.0
             local anchor = db.summonIconAnchor or "CENTER"
@@ -1575,7 +1540,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.resurrectionIconEnabled or db.testShowStatusIcons == false then
             frame.resurrectionIcon:Hide()
         elseif testData.centerStatus == "resurrect" then
-            frame.resurrectionIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+            DF:SetUpgradedStatusIcon(frame.resurrectionIcon.texture, "Interface\\RaidFrame\\Raid-Icon-Rez")
             frame.resurrectionIcon.texture:SetVertexColor(0, 1, 0)  -- Green = being cast
             
             local scale = db.resurrectionIconScale or 1.0
@@ -1605,7 +1570,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.phasedIconEnabled or db.testShowStatusIcons == false then
             frame.phasedIcon:Hide()
         elseif testData.isPhased then
-            frame.phasedIcon.texture:SetTexture("Interface\\TargetingFrame\\UI-PhasingIcon")
+            DF:SetUpgradedStatusIcon(frame.phasedIcon.texture, "Interface\\TargetingFrame\\UI-PhasingIcon")
             
             local scale = db.phasedIconScale or 1.0
             local anchor = db.phasedIconAnchor or "TOPRIGHT"
@@ -1635,7 +1600,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
             frame.afkIcon:Hide()
             if frame.afkIcon.timerText then frame.afkIcon.timerText:Hide() end
         elseif testData.isAFK then
-            frame.afkIcon.texture:SetTexture("Interface\\FriendsFrame\\StatusIcon-Away")
+            DF:SetUpgradedStatusIcon(frame.afkIcon.texture, "Interface\\FriendsFrame\\StatusIcon-Away")
             
             local scale = db.afkIconScale or 1.0
             local anchor = db.afkIconAnchor or "CENTER"
@@ -1679,6 +1644,9 @@ function DF:UpdateTestStatusIcons(frame, testData)
             
             -- Show as text or icon (with font and color settings)
             ShowTestIconAsText(frame.afkIcon, statusText, db.afkIconShowText, db, "afkIcon")
+            if db.afkIconShowText and frame.afkIcon.text and DF.ApplyStableTextAnchor then
+                DF:ApplyStableTextAnchor(frame.afkIcon.text, frame.afkIcon)
+            end
             frame.afkIcon:Show()
             
             local frameLevel = db.afkIconFrameLevel or 0
@@ -1698,7 +1666,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.vehicleIconEnabled or db.testShowStatusIcons == false then
             frame.vehicleIcon:Hide()
         elseif testData.inVehicle then
-            frame.vehicleIcon.texture:SetTexture("Interface\\Vehicles\\UI-Vehicles-Raid-Icon")
+            DF:SetUpgradedStatusIcon(frame.vehicleIcon.texture, "Interface\\Vehicles\\UI-Vehicles-Raid-Icon")
             
             local scale = db.vehicleIconScale or 1.0
             local anchor = db.vehicleIconAnchor or "BOTTOMRIGHT"
@@ -1727,7 +1695,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
         if not db.raidRoleIconEnabled or db.testShowStatusIcons == false then
             frame.raidRoleIcon:Hide()
         elseif testData.isMainTank and db.raidRoleIconShowTank ~= false then
-            frame.raidRoleIcon.texture:SetTexture("Interface\\GroupFrame\\UI-Group-MainTankIcon")
+            DF:SetUpgradedStatusIcon(frame.raidRoleIcon.texture, "Interface\\GroupFrame\\UI-Group-MainTankIcon")
             
             local scale = db.raidRoleIconScale or 1.0
             local anchor = db.raidRoleIconAnchor or "BOTTOMLEFT"
@@ -1747,7 +1715,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
                 frame.raidRoleIcon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
             end
         elseif testData.isMainAssist and db.raidRoleIconShowAssist ~= false then
-            frame.raidRoleIcon.texture:SetTexture("Interface\\GroupFrame\\UI-Group-MainAssistIcon")
+            DF:SetUpgradedStatusIcon(frame.raidRoleIcon.texture, "Interface\\GroupFrame\\UI-Group-MainAssistIcon")
             
             local scale = db.raidRoleIconScale or 1.0
             local anchor = db.raidRoleIconAnchor or "BOTTOMLEFT"
@@ -1795,7 +1763,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
             end
             
             if texture then
-                frame.centerStatusIcon.texture:SetTexture(texture)
+                DF:SetUpgradedStatusIcon(frame.centerStatusIcon.texture, texture)
                 
                 local scale = db.centerStatusIconScale or 1.0
                 local anchor = db.centerStatusIconAnchor or "CENTER"

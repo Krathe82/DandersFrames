@@ -83,7 +83,7 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.summonIcon = CreateStatusIcon(overlay, 16)
     frame.summonIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    frame.summonIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-SummonPending")
+    DF:SetUpgradedStatusIcon(frame.summonIcon.texture, "Interface\\RaidFrame\\Raid-Icon-SummonPending")
     frame.summonIcon.text:SetTextColor(0.6, 0.2, 1, 1)  -- Purple for summon
     
     -- ========================================
@@ -91,7 +91,7 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.resurrectionIcon = CreateStatusIcon(overlay, 16)
     frame.resurrectionIcon:SetPoint("CENTER", frame, "CENTER", 0, 10)
-    frame.resurrectionIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+    DF:SetUpgradedStatusIcon(frame.resurrectionIcon.texture, "Interface\\RaidFrame\\Raid-Icon-Rez")
     frame.resurrectionIcon.text:SetTextColor(0.2, 1, 0.2, 1)  -- Green for res
     frame.resurrectionIcon.unitFrame = frame
     frame.resurrectionIcon:EnableMouse(true)
@@ -131,8 +131,7 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.phasedIcon = CreateStatusIcon(overlay, 16)
     frame.phasedIcon:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
-    frame.phasedIcon.texture:SetTexture("Interface\\TargetingFrame\\UI-PhasingIcon")
-    frame.phasedIcon.texture:SetTexCoord(0.15625, 0.84375, 0.15625, 0.84375)
+    DF:SetUpgradedStatusIcon(frame.phasedIcon.texture, "Interface\\TargetingFrame\\UI-PhasingIcon")
     frame.phasedIcon.text:SetTextColor(0.5, 0.5, 1, 1)  -- Blue-ish for phased
     
     -- ========================================
@@ -140,7 +139,7 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.afkIcon = CreateStatusIcon(overlay, 32)
     frame.afkIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    frame.afkIcon.texture:SetTexture("Interface\\FriendsFrame\\StatusIcon-Away")
+    DF:SetUpgradedStatusIcon(frame.afkIcon.texture, "Interface\\FriendsFrame\\StatusIcon-Away")
     DF:SafeSetFont(frame.afkIcon.text, nil, 12, "OUTLINE")
     frame.afkIcon.text:SetTextColor(1, 0.5, 0, 1)  -- Orange for AFK
     -- Timer text (separate from main text, shown below/after)
@@ -155,7 +154,7 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.vehicleIcon = CreateStatusIcon(overlay, 16)
     frame.vehicleIcon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
-    frame.vehicleIcon.texture:SetTexture("Interface\\Vehicles\\UI-Vehicles-Raid-Icon")
+    DF:SetUpgradedStatusIcon(frame.vehicleIcon.texture, "Interface\\Vehicles\\UI-Vehicles-Raid-Icon")
     frame.vehicleIcon.text:SetTextColor(0.4, 0.8, 1, 1)  -- Light blue for vehicle
     
     -- ========================================
@@ -171,6 +170,77 @@ function DF:CreateStatusIcons(frame)
     -- ========================================
     frame.centerStatusIcon = CreateStatusIcon(overlay, 16)
     frame.centerStatusIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
+end
+
+-- ============================================================
+-- HELPER: Apply the AFK-style timer text settings (font, size, outline,
+-- colour, position). Dedicated <prefix>Timer* keys take precedence, falling
+-- back to the global status-icon font so existing profiles keep their look.
+-- Shared by the live render (ApplyIconSettings) and Test Mode.
+-- ============================================================
+function DF:ApplyTimerTextSettings(icon, db, prefix)
+    local t = icon and icon.timerText
+    if not t or not db or not prefix then return end
+
+    local font    = db[prefix .. "TimerFont"]     or db.statusIconFont or "Fonts\\FRIZQT__.TTF"
+    local size    = db[prefix .. "TimerFontSize"] or ((db.statusIconFontSize or 12) - 2)
+    local outline = db[prefix .. "TimerOutline"]  or db.statusIconFontOutline or "OUTLINE"
+    -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips the
+    -- shadow and returns the SetFont flag ("NONE" -> "" since SetFont rejects it).
+    local flag = DF:OutlineFlag(outline)
+    local actualOutline = (flag == "NONE") and "" or flag
+    local fontPath = (DF.GetFont and (DF:GetFont(font) or font)) or font
+    t:SetFont(fontPath, size, actualOutline)
+
+    if DF:OutlineHasShadow(outline) then
+        local sc = db.fontShadowColor or { r = 0, g = 0, b = 0, a = 1 }
+        t:SetShadowOffset(db.fontShadowOffsetX or 1, db.fontShadowOffsetY or -1)
+        t:SetShadowColor(sc.r or 0, sc.g or 0, sc.b or 0, sc.a or 1)
+    else
+        t:SetShadowOffset(0, 0)
+    end
+
+    local c = db[prefix .. "TimerColor"] or db[prefix .. "TextColor"]
+    if c then t:SetTextColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1) end
+
+    -- LEFT-justify the timer instead of centring it. CENTRE justify — even inside
+    -- a fixed-width box — re-measures the text's INK box each tick, and a narrow
+    -- "1" shrinks that ink box, so a centred string nudges left/right every second.
+    -- The seconds change each tick, so pin the LEFT edge and let the digits sit at
+    -- fixed offsets to the right. The time is also zero-padded to MM:SS (constant
+    -- char count, see FormatAFKTime), so the string width never changes either —
+    -- it stays put across the 9:59 -> 10:00 boundary too. Anchor the left edge
+    -- ~half a typical MM:SS left of centre so it reads centred under the icon.
+    local nudge = size * 1.2  -- ~half the width of a 5-char MM:SS timer
+    t:SetWidth(size * 6)
+    t:SetJustifyH("LEFT")
+    t:ClearAllPoints()
+    t:SetPoint("TOPLEFT", icon, "BOTTOM", (db[prefix .. "TimerX"] or 0) - nudge, db[prefix .. "TimerY"] or -1)
+end
+
+-- ============================================================
+-- HELPER: Stable anchor for status text that updates rapidly (the AFK
+-- "show as text" line, which bakes the ticking timer into the string).
+-- CENTRE auto-measures the ink box every tick, so the changing timer nudges the
+-- whole string left/right. LEFT-justify instead: pin the left edge (the constant
+-- label) and let the changing timer dangle off the right. Cache the centring
+-- nudge keyed by string LENGTH, so a constant-length string (the time is
+-- zero-padded to MM:SS) only re-measures when the structure actually changes,
+-- never per tick — which is what keeps it from wobbling.
+-- ============================================================
+function DF:ApplyStableTextAnchor(fs, icon)
+    if not fs or not icon then return end
+    fs:SetJustifyH("LEFT")
+    local text = fs:GetText() or ""
+    if fs._dfStableLen ~= #text then
+        local w = fs:GetStringWidth()
+        if w and w > 0 then
+            fs._dfStableLen = #text
+            fs._dfStableNudge = w / 2
+        end
+    end
+    fs:ClearAllPoints()
+    fs:SetPoint("LEFT", icon, "CENTER", -(fs._dfStableNudge or 0), 0)
 end
 
 -- ============================================================
@@ -201,22 +271,21 @@ local function ApplyIconSettings(icon, db, prefix)
         local fontSize = db.statusIconFontSize or 12
         local outline = db.statusIconFontOutline or "OUTLINE"
         
-        -- Handle SHADOW and NONE outlines (WoW SetFont rejects "NONE")
-        local actualOutline = outline
-        if outline == "SHADOW" or outline == "NONE" then
-            actualOutline = ""
-        end
-        
+        -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips
+        -- the shadow and returns the SetFont flag ("NONE" -> "" — SetFont rejects "NONE").
+        local flag = DF:OutlineFlag(outline)
+        local actualOutline = (flag == "NONE") and "" or flag
+
         -- Get font path from SharedMedia if available
         local fontPath = font
         if DF.GetFont then
             fontPath = DF:GetFont(font) or font
         end
-        
+
         icon.text:SetFont(fontPath, fontSize, actualOutline)
-        
+
         -- Apply shadow if needed
-        if outline == "SHADOW" then
+        if DF:OutlineHasShadow(outline) then
             local shadowX = db.fontShadowOffsetX or 1
             local shadowY = db.fontShadowOffsetY or -1
             local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
@@ -233,39 +302,9 @@ local function ApplyIconSettings(icon, db, prefix)
         end
     end
     
-    -- Also apply to timer text if it exists (AFK icon)
+    -- Also apply to timer text if it exists (AFK icon) — dedicated controls.
     if icon.timerText then
-        local font = db.statusIconFont or "Fonts\\FRIZQT__.TTF"
-        local fontSize = (db.statusIconFontSize or 12) - 2  -- Slightly smaller for timer
-        local outline = db.statusIconFontOutline or "OUTLINE"
-        
-        local actualOutline = outline
-        if outline == "SHADOW" or outline == "NONE" then
-            actualOutline = ""
-        end
-
-        local fontPath = font
-        if DF.GetFont then
-            fontPath = DF:GetFont(font) or font
-        end
-
-        icon.timerText:SetFont(fontPath, fontSize, actualOutline)
-        
-        if outline == "SHADOW" then
-            local shadowX = db.fontShadowOffsetX or 1
-            local shadowY = db.fontShadowOffsetY or -1
-            local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-            icon.timerText:SetShadowOffset(shadowX, shadowY)
-            icon.timerText:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-        else
-            icon.timerText:SetShadowOffset(0, 0)
-        end
-        
-        -- Timer text uses same color as main text
-        local textColor = db[prefix .. "TextColor"]
-        if textColor then
-            icon.timerText:SetTextColor(textColor.r or 1, textColor.g or 1, textColor.b or 1, 1)
-        end
+        DF:ApplyTimerTextSettings(icon, db, prefix)
     end
 end
 
@@ -339,8 +378,7 @@ function DF:UpdateSummonIcon(frame)
     end
     
     if showIcon then
-        frame.summonIcon.texture:SetTexture(texture)
-        frame.summonIcon.texture:SetTexCoord(0, 1, 0, 1)
+        DF:SetUpgradedStatusIcon(frame.summonIcon.texture, texture)
         ApplyIconSettings(frame.summonIcon, db, "summonIcon")
         
         -- Show as text or icon based on setting
@@ -411,7 +449,7 @@ function DF:UpdateResurrectionIcon(frame)
                 resCache[unit] = 1
                 resTimer = resTimer or C_Timer.NewTicker(0.25, ResTimerCleanup)
             end
-            frame.resurrectionIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+            DF:SetUpgradedStatusIcon(frame.resurrectionIcon.texture, "Interface\\RaidFrame\\Raid-Icon-Rez")
             frame.resurrectionIcon.texture:SetVertexColor(0, 1, 0, 1)
             ApplyIconSettings(frame.resurrectionIcon, db, "resurrectionIcon")
             frame.resurrectionIcon:Show()
@@ -420,7 +458,7 @@ function DF:UpdateResurrectionIcon(frame)
             -- Was casting, now stopped → pending accept (yellow)
             -- Store timestamp so we can expire after 60s
             resCache[unit] = GetTime()
-            frame.resurrectionIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+            DF:SetUpgradedStatusIcon(frame.resurrectionIcon.texture, "Interface\\RaidFrame\\Raid-Icon-Rez")
             frame.resurrectionIcon.texture:SetVertexColor(1, 1, 0, 0.75)
             ApplyIconSettings(frame.resurrectionIcon, db, "resurrectionIcon")
             frame.resurrectionIcon:Show()
@@ -428,7 +466,7 @@ function DF:UpdateResurrectionIcon(frame)
         elseif resCache[unit] and resCache[unit] ~= 1 then
             -- Still showing pending accept (check not expired)
             if (GetTime() - resCache[unit]) <= RES_ACCEPT_TIMEOUT then
-                frame.resurrectionIcon.texture:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+                DF:SetUpgradedStatusIcon(frame.resurrectionIcon.texture, "Interface\\RaidFrame\\Raid-Icon-Rez")
                 frame.resurrectionIcon.texture:SetVertexColor(1, 1, 0, 0.75)
                 ApplyIconSettings(frame.resurrectionIcon, db, "resurrectionIcon")
                 frame.resurrectionIcon:Show()
@@ -661,11 +699,9 @@ function DF:UpdatePhasedIcon(frame)
         -- cached == -1 means LFG (other party), anything else means phased
         local isLFG = (cached == -1)
         if isLFG and db.phasedIconShowLFGEye then
-            frame.phasedIcon.texture:SetTexture("Interface\\LFGFrame\\LFG-Eye")
-            frame.phasedIcon.texture:SetTexCoord(0.14, 0.235, 0.28, 0.47)
+            DF:SetUpgradedStatusIcon(frame.phasedIcon.texture, "Interface\\LFGFrame\\LFG-Eye")
         else
-            frame.phasedIcon.texture:SetTexture("Interface\\TargetingFrame\\UI-PhasingIcon")
-            frame.phasedIcon.texture:SetTexCoord(0.15625, 0.84375, 0.15625, 0.84375)
+            DF:SetUpgradedStatusIcon(frame.phasedIcon.texture, "Interface\\TargetingFrame\\UI-PhasingIcon")
         end
         ApplyIconSettings(frame.phasedIcon, db, "phasedIcon")
         ShowIconAsText(frame.phasedIcon, db.phasedIconText or "Phased", db.phasedIconShowText)
@@ -693,12 +729,12 @@ end
 -- Format seconds as M:SS or H:MM:SS
 local function FormatAFKTime(seconds)
     if seconds < 3600 then
-        return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+        return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
     else
         local hours = math.floor(seconds / 3600)
         local mins = math.floor((seconds % 3600) / 60)
         local secs = seconds % 60
-        return string.format("%d:%02d:%02d", hours, mins, secs)
+        return string.format("%02d:%02d:%02d", hours, mins, secs)
     end
 end
 
@@ -770,8 +806,8 @@ function DF:UpdateAFKIcon(frame)
             if frame.afkIcon.timerText then frame.afkIcon.timerText:Hide() end
         else
             statusText = db.afkIconText or "AFK"
-            -- Restore AFK's orange color (may have been overridden by DND branch)
-            frame.afkIcon.text:SetTextColor(1, 0.5, 0, 1)
+            -- AFK text colour comes from afkIconTextColor (applied by
+            -- ApplyIconSettings above); the DND branch overrides to red when DND.
             local showTimer = db.afkIconShowTimer ~= false
 
             -- Calculate timer if enabled
@@ -796,6 +832,9 @@ function DF:UpdateAFKIcon(frame)
         end
 
         ShowIconAsText(frame.afkIcon, statusText, db.afkIconShowText)
+        if db.afkIconShowText and frame.afkIcon.text then
+            DF:ApplyStableTextAnchor(frame.afkIcon.text, frame.afkIcon)
+        end
         frame.afkIcon:Show()
     else
         frame.afkIcon:Hide()
@@ -932,13 +971,12 @@ function DF:UpdateRaidRoleIcon(frame)
     if showIcon and role then
         local statusText = nil
         if role == "MAINTANK" then
-            frame.raidRoleIcon.texture:SetTexture("Interface\\GroupFrame\\UI-Group-MainTankIcon")
+            DF:SetUpgradedStatusIcon(frame.raidRoleIcon.texture, "Interface\\GroupFrame\\UI-Group-MainTankIcon")
             statusText = db.raidRoleIconTextTank or "MT"
         else
-            frame.raidRoleIcon.texture:SetTexture("Interface\\GroupFrame\\UI-Group-MainAssistIcon")
+            DF:SetUpgradedStatusIcon(frame.raidRoleIcon.texture, "Interface\\GroupFrame\\UI-Group-MainAssistIcon")
             statusText = db.raidRoleIconTextAssist or "MA"
         end
-        frame.raidRoleIcon.texture:SetTexCoord(0, 1, 0, 1)
         ApplyIconSettings(frame.raidRoleIcon, db, "raidRoleIcon")
         ShowIconAsText(frame.raidRoleIcon, statusText, db.raidRoleIconShowText)
         frame.raidRoleIcon:Show()
@@ -967,29 +1005,19 @@ end
 -- Called when text mode settings change
 -- ============================================================
 function DF:UpdateAllFramesStatusIcons()
-    -- Update party frames
-    if DF.partyHeader then
-        local children = {DF.partyHeader:GetChildren()}
-        for _, frame in pairs(children) do
+    -- Update all live frames via the proper iterator. GetChildren() on the secure
+    -- group headers returns template internals, NOT the unit buttons, so the old
+    -- GetChildren() loops here never reached live frames — status-icon font / size /
+    -- colour changes only applied after a /reload. IterateAllFrames uses
+    -- GetAttribute("child"..i), the same path the AFK ticker uses.
+    if DF.IterateAllFrames then
+        DF:IterateAllFrames(function(frame)
             if frame.unit then
                 DF:UpdateAllStatusIcons(frame)
             end
-        end
+        end)
     end
-    
-    -- Update raid frames
-    for i = 1, 8 do
-        local header = DF["raidGroup" .. i]
-        if header then
-            local children = {header:GetChildren()}
-            for _, frame in pairs(children) do
-                if frame.unit then
-                    DF:UpdateAllStatusIcons(frame)
-                end
-            end
-        end
-    end
-    
+
     -- Also refresh test frames if in test mode
     if DF.testMode or DF.raidTestMode then
         DF:RefreshTestFrames()
@@ -1051,7 +1079,7 @@ afkTickerFrame:SetScript("OnUpdate", function(self, elapsed)
         for i = 1, 40 do
             local frame = DF.testRaidFrames and DF.testRaidFrames[i]
             if frame and frame.afkIcon and frame.afkIcon:IsShown() then
-                local testData = DF:GetTestUnitData(i)
+                local testData = DF:GetTestUnitData(i, true)  -- true = raid; without it this pulled PARTY data so raid AFK frames (3 & 15) read isAFK=false and never ticked
                 if testData and testData.isAFK then
                     DF:UpdateTestStatusIcons(frame, testData)
                 end
@@ -1115,7 +1143,7 @@ function DF:UpdateReadyCheckIconEnhanced(frame)
         return
     end
     
-    frame.readyCheckIcon.texture:SetTexture(texture)
+    DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, texture)
     
     -- Apply positioning
     local scale = db.readyCheckIconScale or 1.0
@@ -1183,9 +1211,7 @@ function DF:UpdateRoleIconEnhanced(frame)
     end
     
     -- Set texture based on style
-    local tex, l, r, t, b = DF:GetRoleIconTexture(db, role)
-    frame.roleIcon.texture:SetTexture(tex)
-    frame.roleIcon.texture:SetTexCoord(l, r, t, b)
+    DF:SetIconTextureOrAtlas(frame.roleIcon.texture, DF:GetRoleIconTexture(db, role))
     
     frame.roleIcon:Show()
     

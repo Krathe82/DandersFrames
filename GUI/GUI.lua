@@ -299,8 +299,18 @@ function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
     local c = GetThemeColor()
     section.title:SetTextColor(c.r, c.g, c.b)
     section.title.UpdateTheme = function()
-        local nc = GetThemeColor()
-        section.title:SetTextColor(nc.r, nc.g, nc.b)
+        if section.previewDimmed then
+            section.title:SetTextColor(0.5, 0.5, 0.5)
+        else
+            local nc = GetThemeColor()
+            section.title:SetTextColor(nc.r, nc.g, nc.b)
+        end
+    end
+    -- Grey the header title when the section's feature is disabled (driven by
+    -- the preview wiring). Routes through UpdateTheme so theme changes respect it.
+    section.SetPreviewDimmed = function(self, dimmed)
+        self.previewDimmed = dimmed and true or false
+        self.title.UpdateTheme()
     end
     if not parent.ThemeListeners then parent.ThemeListeners = {} end
     table.insert(parent.ThemeListeners, section.title)
@@ -356,6 +366,69 @@ function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
         widget.collapsibleSection = self
     end
     
+    -- Optional header preview thumbnails — a right-aligned row of small icon
+    -- swatches on the header bar, used to show the actual icon(s) a section
+    -- controls (e.g. the Role Icon section previews the Tank/Healer/DPS icons in
+    -- the currently selected style). Always visible on the header, so the page
+    -- reads as a gallery whether sections are expanded or collapsed.
+    --
+    -- icons: array of entries, each EITHER an icon or a text label:
+    --   { texture = "atlas-or-path", coords = {l,r,t,b}?, desaturate = bool? }
+    --   { text = "MT", desaturate = bool? }
+    -- Icon entries are fixed-width swatches; text entries are sized to the
+    -- string. Entries flow right-to-left from the header's right edge so the
+    -- first entry sits leftmost. nil/empty clears the preview.
+    section.previewIcons = {}
+    section.SetPreviewIcons = function(self, icons)
+        local pool = self.previewIcons
+        local n = icons and #icons or 0
+        local SIZE, GAP, RIGHT_INSET = 18, 4, -10
+        local x = RIGHT_INSET
+        for i = n, 1, -1 do  -- right-to-left so entry 1 ends up leftmost
+            local data = icons[i]
+            local slot = pool[i]
+            if not slot then
+                slot = CreateFrame("Frame", nil, self)
+                slot:SetHeight(SIZE)
+                slot.tex = slot:CreateTexture(nil, "OVERLAY")
+                slot.tex:SetAllPoints()
+                slot.fs = slot:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+                slot.fs:SetAllPoints()
+                slot.fs:SetJustifyH("CENTER")
+                pool[i] = slot
+            end
+            local dim = data.desaturate and true or false
+            local w = SIZE
+            if data.text and data.text ~= "" then
+                slot.tex:Hide()
+                slot.fs:SetText(data.text)
+                if dim then
+                    slot.fs:SetTextColor(0.5, 0.5, 0.5, 1)
+                elseif data.color then
+                    slot.fs:SetTextColor(data.color.r or 1, data.color.g or 1, data.color.b or 1, data.color.a or 1)
+                else
+                    slot.fs:SetTextColor(1, 0.82, 0, 1)
+                end
+                slot.fs:Show()
+                w = math.max(SIZE, (slot.fs:GetStringWidth() or 0) + 4)
+            else
+                slot.fs:Hide()
+                -- data.texture may be an atlas name or a texture path; the helper
+                -- prefers the atlas and falls back to the path (+ optional coords).
+                local co = data.coords
+                DF:SetIconTextureOrAtlas(slot.tex, data.texture, co and co[1], co and co[2], co and co[3], co and co[4])
+                slot.tex:SetDesaturated(dim)
+                slot.tex:Show()
+            end
+            slot:SetWidth(w)
+            slot:ClearAllPoints()
+            slot:SetPoint("RIGHT", self, "RIGHT", x, 0)
+            slot:Show()
+            x = x - w - GAP
+        end
+        for i = n + 1, #pool do pool[i]:Hide() end
+    end
+
     -- Hover effects
     clickArea:SetScript("OnEnter", function()
         section:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 0.8)
@@ -397,6 +470,10 @@ function GUI:CreateSettingsGroup(parent, width, opts)
     group.isSettingsGroup = true
     group.collapsible = opts.collapsible or false
     group.showSummary = opts.showSummary or false
+    -- Optional saved-state key override: lets several boxes share a standard
+    -- display header (e.g. "Appearance") while persisting collapse state under a
+    -- unique key (e.g. "afkIcon:Appearance"), so they don't toggle together.
+    group.collapseKey = opts.collapseKey
     group.collapsed = false
 
     -- Visual styling - subtle background and border
@@ -426,26 +503,30 @@ function GUI:CreateSettingsGroup(parent, width, opts)
         barBg:SetColorTexture(1, 1, 1, 0.03)
 
         local barIcon = collapseBar:CreateTexture(nil, "OVERLAY")
-        barIcon:SetSize(8, 8)
+        barIcon:SetSize(12, 12)
         barIcon:SetPoint("CENTER", 0, 0)
         local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
-        barIcon:SetTexture(mediaPath .. "chevron_right")
-        barIcon:SetVertexColor(1, 1, 1, 0.3)
+        -- "expand_more" is a down chevron; rotate 180° so it points UP — this bar
+        -- collapses the (expanded) section, so an up arrow reads correctly.
+        barIcon:SetTexture(mediaPath .. "expand_more")
+        barIcon:SetRotation(math.pi)
+        barIcon:SetVertexColor(1, 1, 1, 0.5)
 
         collapseBar:SetScript("OnEnter", function()
             barBg:SetColorTexture(1, 1, 1, 0.06)
-            barIcon:SetVertexColor(1, 1, 1, 0.6)
+            barIcon:SetVertexColor(1, 1, 1, 0.85)
         end)
         collapseBar:SetScript("OnLeave", function()
             barBg:SetColorTexture(1, 1, 1, 0.03)
-            barIcon:SetVertexColor(1, 1, 1, 0.3)
+            barIcon:SetVertexColor(1, 1, 1, 0.5)
         end)
         collapseBar:SetScript("OnClick", function()
             group.collapsed = true
             local headerText = group.headerWidget and group.headerWidget.text and group.headerWidget.text:GetText()
-            if headerText then
+            local stateKey = group.collapseKey or headerText
+            if stateKey then
                 local saved = GUI:GetCollapsedGroups()
-                saved[headerText] = true
+                saved[stateKey] = true
             end
             if group.collapseArrow then
                 group.collapseArrow:SetTexture(mediaPath .. "chevron_right")
@@ -453,6 +534,8 @@ function GUI:CreateSettingsGroup(parent, width, opts)
             if DF.AuraDesigner_RefreshPage then
                 DF:AuraDesigner_RefreshPage()
             end
+            local pageChild = group:GetParent()
+            if pageChild and pageChild.RefreshStates then pageChild.RefreshStates() end
             if group.onCollapseChanged then group.onCollapseChanged(group) end
         end)
 
@@ -476,8 +559,9 @@ function GUI:CreateSettingsGroup(parent, width, opts)
 
             -- Resolve collapsed state: default to expanded unless saved state says collapsed
             local headerText = widget.text:GetText()
+            local stateKey = self.collapseKey or headerText
             local savedStates = GUI:GetCollapsedGroups()
-            if headerText and savedStates[headerText] then
+            if stateKey and savedStates[stateKey] then
                 self.collapsed = true
             else
                 self.collapsed = false
@@ -510,15 +594,19 @@ function GUI:CreateSettingsGroup(parent, width, opts)
             widget:SetScript("OnMouseDown", function()
                 self.collapsed = not self.collapsed
                 -- Persist collapsed state to SavedVariables
-                if headerText then
+                if stateKey then
                     local saved = GUI:GetCollapsedGroups()
-                    saved[headerText] = self.collapsed or nil  -- only store true, remove when expanded
+                    saved[stateKey] = self.collapsed or nil  -- only store true, remove when expanded
                 end
                 arrow:SetTexture(self.collapsed and (mediaPath .. "chevron_right") or (mediaPath .. "expand_more"))
-                -- Refresh the page to recalculate layout
+                -- Refresh the page to recalculate layout. The Aura Designer page
+                -- has its own refresh; BuildPage pages (icons, frame settings…)
+                -- expose RefreshStates on the group's parent (self.child).
                 if DF.AuraDesigner_RefreshPage then
                     DF:AuraDesigner_RefreshPage()
                 end
+                local pageChild = self:GetParent()
+                if pageChild and pageChild.RefreshStates then pageChild.RefreshStates() end
                 if self.onCollapseChanged then self.onCollapseChanged(self) end
             end)
 
@@ -2461,7 +2549,7 @@ function GUI:CreateInput(parent, label, width)
 end
 
 -- CreateEditBox: Text input with db binding (for settings like custom text)
-function GUI:CreateEditBox(parent, label, dbTable, dbKey, callback, width)
+function GUI:CreateEditBox(parent, label, dbTable, dbKey, callback, width, placeholder)
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetSize(width or 180, 44)
     
@@ -2542,6 +2630,25 @@ function GUI:CreateEditBox(parent, label, dbTable, dbKey, callback, width)
     end)
     editbox:SetScript("OnEditFocusLost", SaveValue)
     
+    -- Optional placeholder: greyed example text shown while the box is empty
+    -- and unfocused. Purely cosmetic — never written to the db.
+    if placeholder and placeholder ~= "" then
+        local ph = editbox:CreateFontString(nil, "ARTWORK", "DFFontHighlightSmall")
+        ph:SetPoint("LEFT", 5, 0)
+        ph:SetPoint("RIGHT", -5, 0)
+        ph:SetJustifyH("LEFT")
+        ph:SetText(placeholder)
+        ph:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.55)
+        local function UpdatePlaceholder()
+            ph:SetShown(not editbox:HasFocus() and editbox:GetText() == "")
+        end
+        editbox.UpdatePlaceholder = UpdatePlaceholder
+        editbox:HookScript("OnTextChanged", UpdatePlaceholder)
+        editbox:HookScript("OnEditFocusGained", UpdatePlaceholder)
+        editbox:HookScript("OnEditFocusLost", UpdatePlaceholder)
+        UpdatePlaceholder()
+    end
+
     -- Refresh override indicators on show
     frame:SetScript("OnShow", function()
         if dbTable and dbKey then
@@ -2550,8 +2657,9 @@ function GUI:CreateEditBox(parent, label, dbTable, dbKey, callback, width)
         if frame.UpdateOverrideIndicators then
             frame:UpdateOverrideIndicators(dbTable and dbTable[dbKey])
         end
+        if editbox.UpdatePlaceholder then editbox.UpdatePlaceholder() end
     end)
-    
+
     frame.EditBox = editbox
     return frame
 end
@@ -3279,7 +3387,7 @@ end
 
 local OUTLINE_FLAG_ORDER = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROME", "MONOCHROME, OUTLINE", "MONOCHROME, THICKOUTLINE" }
 
-function GUI:CreateOutlineDropdown(parent, label, dbTable, dbKey, callback)
+function GUI:CreateOutlineDropdown(parent, label, dbTable, dbKey, callback, inheritKey)
     local options = {
         NONE = L["None"],
         OUTLINE = L["Outline"],
@@ -3289,8 +3397,8 @@ function GUI:CreateOutlineDropdown(parent, label, dbTable, dbKey, callback)
         ["MONOCHROME, THICKOUTLINE"] = L["Monochrome Thick Outline"],
         _order = OUTLINE_FLAG_ORDER,
     }
-    local get = function() return DF:OutlineFlag(dbTable[dbKey]) end
-    local set = function(flag) dbTable[dbKey] = DF:ComposeOutline(flag, DF:OutlineHasShadow(dbTable[dbKey])) end
+    local get = function() return DF:OutlineFlag(dbTable[dbKey] or (inheritKey and dbTable[inheritKey])) end
+    local set = function(flag) dbTable[dbKey] = DF:ComposeOutline(flag, DF:OutlineHasShadow(dbTable[dbKey] or (inheritKey and dbTable[inheritKey]))) end
     return GUI:CreateDropdown(parent, label or L["Outline"], options, dbTable, dbKey, callback, get, set)
 end
 
@@ -4614,7 +4722,10 @@ end
 -- FONT DROPDOWN WITH PREVIEW
 -- ============================================================
 
-function GUI:CreateFontDropdown(parent, label, dbTable, dbKey, callback)
+-- inheritKey (optional): when dbTable[dbKey] is nil (no per-element override),
+-- the dropdown DISPLAYS dbTable[inheritKey] instead so it shows the inherited
+-- (e.g. global) font. Selecting a font still writes dbKey (the override).
+function GUI:CreateFontDropdown(parent, label, dbTable, dbKey, callback, inheritKey)
     local container = CreateFrame("Frame", nil, parent)
     container:SetSize(260, 50)
 
@@ -4665,7 +4776,7 @@ function GUI:CreateFontDropdown(parent, label, dbTable, dbKey, callback)
     
     local function UpdateText()
         if dbTable and dbKey then
-            local val = dbTable[dbKey]
+            local val = dbTable[dbKey] or (inheritKey and dbTable[inheritKey])
             -- Get font display name (handles both names and legacy paths)
             local displayName = DF:GetFontNameFromPath(val)
             btn.Text:SetText(displayName or L["Select..."])

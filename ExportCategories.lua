@@ -574,7 +574,7 @@ DF.ExportCategories = {
         "roleIconHideTank",
         "roleIconHideHealer",
         "roleIconHideDPS",
-        "roleIconOnlyInCombat",
+        "roleIconHideInCombat",
         "roleIconHideOnlyInCombat",
         "roleIconExternalTank",
         "roleIconExternalHealer",
@@ -674,7 +674,13 @@ DF.ExportCategories = {
         "afkIconShowText",
         "afkIconText",
         "afkIconShowTimer",
-        
+        "afkIconTimerFont",
+        "afkIconTimerFontSize",
+        "afkIconTimerOutline",
+        "afkIconTimerColor",
+        "afkIconTimerX",
+        "afkIconTimerY",
+
         -- Vehicle Icon
         "vehicleIconEnabled",
         "vehicleIconAnchor",
