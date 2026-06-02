@@ -2099,35 +2099,9 @@ local function CreatePersonalIcon(index)
     iconFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     icon.iconFrame = iconFrame
     
-    -- Border textures - 4 edge borders (consistent with other icons)
-    local defBorderSize = 2
-    local borderLeft = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderLeft:SetPoint("TOPLEFT", 0, 0)
-    borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    borderLeft:SetWidth(defBorderSize)
-    borderLeft:SetColorTexture(1, 0.3, 0, 1)
-    icon.borderLeft = borderLeft
-    
-    local borderRight = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderRight:SetPoint("TOPRIGHT", 0, 0)
-    borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    borderRight:SetWidth(defBorderSize)
-    borderRight:SetColorTexture(1, 0.3, 0, 1)
-    icon.borderRight = borderRight
-    
-    local borderTop = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderTop:SetPoint("TOPLEFT", defBorderSize, 0)
-    borderTop:SetPoint("TOPRIGHT", -defBorderSize, 0)
-    borderTop:SetHeight(defBorderSize)
-    borderTop:SetColorTexture(1, 0.3, 0, 1)
-    icon.borderTop = borderTop
-    
-    local borderBottom = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderBottom:SetPoint("BOTTOMLEFT", defBorderSize, 0)
-    borderBottom:SetPoint("BOTTOMRIGHT", -defBorderSize, 0)
-    borderBottom:SetHeight(defBorderSize)
-    borderBottom:SetColorTexture(1, 0.3, 0, 1)
-    icon.borderBottom = borderBottom
+    -- Border via the unified DF.Border backend (Stage 4.4).
+    -- ApplyPersonalIconSettings drives BuildSpec + Apply on each update.
+    icon.border = DF.Border:New(iconFrame)
     
     -- Important spell highlight frame - set frame level ABOVE iconFrame so it renders on top
     local highlightFrame = CreateFrame("Frame", nil, iconFrame)
@@ -2139,7 +2113,12 @@ local function CreatePersonalIcon(index)
     highlightFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     icon.highlightFrame = highlightFrame
     
-    -- Icon texture - positioned with inset for border
+    -- Icon texture - positioned with default 2px inset so it lines up
+    -- with the border at creation time. ApplyPersonalIconSettings
+    -- recomputes the inset from the db's BorderSize on every render
+    -- (via the shared artInset path), so this value only matters for
+    -- the brief moment between creation and first Apply.
+    local defBorderSize = 2
     local texture = iconFrame:CreateTexture(nil, "ARTWORK")
     texture:SetPoint("TOPLEFT", defBorderSize, -defBorderSize)
     texture:SetPoint("BOTTOMRIGHT", -defBorderSize, defBorderSize)
@@ -2366,68 +2345,28 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
         end
     end
     
-    -- Border - 4 edge textures (consistent with other icons)
-    if showBorder then
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderLeft:SetWidth(borderSize)
-            icon.borderLeft:Show()
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderRight:SetWidth(borderSize)
-            icon.borderRight:Show()
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderTop:SetHeight(borderSize)
-            icon.borderTop:ClearAllPoints()
-            icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-            icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            icon.borderTop:Show()
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderBottom:SetHeight(borderSize)
-            icon.borderBottom:ClearAllPoints()
-            icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-            icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            icon.borderBottom:Show()
-        end
-        
-        -- Adjust icon texture position for border
-        if icon.icon then
-            icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-        end
-        
-        -- Adjust cooldown to match
-        if icon.cooldown then
-            icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-        end
-    else
-        -- Hide all border edges
-        if icon.borderLeft then icon.borderLeft:Hide() end
-        if icon.borderRight then icon.borderRight:Hide() end
-        if icon.borderTop then icon.borderTop:Hide() end
-        if icon.borderBottom then icon.borderBottom:Hide() end
-        
-        -- Full size icon when no border
-        if icon.icon then
-            icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-        end
-        
-        -- Adjust cooldown to match
-        if icon.cooldown then
-            icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-        end
+    -- Border via unified DF.Border backend (Stage 4.4). BuildSpec reads
+    -- canonical personalTargetedSpell* keys; we override size with the
+    -- locally pixel-perfected value. Icon + cooldown inset by visible
+    -- border thickness so artwork doesn't overlap the border edges (or
+    -- sits flush with the icon frame when the border is off).
+    if icon.border then
+        local spec = DF.Border:BuildSpec(db, "personalTargetedSpell", { iconMode = true })
+        spec.enabled = showBorder
+        spec.size    = borderSize
+        DF.Border:Apply(icon.border, spec)
+    end
+
+    local artInset = showBorder and borderSize or 0
+    if icon.icon then
+        icon.icon:ClearAllPoints()
+        icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", artInset, -artInset)
+        icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -artInset, artInset)
+    end
+    if icon.cooldown then
+        icon.cooldown:ClearAllPoints()
+        icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", artInset, -artInset)
+        icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -artInset, artInset)
     end
     
     -- Cooldown swipe
@@ -4373,16 +4312,9 @@ local function TargetedList_BuildBar(parent)
     bg:SetColorTexture(0, 0, 0, 0.6)
     bar.bg = bg
 
-    -- Border (backdrop-template frame). Visibility + color applied
-    -- by TargetedList_ApplyBarAppearance.
-    local border = CreateFrame("Frame", nil, bar, "BackdropTemplate")
-    border:SetAllPoints(bar)
-    border:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    border:SetBackdropBorderColor(0, 0, 0, 1)
-    bar.border = border
+    -- Border via the unified DF.Border backend (Stage 4.5).
+    -- TargetedList_ApplyBarAppearance drives BuildSpec + Apply per render.
+    bar.border = DF.Border:New(bar)
 
     -- Icon — anchored dynamically by ApplyBarAppearance so its
     -- position (LEFT/RIGHT) and zoom state can change at runtime.
@@ -4613,14 +4545,12 @@ local function TargetedList_ApplyBarAppearance(bar, db)
     local bgAlpha = db.targetedListBackgroundAlpha or 0.6
     bar.bg:SetColorTexture(0, 0, 0, bgAlpha)
 
-    -- ----- Border show/hide + color -----
-    local showBorder = db.targetedListShowBorder ~= false
-    if showBorder then
-        bar.border:Show()
-        local bc = db.targetedListBorderColor or {r=0, g=0, b=0, a=1}
-        bar.border:SetBackdropBorderColor(bc.r or 0, bc.g or 0, bc.b or 0, bc.a or 1)
-    else
-        bar.border:Hide()
+    -- Border via unified DF.Border backend (Stage 4.5). BuildSpec reads
+    -- canonical targetedList* keys; consumer doesn't override anything
+    -- (no pixel-perfect on Targeted List bars — bars are positioned by
+    -- screen-anchored container, not by the frame-pixel grid).
+    if bar.border then
+        DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "targetedList"))
     end
 
     -- ----- Font (all text elements share one font + outline setting) -----
@@ -5947,10 +5877,11 @@ function DF:LightweightUpdateTargetedListBorderColor()
     if not TargetedList_IsGateOpen() then return end
     local db = DF.db and DF.db.party
     if not db then return end
-    local bc = db.targetedListBorderColor or {r=0, g=0, b=0, a=1}
+    -- Route through BuildSpec + Apply (Stage 4.5) so the live drag-update
+    -- path renders identically to TargetedList_ApplyBarAppearance.
     for _, bar in pairs(casterToBar) do
-        if bar.border and bar.border:IsShown() then
-            bar.border:SetBackdropBorderColor(bc.r, bc.g, bc.b, bc.a or 1)
+        if bar.border then
+            DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "targetedList"))
         end
     end
 end

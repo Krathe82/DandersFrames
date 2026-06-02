@@ -1109,16 +1109,30 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         appearanceGroup:AddWidget(GUI:CreateTextureDropdown(self.child, L["Health Bar Texture"], db, "petTexture", function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end), 55)
-        appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "petShowBorder", function()
-            if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
-        end), 30)
-        appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "petBorderColor", true, function()
-            if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
-        end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 35)
         appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Background Color"], db, "petBackgroundColor", true, function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 35)
         Add(appearanceGroup, nil, 2)
+
+        -- ===== BORDER GROUP (Stage 4.3) =====
+        -- include set tailored for a mini unit frame's border. Skipped:
+        -- animate (decoration, not alert), offset (Pet Frame has its own
+        -- Offset X / Y in the Position group above), class / role colour
+        -- (UnitClass("pet") returns the pet family, not a class token),
+        -- colour-by-time / colour-by-type (no aura-state context).
+        local petBorderGroup = GUI:CreateSettingsGroup(self.child, 280)
+        petBorderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
+        GUI:CreateBorderControls(petBorderGroup, db, "pet", {
+            parent       = self.child,
+            include      = { alpha = true, inset = true, blendMode = true,
+                             gradient = true, shadow = true },
+            fullUpdate   = function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end,
+            lightUpdate  = function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end,
+            lightColors  = function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end,
+            refreshStates = function() self:RefreshStates() end,
+            sizeMin = 1, sizeMax = 6, sizeStep = 1,
+        })
+        Add(petBorderGroup, nil, 1)
         
         -- HEALTH TEXT GROUP (col2)
         local healthTextGroup = GUI:CreateSettingsGroup(self.child, 280)
@@ -1481,29 +1495,29 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== APPEARANCE GROUP (Column 2) =====
         local appearanceGroup = GUI:CreateSettingsGroup(self.child, 280)
         appearanceGroup:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 40)
-        appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Frame Border"], db, "showFrameBorder", UpdateFrames), 30)
-        local borderColorPicker = appearanceGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "borderColor", true, UpdateFrames, function() DF:LightweightUpdateBorderColor() end, true), 35)
-        borderColorPicker.hideOn = function(d) return not d.showFrameBorder end
-        local borderClassColorCheck = appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use Class Color"], db, "borderClassColor", function() UpdateFrames() DF:LightweightUpdateBorderColor() end), 30)
-        borderClassColorCheck.hideOn = function(d) return not d.showFrameBorder end
-        local borderStyleDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Border Style"], { SOLID = L["Solid"], TEXTURE = L["Texture"] }, db, "borderStyle", function()
-            -- Switching to Texture with no valid texture chosen would show a blank
-            -- dropdown and keep rendering the solid border. Seed the first available
-            -- SharedMedia border so the change is immediately visible.
-            if db.borderStyle == "TEXTURE" then
-                local list = DF:GetBorderList()
-                if not (db.borderTexture and list[db.borderTexture]) then
-                    db.borderTexture = next(list)
-                end
-            end
-            UpdateFrames()
-            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
-        end), 55)
-        borderStyleDropdown.hideOn = function(d) return not d.showFrameBorder end
-        local borderTextureDropdown = appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Border Texture"], DF:GetBorderList(), db, "borderTexture", UpdateFrames), 55)
-        borderTextureDropdown.hideOn = function(d) return not d.showFrameBorder or d.borderStyle ~= "TEXTURE" end
-        local borderSizeSlider = appearanceGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 1, 16, 1, db, "borderSize", UpdateFrames, UpdateFrames, true), 55)
-        borderSizeSlider.hideOn = function(d) return not d.showFrameBorder end
+        -- Canonical border controls via the unified helper. Replaces the
+        -- previous hand-rolled Show / Color / Style / Texture / Size block.
+        -- classColor + roleColor are now first-class helper include flags (no
+        -- bespoke "Use Class Color" extra needed). Pixel-Perfect is a frame-
+        -- level setting and stays here.
+        GUI:CreateBorderControls(appearanceGroup, db, "frame", {
+            parent       = self.child,
+            include      = {
+                -- Frame Border is the outer chrome of the unit. It's a
+                -- structural element, not an alert surface, so animations
+                -- don't fit the design — removed in Stage 4.0 after Stage
+                -- 3 used it as a dev playground.
+                inset = true, offset = true, blendMode = true,
+                gradient = true, shadow = true,
+                classColor = true, roleColor = true,
+                alpha = true,
+            },
+            fullUpdate   = function() UpdateFrames() DF:LightweightUpdateBorder() end,
+            lightUpdate  = function() DF:LightweightUpdateBorder() end,
+            lightColors  = function() DF:LightweightUpdateBorderColor() end,
+            refreshStates = function() if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end end,
+            sizeMin = 1, sizeMax = 16, sizeStep = 1,
+        })
         appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pixel-Perfect Scaling"], db, "pixelPerfect", UpdateFrames), 30)
         appearanceGroup:AddWidget(GUI:CreateLabel(self.child, L["Snaps sizes and borders to exact pixels for crisp rendering."], 250), 30)
         Add(appearanceGroup, nil, 2)
@@ -3262,16 +3276,27 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }), 30, "both")
     end)
     
-    -- Display > Class Colors
-    local pageClassColors = CreateSubTab("display", "display_classcolors", L["Class Colors"])
-    BuildPage(pageClassColors, function(self, db, Add, AddSpace, AddSyncPoint)
+    -- Display > Colors  (was "Class Colors" pre-Stage 2; renamed when role
+    -- colours moved here so the page houses BOTH the class set and the role
+    -- set used by every border that opts into include.classColor /
+    -- include.roleColor in CreateBorderControls.)
+    local pageColors = CreateSubTab("display", "display_classcolors", L["Colors"])
+    BuildPage(pageColors, function(self, db, Add, AddSpace, AddSyncPoint)
         -- Class colors are shared across party/raid, stored at profile level
         local classColorsDB = DF.db.classColors
         if not classColorsDB then
             DF.db.classColors = {}
             classColorsDB = DF.db.classColors
         end
-        
+
+        -- Role colors live at profile level too (DF.db.roleColors), seeded by
+        -- DF:MigrateRoleBorderColors on db load.
+        local roleColorsDB = DF.db.roleColors
+        if not roleColorsDB then
+            DF.db.roleColors = {}
+            roleColorsDB = DF.db.roleColors
+        end
+
         -- Ordered list of all classes with display names
         local CLASS_LIST = {
             { token = "WARRIOR",      name = L["Warrior"] },
@@ -3288,7 +3313,18 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             { token = "DEMONHUNTER",  name = L["Demon Hunter"] },
             { token = "EVOKER",       name = L["Evoker"] },
         }
-        
+
+        local ROLE_LIST = {
+            { token = "TANK",    name = L["Tank"]    },
+            { token = "HEALER",  name = L["Healer"]  },
+            { token = "DAMAGER", name = L["Damager"] },
+        }
+        local ROLE_DEFAULTS = {
+            TANK    = {r = 0.20, g = 0.55, b = 0.95, a = 1},
+            HEALER  = {r = 0.20, g = 0.80, b = 0.30, a = 1},
+            DAMAGER = {r = 0.85, g = 0.20, b = 0.20, a = 1},
+        }
+
         -- ===== Column 1 =====
         local col1 = GUI:CreateSettingsGroup(self.child, 280)
         col1:AddWidget(GUI:CreateHeader(self.child, L["Class Colors"]), 40)
@@ -3317,8 +3353,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             DF:RefreshAllVisibleFrames()
             -- Refresh the options page to update swatches
-            if pageClassColors and pageClassColors.Refresh then
-                pageClassColors:Refresh()
+            if pageColors and pageColors.Refresh then
+                pageColors:Refresh()
             end
         end)
         resetAllBtn:SetScript("OnEnter", function(s) s:SetBackdropColor(0.25, 0.25, 0.25, 1) end)
@@ -3344,6 +3380,46 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
 
         Add(col1, nil, 1)
+
+        -- ===== Column 2: Role Colors =====
+        local col2 = GUI:CreateSettingsGroup(self.child, 280)
+        col2:AddWidget(GUI:CreateHeader(self.child, L["Role Colors"]), 40)
+        col2:AddWidget(GUI:CreateLabel(self.child, L["Customize role colors used by any border whose Colour Source is set to Role. Applies to Tank, Healer, and Damager assignments."], 260), 50)
+
+        local roleResetBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
+        roleResetBtn:SetSize(260, 24)
+        roleResetBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        roleResetBtn:SetBackdropColor(0.15, 0.15, 0.15, 1)
+        roleResetBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        local roleResetText = roleResetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        roleResetText:SetPoint("CENTER")
+        roleResetText:SetText(L["Reset All to Default"])
+        roleResetBtn:SetScript("OnClick", function()
+            for _, info in ipairs(ROLE_LIST) do
+                local d = ROLE_DEFAULTS[info.token]
+                if d then roleColorsDB[info.token] = { r = d.r, g = d.g, b = d.b, a = d.a } end
+            end
+            DF:RefreshAllVisibleFrames()
+            if pageColors and pageColors.Refresh then pageColors:Refresh() end
+        end)
+        roleResetBtn:SetScript("OnEnter", function(s) s:SetBackdropColor(0.25, 0.25, 0.25, 1) end)
+        roleResetBtn:SetScript("OnLeave", function(s) s:SetBackdropColor(0.15, 0.15, 0.15, 1) end)
+        col2:AddWidget(roleResetBtn, 30)
+
+        for i = 1, #ROLE_LIST do
+            local info = ROLE_LIST[i]
+            if not roleColorsDB[info.token] then
+                local d = ROLE_DEFAULTS[info.token]
+                if d then roleColorsDB[info.token] = { r = d.r, g = d.g, b = d.b, a = d.a } end
+            end
+            col2:AddWidget(GUI:CreateColorPicker(self.child, info.name, roleColorsDB, info.token, false, function()
+                DF:RefreshAllVisibleFrames()
+            end, function()
+                DF:RefreshAllVisibleFrames()
+            end, true), 30)
+        end
+
+        Add(col2, nil, 2)
     end)
     
     -- ========================================
@@ -3660,14 +3736,27 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(bgGroup, nil, 2)
         
         -- ===== BORDER GROUP (Column 1) =====
+        -- Stage 4.2: hand-rolled Show + Colour block expanded to the full
+        -- unified helper. include set tailored for a resource indicator:
+        -- alpha / inset / blendMode / gradient / shadow keep the visual
+        -- toolkit; classColor / roleColor match the bar's optional class
+        -- tinting (resourceBarClassColor) for cohesion. Skipped: animate
+        -- (resource bar is decoration, not an alert surface), offset (bar
+        -- has its own X/Y positioning controls above), colorByTime /
+        -- colorByType (no aura-state context).
         local borderGroup = GUI:CreateSettingsGroup(self.child, 280)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "resourceBarBorderEnabled", function()
-            self:RefreshStates()
-            DF:LightweightUpdateResourceBarBorder()
-        end), 30)
-        local borderColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "resourceBarBorderColor", true, nil, function() DF:LightweightUpdateResourceBarBorderColor() end, true), 35)
-        borderColor.disableOn = function(d) return not d.resourceBarBorderEnabled end
+        GUI:CreateBorderControls(borderGroup, db, "resourceBar", {
+            parent       = self.child,
+            include      = { alpha = true, inset = true, blendMode = true,
+                             gradient = true, shadow = true,
+                             classColor = true, roleColor = true },
+            fullUpdate   = function() DF:LightweightUpdateResourceBarBorder() end,
+            lightUpdate  = function() DF:LightweightUpdateResourceBarBorder() end,
+            lightColors  = function() DF:LightweightUpdateResourceBarBorderColor() end,
+            refreshStates = function() self:RefreshStates() end,
+            sizeMin = 1, sizeMax = 6, sizeStep = 1,
+        })
         Add(borderGroup, nil, 1)
         
         -- ===== FRAME LEVEL GROUP (Column 2) =====
@@ -4850,19 +4939,24 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
         local buffMasqueNote = borderGroup:AddWidget(GUI:CreateLabel(self.child, "|cffff9900Borders controlled by Masque.|r See Integrations.", 230), 30)
         buffMasqueNote.hideOn = function(d) return not MasqueControlsBorders(d) end
-        local buffBorderEnabled = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "buffBorderEnabled", nil), 30)
-        buffBorderEnabled.disableOn = function(d) return not d.showBuffs or MasqueControlsBorders(d) end
-        buffBorderEnabled.hideOn = function(d) return MasqueControlsBorders(d) end
-        local buffBorderThickness = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 5, 1, db, "buffBorderThickness", nil, function() DF:LightweightUpdateAuraBorder("buff") end, true), 55)
-        buffBorderThickness.disableOn = function(d) return not d.showBuffs or not d.buffBorderEnabled or MasqueControlsBorders(d) end
-        buffBorderThickness.hideOn = function(d) return MasqueControlsBorders(d) end
-        local buffBorderInset = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -3, 3, 1, db, "buffBorderInset", nil, function() DF:LightweightUpdateAuraBorder("buff") end, true), 55)
-        buffBorderInset.disableOn = function(d) return not d.showBuffs or not d.buffBorderEnabled or MasqueControlsBorders(d) end
-        buffBorderInset.hideOn = function(d) return MasqueControlsBorders(d) end
-        borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "buffHideSwipe", nil), 30)
+        -- Full border toolkit via the unified helper (Stage 5.5 Phase 2).  No
+        -- class/role colour (aura indicators aren't unit-class).  Hidden when
+        -- buffs are off or Masque controls the borders.
+        GUI:CreateBorderControls(borderGroup, db, "buff", {
+            parent        = self.child,
+            include       = { inset = true, offset = true, blendMode = true,
+                              gradient = true, shadow = true, alpha = true,
+                              animate = true },
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+            fullUpdate    = function() if DF.UpdateAllFrames then DF:UpdateAllFrames() end end,
+            lightUpdate   = function() DF:LightweightUpdateAuraBorder("buff") end,
+            lightColors   = function() DF:LightweightUpdateAuraBorder("buff") end,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = function(d) return not d.showBuffs or MasqueControlsBorders(d) end,
+        })
         AddToSection(borderGroup, nil, 1)
         
-        -- Stack Count Group (col1)
+        -- Stack Count Group (col2)
         local stackCountGroup = GUI:CreateSettingsGroup(self.child, 260)
         stackCountGroup:AddWidget(GUI:CreateHeader(self.child, L["Stack Count"]), 40)
         stackCountGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "buffStackFont", function() DF:LightweightUpdateAuraStackText("buff") end), 55)
@@ -4873,15 +4967,18 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         stackCountGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -150, 150, 1, db, "buffStackX", nil, function() DF:LightweightUpdateAuraStackText("buff") end, true), 55)
         stackCountGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -150, 150, 1, db, "buffStackY", nil, function() DF:LightweightUpdateAuraStackText("buff") end, true), 55)
         stackCountGroup:AddWidget(GUI:CreateSlider(self.child, L["Min Stacks to Show"], 1, 10, 1, db, "buffStackMinimum", nil), 55)
-        AddToSection(stackCountGroup, nil, 1)
+        AddToSection(stackCountGroup, nil, 2)
         
         -- Duration Text Group (col2)
         local durationGroup = GUI:CreateSettingsGroup(self.child, 260)
-        durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Text"]), 40)
+        durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration"]), 40)
         local durShow = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration"], db, "buffShowDuration", function()
             self:RefreshStates()
             DF:UpdateAllFrames()
         end), 30)
+        -- The cooldown swipe (radial sweep) is the OTHER way time-remaining is
+        -- shown, so it lives here with Duration Text rather than under Border.
+        durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "buffHideSwipe", nil), 30)
         local durFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "buffDurationFont", nil), 55)
         durFont.disableOn = function(d) return not d.buffShowDuration end
         local durScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "buffDurationScale", nil, function() DF:LightweightUpdateAuraDurationText("buff") end, true), 55)
@@ -4904,61 +5001,50 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         durHideAboveSlider.disableOn = function(d) return not d.buffShowDuration or not d.buffDurationHideAboveEnabled end
         AddToSection(durationGroup, nil, 2)
 
-        -- Expiring Indicator Group (col2)
+        -- Expiring Indicator Group (col1 — placed under Border, matching the
+        -- Aura Designer's Border→Expiring ordering)
         local expiringGroup = GUI:CreateSettingsGroup(self.child, 260)
         expiringGroup:AddWidget(GUI:CreateHeader(self.child, L["Expiring Indicator"]), 40)
-        expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Expiring Indicators"], db, "buffExpiringEnabled", function()
-            self:RefreshStates()
-            DF:UpdateAllFrames()
-        end), 30)
-        local function HideExpiring(d) return not d.buffExpiringEnabled end
-        local isSeconds = db.buffExpiringThresholdMode == "SECONDS"
-        local thresholdLabel = isSeconds and L["Expiring Threshold (seconds)"] or L["Expiring Threshold (%)"]
-        local thresholdMin = isSeconds and 1 or 5
-        local thresholdMax = isSeconds and 60 or 95
-        local thresholdStep = isSeconds and 1 or 5
-        local thresholdSlider = expiringGroup:AddWidget(GUI:CreateSlider(self.child, thresholdLabel, thresholdMin, thresholdMax, thresholdStep, db, "buffExpiringThreshold", nil), 55)
-        thresholdSlider.disableOn = HideExpiring
-        local modeBtn = expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use Seconds Instead of Percent"], nil, nil,
-            nil,
-            function() return db.buffExpiringThresholdMode == "SECONDS" end,
-            function(val)
-                if val then
-                    db.buffExpiringThresholdMode = "SECONDS"
-                    db.buffExpiringThreshold = 10
-                else
-                    db.buffExpiringThresholdMode = "PERCENT"
-                    db.buffExpiringThreshold = 30
-                end
-                DF:UpdateAllFrames()
-                self:Refresh()
-            end,
-            "buffExpiringThresholdMode"), 30)
-        modeBtn.disableOn = HideExpiring
-        local borderEnabled = expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Expiring Border"], db, "buffExpiringBorderEnabled", function()
-            self:RefreshStates()
-            DF:UpdateAllFrames() 
-        end), 30)
-        borderEnabled.disableOn = HideExpiring
-        local borderColorByTime = expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color by Time Remaining"], db, "buffExpiringBorderColorByTime", function() 
-            self:RefreshStates()
-            DF:UpdateAllFrames() 
-        end), 30)
-        borderColorByTime.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringBorderEnabled end
-        local borderColor = expiringGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "buffExpiringBorderColor", true, nil, function() DF:LightweightUpdateExpiringBorderColor() end, true), 35)
-        borderColor.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringBorderEnabled or d.buffExpiringBorderColorByTime end
-        borderColor.hideOn = function(d) return d.buffExpiringBorderColorByTime end
-        local borderPulsate = expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pulsate Border"], db, "buffExpiringBorderPulsate", nil), 30)
-        borderPulsate.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringBorderEnabled end
-        local borderThickness = expiringGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 5, 1, db, "buffExpiringBorderThickness", nil, function() DF:LightweightUpdateAuraBorder("buff") end, true), 55)
-        borderThickness.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringBorderEnabled end
-        local borderInset = expiringGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -3, 3, 1, db, "buffExpiringBorderInset", nil, function() DF:LightweightUpdateAuraBorder("buff") end, true), 55)
-        borderInset.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringBorderEnabled end
-        local tintEnabled = expiringGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Expiring Tint"], db, "buffExpiringTintEnabled", nil), 30)
-        tintEnabled.disableOn = HideExpiring
-        local tintColor = expiringGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Tint Color"], db, "buffExpiringTintColor", true, nil, function() DF:LightweightUpdateExpiringTintColor() end, true), 35)
-        tintColor.disableOn = function(d) return not d.buffExpiringEnabled or not d.buffExpiringTintEnabled end
-        AddToSection(expiringGroup, nil, 2)
+        -- Unified expiring panel — SAME shared helper + flow as the Aura Designer
+        -- (which is the reference design): master enable → Percent/Seconds toggle
+        -- threshold → State Overrides → thickness/inset/colour/alpha/animation →
+        -- Tint.  Buff-only rows (Show Expiring Border, Color-by-Time, Inset, Tint)
+        -- appear via include flags; rows that don't apply simply hide.
+        GUI:CreateExpiringControls(expiringGroup, db, {
+            parent        = self.child,
+            masterLabel   = L["Enable Expiring Indicators"],
+            fullUpdate    = function() DF:UpdateAllFrames() end,
+            lightColors   = function() DF:LightweightUpdateExpiringBorderColor() end,
+            lightGeometry = function() DF:LightweightUpdateAuraBorder("buff") end,
+            lightTint     = function() DF:LightweightUpdateExpiringTintColor() end,
+            refreshStates = function() self:RefreshStates() end,
+            refreshPage   = function() self:Refresh() end,
+            keys = {
+                master           = "buffExpiringEnabled",
+                threshold        = "buffExpiringThreshold",
+                thresholdMode    = "buffExpiringThresholdMode",
+                borderEnable     = "buffExpiringBorderEnabled",
+                colorByTime      = "buffExpiringBorderColorByTime",
+                color            = "buffExpiringBorderColor",
+                alphaHandleColor = "buffExpiringBorderColor",
+                thickness        = "buffExpiringBorderThickness",
+                inset            = "buffExpiringBorderInset",
+                animPrefix       = "buffExpiringBorderAnimation",
+                tintEnable       = "buffExpiringTintEnabled",
+                tintColor        = "buffExpiringTintColor",
+            },
+            include = {
+                threshold    = true,
+                borderEnable = true,
+                colorByTime  = true,
+                alpha        = true,
+                thickness    = true, thicknessMin = 1, thicknessMax = 5,
+                inset        = true,
+                animation    = true,
+                tint         = true,
+            },
+        })
+        AddToSection(expiringGroup, nil, 1)
 
         currentSection = nil
 
@@ -5065,36 +5151,42 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
         local debuffMasqueNote = borderGroup:AddWidget(GUI:CreateLabel(self.child, "|cffff9900Borders controlled by Masque.|r See Integrations.", 230), 30)
         debuffMasqueNote.hideOn = function(d) return not MasqueControlsBorders(d) end
-        local debuffBorderEnabled = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "debuffBorderEnabled", InvalidateAndUpdate), 30)
-        debuffBorderEnabled.disableOn = function(d) return not d.showDebuffs or MasqueControlsBorders(d) end
-        debuffBorderEnabled.hideOn = function(d) return MasqueControlsBorders(d) end
-        local debuffBorderThickness = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 5, 1, db, "debuffBorderThickness", nil, function() DF:LightweightUpdateAuraBorder("debuff") end, true), 55)
-        debuffBorderThickness.disableOn = function(d) return not d.showDebuffs or not d.debuffBorderEnabled or MasqueControlsBorders(d) end
-        debuffBorderThickness.hideOn = function(d) return MasqueControlsBorders(d) end
-        local debuffBorderInset = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -3, 3, 1, db, "debuffBorderInset", nil, function() DF:LightweightUpdateAuraBorder("debuff") end, true), 55)
-        debuffBorderInset.disableOn = function(d) return not d.showDebuffs or not d.debuffBorderEnabled or MasqueControlsBorders(d) end
-        debuffBorderInset.hideOn = function(d) return MasqueControlsBorders(d) end
+        -- Full border toolkit via the unified helper (Stage 5.5 Phase 2).  When
+        -- "Color by Dispel Type" (below) is ON, the border is forced SOLID and
+        -- recoloured per dispel type, so Style/Colour/Gradient/Animation here
+        -- only take effect when it's OFF (Size/Inset always apply).
+        GUI:CreateBorderControls(borderGroup, db, "debuff", {
+            parent        = self.child,
+            include       = { inset = true, offset = true, blendMode = true,
+                              gradient = true, shadow = true, alpha = true,
+                              animate = true },
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+            fullUpdate    = function() if DF.UpdateAllFrames then DF:UpdateAllFrames() end end,
+            lightUpdate   = function() DF:LightweightUpdateAuraBorder("debuff") end,
+            lightColors   = function() DF:LightweightUpdateAuraBorder("debuff") end,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = function(d) return not d.showDebuffs or MasqueControlsBorders(d) end,
+        })
         local colorByType = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Color by Dispel Type"], db, "debuffBorderColorByType", InvalidateAndUpdate), 30)
-        colorByType.disableOn = function(d) return not d.debuffBorderEnabled or MasqueControlsBorders(d) end
+        colorByType.disableOn = function(d) return not d.debuffShowBorder or MasqueControlsBorders(d) end
         colorByType.hideOn = function(d) return MasqueControlsBorders(d) end
-        borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "debuffHideSwipe", nil), 30)
         AddToSection(borderGroup, nil, 1)
         
         -- Dispel Colors Group (col2)
         local colorsGroup = GUI:CreateSettingsGroup(self.child, 260)
         colorsGroup:AddWidget(GUI:CreateHeader(self.child, L["Dispel Type Colors"]), 40)
         local magicColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Magic"], db, "debuffBorderColorMagic", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        magicColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        magicColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         local curseColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Curse"], db, "debuffBorderColorCurse", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        curseColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        curseColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         local diseaseColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Disease"], db, "debuffBorderColorDisease", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        diseaseColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        diseaseColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         local poisonColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Poison"], db, "debuffBorderColorPoison", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        poisonColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        poisonColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         local bleedColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Bleed / Enrage"], db, "debuffBorderColorBleed", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        bleedColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        bleedColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         local noneColor = colorsGroup:AddWidget(GUI:CreateColorPicker(self.child, L["None / Physical"], db, "debuffBorderColorNone", false, InvalidateAndUpdate, function() DF:LightweightUpdateDebuffBorderColors() end, true), 30)
-        noneColor.disableOn = function(d) return not d.debuffBorderEnabled or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
+        noneColor.disableOn = function(d) return not d.debuffShowBorder or not d.debuffBorderColorByType or MasqueControlsBorders(d) end
         colorsGroup.hideOn = function(d) return MasqueControlsBorders(d) end
         AddToSection(colorsGroup, nil, 2)
         
@@ -5113,11 +5205,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         -- Duration Text Group (col2)
         local durationGroup = GUI:CreateSettingsGroup(self.child, 260)
-        durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Text"]), 40)
+        durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration"]), 40)
         local durShow = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration"], db, "debuffShowDuration", function()
             self:RefreshStates()
             DF:UpdateAllFrames()
         end), 30)
+        -- Cooldown swipe (radial time-remaining) lives with Duration Text, not Border.
+        durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "debuffHideSwipe", nil), 30)
         local durFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "debuffDurationFont", nil), 55)
         durFont.disableOn = function(d) return not d.debuffShowDuration end
         local durScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "debuffDurationScale", nil, function() DF:LightweightUpdateAuraDurationText("debuff") end, true), 55)
@@ -5455,24 +5549,25 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(positionGroup, nil, 2)
         
         -- ===== BORDER GROUP (Column 1) =====
+        -- Stage 4.1: hand-rolled border block replaced by the unified helper.
+        -- include set tailored for a "needs attention" alert: alpha / inset /
+        -- offset / blendMode / gradient / shadow / animate (matches the
+        -- Defensive Icon — Border Offset nudges the band relative to the icon).
+        -- Skipped: class / role / colour-by-time / colour-by-type (alert colour,
+        -- not the unit's identity, and no aura-state context here).
         local borderGroup = GUI:CreateSettingsGroup(self.child, 280)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        local mbShowBorder = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "missingBuffIconShowBorder", function()
-            self:RefreshStates()
-            if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end
-        end), 30)
-        mbShowBorder.hideOn = HideMissingBuffOptions
-        local function HideMissingBuffBorderOptions(d)
-            return not d.missingBuffIconEnabled or not d.missingBuffIconShowBorder
-        end
-        local mbBorder = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 1, 6, 1, db, "missingBuffIconBorderSize", function()
-            if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end
-        end, function() DF:LightweightUpdateMissingBuff() end, true), 55)
-        mbBorder.hideOn = HideMissingBuffBorderOptions
-        local mbColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "missingBuffIconBorderColor", true, function()
-            if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end
-        end, function() DF:LightweightUpdateMissingBuffBorderColor() end, true), 35)
-        mbColor.hideOn = HideMissingBuffBorderOptions
+        GUI:CreateBorderControls(borderGroup, db, "missingBuffIcon", {
+            parent       = self.child,
+            include      = { alpha = true, inset = true, offset = true, blendMode = true,
+                             gradient = true, shadow = true, animate = true },
+            fullUpdate   = function() if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end end,
+            lightUpdate  = function() DF:LightweightUpdateMissingBuff() end,
+            lightColors  = function() DF:LightweightUpdateMissingBuffBorderColor() end,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen     = function(d) return not d.missingBuffIconEnabled end,
+            sizeMin = 1, sizeMax = 6, sizeStep = 1,
+        })
         borderGroup.hideOn = HideMissingBuffOptions
         Add(borderGroup, nil, 1)
         
@@ -5559,26 +5654,30 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== BORDER GROUP (Column 2) =====
         local borderGroup = GUI:CreateSettingsGroup(self.child, 280)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        
-        local diShowBorder = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "defensiveIconShowBorder", function()
-            self:RefreshStates()
-            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
-        end), 30)
-        diShowBorder.hideOn = HideDefensiveIconOptions
-        
-        local function HideDefensiveBorderOptions(d)
-            return not d.defensiveIconEnabled or not d.defensiveIconShowBorder
-        end
-        
-        local diBorder = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 0, 8, 1, db, "defensiveIconBorderSize", function()
-            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
-        end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
-        diBorder.hideOn = HideDefensiveBorderOptions
-        
-        local diColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "defensiveIconBorderColor", true, function()
-            if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
-        end, function() DF:LightweightUpdateDefensiveIconColors() end, true), 35)
-        diColor.hideOn = HideDefensiveBorderOptions
+
+        -- Canonical border controls via the unified helper. include opts in
+        -- inset / offset / blendMode / gradient / shadow on top of the
+        -- always-present Show / Style / Texture / Size / Colour. Inset moves
+        -- the border edges inward (positive) or outward (negative) relative
+        -- to the icon's bounds — independent of borderSize (thickness) and
+        -- independent of the artwork's own inset.
+        GUI:CreateBorderControls(borderGroup, db, "defensiveIcon", {
+            parent       = self.child,
+            -- Class/Role colour makes sense here: at a glance, the border
+            -- communicates WHO is using the defensive cooldown (their class
+            -- or role) without the user having to read the icon. Animation
+            -- is useful as a "needs attention" alert when a high-priority
+            -- defensive fires.
+            include      = { inset = true, offset = true, blendMode = true,
+                             gradient = true, shadow = true, alpha = true,
+                             classColor = true, roleColor = true,
+                             animate = true },
+            fullUpdate   = function() if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end end,
+            lightUpdate  = function() DF:LightweightUpdateDefensiveIcons() end,
+            lightColors  = function() DF:LightweightUpdateDefensiveIconColors() end,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen     = function(d) return not d.defensiveIconEnabled end,
+        })
         Add(borderGroup, nil, 2)
         
         -- ===== DURATION GROUP (Column 1) =====
@@ -6121,13 +6220,22 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tlTexture.disableOn = HideTLOptions
             local tlBgAlpha = presetGroup:AddWidget(GUI:CreateSlider(self.child, L["Background Alpha"], 0, 1, 0.05, db, "targetedListBackgroundAlpha", TargetedListUpdate, TargetedListUpdate, true), 55)
             tlBgAlpha.disableOn = HideTLOptions
-            local tlShowBorder = presetGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "targetedListShowBorder", function()
-                self:RefreshStates()
-                TargetedListUpdate()
-            end), 30)
-            tlShowBorder.disableOn = HideTLOptions
-            local tlBorderColor = presetGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "targetedListBorderColor", true, TargetedListUpdate, function() if DF.LightweightUpdateTargetedListBorderColor then DF:LightweightUpdateTargetedListBorderColor() end end, true), 35)
-            tlBorderColor.disableOn = HideBorderOptions
+            -- Stage 4.5: Show Border + Border Color replaced by
+            -- CreateBorderControls. Targeted List is a list view (N bars),
+            -- so animate is deliberately skipped (per-bar animation would
+            -- be visual noise + a perf hit). class/role colour skipped
+            -- because the bars represent SPELLS, not units. colour-by-time
+            -- / colour-by-type also skipped (no aura state).
+            GUI:CreateBorderControls(presetGroup, db, "targetedList", {
+                parent       = self.child,
+                include      = { alpha = true, inset = true, blendMode = true,
+                                 gradient = true, shadow = true },
+                fullUpdate   = TargetedListUpdate,
+                lightUpdate  = TargetedListUpdate,
+                lightColors  = function() if DF.LightweightUpdateTargetedListBorderColor then DF:LightweightUpdateTargetedListBorderColor() end end,
+                refreshStates = function() self:RefreshStates() end,
+                sizeMin = 1, sizeMax = 6, sizeStep = 1,
+            })
             AddToSection(presetGroup, nil, 2)
 
             currentSection = nil
@@ -6425,22 +6533,31 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local appearanceSection = Add(GUI:CreateCollapsibleSection(self.child, L["Appearance"], true), 36, "both")
         currentSection = appearanceSection
         
-        -- Border Group (col1)
+        -- Border Group (col1) — Stage 4.4: 3 hand-rolled border widgets
+        -- (Show / Size / Color) replaced by CreateBorderControls. include
+        -- set tailored for a "needs attention" alert surface (Personal
+        -- Targeted = spells targeting you). Skipped: offset (icon has its
+        -- own positioning), classColor / roleColor (spell alert, not unit
+        -- identity), colorByTime / colorByType (no aura-state context).
+        -- The Icon Alpha (personalTargetedSpellAlpha) and Cooldown Swipe
+        -- toggles stay on this group — they're not border-related.
         local borderGroup = GUI:CreateSettingsGroup(self.child, 260)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
         local ptsAlpha = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
         ptsAlpha.disableOn = HidePersonalOptions
         local ptsSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
         ptsSwipe.disableOn = HidePersonalOptions
-        local ptsBorder = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "personalTargetedSpellShowBorder", function()
-            self:RefreshStates()
-            PersonalTargetedUpdate()
-        end), 30)
-        ptsBorder.disableOn = HidePersonalOptions
-        local ptsBorderSize = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 1, 5, 1, db, "personalTargetedSpellBorderSize", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsBorderSize.disableOn = HideBorderOptions
-        local ptsBorderColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "personalTargetedSpellBorderColor", false, PersonalTargetedUpdate), 35)
-        ptsBorderColor.disableOn = HideBorderOptions
+        GUI:CreateBorderControls(borderGroup, db, "personalTargetedSpell", {
+            parent       = self.child,
+            include      = { alpha = true, inset = true, blendMode = true,
+                             gradient = true, shadow = true, animate = true },
+            fullUpdate   = PersonalTargetedUpdate,
+            lightUpdate  = PersonalTargetedUpdate,
+            lightColors  = PersonalTargetedUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen     = function(d) return not d.personalTargetedSpellEnabled end,
+            sizeMin = 1, sizeMax = 5, sizeStep = 1,
+        })
         AddToSection(borderGroup, nil, 1)
         
         -- Duration Group (col2)

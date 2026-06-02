@@ -27,13 +27,10 @@ local issecretvalue = issecretvalue or function() return false end
 local GetAuraDataByAuraInstanceID = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
 local IsAuraFilteredOut = C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID
 
--- Check if an interpolated color result differs from the original color.
--- result.r/g/b may be secret (tainted) values from EvaluateRemainingDuration/Percent;
--- arithmetic on secret values throws. If tainted, the engine IS interpolating → expiring.
-local function IsColorExpiring(result, oc)
-    if issecretvalue(result.r) then return true end
-    return (math.abs(result.r - oc.r) > 0.01 or math.abs(result.g - oc.g) > 0.01 or math.abs(result.b - oc.b) > 0.01)
-end
+-- Secret-safe "is this colour-curve result the expiring colour?" — now lives on
+-- the shared DF.Expiring engine; kept as a local alias so the call sites below
+-- read unchanged.
+local IsColorExpiring = DF.Expiring.IsColorExpiring
 
 DF.AuraDesigner = DF.AuraDesigner or {}
 
@@ -156,104 +153,37 @@ local function AdjustOffsetForBorder(anchor, offsetX, offsetY, borderSize, borde
 end
 
 -- ============================================================
--- SHARED EXPIRING TICKER
--- Processes all registered indicators with expiring settings
--- at ~3 FPS. Same dual-path approach as bar's OnUpdate:
---   API path:     Build a Step color curve per element, evaluate
---                 via durationObj:EvaluateRemainingPercent → apply
---   Preview path: Manual pct calculation, compare to threshold
+-- EXPIRING — thin AD-side adapters over the shared DF.Expiring engine
+-- (engine: registry + ~3 FPS ticker + colour curve live in Frames/Expiring.lua).
+-- The pending* flags are AD's "Show When Missing" mechanism: Apply sets them
+-- before dispatching to Configure, and the RegisterExpiring wrapper injects them
+-- into entryData (keeping that coupling AD-side; the shared engine reads only
+-- entryData).  The call sites below (RegisterExpiring / UnregisterExpiring /
+-- BuildExpiringColorCurve) are unchanged — these locals just delegate.
 -- ============================================================
 
-local expiringRegistry = {}
 local pendingHideWhenNotExpiring = false  -- Set by Apply before dispatch, read by RegisterExpiring
 local pendingUseShowHide = false          -- When true, ticker uses Show/Hide instead of SetAlpha
 local pendingHiddenAlpha = nil            -- Alpha to use when "not expiring" (nil = 0 for borders, savedAlpha for framealpha)
 
 local function RegisterExpiring(element, entryData)
-    -- Propagate Show When Missing visibility flag
+    -- Propagate Show When Missing visibility flag into entryData (the shared
+    -- engine has no knowledge of AD's pending state).
     if pendingHideWhenNotExpiring then
         entryData.hideWhenNotExpiring = true
         entryData.visibleAlpha = entryData.originalAlpha or 1
         entryData.useShowHide = pendingUseShowHide or false
         entryData.hiddenAlpha = pendingHiddenAlpha  -- nil = use 0, number = use that alpha
     end
-    expiringRegistry[element] = entryData
-
-    -- Evaluate immediately so the Apply function ends with the correct
-    -- color.  Without this the Apply sets the *original* color, then the
-    -- ticker (3 FPS) overrides it later → visible flicker.
-    -- Same approach as bar's "Set initial bar color" block in ConfigureBar.
-    local applied = false
-    if entryData.colorCurve and entryData.unit and entryData.auraInstanceID
-       and C_UnitAuras and C_UnitAuras.GetAuraDuration then
-        local durationObj = C_UnitAuras.GetAuraDuration(entryData.unit, entryData.auraInstanceID)
-        if durationObj then
-            local result
-            if entryData.thresholdMode == "SECONDS" and durationObj.EvaluateRemainingDuration then
-                result = durationObj:EvaluateRemainingDuration(entryData.colorCurve)
-            elseif durationObj.EvaluateRemainingPercent then
-                result = durationObj:EvaluateRemainingPercent(entryData.colorCurve)
-            end
-            if result and entryData.applyResult then
-                entryData.applyResult(element, result, entryData)
-                applied = true
-            end
-        end
-    end
-    if not applied then
-        local dur = entryData.duration
-        local exp = entryData.expirationTime
-        if dur and exp and not issecretvalue(dur) and not issecretvalue(exp) and dur > 0 then
-            local remaining = max(0, exp - GetTime())
-            local isExpiring
-            if entryData.thresholdMode == "SECONDS" then
-                isExpiring = remaining <= (entryData.threshold or 10)
-            else
-                local pct = remaining / dur
-                isExpiring = pct <= ((entryData.threshold or 30) / 100)
-            end
-            if entryData.applyManual then
-                entryData.applyManual(element, isExpiring, entryData)
-            end
-        elseif entryData.applyManual then
-            -- duration=0 means permanent or synthetic (missing) aura — not expiring
-            entryData.applyManual(element, false, entryData)
-        end
-    end
+    DF.Expiring:Register(element, entryData)
 end
 
 local function UnregisterExpiring(element)
-    if element then
-        expiringRegistry[element] = nil
-    end
+    DF.Expiring:Unregister(element)
 end
 
--- Build a Step color curve encoding two states:
---   Below threshold → expiring color
---   At/above threshold → original color
--- Same pattern as bar's dfAD_colorCurve for expiring-only mode.
--- thresholdMode: nil/"PERCENT" = percentage (0-100), "SECONDS" = seconds (1-60)
 local function BuildExpiringColorCurve(threshold, expiringColor, originalColor, thresholdMode)
-    if not C_CurveUtil or not C_CurveUtil.CreateColorCurve then return nil end
-    local curve = C_CurveUtil.CreateColorCurve()
-    curve:SetType(Enum.LuaCurveType.Step)
-    local ecR = expiringColor.r or 1
-    local ecG = expiringColor.g or 0.2
-    local ecB = expiringColor.b or 0.2
-    local ocR = originalColor.r or 1
-    local ocG = originalColor.g or 1
-    local ocB = originalColor.b or 1
-    curve:AddPoint(0, CreateColor(ecR, ecG, ecB, 1))
-    if thresholdMode == "SECONDS" then
-        -- Curve points in seconds for EvaluateRemainingDuration
-        curve:AddPoint(threshold, CreateColor(ocR, ocG, ocB, 1))
-        curve:AddPoint(600, CreateColor(ocR, ocG, ocB, 1))  -- 10min cap
-    else
-        -- Curve points as decimal percentage for EvaluateRemainingPercent
-        curve:AddPoint(threshold / 100, CreateColor(ocR, ocG, ocB, 1))
-        curve:AddPoint(1, CreateColor(ocR, ocG, ocB, 1))
-    end
-    return curve
+    return DF.Expiring:BuildColorCurve(threshold, expiringColor, originalColor, thresholdMode)
 end
 
 -- Build a Step color curve for hiding duration text above a seconds threshold.
@@ -314,24 +244,37 @@ local function GetOrCreateWholeAlphaPulse(frame)
     return frame.dfAD_wholeAlphaPulse
 end
 
--- Create or return a bounce (translation) animation.
--- For squares, a wrapper frame is used to avoid CooldownFrameTemplate rendering glitches
--- when Translation is applied directly to a frame with a Cooldown child.
--- The wrapper is created and managed in the square expiring setup section.
+-- Bounce driver.  A real Translation animation moves the frame's render
+-- TRANSFORM, which child-frame overlays (the expiring Tint and the Expiring-
+-- Animation glow) don't track cleanly under the AD preview's per-frame refresh —
+-- they accumulate the offset and drift off-screen.  Instead we move the element
+-- with a real SetPoint LAYOUT offset (relative to its base anchor, stored as
+-- el.dfAD_basePos by UpdateIcon/Square/Bar), which propagates to every descendant
+-- correctly.  The driver mimics the AnimationGroup interface (Play/Stop/IsPlaying)
+-- so every existing call site works unchanged.
+local BOUNCE_AMP, BOUNCE_PERIOD = 4, 0.6  -- pixels, seconds per full up-down cycle
 local function GetOrCreateBounceAnim(frame)
     if not frame.dfAD_bounceAnim then
-        frame.dfAD_bounceAnim = frame:CreateAnimationGroup()
-        frame.dfAD_bounceAnim:SetLooping("REPEAT")
-        local up = frame.dfAD_bounceAnim:CreateAnimation("Translation")
-        up:SetOffset(0, 4)
-        up:SetDuration(0.25)
-        up:SetOrder(1)
-        up:SetSmoothing("OUT")
-        local down = frame.dfAD_bounceAnim:CreateAnimation("Translation")
-        down:SetOffset(0, -4)
-        down:SetDuration(0.25)
-        down:SetOrder(2)
-        down:SetSmoothing("IN")
+        local d = CreateFrame("Frame")
+        d:Hide()
+        d.elapsed = 0
+        d.IsPlaying = function(self) return self:IsShown() end
+        d.Play = function(self) self.elapsed = 0; self:Show() end
+        d.Stop = function(self)
+            self:Hide()
+            local b = frame.dfAD_basePos  -- snap back to the resting position
+            if b then frame:ClearAllPoints(); frame:SetPoint(b.point, b.rel, b.relPoint, b.x, b.y) end
+        end
+        d:SetScript("OnUpdate", function(self, dt)
+            self.elapsed = self.elapsed + dt
+            local b = frame.dfAD_basePos
+            if not b then return end
+            -- Smooth 0→AMP→0 each cycle (zero-slope endpoints, no seam on loop).
+            local off = (1 - math.cos(self.elapsed * (2 * math.pi / BOUNCE_PERIOD))) * 0.5 * BOUNCE_AMP
+            frame:ClearAllPoints()
+            frame:SetPoint(b.point, b.rel, b.relPoint, b.x, b.y + off)
+        end)
+        frame.dfAD_bounceAnim = d
     end
     return frame.dfAD_bounceAnim
 end
@@ -357,6 +300,175 @@ local function UpdateBounceState(el, isExpiring)
             el.dfAD_bounceAnim:Stop()
         end
     end
+end
+
+-- Drive the anim effects (pulse / whole-alpha / bounce) from an applyResult tick,
+-- but ONLY on NON-secret auras.  On a secret aura the curve result is tainted, so
+-- IsColorExpiring returns true-always — a play/stop that branches on that would
+-- keep the effect running forever (e.g. a bounce that never stops drifts upward
+-- and "flies off" in the preview).  Per design the anim effects are non-secret-
+-- only, so on a secret aura we force them STOPPED (effExp = false → revert to base
+-- position/alpha).  `pulseFrame` = the element's fill/border pulse frame (or nil).
+local function DriveExpiringEffects(el, result, isExp, pulseFrame)
+    local effExp = (not issecretvalue(result.r)) and isExp or false
+    if pulseFrame then UpdatePulseState(pulseFrame, effExp) end
+    UpdateWholeAlphaPulseState(el, effExp)
+    UpdateBounceState(el, effExp)
+end
+
+-- Secret-safe expiring TINT for AD indicators (icon / square / bar).  A colour
+-- overlay that fades in below threshold, driven by the shared DF.Expiring engine
+-- (alpha-gated via SetAlphaFromBoolean — works on SECRET auras, never branches on
+-- the secret remaining-time).  `host` is the frame the texture attaches to
+-- (textOverlay where present, else the element).  Idempotent: reuses host.dfAD_tint.
+-- `host` = frame the texture attaches to (textOverlay where present, else the
+-- element); `el` = the element carrying the stored dfAD_* config (set in Configure).
+local function SetupExpiringTint(host, layer, el, frame, auraData)
+    if not host or not el then return end
+    -- Lazy: don't allocate a tint texture for the common (disabled) case; just
+    -- tear down any existing one.
+    if not el.dfAD_expiringTintEnabled then
+        if host.dfAD_tint then
+            DF.Expiring:Unregister(host.dfAD_tint)
+            host.dfAD_tint:Hide()
+        end
+        return
+    end
+    if not host.dfAD_tint then
+        host.dfAD_tint = host:CreateTexture(nil, layer or "ARTWORK")
+        host.dfAD_tint:SetAllPoints(host)
+        host.dfAD_tint:SetBlendMode("ADD")
+        host.dfAD_tint:Hide()
+    end
+    DF.Expiring:UpdateTint(host.dfAD_tint, {
+        unit           = frame and frame.unit,
+        auraInstanceID = auraData and auraData.auraInstanceID,
+        threshold      = el.dfAD_expiringThreshold or 30,
+        thresholdMode  = el.dfAD_expiringThresholdMode,
+        duration       = auraData and auraData.duration,
+        expirationTime = auraData and auraData.expirationTime,
+        enabled        = el.dfAD_expiringTintEnabled,
+        color          = el.dfAD_expiringTintColor,
+    })
+end
+
+-- Tear down an element's tint (unregister from the engine + hide).
+local function ClearExpiringTint(host)
+    if host and host.dfAD_tint then
+        DF.Expiring:Unregister(host.dfAD_tint)
+        host.dfAD_tint:Hide()
+    end
+end
+
+-- ============================================================
+-- EXPIRING BORDER STATE (shared by indicator types)
+-- Generic versions of the icon's per-aura buildAnim / applyState, reading
+-- every input from `el.dfAD_*` fields so any indicator that stores the same
+-- fields (icon, square, …) can drive its DF.Border through the expiring
+-- state-replace model.  The element must carry, from its Configure pass:
+--   dfADBorder, texture, dfAD_hideIcon
+--   dfAD_baseBorderSize/Inset/Color/Style/Gradient/Texture/Shadow/Blend/OffsetX/Y
+--   dfAD_baseAnim* (Type/Color/Frequency/Particles/Length/Thickness/Scale/
+--                   Inset/OffsetX/OffsetY/Mask/SidesAxis/CornerLength)
+--   dfAD_ExpiringBorderSize/Alpha, dfAD_ExpiringAnimation*
+--   dfAD_expiringEnabled (colour override on), dfAD_expiringColor
+-- All three placed border indicators (icon / square / bar) now drive their
+-- DF.Border through these shared helpers — the icon's old inline closures were
+-- removed (task #46), so there is a single source of truth for the expiring
+-- border state-swap.
+-- ============================================================
+local function ADExpiringBorderHasAnim(el)
+    local t = el.dfAD_ExpiringAnimationType
+    return t and t ~= "NONE"
+end
+
+-- State-replace: below threshold with an expiring animation, use the FULL
+-- expiring tunable set (own colour/particles/etc.); else the base animation.
+local function ADBuildExpiringBorderAnim(el, isExp)
+    if isExp and ADExpiringBorderHasAnim(el) then
+        return {
+            type         = el.dfAD_ExpiringAnimationType,
+            color        = el.dfAD_ExpiringAnimationColor or el.dfAD_expiringColor,
+            frequency    = el.dfAD_ExpiringAnimationFrequency,
+            particles    = el.dfAD_ExpiringAnimationParticles,
+            length       = el.dfAD_ExpiringAnimationLength,
+            thickness    = el.dfAD_ExpiringAnimationThickness,
+            scale        = el.dfAD_ExpiringAnimationScale,
+            inset        = el.dfAD_ExpiringAnimationInset,
+            offsetX      = el.dfAD_ExpiringAnimationOffsetX,
+            offsetY      = el.dfAD_ExpiringAnimationOffsetY,
+            mask         = el.dfAD_ExpiringAnimationMask,
+            sidesAxis    = el.dfAD_ExpiringAnimationSidesAxis,
+            cornerLength = el.dfAD_ExpiringAnimationCornerLength,
+        }
+    elseif el.dfAD_baseAnimType and el.dfAD_baseAnimType ~= "NONE" then
+        return {
+            type         = el.dfAD_baseAnimType,
+            color        = el.dfAD_baseAnimColor,
+            frequency    = el.dfAD_baseAnimFrequency,
+            particles    = el.dfAD_baseAnimParticles,
+            length       = el.dfAD_baseAnimLength,
+            thickness    = el.dfAD_baseAnimThickness,
+            scale        = el.dfAD_baseAnimScale,
+            inset        = el.dfAD_baseAnimInset,
+            offsetX      = el.dfAD_baseAnimOffsetX,
+            offsetY      = el.dfAD_baseAnimOffsetY,
+            mask         = el.dfAD_baseAnimMask,
+            sidesAxis    = el.dfAD_baseAnimSidesAxis,
+            cornerLength = el.dfAD_baseAnimCornerLength,
+        }
+    end
+    return nil
+end
+
+-- Apply the expiring (or base) border state to el.dfADBorder.  `color` is the
+-- tint for SOLID mode (curve / override colour when expiring, base otherwise).
+local function ADApplyExpiringBorderState(el, isExp, color)
+    if not el.dfADBorder then return end
+    local applyColor = el.dfAD_expiringEnabled
+    local thickness
+    if isExp then
+        thickness = el.dfAD_ExpiringBorderSize  or el.dfAD_baseBorderSize  or 1
+    else
+        thickness = el.dfAD_baseBorderSize  or 1
+    end
+    local insetVal = el.dfAD_baseBorderInset or 1
+    local sizeVal  = thickness
+    -- Inset the artwork/fill by the current thickness so the band frames it and
+    -- a thicker expiring band stays visible (not covered by the texture).
+    if el.texture and not el.dfAD_hideIcon then
+        el.texture:ClearAllPoints()
+        el.texture:SetPoint("TOPLEFT",     thickness, -thickness)
+        el.texture:SetPoint("BOTTOMRIGHT", -thickness,  thickness)
+    end
+    -- Colour carries its own alpha (the expiring border colour's alpha below
+    -- threshold via borderTintFor, base alpha otherwise) — no separate
+    -- multiplier, so the picker's alpha is the single source of truth.
+    local pickedColor = color
+    -- Preserve the base presentation (gradient / texture / shadow / blend);
+    -- flatten to SOLID only when the colour override is actively tinting below
+    -- threshold (a single override colour can't be drawn as a two-stop gradient).
+    local flattenToSolid = applyColor and isExp
+    local useStyle    = flattenToSolid and "SOLID" or (el.dfAD_baseBorderStyle or "SOLID")
+    local useGradient = (not flattenToSolid) and el.dfAD_baseBorderGradient or nil
+    local useTexture  = (not flattenToSolid) and el.dfAD_baseBorderTexture or nil
+    -- Respect the base Show Border state — don't let an expiring override
+    -- re-enable a border the user has turned off (defaults to enabled when the
+    -- field is unset, so consumers that don't store it behave as before).
+    DF.Border:Apply(el.dfADBorder, {
+        enabled   = el.dfAD_baseBorderEnabled ~= false,
+        style     = useStyle,
+        texture   = useTexture,
+        gradient  = useGradient,
+        shadow    = el.dfAD_baseBorderShadow,
+        blendMode = el.dfAD_baseBorderBlend,
+        size      = sizeVal,
+        inset     = -insetVal,
+        offsetX   = el.dfAD_baseBorderOffsetX or 0,
+        offsetY   = el.dfAD_baseBorderOffsetY or 0,
+        color     = pickedColor,
+        animation = ADBuildExpiringBorderAnim(el, isExp),
+    })
 end
 
 local function BuildDurationHideCurve(threshold)
@@ -428,91 +540,9 @@ local function ApplyDeferredDurationStyling(indicator)
     text:Show()
 end
 
-local expiringFrame = CreateFrame("Frame")
-local expiringElapsed = 0
-expiringFrame:Show()  -- CRITICAL: OnUpdate only fires on visible frames
-
-expiringFrame:SetScript("OnUpdate", function(_, elapsed)
-    expiringElapsed = expiringElapsed + elapsed
-    if expiringElapsed < 0.33 then return end  -- ~3 FPS
-    expiringElapsed = 0
-
-    for element, entry in pairs(expiringRegistry) do
-        if not element:IsShown() then
-            expiringRegistry[element] = nil
-        else
-            local applied = false
-
-            -- API path: evaluate color curve (same as bar's OnUpdate)
-            if entry.colorCurve and entry.unit and entry.auraInstanceID
-               and C_UnitAuras and C_UnitAuras.GetAuraDuration then
-                local durationObj = C_UnitAuras.GetAuraDuration(entry.unit, entry.auraInstanceID)
-                if durationObj then
-                    local result
-                    if entry.thresholdMode == "SECONDS" and durationObj.EvaluateRemainingDuration then
-                        result = durationObj:EvaluateRemainingDuration(entry.colorCurve)
-                    elseif durationObj.EvaluateRemainingPercent then
-                        result = durationObj:EvaluateRemainingPercent(entry.colorCurve)
-                    end
-                    if result and entry.applyResult then
-                        entry.applyResult(element, result, entry)
-                        applied = true
-                    end
-                end
-            end
-
-            -- Preview fallback: manual comparison (same as bar's preview path)
-            if not applied then
-                local dur = entry.duration
-                local exp = entry.expirationTime
-                if dur and exp and not issecretvalue(dur) and not issecretvalue(exp) and dur > 0 then
-                    local remaining = max(0, exp - GetTime())
-                    local isExpiring
-                    if entry.thresholdMode == "SECONDS" then
-                        isExpiring = remaining <= (entry.threshold or 10)
-                    else
-                        local pct = remaining / dur
-                        isExpiring = pct <= ((entry.threshold or 30) / 100)
-                    end
-                    if entry.applyManual then
-                        entry.applyManual(element, isExpiring, entry)
-                    end
-                elseif entry.applyManual then
-                    -- duration=0 means permanent or synthetic (missing) aura — not expiring
-                    entry.applyManual(element, false, entry)
-                end
-            end
-
-            -- Show When Missing: toggle visibility based on expiring state.
-            -- Icons/squares use Hide()/Show() so OOR alpha restore won't undo us.
-            -- Borders use SetAlpha() since they're not in the OOR icon/square loop.
-            if entry.hideWhenNotExpiring then
-                local dur = entry.duration
-                local exp = entry.expirationTime
-                local isExp = false
-                if dur and exp and not issecretvalue(dur) and not issecretvalue(exp) and dur > 0 then
-                    local rem = max(0, exp - GetTime())
-                    if entry.thresholdMode == "SECONDS" then
-                        isExp = rem <= (entry.threshold or 10)
-                    else
-                        isExp = (rem / dur) <= ((entry.threshold or 30) / 100)
-                    end
-                end
-                if entry.useShowHide then
-                    if isExp then
-                        element:Show()
-                        element:SetAlpha(entry.visibleAlpha or 1)
-                    else
-                        element:Hide()
-                    end
-                else
-                    local notExpAlpha = entry.hiddenAlpha or 0
-                    element:SetAlpha(isExp and (entry.visibleAlpha or 1) or notExpAlpha)
-                end
-            end
-        end
-    end
-end)
+-- (The ~3 FPS expiring ticker now lives on the shared DF.Expiring engine in
+-- Frames/Expiring.lua — every registered element across the addon, AD indicators
+-- and standard buff borders alike, is driven by that one OnUpdate.)
 
 -- ============================================================
 -- PER-FRAME STATE
@@ -664,7 +694,10 @@ function Indicators:Apply(frame, typeKey, config, auraData, defaults, auraName, 
             if config.borderMode == "custom" and frame.dfAD_customBorders then
                 ch = frame.dfAD_customBorders[auraName]
             end
-            if ch then ch:SetAlpha(0) end
+            if ch then
+                DF.Border:Apply(ch, { enabled = false })  -- hide edges + stop animation
+                ch.dfAD_sig = nil
+            end
         elseif typeKey == "framealpha" then
             -- Revert to normal alpha — don't make the frame transparent
             local state = frame.dfAD
@@ -721,9 +754,8 @@ function Indicators:EndFrame(frame)
         for key, ch in pairs(frame.dfAD_customBorders) do
             if not state.activeCustomBorders[key] then
                 UnregisterExpiring(ch)
-                DF.ApplyHighlightStyle(ch, "NONE", 2, 0, 1, 1, 1, 1)
-                ch.dfAD_style = nil
-                ch.dfAD_auraID = nil
+                DF.Border:Apply(ch, { enabled = false })
+                ch.dfAD_sig = nil
             end
         end
     end
@@ -787,159 +819,290 @@ end
 -- textures. Does NOT modify the existing frame.border.
 -- ============================================================
 
--- Map old border style names to highlight-compatible uppercase keys
+-- Map old border style names to the current uppercase keys
 local BORDER_STYLE_MIGRATION = { Solid = "SOLID", Glow = "GLOW", Pulse = "SOLID" }
 
-local function GetOrCreateADBorder(frame)
-    if frame.dfAD_border then
-        -- Update points (frame may have moved)
-        frame.dfAD_border:ClearAllPoints()
-        frame.dfAD_border:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-        frame.dfAD_border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-        return frame.dfAD_border
+-- Stage 5.4: the border-type indicator now renders through DF.Border (a 4-edge
+-- widget covering the whole unit frame) instead of the highlight overlay.  The
+-- legacy `style` enum maps onto a DF.Border style + animation:
+--   SOLID    → solid edges
+--   GLOW     → TEXTURE style + the bundled "DF Glow" edgeFile
+--   DASHED   → base hidden + DF_DASH @ freq 0 (static dashes)
+--   ANIMATED → base hidden + DF_DASH @ freq 1 (marching ants)
+--   CORNERS  → base hidden + CORNERS_ONLY
+-- (Inset is positive-INWARD here, matching the highlight system's convention.)
+local function BuildBorderTypeSpec(config)
+    local thickness = config.thickness or 2
+    local inset     = config.inset or 0
+    local color     = config.color or { r = 0, g = 0, b = 0, a = 1 }
+    local style     = BORDER_STYLE_MIGRATION[config.style] or config.style or "SOLID"
+    local spec = {
+        enabled = true, style = "SOLID",
+        size = thickness, inset = inset, color = color,
+    }
+    if style == "GLOW" then
+        spec.style   = "TEXTURE"
+        spec.texture = "DF Glow"
+    elseif style == "DASHED" or style == "ANIMATED" then
+        spec.size = 0  -- hide the solid base; the dashes ARE the border
+        spec.animation = { type = "DF_DASH",
+            frequency = (style == "ANIMATED") and 1 or 0,
+            thickness = thickness, inset = inset, color = color }
+    elseif style == "CORNERS" then
+        spec.size = 0
+        spec.animation = { type = "CORNERS_ONLY", thickness = thickness, color = color }
     end
+    return spec
+end
 
-    -- Create overlay frame parented to UIParent (avoids clipping)
-    -- Uses same structure as the highlight system so we can reuse
-    -- DF.ApplyHighlightStyle for all 6 border modes.
-    local ch = CreateFrame("Frame", nil, UIParent)
-    ch:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    ch:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    ch:SetFrameStrata(frame:GetFrameStrata())
-    ch:SetFrameLevel(frame:GetFrameLevel() + 8)  -- Below aggro(+9) highlight
-    ch:Hide()
+-- Whole-frame DF.Border widget.  SetAllPoints tracks the frame automatically,
+-- and being a child of the frame it hides when the frame does.
+local function NewADBorderWidget(frame, levelOffset)
+    local w = DF.Border:New(frame, { frameLevelOffset = levelOffset, layer = "OVERLAY" })
+    -- Remember the creation offset so ApplyBorderToOverlay can re-derive the
+    -- frame level from it when the "Draw above frame border" toggle changes.
+    w.dfAD_baseLevelOffset = levelOffset
+    return w
+end
 
-    -- 4 edge textures (named to match highlight system)
-    ch.topLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.bottomLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.leftLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.rightLine = ch:CreateTexture(nil, "OVERLAY")
-
-    -- Hook owner OnHide to hide border
-    frame:HookScript("OnHide", function()
-        if frame.dfAD_border then
-            frame.dfAD_border:Hide()
-        end
-    end)
-
-    frame.dfAD_border = ch
-    return ch
+local function GetOrCreateADBorder(frame)
+    if frame.dfAD_border then return frame.dfAD_border end
+    frame.dfAD_border = NewADBorderWidget(frame, 8)  -- below aggro(+9)
+    return frame.dfAD_border
 end
 
 local function GetOrCreateCustomBorder(frame, key)
-    if not frame.dfAD_customBorders then
-        frame.dfAD_customBorders = {}
-    end
+    if not frame.dfAD_customBorders then frame.dfAD_customBorders = {} end
     local pool = frame.dfAD_customBorders
-    if pool[key] then
-        pool[key]:ClearAllPoints()
-        pool[key]:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-        pool[key]:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-        return pool[key]
+    if pool[key] then return pool[key] end
+    pool[key] = NewADBorderWidget(frame, 7)  -- below shared border(+8)
+    return pool[key]
+end
+
+-- Comprehensive change-detection signature for the border-type spec.  MUST
+-- cover every render-affecting field, or a GUI edit to an uncovered field
+-- won't reach live frames until /reload (the preview rebuilds every refresh so
+-- it always reflects edits, masking the gap).
+local function colorSig(c)
+    if not c then return "_" end
+    return tostring(c.r or c[1]) .. "," .. tostring(c.g or c[2]) .. ","
+        .. tostring(c.b or c[3]) .. "," .. tostring(c.a or c[4])
+end
+local function BorderTypeSpecSig(spec, auraID, config)
+    local an, gr, sh = spec.animation, spec.gradient, spec.shadow
+    return table.concat({
+        tostring(spec.style), tostring(spec.size), tostring(spec.inset),
+        tostring(spec.offsetX), tostring(spec.offsetY), tostring(spec.texture),
+        tostring(spec.blendMode), colorSig(spec.color),
+        gr and ("G" .. colorSig(gr.startColor) .. colorSig(gr.endColor) .. tostring(gr.direction)) or "_",
+        sh and ("S" .. tostring(sh.enabled) .. colorSig(sh.color) .. tostring(sh.size)
+                .. tostring(sh.offsetX) .. tostring(sh.offsetY)) or "_",
+        an and ("A" .. tostring(an.type) .. tostring(an.frequency) .. tostring(an.particles)
+                .. tostring(an.length) .. tostring(an.thickness) .. tostring(an.scale)
+                .. tostring(an.inset) .. tostring(an.offsetX) .. tostring(an.offsetY)
+                .. tostring(an.mask) .. tostring(an.sidesAxis) .. tostring(an.cornerLength)
+                .. colorSig(an.color)) or "_",
+        tostring(auraID),
+        tostring(config.drawAboveFrameBorder),
+        tostring(config.expiringFeatureEnabled),
+        tostring(config.expiringEnabled), tostring(config.expiringPulsate),
+        tostring(config.expiringThreshold), tostring(config.expiringThresholdMode),
+        colorSig(config.expiringColor), tostring(config.expiringAlpha),
+        -- Expiring-border overrides — included so editing them rebuilds the
+        -- base + expiring spec pair.
+        tostring(config.ExpiringBorderSize), tostring(config.ExpiringBorderAlpha),
+        tostring(config.ExpiringAnimationType), tostring(config.ExpiringAnimationFrequency),
+        tostring(config.ExpiringAnimationThickness),
+        colorSig(config.ExpiringAnimationColor),
+        tostring(config.ExpiringAnimationParticles), tostring(config.ExpiringAnimationLength),
+        tostring(config.ExpiringAnimationScale), tostring(config.ExpiringAnimationInset),
+        tostring(config.ExpiringAnimationOffsetX), tostring(config.ExpiringAnimationOffsetY),
+        tostring(config.ExpiringAnimationMask), tostring(config.ExpiringAnimationSidesAxis),
+        tostring(config.ExpiringAnimationCornerLength),
+    }, "|")
+end
+
+-- Build the EXPIRING-state spec for the border-type: clone the base spec, then
+-- apply the expiring overrides (thickness / alpha / colour / animation swap).
+-- `applyColor` true recolours to the expiring colour (with its own alpha);
+-- else keep the base colour and alpha.  The ticker swaps base ↔ expiring on the
+-- threshold crossing; RecolorActive applies the colour between.
+local function buildBorderExpiringSpec(baseSpec, config, ec, applyColor)
+    local s = {}
+    for k, v in pairs(baseSpec) do s[k] = v end
+    -- Alpha rides with the colour (no separate multiplier): the expiring colour
+    -- carries its own alpha; the base colour keeps the base alpha.
+    local base = baseSpec.color or { r = 1, g = 1, b = 1, a = 1 }
+    if applyColor then
+        s.color = { r = ec.r or 1, g = ec.g or 0.2, b = ec.b or 0.2, a = ec.a or ec[4] or 1 }
+    else
+        s.color = { r = base.r or base[1] or 1, g = base.g or base[2] or 1,
+                    b = base.b or base[3] or 1, a = (base.a or base[4]) or 1 }
     end
-
-    local ch = CreateFrame("Frame", nil, UIParent)
-    ch:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    ch:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    ch:SetFrameStrata(frame:GetFrameStrata())
-    ch:SetFrameLevel(frame:GetFrameLevel() + 7)  -- Below shared border(+8)
-    ch:Hide()
-
-    ch.topLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.bottomLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.leftLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.rightLine = ch:CreateTexture(nil, "OVERLAY")
-
-    frame:HookScript("OnHide", function()
-        if pool[key] then
-            pool[key]:Hide()
+    local expThick = config.ExpiringBorderSize
+    local expAnim  = config.ExpiringAnimationType
+    if expAnim and expAnim ~= "NONE" then
+        s.animation = {
+            type         = expAnim,
+            color        = config.ExpiringAnimationColor or s.color,
+            frequency    = config.ExpiringAnimationFrequency,
+            thickness    = expThick or config.ExpiringAnimationThickness,
+            particles    = config.ExpiringAnimationParticles,
+            length       = config.ExpiringAnimationLength,
+            scale        = config.ExpiringAnimationScale,
+            inset        = config.ExpiringAnimationInset,
+            offsetX      = config.ExpiringAnimationOffsetX,
+            offsetY      = config.ExpiringAnimationOffsetY,
+            mask         = config.ExpiringAnimationMask,
+            sidesAxis    = config.ExpiringAnimationSidesAxis,
+            cornerLength = config.ExpiringAnimationCornerLength,
+        }
+        if expAnim == "DF_DASH" or expAnim == "CORNERS_ONLY" or expAnim == "SIDES_ONLY" then
+            s.size = 0  -- these effects ARE the border; hide the base edges
         end
-    end)
-
-    pool[key] = ch
-    return ch
+    elseif expThick then
+        if s.size and s.size > 0 then
+            s.size = expThick
+        elseif s.animation then
+            local a = {}; for k, v in pairs(s.animation) do a[k] = v end
+            a.thickness = expThick; s.animation = a
+        end
+    end
+    return s
 end
 
 -- Shared logic for applying border style, change detection, and expiring
 -- registration to a border overlay frame. Used by both shared and custom borders.
 local function ApplyBorderToOverlay(ch, frame, config, auraData)
-    local color = config.color
-    if not color then return end
-
-    local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
-    local alpha = color[4] or color.a or 1
-    local thickness = config.thickness or 2
-    local inset = config.inset or 0
-
-    local style = BORDER_STYLE_MIGRATION[config.style] or config.style or "SOLID"
-
-    local auraID = auraData and auraData.auraInstanceID
-    local expiringPulsate = config.expiringPulsate or false
-    if ch:IsShown()
-        and ch.dfAD_style == style
-        and ch.dfAD_r == r and ch.dfAD_g == g and ch.dfAD_b == b and ch.dfAD_a == alpha
-        and ch.dfAD_thickness == thickness and ch.dfAD_inset == inset
-        and ch.dfAD_auraID == auraID
-        and ch.dfAD_expiringPulsate == expiringPulsate then
+    -- Legacy configs (still carrying the old `style` enum, pre-migration or a
+    -- fresh import) map via BuildBorderTypeSpec; migrated configs build the
+    -- canonical spec directly.  Both produce the same DF.Border spec shape.
+    local spec = config.style and BuildBorderTypeSpec(config) or DF.Border:BuildSpec(config, "")
+    if not spec.color then spec.color = { r = 0, g = 0, b = 0, a = 1 } end
+    if spec.enabled == nil then spec.enabled = true end
+    if spec.enabled == false then
+        DF.Border:Apply(ch, { enabled = false })
+        UnregisterExpiring(ch)
+        ch.dfAD_sig = "off"
         return
     end
 
-    DF.ApplyHighlightStyle(ch, style, thickness, inset, r, g, b, alpha)
-
-    ch.dfAD_style = style
-    ch.dfAD_r, ch.dfAD_g, ch.dfAD_b, ch.dfAD_a = r, g, b, alpha
-    ch.dfAD_thickness = thickness
-    ch.dfAD_inset = inset
-    ch.dfAD_auraID = auraID
-
+    local bc = spec.color
+    local r = bc.r or bc[1] or 1
+    local g = bc.g or bc[2] or 1
+    local b = bc.b or bc[3] or 1
+    local alpha = bc.a or bc[4] or 1
+    local auraID = auraData and auraData.auraInstanceID
+    local expiringPulsate = config.expiringPulsate or false
     local expiringEnabled = config.expiringEnabled
     if expiringEnabled == nil then expiringEnabled = false end
+    local ec = config.expiringColor
+
+    -- Change detection — ApplyBorder runs every Apply cycle (frame-level
+    -- indicator), so skip the rebuild + expiring re-register when nothing the
+    -- border cares about changed.  Comprehensive (covers every render-affecting
+    -- spec field) so GUI edits reach live frames without /reload.  The expiring
+    -- ticker recolours live via RecolorActive between rebuilds.
+    local sig = BorderTypeSpecSig(spec, auraID, config)
+    if ch.dfAD_sig == sig then return end
+    ch.dfAD_sig = sig
+
+    DF.Border:Apply(ch, spec)
+
+    -- Draw order: by default lift the border-type above the frame's class border
+    -- (parent+10) and aggro (parent+9) so it fully covers them instead of being
+    -- rendered underneath.  +4 preserves the shared(+8)/custom(+7) relative order
+    -- (→ 12 / 11).  Toggling it off restores the creation offset so it tucks back
+    -- under the class border.
+    local baseOff = ch.dfAD_baseLevelOffset or 8
+    local lvlOff  = (config.drawAboveFrameBorder ~= false) and (baseOff + 4) or baseOff
+    ch:SetFrameLevel(frame:GetFrameLevel() + lvlOff)
 
     -- Lazy-create pulse animation group (reused across aura changes)
     if expiringPulsate then GetOrCreatePulseAnim(ch) end
     ch.dfAD_expiringPulsate = expiringPulsate
 
-    if expiringEnabled then
-        local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
+    -- Expiring features (Stage 5.4 parity): master gate + colour override /
+    -- pulsate / thickness / alpha / animation swap.  When thickness/alpha/
+    -- animation differ from base, we build an EXPIRING spec the ticker swaps in
+    -- on the threshold crossing; the colour override (if on) smooths the colour
+    -- via RecolorActive between crossings (no per-tick tear-down).
+    local masterEnabled = config.expiringFeatureEnabled ~= false
+    local applyColor    = expiringEnabled
+    local expAnimType   = config.ExpiringAnimationType
+    local hasExpAnim    = expAnimType and expAnimType ~= "NONE"
+    local baseThick     = (spec.size and spec.size > 0) and spec.size
+                          or (spec.animation and spec.animation.thickness) or 0
+    local hasExpThick   = config.ExpiringBorderSize and config.ExpiringBorderSize ~= baseThick
+    -- Alpha is no longer a separate override: it rides with the expiring colour
+    -- (expiringColor.a), applied by RecolorActive when the colour override is on
+    -- — matching the base Border Alpha = BorderColor.a model.
+    local anyExp = masterEnabled and (applyColor or expiringPulsate
+                   or hasExpAnim or hasExpThick)
+
+    if anyExp then
+        local ecc = ec or {r = 1, g = 0.2, b = 0.2}
         local oc = {r = r, g = g, b = b}
+        ch.dfAD_baseSpec = spec
+        ch.dfAD_expSpec  = (hasExpAnim or hasExpThick)
+                           and buildBorderExpiringSpec(spec, config, ecc, applyColor) or nil
+        ch.dfAD_lastExp  = nil  -- force the ticker to (re)apply the right spec
+
+        -- Shared state transition: swap the base/expiring spec on the threshold
+        -- crossing, then SNAP the colour to the full expiring colour (the curve
+        -- is a STEP curve so there's no washed-out fade).  Reached from both
+        -- applyResult (live, secret-safe colour-curve path) and applyManual
+        -- (preview / non-colour fallback).
+        local function applyBorderExpState(el, isExp, entry)
+            if el.dfAD_expSpec and isExp ~= el.dfAD_lastExp then
+                el.dfAD_lastExp = isExp
+                DF.Border:Apply(el, isExp and el.dfAD_expSpec or el.dfAD_baseSpec)
+            end
+            -- Recolour only when the colour override is on; otherwise the spec
+            -- swap already carries the right colour.
+            if entry.applyColor then
+                if isExp then
+                    local c = entry.color
+                    DF.Border:RecolorActive(el, c.r or 1, c.g or 0.2, c.b or 0.2, entry.expiringAlpha)
+                else
+                    local c = entry.originalColor
+                    DF.Border:RecolorActive(el, c.r, c.g, c.b, entry.originalAlpha)
+                end
+            end
+            UpdatePulseState(el, isExp)
+        end
+
         RegisterExpiring(ch, {
             unit = frame.unit,
             auraInstanceID = auraID,
             threshold = config.expiringThreshold or 30,
             duration = auraData and auraData.duration,
             expirationTime = auraData and auraData.expirationTime,
-            colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
+            -- Colour curve drives the secret-safe live detection path: live aura
+            -- durations are tainted, so the manual fallback can't read them and
+            -- the curve's EvaluateRemainingPercent is the only way to detect the
+            -- threshold crossing on real frames.  It's a STEP curve, so the
+            -- colour SNAPS to the full expiring colour (no washed-out blend).
+            colorCurve = applyColor and BuildExpiringColorCurve(config.expiringThreshold or 30, ecc, oc, config.expiringThresholdMode) or nil,
             thresholdMode = config.expiringThresholdMode,
-            color = ec, originalColor = oc,
-            originalAlpha = alpha, expiringAlpha = config.expiringAlpha or 1.0, style = style, thickness = thickness, inset = inset,
-            -- Border expiring callbacks: only the color and alpha change
-            -- as the aura approaches expiration. The style/thickness/inset
-            -- were fixed when ApplyHighlightStyle was originally called in
-            -- the parent function, so every tick here is a pure recolor.
-            -- Use UpdateHighlightStyleColor to skip the full tear-down
-            -- (especially important for ANIMATED where tearing down hides
-            -- 80 dashes, removes from the animator, and re-initializes
-            -- everything 3 times per second).
+            color = ecc, originalColor = oc,
+            originalAlpha = alpha,
+            -- Expiring alpha = the expiring colour's own alpha (in sync with its
+            -- picker), not a separate slider.
+            expiringAlpha = ecc.a or ecc[4] or 1,
+            applyColor = applyColor,
             applyResult = function(el, result, entry)
-                local oc2 = entry.originalColor
-                local isExp = IsColorExpiring(result, oc2)
-                local a = isExp and entry.expiringAlpha or entry.originalAlpha
-                DF.UpdateHighlightStyleColor(el, entry.style, result.r, result.g, result.b, a)
-                UpdatePulseState(el, isExp)
+                -- Fires only when colorCurve is set (colour override on).  The
+                -- stepped result is either the base or full expiring colour.
+                applyBorderExpState(el, IsColorExpiring(result, entry.originalColor), entry)
             end,
             applyManual = function(el, isExp, entry)
-                if isExp then
-                    local c = entry.color
-                    DF.UpdateHighlightStyleColor(el, entry.style, c.r or 1, c.g or 0.2, c.b or 0.2, entry.expiringAlpha)
-                else
-                    local c = entry.originalColor
-                    DF.UpdateHighlightStyleColor(el, entry.style, c.r, c.g, c.b, entry.originalAlpha)
-                end
-                UpdatePulseState(el, isExp)
+                applyBorderExpState(el, isExp, entry)
             end,
         })
     else
         UnregisterExpiring(ch)
+        ch.dfAD_baseSpec, ch.dfAD_expSpec, ch.dfAD_lastExp = nil, nil, nil
         -- Stop pulsation when expiring is disabled
         if ch.dfAD_pulse and ch.dfAD_pulse:IsPlaying() then
             ch.dfAD_pulse:Stop()
@@ -969,11 +1132,10 @@ end
 function Indicators:RevertBorder(frame)
     if frame and frame.dfAD_border then
         UnregisterExpiring(frame.dfAD_border)
-        -- Use NONE mode to properly clean up all styles (animated, glow, corners, etc.)
-        DF.ApplyHighlightStyle(frame.dfAD_border, "NONE", 2, 0, 1, 1, 1, 1)
-        -- Clear cached state so next ApplyBorder won't skip via change detection
-        frame.dfAD_border.dfAD_style = nil
-        frame.dfAD_border.dfAD_auraID = nil
+        -- enabled=false hides the edges AND stops any animation (dashes/corners).
+        DF.Border:Apply(frame.dfAD_border, { enabled = false })
+        -- Clear the change-detection signature so the next ApplyBorder rebuilds.
+        frame.dfAD_border.dfAD_sig = nil
     end
 end
 
@@ -981,9 +1143,8 @@ function Indicators:RevertCustomBorders(frame)
     if frame and frame.dfAD_customBorders then
         for _, ch in pairs(frame.dfAD_customBorders) do
             UnregisterExpiring(ch)
-            DF.ApplyHighlightStyle(ch, "NONE", 2, 0, 1, 1, 1, 1)
-            ch.dfAD_style = nil
-            ch.dfAD_auraID = nil
+            DF.Border:Apply(ch, { enabled = false })
+            ch.dfAD_sig = nil
         end
     end
 end
@@ -1516,6 +1677,20 @@ local function GetIconMap(frame)
     return frame.dfAD_icons
 end
 
+-- Lazy-create the unified DF.Border widget that replaces the icon factory's
+-- default 1px backdrop. The factory's `icon.border` (a single BACKGROUND
+-- ColorTexture) is hidden once and stays hidden — AD icons render their
+-- border exclusively through dfADBorder so the new feature set (style,
+-- gradient, shadow, blendMode, offset) is available on every aura icon.
+-- Non-AD callers of CreateAuraIcon are untouched because we don't modify
+-- the factory itself.
+local function GetOrCreateADIconBorder(icon)
+    if icon.dfADBorder then return icon.dfADBorder end
+    icon.dfADBorder = DF.Border:New(icon, { frameLevelOffset = 0, layer = "BACKGROUND" })
+    if icon.border then icon.border:Hide() end
+    return icon.dfADBorder
+end
+
 local function GetOrCreateADIcon(frame, auraName)
     local map = GetIconMap(frame)
     if map[auraName] then return map[auraName] end
@@ -1580,26 +1755,64 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     icon.dfAD_hideIcon = hideIcon
 
     -- ========================================
-    -- BORDER (the black background behind the icon texture)
+    -- BORDER (unified DF.Border — replaces the icon factory's 1px backdrop)
+    --
+    -- Stage 5.1c: spec comes from DF.Border:BuildSpec(config, "") so the
+    -- canonical Style / Texture / Color / Gradient / Shadow / BlendMode /
+    -- Offset keys flow through automatically. The empty prefix is correct:
+    -- AD's icon proxy is already type-scoped, so BuildSpec's key("BorderX")
+    -- builder ("" .. "BorderX" = "BorderX") lands directly on config.
+    --
+    -- AD-specific overrides on top of BuildSpec:
+    --   * BorderInset semantics — AD's slider means "extend perimeter OUTWARD
+    --     by N pixels".  DF.Border's inset is positive-INWARD.  So we invert
+    --     to spec.inset = -BorderInset.
+    --   * Visible band combines AD's BorderSize (inner thickness, behind the
+    --     icon's inset) and BorderInset (outer extension) → spec.size =
+    --     BorderSize + BorderInset.  This preserves the pre-5.1a visual
+    --     where the "border" straddled the icon's edge.
+    --   * spec.enabled is gated by both ShowBorder AND hideIcon — hideIcon
+    --     is a text-only mode where the icon TEXTURE is hidden and showing a
+    --     border around nothing looks broken.
+    --
+    -- Legacy fallback (borderEnabled / borderThickness / borderInset) covers
+    -- in-memory state that hasn't been migrated yet — e.g. a fresh import
+    -- where ApplyImportedProfile doesn't trigger ADDON_LOADED.
     -- ========================================
-    local borderEnabled = config.borderEnabled
+    local borderEnabled = config.ShowBorder
+    if borderEnabled == nil then borderEnabled = config.borderEnabled end
     if borderEnabled == nil then borderEnabled = true end
-    local borderThickness = config.borderThickness or 1
-    local borderInset = config.borderInset or 1
+    local borderThickness = config.BorderSize  or config.borderThickness or 1
+    local borderInset     = config.BorderInset or config.borderInset     or 1
 
-    if icon.border then
-        if borderEnabled and not hideIcon then
-            icon.border:ClearAllPoints()
-            PixelUtil.SetPoint(icon.border, "TOPLEFT", icon, "TOPLEFT", -borderInset, borderInset)
-            PixelUtil.SetPoint(icon.border, "BOTTOMRIGHT", icon, "BOTTOMRIGHT", borderInset, -borderInset)
-            icon.border:SetColorTexture(0, 0, 0, 0.8)
-            icon.border:Show()
-        else
-            icon.border:Hide()
-        end
+    local adBorder = GetOrCreateADIconBorder(icon)
+    -- Border geometry: BorderSize is the band THICKNESS on its own — Inset no
+    -- longer adds to it (the old `size = thickness + inset` coupling made the
+    -- band visibly thicker as you raised Inset).  Inset just repositions the
+    -- constant-width band: spec.inset = -BorderInset moves it outward (AD's
+    -- "extend outward by N" convention).  At Inset 0 the band sits flush
+    -- against the icon edge; positive Inset opens a gap; negative pulls it in.
+    -- The cached values feed the spec below; the expiring path recomputes the
+    -- same way so the two stay consistent.
+    adBorder.dfADIconSize  = borderThickness
+    adBorder.dfADIconInset = -borderInset
+
+    local spec = DF.Border:BuildSpec(config, "")
+    spec.enabled = borderEnabled and not hideIcon
+    spec.size    = adBorder.dfADIconSize
+    spec.inset   = adBorder.dfADIconInset
+    -- BuildSpec doesn't seed a default colour when the static-colour key
+    -- (BorderColor) is missing — for migrated configs without an explicit
+    -- BorderColor it returns nil colour, which Apply then reads as 0/0/0/1.
+    -- Fall back to the pre-5.1a hardcoded translucent black so legacy
+    -- profiles render identically until the user picks a colour.
+    if not spec.color then
+        spec.color = { r = 0, g = 0, b = 0, a = 0.8 }
     end
+    DF.Border:Apply(adBorder, spec)
 
-    -- Adjust texture inset to sit inside border
+    -- Inset the artwork by the border thickness so the icon stays its original
+    -- size and the band frames it instead of sitting on top of the art.
     if icon.texture and not hideIcon then
         icon.texture:ClearAllPoints()
         local texInset = borderEnabled and borderThickness or 0
@@ -1722,8 +1935,12 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     if expiringEnabled == nil then expiringEnabled = false end
     local expiringPulsate = config.expiringPulsate or false
 
-    -- Lazy-create a wrapper frame for the border texture so we can animate its alpha
-    if expiringPulsate and icon.border then
+    -- Lazy-create a wrapper frame so we can animate the border's alpha. The
+    -- DF.Border widget is a frame with 4 edge textures — reparenting the whole
+    -- widget under the pulse wrapper lets the wrapper's alpha animation
+    -- propagate to every edge at once (child frames inherit parent alpha).
+    -- Stage 5.1a: was `icon.border` (single texture); now `icon.dfADBorder`.
+    if expiringPulsate and icon.dfADBorder then
         if not icon.adBorderPulseFrame then
             icon.adBorderPulseFrame = CreateFrame("Frame", nil, icon)
             icon.adBorderPulseFrame:SetAllPoints(icon)
@@ -1731,7 +1948,7 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
             icon.adBorderPulseFrame:EnableMouse(false)
         end
         if not icon.adBorderReparented then
-            icon.border:SetParent(icon.adBorderPulseFrame)
+            icon.dfADBorder:SetParent(icon.adBorderPulseFrame)
             icon.adBorderReparented = true
         end
         GetOrCreatePulseAnim(icon.adBorderPulseFrame)
@@ -1762,11 +1979,86 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     end
 
     -- Store expiring config flags for UpdateIcon to read
+    icon.dfAD_expiringFeatureEnabled = config.expiringFeatureEnabled
     icon.dfAD_expiringEnabled = expiringEnabled
     icon.dfAD_expiringColor = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
     icon.dfAD_expiringThreshold = config.expiringThreshold or 30
     icon.dfAD_expiringThresholdMode = config.expiringThresholdMode
+    icon.dfAD_expiringTintEnabled = config.expiringTintEnabled
+    icon.dfAD_expiringTintColor = config.expiringTintColor
     icon.dfAD_expiringPulsate = expiringPulsate
+    -- Stage 5.1d.2: Border-Animation effect to swap into spec.animation when
+    -- the aura crosses the threshold.  NONE means no animation override;
+    -- the base Border Animation (if any) runs continuously.  Other values
+    -- mirror Border Animation's effect set.  Frequency is per-state so
+    -- "slow continuous pulse / fast expiring flash" works.
+    -- Full per-state animation tunables (parity with base Border Animation).
+    -- buildAnim reads these when below threshold so the expiring animation has
+    -- its own colour / particles / thickness / offset / etc. independent of
+    -- the base animation.
+    icon.dfAD_ExpiringAnimationType         = config.ExpiringAnimationType or "NONE"
+    icon.dfAD_ExpiringAnimationColor        = config.ExpiringAnimationColor
+    icon.dfAD_ExpiringAnimationFrequency    = config.ExpiringAnimationFrequency or 1
+    icon.dfAD_ExpiringAnimationParticles    = config.ExpiringAnimationParticles
+    icon.dfAD_ExpiringAnimationLength       = config.ExpiringAnimationLength
+    icon.dfAD_ExpiringAnimationThickness    = config.ExpiringAnimationThickness
+    icon.dfAD_ExpiringAnimationScale        = config.ExpiringAnimationScale
+    icon.dfAD_ExpiringAnimationInset        = config.ExpiringAnimationInset
+    icon.dfAD_ExpiringAnimationOffsetX      = config.ExpiringAnimationOffsetX
+    icon.dfAD_ExpiringAnimationOffsetY      = config.ExpiringAnimationOffsetY
+    icon.dfAD_ExpiringAnimationMask         = config.ExpiringAnimationMask
+    icon.dfAD_ExpiringAnimationSidesAxis    = config.ExpiringAnimationSidesAxis
+    icon.dfAD_ExpiringAnimationCornerLength = config.ExpiringAnimationCornerLength
+
+    -- Stage 5.1d.3: per-state thickness / alpha overrides.  Stored alongside
+    -- the base BorderSize / BorderInset so the expiring callback can
+    -- recompute the combined size + inset using the AD-specific translation
+    -- (spec.size = thickness + inset, spec.inset = -inset).
+    -- Also store the base BorderColor so applyState can fall back to it when
+    -- thickness/alpha overrides are configured without a colour override.
+    icon.dfAD_baseBorderSize       = borderThickness
+    icon.dfAD_baseBorderInset      = borderInset
+    icon.dfAD_baseBorderColor      = spec.color
+    -- Capture the base PRESENTATION (style + gradient / texture / shadow /
+    -- blend) so the expiring callback can preserve it.  Without this, applyState
+    -- hand-built a SOLID spec and dropped the gradient / texture entirely — so
+    -- any icon with an expiring feature lost its gradient border.  The expiring
+    -- callback flattens to SOLID only when the Expiring Colour Override is the
+    -- thing actively tinting the border (a single override colour can't be
+    -- expressed as a two-stop gradient); otherwise it keeps the base style.
+    icon.dfAD_baseBorderStyle      = spec.style
+    icon.dfAD_baseBorderGradient   = spec.gradient
+    icon.dfAD_baseBorderTexture    = spec.texture
+    icon.dfAD_baseBorderShadow     = spec.shadow
+    icon.dfAD_baseBorderBlend      = spec.blendMode
+    -- Capture the static Border Offset X/Y from the base spec (BuildSpec
+    -- reads BorderOffsetX/Y).  applyState builds its Apply spec by hand and
+    -- must re-supply these — otherwise the expiring callback's Apply defaults
+    -- offset to 0,0 and snaps the border off the user's configured position.
+    icon.dfAD_baseBorderOffsetX    = spec.offsetX
+    icon.dfAD_baseBorderOffsetY    = spec.offsetY
+    icon.dfAD_ExpiringBorderSize   = config.ExpiringBorderSize  or borderThickness
+    -- Expiring alpha = the expiring colour's own alpha (in sync with the
+    -- Expiring Color picker's alpha bar) — matches base Border Alpha = colour.a.
+    -- The render forces the tint colour to a=1 then multiplies by this, so it
+    -- ends up as exactly the colour's alpha.
+    icon.dfAD_ExpiringBorderAlpha  = (config.expiringColor and (config.expiringColor.a or config.expiringColor[4])) or 1
+    -- Capture the base animation spec from the config so the expiring
+    -- callback can restore it when the aura returns above threshold.
+    -- Mirrors what BuildSpec puts on spec.animation.
+    icon.dfAD_baseAnimType         = config.BorderAnimationType or "NONE"
+    icon.dfAD_baseAnimColor        = config.BorderAnimationColor
+    icon.dfAD_baseAnimFrequency    = config.BorderAnimationFrequency
+    icon.dfAD_baseAnimParticles    = config.BorderAnimationParticles
+    icon.dfAD_baseAnimLength       = config.BorderAnimationLength
+    icon.dfAD_baseAnimThickness    = config.BorderAnimationThickness
+    icon.dfAD_baseAnimScale        = config.BorderAnimationScale
+    icon.dfAD_baseAnimInset        = config.BorderAnimationInset
+    icon.dfAD_baseAnimOffsetX      = config.BorderAnimationOffsetX
+    icon.dfAD_baseAnimOffsetY      = config.BorderAnimationOffsetY
+    icon.dfAD_baseAnimMask         = config.BorderAnimationMask
+    icon.dfAD_baseAnimSidesAxis    = config.BorderAnimationSidesAxis
+    icon.dfAD_baseAnimCornerLength = config.BorderAnimationCornerLength
 
     -- Missing-mode config
     icon.dfAD_missingDesaturate = config.missingDesaturate
@@ -1815,12 +2107,24 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
     local anchor = config.anchor or "TOPLEFT"
     local offsetX = config.offsetX or 0
     local offsetY = config.offsetY or 0
-    -- Compensate for border overhang at frame edges
-    local borderEnabledForPos = config.borderEnabled
-    if borderEnabledForPos == nil then borderEnabledForPos = true end
-    offsetX, offsetY = AdjustOffsetForBorder(anchor, offsetX, offsetY, config.borderInset or 1, borderEnabledForPos)
-    icon:ClearAllPoints()
-    icon:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    -- Position is the user's offset only.  We deliberately do NOT shift the
+    -- icon by the border inset any more — the band is a constant-width ring
+    -- whose Inset slider expands it outward, and tying the icon's position to
+    -- Inset made the whole icon slide every time the slider moved.  The icon
+    -- stays put; only the ring around it grows out / in.
+    -- Only re-anchor when the position actually changed (or the frame lost its
+    -- points on recycle).  The AD preview re-runs UpdateIcon every frame; re-
+    -- SetPointing each frame fights an active Bounce Translation and drifts the
+    -- child-frame overlays (tint / anim glow) up the screen.  Live frames rarely
+    -- re-run this, which is why the bug was preview-only.
+    if icon:GetNumPoints() == 0 or icon.dfAD_posAnchor ~= anchor
+       or icon.dfAD_posX ~= offsetX or icon.dfAD_posY ~= offsetY then
+        icon.dfAD_posAnchor, icon.dfAD_posX, icon.dfAD_posY = anchor, offsetX, offsetY
+        local b = icon.dfAD_basePos or {}; icon.dfAD_basePos = b
+        b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
+        icon:ClearAllPoints()
+        icon:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    end
 
     -- Read stored config flags from ConfigureIcon
     local hideIcon = icon.dfAD_hideIcon
@@ -2054,13 +2358,36 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
     local expiringPulsate = icon.dfAD_expiringPulsate
     local expiringWholeAlphaPulse = icon.dfAD_expiringWholeAlphaPulse
     local expiringBounce = icon.dfAD_expiringBounce
+    local expiringAnimType = icon.dfAD_ExpiringAnimationType
 
-    -- Register if ANY expiring feature is active (color, pulsate, alpha pulse, bounce)
-    local anyExpiringFeature = expiringEnabled or expiringPulsate or expiringWholeAlphaPulse or expiringBounce
+    -- Register if ANY expiring feature is active (color, pulsate, alpha pulse,
+    -- bounce, animation override, OR a Stage 5.1d.3 thickness/alpha override
+    -- that differs from the base — otherwise those sliders would silently
+    -- do nothing when set alone).
+    local hasExpiringAnim = expiringAnimType and expiringAnimType ~= "NONE"
+    local hasExpiringThickness = icon.dfAD_ExpiringBorderSize
+                                 and icon.dfAD_ExpiringBorderSize ~= icon.dfAD_baseBorderSize
+    local hasExpiringAlpha = icon.dfAD_ExpiringBorderAlpha
+                             and icon.dfAD_ExpiringBorderAlpha ~= 1
+    -- Master enable gates the WHOLE feature: when off, no expiring override
+    -- registers regardless of the individual settings.  nil (legacy / unset)
+    -- counts as enabled so existing configs are unaffected.
+    local masterEnabled = icon.dfAD_expiringFeatureEnabled ~= false
+    local anyExpiringFeature = masterEnabled and (expiringEnabled or expiringPulsate
+                            or expiringWholeAlphaPulse or expiringBounce
+                            or hasExpiringAnim
+                            or hasExpiringThickness or hasExpiringAlpha)
     if anyExpiringFeature then
         local ec = icon.dfAD_expiringColor
         local oc = {r = 0, g = 0, b = 0}  -- icon border default = black
         local applyColor = expiringEnabled
+
+        -- Border state-swap (geometry / colour / style / animation) is the
+        -- shared ADApplyExpiringBorderState — the SAME helper square and bar use,
+        -- so the three placed border indicators never drift (task #46).  The
+        -- icon's old inline buildAnim/applyState (with a now-dead ExpiringBorder
+        -- Alpha multiplier — the GUI edits the colour's own alpha) were removed.
+
         RegisterExpiring(icon, {
             unit = frame.unit,
             auraInstanceID = auraData and auraData.auraInstanceID,
@@ -2071,30 +2398,32 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
             thresholdMode = icon.dfAD_expiringThresholdMode,
             color = ec, originalColor = oc,
             applyResult = function(el, result, entry)
-                -- applyResult only fires when colorCurve is set (i.e. applyColor = true)
-                if el.border then
-                    el.border:SetColorTexture(result.r, result.g, result.b, result.a or 1)
-                end
-                local oc2 = entry.originalColor
-                local isExp = IsColorExpiring(result, oc2)
-                if el.adBorderPulseFrame then
-                    UpdatePulseState(el.adBorderPulseFrame, isExp)
-                end
-                UpdateWholeAlphaPulseState(el, isExp)
-                UpdateBounceState(el, isExp)
+                -- applyResult only fires when colorCurve is set
+                -- (applyColor = true, i.e. user enabled Expiring Color Override).
+                local isExp = IsColorExpiring(result, entry.originalColor)
+                ADApplyExpiringBorderState(el, isExp, { r = result.r, g = result.g, b = result.b, a = result.a or 1 })
+                -- Anim effects: non-secret only (force-stopped on secret auras).
+                DriveExpiringEffects(el, result, isExp, el.adBorderPulseFrame)
             end,
             applyManual = function(el, isExp, entry)
-                if applyColor and el.border then
-                    if isExp then
+                -- Fire applyState whenever ANY border-affecting expiring
+                -- feature is configured.  Without this, setting only
+                -- Expiring Thickness / Alpha did nothing because applyState
+                -- was only reached via colour-override and animation paths.
+                if applyColor or hasExpiringAnim or hasExpiringThickness or hasExpiringAlpha then
+                    local color
+                    if applyColor and isExp then
                         local c = entry.color
-                        el.border:SetColorTexture(c.r or 1, c.g or 0.2, c.b or 0.2, 1)
+                        color = { r = c.r or 1, g = c.g or 0.2, b = c.b or 0.2, a = 1 }
                     else
-                        el.border:SetColorTexture(0, 0, 0, 0.8)
+                        -- No colour override active for this tick — use base
+                        -- colour so thickness / alpha overrides still apply
+                        -- on the user's chosen border colour.
+                        color = icon.dfAD_baseBorderColor or { r = 0, g = 0, b = 0, a = 0.8 }
                     end
+                    ADApplyExpiringBorderState(el, isExp, color)
                 end
-                if el.adBorderPulseFrame then
-                    UpdatePulseState(el.adBorderPulseFrame, isExp)
-                end
+                if el.adBorderPulseFrame then UpdatePulseState(el.adBorderPulseFrame, isExp) end
                 UpdateWholeAlphaPulseState(el, isExp)
                 UpdateBounceState(el, isExp)
             end,
@@ -2114,6 +2443,11 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
         end
     end
 
+    -- Expiring TINT (independent of the border feature; secret-safe, on the
+    -- shared engine).  Self-gates: UpdateTint registers when enabled, else
+    -- unregisters.  Hosted on textOverlay so it sits above the icon art.
+    SetupExpiringTint(icon.textOverlay or icon, "ARTWORK", icon, frame, auraData)
+
     icon:Show()
 end
 
@@ -2123,6 +2457,7 @@ function Indicators:HideUnusedIcons(frame, activeMap)
     for auraName, icon in pairs(map) do
         if not activeMap[auraName] then
             UnregisterExpiring(icon)
+            ClearExpiringTint(icon.textOverlay or icon)
             icon:Hide()
             -- Clear stale aura data (matches bar cleanup pattern)
             if icon.auraData then
@@ -2199,6 +2534,15 @@ local function GetOrCreateADSquare(frame, auraName)
     return sq
 end
 
+-- Stage 5.2a: lazily attach a unified DF.Border widget to a square and hide
+-- the legacy single-texture `sq.border`.  Mirrors GetOrCreateADIconBorder.
+local function GetOrCreateADSquareBorder(sq)
+    if sq.dfADBorder then return sq.dfADBorder end
+    sq.dfADBorder = DF.Border:New(sq, { frameLevelOffset = 0, layer = "BACKGROUND" })
+    if sq.border then sq.border:Hide() end
+    return sq.dfADBorder
+end
+
 -- ============================================================
 -- ConfigureSquare: static config applied once per config change
 -- Sets size, scale, alpha, frame level/strata, border, color,
@@ -2239,30 +2583,90 @@ function Indicators:ConfigureSquare(frame, config, defaults, auraName, priority)
     sq.dfAD_hideIcon = hideIcon
 
     -- ========================================
-    -- BORDER
+    -- BORDER (Stage 5.2 — unified DF.Border backend)
+    -- Canonical keys (ShowBorder / BorderSize / BorderInset) with legacy
+    -- fallback (showBorder / borderThickness / borderInset) for configs that
+    -- haven't run the migration shim yet.  Same geometry model as the icon
+    -- (Stage 5.1): BorderSize is the band thickness alone; Inset repositions a
+    -- constant-width band outward (spec.inset = -BorderInset).  BuildSpec also
+    -- carries Style / Texture / Colour / Gradient / Shadow / Blend / Offset /
+    -- Animation through, so Apply renders + animates the border in one call.
     -- ========================================
-    local showBorder = config.showBorder
-    if showBorder == nil then showBorder = true end
-    local borderThickness = config.borderThickness or 1
-    local borderInset = config.borderInset or 1
+    local borderEnabled = config.ShowBorder
+    if borderEnabled == nil then borderEnabled = config.showBorder end
+    if borderEnabled == nil then borderEnabled = true end
+    local borderThickness = config.BorderSize  or config.borderThickness or 1
+    local borderInset     = config.BorderInset or config.borderInset     or 1
 
-    if showBorder and not hideIcon then
-        sq.border:ClearAllPoints()
-        PixelUtil.SetPoint(sq.border, "TOPLEFT", sq, "TOPLEFT", -borderInset, borderInset)
-        PixelUtil.SetPoint(sq.border, "BOTTOMRIGHT", sq, "BOTTOMRIGHT", borderInset, -borderInset)
-        sq.border:SetColorTexture(0, 0, 0, 1)
-        sq.border:Show()
-    else
-        sq.border:Hide()
+    local adBorder = GetOrCreateADSquareBorder(sq)
+    adBorder.dfADIconSize  = borderThickness
+    adBorder.dfADIconInset = -borderInset
+
+    local spec = DF.Border:BuildSpec(config, "")
+    spec.enabled = borderEnabled and not hideIcon
+    spec.size    = adBorder.dfADIconSize
+    spec.inset   = adBorder.dfADIconInset
+    -- Legacy square border was opaque black; fall back to it when no explicit
+    -- BorderColor (BuildSpec returns nil colour for unmigrated configs).
+    if not spec.color then
+        spec.color = { r = 0, g = 0, b = 0, a = 1 }
     end
+    DF.Border:Apply(adBorder, spec)
 
-    -- Adjust texture inset to sit inside border
+    -- Inset the fill texture by the border thickness so the band frames the
+    -- square instead of sitting over it (same as the icon).
     if not hideIcon then
         sq.texture:ClearAllPoints()
-        local texInset = showBorder and borderThickness or 0
+        local texInset = borderEnabled and borderThickness or 0
         sq.texture:SetPoint("TOPLEFT", texInset, -texInset)
         sq.texture:SetPoint("BOTTOMRIGHT", -texInset, texInset)
     end
+
+    -- Stage 5.2 expiring-border parity: store the base presentation + expiring
+    -- overrides so UpdateSquare's expiring callback can recolour / thicken /
+    -- animate the BORDER below threshold via ADApplyExpiringBorderState (shared
+    -- with the fill's expiring colour).  Mirrors what ConfigureIcon stores.
+    sq.dfAD_baseBorderEnabled  = borderEnabled and not hideIcon
+    sq.dfAD_baseBorderSize     = borderThickness
+    sq.dfAD_baseBorderInset    = borderInset
+    sq.dfAD_baseBorderColor    = spec.color
+    sq.dfAD_baseBorderStyle    = spec.style
+    sq.dfAD_baseBorderGradient = spec.gradient
+    sq.dfAD_baseBorderTexture  = spec.texture
+    sq.dfAD_baseBorderShadow   = spec.shadow
+    sq.dfAD_baseBorderBlend    = spec.blendMode
+    sq.dfAD_baseBorderOffsetX  = spec.offsetX
+    sq.dfAD_baseBorderOffsetY  = spec.offsetY
+    sq.dfAD_baseAnimType         = config.BorderAnimationType or "NONE"
+    sq.dfAD_baseAnimColor        = config.BorderAnimationColor
+    sq.dfAD_baseAnimFrequency    = config.BorderAnimationFrequency
+    sq.dfAD_baseAnimParticles    = config.BorderAnimationParticles
+    sq.dfAD_baseAnimLength       = config.BorderAnimationLength
+    sq.dfAD_baseAnimThickness    = config.BorderAnimationThickness
+    sq.dfAD_baseAnimScale        = config.BorderAnimationScale
+    sq.dfAD_baseAnimInset        = config.BorderAnimationInset
+    sq.dfAD_baseAnimOffsetX      = config.BorderAnimationOffsetX
+    sq.dfAD_baseAnimOffsetY      = config.BorderAnimationOffsetY
+    sq.dfAD_baseAnimMask         = config.BorderAnimationMask
+    sq.dfAD_baseAnimSidesAxis    = config.BorderAnimationSidesAxis
+    sq.dfAD_baseAnimCornerLength = config.BorderAnimationCornerLength
+    sq.dfAD_ExpiringBorderColor  = config.ExpiringBorderColor or {r = 1, g = 0.2, b = 0.2, a = 1}
+    sq.dfAD_ExpiringBorderSize   = config.ExpiringBorderSize  or borderThickness
+    sq.dfAD_ExpiringBorderAlpha  = config.ExpiringBorderAlpha or 1
+    sq.dfAD_ExpiringAnimationType         = config.ExpiringAnimationType or "NONE"
+    sq.dfAD_ExpiringAnimationColor        = config.ExpiringAnimationColor
+    sq.dfAD_ExpiringAnimationFrequency    = config.ExpiringAnimationFrequency or 1
+    sq.dfAD_ExpiringAnimationParticles    = config.ExpiringAnimationParticles
+    sq.dfAD_ExpiringAnimationLength       = config.ExpiringAnimationLength
+    sq.dfAD_ExpiringAnimationThickness    = config.ExpiringAnimationThickness
+    sq.dfAD_ExpiringAnimationScale        = config.ExpiringAnimationScale
+    sq.dfAD_ExpiringAnimationInset        = config.ExpiringAnimationInset
+    sq.dfAD_ExpiringAnimationOffsetX      = config.ExpiringAnimationOffsetX
+    sq.dfAD_ExpiringAnimationOffsetY      = config.ExpiringAnimationOffsetY
+    sq.dfAD_ExpiringAnimationMask         = config.ExpiringAnimationMask
+    sq.dfAD_ExpiringAnimationSidesAxis    = config.ExpiringAnimationSidesAxis
+    sq.dfAD_ExpiringAnimationCornerLength = config.ExpiringAnimationCornerLength
+    sq.dfAD_expiringFeatureEnabled = config.expiringFeatureEnabled
 
     -- Color (static config)
     local color = config.color
@@ -2433,6 +2837,8 @@ function Indicators:ConfigureSquare(frame, config, defaults, auraName, priority)
     sq.dfAD_expiringColor = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
     sq.dfAD_expiringThreshold = config.expiringThreshold or 30
     sq.dfAD_expiringThresholdMode = config.expiringThresholdMode
+    sq.dfAD_expiringTintEnabled = config.expiringTintEnabled
+    sq.dfAD_expiringTintColor = config.expiringTintColor
     sq.dfAD_expiringPulsate = expiringPulsate
 
     -- Missing-mode config
@@ -2476,16 +2882,23 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
     end
 
     -- Position — each aura has its own anchor, no growth
-    -- Position is dynamic because layout groups compute offsets per-event
+    -- Position is dynamic because layout groups compute offsets per-event.
+    -- Position is the user's offset only — like the icon (Stage 5.2), we no
+    -- longer shift the square by the border inset, so dragging Inset expands
+    -- the ring without sliding the whole square.
     local anchor = config.anchor or "TOPLEFT"
     local offsetX = config.offsetX or 0
     local offsetY = config.offsetY or 0
-    -- Compensate for border overhang at frame edges
-    local showBorderForPos = config.showBorder
-    if showBorderForPos == nil then showBorderForPos = true end
-    offsetX, offsetY = AdjustOffsetForBorder(anchor, offsetX, offsetY, config.borderInset or 1, showBorderForPos)
-    sq:ClearAllPoints()
-    sq:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    -- Only re-anchor when the position changed (see UpdateIcon) so the preview's
+    -- per-frame refresh doesn't fight an active Bounce Translation.
+    if sq:GetNumPoints() == 0 or sq.dfAD_posAnchor ~= anchor
+       or sq.dfAD_posX ~= offsetX or sq.dfAD_posY ~= offsetY then
+        sq.dfAD_posAnchor, sq.dfAD_posX, sq.dfAD_posY = anchor, offsetX, offsetY
+        local b = sq.dfAD_basePos or {}; sq.dfAD_basePos = b
+        b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
+        sq:ClearAllPoints()
+        sq:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    end
 
     -- Read stored config flags from ConfigureSquare
     local hideIcon = sq.dfAD_hideIcon
@@ -2699,13 +3112,37 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
     local expiringWholeAlphaPulse = sq.dfAD_expiringWholeAlphaPulse
     local expiringBounce = sq.dfAD_expiringBounce
 
-    -- Register if ANY expiring feature is active (color, pulsate, alpha pulse, bounce)
-    local anyExpiringFeature = expiringEnabled or expiringPulsate or expiringWholeAlphaPulse or expiringBounce
+    -- Stage 5.2 expiring-border parity: the square's expiring colour now tints
+    -- the BORDER too (shared "turn red" look), and the border gets its own
+    -- thickness / alpha / animation overrides via ADApplyExpiringBorderState.
+    -- These flags mirror the icon's so the same trigger conditions apply.
+    local expiringAnimType = sq.dfAD_ExpiringAnimationType
+    local hasExpiringAnim = expiringAnimType and expiringAnimType ~= "NONE"
+    local hasExpiringThickness = sq.dfAD_ExpiringBorderSize
+                                 and sq.dfAD_ExpiringBorderSize ~= sq.dfAD_baseBorderSize
+    local hasExpiringAlpha = sq.dfAD_ExpiringBorderAlpha
+                             and sq.dfAD_ExpiringBorderAlpha ~= 1
+    -- Master enable gates the whole feature.
+    local masterEnabled = sq.dfAD_expiringFeatureEnabled ~= false
+    local anyExpiringFeature = masterEnabled and (expiringEnabled or expiringPulsate
+                            or expiringWholeAlphaPulse or expiringBounce
+                            or hasExpiringAnim or hasExpiringThickness or hasExpiringAlpha)
     if anyExpiringFeature then
         local ec = sq.dfAD_expiringColor
         local color = config.color
         local oc = {r = color and (color[1] or color.r) or 1, g = color and (color[2] or color.g) or 1, b = color and (color[3] or color.b) or 1}
         local applyColor = expiringEnabled
+        -- Border colour SNAPS at the threshold (the fill interpolates via the
+        -- curve): the border's OWN expiring colour when below + override on,
+        -- else its base colour.  Separate from the fill's expiring colour so
+        -- the fill and border can differ on expiring.
+        local function borderTintFor(isExp)
+            if applyColor and isExp then
+                return sq.dfAD_ExpiringBorderColor or ec
+            end
+            return sq.dfAD_baseBorderColor or { r = 0, g = 0, b = 0, a = 1 }
+        end
+        local fireBorder = applyColor or hasExpiringAnim or hasExpiringThickness or hasExpiringAlpha
         RegisterExpiring(sq, {
             unit = frame.unit,
             auraInstanceID = auraData and auraData.auraInstanceID,
@@ -2716,17 +3153,15 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
             thresholdMode = sq.dfAD_expiringThresholdMode,
             color = ec, originalColor = oc,
             applyResult = function(el, result, entry)
-                -- applyResult only fires when colorCurve is set (i.e. applyColor = true)
+                -- applyResult only fires when colorCurve is set (applyColor true).
                 if el.texture then
                     el.texture:SetColorTexture(result.r, result.g, result.b, result.a or 1)
                 end
                 local oc2 = entry.originalColor
                 local isExp = IsColorExpiring(result, oc2)
-                if el.adFillPulseFrame then
-                    UpdatePulseState(el.adFillPulseFrame, isExp)
-                end
-                UpdateWholeAlphaPulseState(el, isExp)
-                UpdateBounceState(el, isExp)
+                if fireBorder then ADApplyExpiringBorderState(el, isExp, borderTintFor(isExp)) end
+                -- Anim effects: non-secret only (force-stopped on secret auras).
+                DriveExpiringEffects(el, result, isExp, el.adFillPulseFrame)
             end,
             applyManual = function(el, isExp, entry)
                 if applyColor and el.texture then
@@ -2738,6 +3173,7 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
                         el.texture:SetColorTexture(c.r or 1, c.g or 1, c.b or 1, 1)
                     end
                 end
+                if fireBorder then ADApplyExpiringBorderState(el, isExp, borderTintFor(isExp)) end
                 if el.adFillPulseFrame then
                     UpdatePulseState(el.adFillPulseFrame, isExp)
                 end
@@ -2760,6 +3196,9 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
         end
     end
 
+    -- Expiring TINT (secret-safe, shared engine; self-gating).
+    SetupExpiringTint(sq.textOverlay or sq, "ARTWORK", sq, frame, auraData)
+
     sq:Show()
 end
 
@@ -2769,6 +3208,7 @@ function Indicators:HideUnusedSquares(frame, activeMap)
     for auraName, sq in pairs(map) do
         if not activeMap[auraName] then
             UnregisterExpiring(sq)
+            ClearExpiringTint(sq.textOverlay or sq)
             sq:Hide()
             -- Clear stale cooldown (matches bar cleanup pattern)
             if sq.cooldown then
@@ -2857,6 +3297,9 @@ local function CreateADBar(frame, auraName)
     bar.dfAD_colorElapsed = 0
     bar.dfAD_usedTimerDuration = false
     bar.dfAD_expiryCheckElapsed = 0
+    -- Scratch ctx reused each frame for DF.Expiring:EvaluateManualColor (the
+    -- preview fill fallback) — avoids per-frame allocation.
+    local manualCtx = { base = {} }
     bar:SetScript("OnUpdate", function(self, elapsed)
         -- Expiration guard: if the aura is gone, hide the bar (#406)
         -- Throttled to ~1 FPS to avoid per-frame API calls
@@ -2896,18 +3339,8 @@ local function CreateADBar(frame, auraName)
                         self.duration:SetText(format("%.1f", remaining))
                     end
                     if self.dfAD_durationColorByTime then
-                        local r, g, b
-                        if pct < 0.3 then
-                            local t = pct / 0.3
-                            r, g, b = 1, 0.5 * t, 0
-                        elseif pct < 0.5 then
-                            local t = (pct - 0.3) / 0.2
-                            r, g, b = 1, 0.5 + 0.5 * t, 0
-                        else
-                            local t = (pct - 0.5) / 0.5
-                            r, g, b = 1 - t, 1, 0
-                        end
-                        self.duration:SetTextColor(r, g, b, 1)
+                        -- Shared colour-by-time ramp (single owner: DF.Expiring)
+                        self.duration:SetTextColor(DF.Expiring:GradientColorAt(pct))
                     end
                 end
             end
@@ -2943,45 +3376,24 @@ local function CreateADBar(frame, auraName)
             end
         end
 
-        -- Manual color fallback for preview
+        -- Manual color fallback for preview — delegate the gradient + expiring
+        -- maths to DF.Expiring so it isn't hand-rolled here (live frames use the
+        -- secret-safe colour curve above).
         if not self.dfAD_usedTimerDuration then
             local dur = self.dfAD_duration
             local exp = self.dfAD_expirationTime
             if dur and exp and dur > 0 and exp > 0 then
-                local pct = min(1, max(0, exp - GetTime()) / dur)
-                local barR = self.dfAD_fillR or 1
-                local barG = self.dfAD_fillG or 1
-                local barB = self.dfAD_fillB or 1
-                if self.dfAD_barColorByTime then
-                    if pct < 0.3 then
-                        local t = pct / 0.3
-                        barR, barG, barB = 1, 0.5 * t, 0
-                    elseif pct < 0.5 then
-                        local t = (pct - 0.3) / 0.2
-                        barR, barG, barB = 1, 0.5 + 0.5 * t, 0
-                    else
-                        local t = (pct - 0.5) / 0.5
-                        barR, barG, barB = 1 - t, 1, 0
-                    end
-                end
-                if self.dfAD_expiringEnabled and self.dfAD_expiringThreshold then
-                    local isExp
-                    if self.dfAD_expiringThresholdMode == "SECONDS" then
-                        local remaining = max(0, exp - GetTime())
-                        isExp = remaining <= self.dfAD_expiringThreshold
-                    else
-                        isExp = pct <= (self.dfAD_expiringThreshold / 100)
-                    end
-                    if isExp then
-                        local ec = self.dfAD_expiringColor
-                        if ec then
-                            barR = ec.r or 1
-                            barG = ec.g or 0.2
-                            barB = ec.b or 0.2
-                        end
-                    end
-                end
-                self:SetStatusBarColor(barR, barG, barB, self.dfAD_fillA or 1)
+                local remaining = max(0, exp - GetTime())
+                local ctx = manualCtx
+                ctx.base.r, ctx.base.g, ctx.base.b =
+                    self.dfAD_fillR or 1, self.dfAD_fillG or 1, self.dfAD_fillB or 1
+                ctx.colorByTime = self.dfAD_barColorByTime
+                ctx.expiringEnabled = self.dfAD_expiringEnabled
+                ctx.threshold = self.dfAD_expiringThreshold
+                ctx.thresholdMode = self.dfAD_expiringThresholdMode
+                ctx.expiringColor = self.dfAD_expiringColor
+                local r, g, b = DF.Expiring:EvaluateManualColor(ctx, remaining, dur)
+                self:SetStatusBarColor(r, g, b, self.dfAD_fillA or 1)
             end
         end
     end)
@@ -2996,6 +3408,15 @@ local function GetOrCreateADBar(frame, auraName)
     local bar = CreateADBar(frame, auraName)
     map[auraName] = bar
     return bar
+end
+
+-- Stage 5.3a: lazily attach a unified DF.Border widget to a bar and hide the
+-- legacy BackdropTemplate `bar.borderFrame`.  Mirrors the icon/square helpers.
+local function GetOrCreateADBarBorder(bar)
+    if bar.dfADBorder then return bar.dfADBorder end
+    bar.dfADBorder = DF.Border:New(bar, { frameLevelOffset = 0, layer = "BACKGROUND" })
+    if bar.borderFrame then bar.borderFrame:Hide() end
+    return bar.dfADBorder
 end
 
 -- ============================================================
@@ -3067,6 +3488,8 @@ function Indicators:ConfigureBar(frame, config, defaults, auraName, priority)
     bar.dfAD_expiringEnabled = expiringEnabled
     bar.dfAD_expiringThreshold = config.expiringThreshold or 30
     bar.dfAD_expiringThresholdMode = config.expiringThresholdMode
+    bar.dfAD_expiringTintEnabled = config.expiringTintEnabled
+    bar.dfAD_expiringTintColor = config.expiringTintColor
     bar.dfAD_expiringColor = config.expiringColor or { r = 1, g = 0.2, b = 0.2 }
 
     -- Store base fill color for OnUpdate fallback
@@ -3163,34 +3586,33 @@ function Indicators:ConfigureBar(frame, config, defaults, auraName, priority)
     end
 
     -- ========================================
-    -- BORDER
+    -- BORDER (Stage 5.3 — unified DF.Border backend)
+    -- Canonical keys (ShowBorder / BorderSize / BorderInset) with legacy
+    -- fallback (showBorder / borderThickness / borderColor).  The bar's border
+    -- sits OUTSIDE the StatusBar (the fill is never inset), so the band is
+    -- placed fully outward: spec.size = thickness, spec.inset = -(inset +
+    -- thickness) puts the ring's inner edge at the bar edge (Inset 0 = flush,
+    -- as before) and grows outward.  BuildSpec carries Style / Texture / Colour
+    -- / Gradient / Shadow / Blend / Animation through, so Apply renders +
+    -- animates in one call.
     -- ========================================
-    local showBorder = config.showBorder
-    if showBorder == nil then showBorder = true end
-    local borderThickness = config.borderThickness or 1
+    local borderEnabled = config.ShowBorder
+    if borderEnabled == nil then borderEnabled = config.showBorder end
+    if borderEnabled == nil then borderEnabled = true end
+    local borderThickness = config.BorderSize  or config.borderThickness or 1
+    local borderInset     = config.BorderInset or config.borderInset     or 0
 
-    if bar.borderFrame then
-        if showBorder then
-            bar.borderFrame:ClearAllPoints()
-            bar.borderFrame:SetPoint("TOPLEFT", -borderThickness, borderThickness)
-            bar.borderFrame:SetPoint("BOTTOMRIGHT", borderThickness, -borderThickness)
-            if bar.borderFrame.SetBackdrop then
-                bar.borderFrame:SetBackdrop({
-                    edgeFile = "Interface\\Buttons\\WHITE8x8",
-                    edgeSize = borderThickness,
-                })
-                local borderColor = config.borderColor
-                if borderColor then
-                    bar.borderFrame:SetBackdropBorderColor(borderColor[1] or borderColor.r or 0, borderColor[2] or borderColor.g or 0, borderColor[3] or borderColor.b or 0, borderColor[4] or borderColor.a or 1)
-                else
-                    bar.borderFrame:SetBackdropBorderColor(0, 0, 0, 1)
-                end
-            end
-            bar.borderFrame:Show()
-        else
-            bar.borderFrame:Hide()
-        end
+    local adBorder = GetOrCreateADBarBorder(bar)
+    local spec = DF.Border:BuildSpec(config, "")
+    spec.enabled = borderEnabled
+    spec.size    = borderThickness
+    spec.inset   = -(borderInset + borderThickness)
+    -- Legacy bar border was opaque black; fall back to it when no explicit
+    -- BorderColor (BuildSpec returns nil colour for unmigrated configs).
+    if not spec.color then
+        spec.color = { r = 0, g = 0, b = 0, a = 1 }
     end
+    DF.Border:Apply(adBorder, spec)
 
     -- Frame level: base from frame (not contentOverlay) + per-indicator level + small priority tiebreaker
     local level = config.frameLevel or (defaults and defaults.indicatorFrameLevel) or 2
@@ -3343,12 +3765,19 @@ function Indicators:UpdateBar(frame, config, auraData, defaults, auraName, prior
     local anchor = config.anchor or "BOTTOM"
     local offsetX = config.offsetX or 0
     local offsetY = config.offsetY or 0
-    -- Compensate for border overhang at frame edges
-    local showBorderForPos = config.showBorder
-    if showBorderForPos == nil then showBorderForPos = true end
-    offsetX, offsetY = AdjustOffsetForBorder(anchor, offsetX, offsetY, config.borderThickness or 1, showBorderForPos)
-    bar:ClearAllPoints()
-    bar:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    -- Position is the user's offset only — like the icon/square (Stage 5.3),
+    -- we no longer shift the bar by the border thickness, so changing the
+    -- border doesn't slide the whole bar.
+    -- Only re-anchor when the position changed (see UpdateIcon) so the preview's
+    -- per-frame refresh doesn't fight an active Bounce Translation.
+    if bar:GetNumPoints() == 0 or bar.dfAD_posAnchor ~= anchor
+       or bar.dfAD_posX ~= offsetX or bar.dfAD_posY ~= offsetY then
+        bar.dfAD_posAnchor, bar.dfAD_posX, bar.dfAD_posY = anchor, offsetX, offsetY
+        local b = bar.dfAD_basePos or {}; bar.dfAD_basePos = b
+        b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
+        bar:ClearAllPoints()
+        bar:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+    end
 
     -- ========================================
     -- COUNTDOWN DATA (drives bar fill)
@@ -3601,6 +4030,10 @@ function Indicators:UpdateBar(frame, config, auraData, defaults, auraName, prior
         end
     end
 
+    -- Expiring TINT (secret-safe, shared engine; self-gating).  Hosted on the
+    -- bar itself at OVERLAY so it sits above the fill.
+    SetupExpiringTint(bar, "OVERLAY", bar, frame, auraData)
+
     bar:Show()
 end
 
@@ -3609,6 +4042,7 @@ function Indicators:HideUnusedBars(frame, activeMap)
     if not map then return end
     for auraName, bar in pairs(map) do
         if not activeMap[auraName] then
+            ClearExpiringTint(bar)
             bar:Hide()
             -- Clear stale metadata so OnUpdate doesn't run with expired
             -- auraInstanceIDs causing stuck/corrupted bar state (#406)

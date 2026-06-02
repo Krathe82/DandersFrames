@@ -2018,10 +2018,10 @@ function DF:UpdateTestAurasContent(frame)
                     end
                 end
                 
-                -- Border visibility
+                -- Border visibility (buffs are static-colour: colour/style come
+                -- from ConfigureAuraIconBorder, no per-update recolour).
                 if icon.border then
-                    if db.buffBorderEnabled ~= false then
-                        icon.border:SetColorTexture(0, 0, 0, 0.8)
+                    if db.buffShowBorder ~= false then
                         icon.border:Show()
                     else
                         icon.border:Hide()
@@ -2045,31 +2045,13 @@ function DF:UpdateTestAurasContent(frame)
                 
                 -- Border - show in test mode if border is enabled (regardless of master switch)
                 local showBorder = isExpiring and db.buffExpiringBorderEnabled
-                if icon.expiringBorderAlphaContainer and showBorder then
-                    local bc = db.buffExpiringBorderColor or {r = 1, g = 0.5, b = 0, a = 1}
-                    if icon.expiringBorderTop then
-                        icon.expiringBorderTop:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                        icon.expiringBorderBottom:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                        icon.expiringBorderLeft:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                        icon.expiringBorderRight:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                    end
-                    icon.expiringBorderAlphaContainer:SetAlpha(1)
-                    icon.expiringBorderAlphaContainer:Show()
-                    
-                    -- Pulsate animation
-                    if db.buffExpiringBorderPulsate and icon.expiringBorderPulse then
-                        if not icon.expiringBorderPulse:IsPlaying() then
-                            icon.expiringBorderPulse:Play()
-                        end
-                    elseif icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                        icon.expiringBorderPulse:Stop()
-                        icon.expiringBorderContainer:SetAlpha(1)
-                    end
-                elseif icon.expiringBorderAlphaContainer then
-                    icon.expiringBorderAlphaContainer:Hide()
-                    if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                        icon.expiringBorderPulse:Stop()
-                    end
+                if icon.expiringBorderGate and showBorder then
+                    -- Configure the unified expiring border (geometry/colour/style/
+                    -- animation), then force the gate fully visible for preview.
+                    DF:ConfigureExpiringBorder(icon, db, "buffExpiring")
+                    icon.expiringBorderGate:SetAlpha(1)
+                elseif icon.expiringBorderGate then
+                    icon.expiringBorderGate:SetAlpha(0)
                 end
                 
                 icon.testAuraData = buffData
@@ -2077,12 +2059,7 @@ function DF:UpdateTestAurasContent(frame)
             else
                 icon.testAuraData = nil
                 if icon.expiringTint then icon.expiringTint:Hide() end
-                if icon.expiringBorderAlphaContainer then
-                    icon.expiringBorderAlphaContainer:Hide()
-                    if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                        icon.expiringBorderPulse:Stop()
-                    end
-                end
+                if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
                 icon:Hide()
             end
         end
@@ -2119,8 +2096,9 @@ function DF:UpdateTestAurasContent(frame)
                 
                 -- Border visibility and color
                 if icon.border then
-                    if db.debuffBorderEnabled ~= false then
-                        -- Use custom dispel type colors if enabled
+                    if db.debuffShowBorder ~= false then
+                        -- Only colour-by-type recolours per-update; static debuff
+                        -- borders carry colour/style from ConfigureAuraIconBorder.
                         if db.debuffBorderColorByType ~= false then
                             local dispelName = debuffData.debuffType
                             local color
@@ -2137,9 +2115,7 @@ function DF:UpdateTestAurasContent(frame)
                             else
                                 color = db.debuffBorderColorNone or {r = 0.8, g = 0.0, b = 0.0}
                             end
-                            icon.border:SetColorTexture(color.r, color.g, color.b, 0.8)
-                        else
-                            icon.border:SetColorTexture(0.8, 0, 0, 0.8)
+                            icon.border:SetColor(color.r, color.g, color.b, 0.8)
                         end
                         icon.border:Show()
                     else
@@ -2215,24 +2191,14 @@ function DF:UpdateTestAurasContent(frame)
                 
                 -- Hide expiring indicators for debuffs (not supported)
                 if icon.expiringTint then icon.expiringTint:Hide() end
-                if icon.expiringBorderAlphaContainer then
-                    icon.expiringBorderAlphaContainer:Hide()
-                    if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                        icon.expiringBorderPulse:Stop()
-                    end
-                end
+                if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
                 
                 icon.testAuraData = debuffData
                 icon:Show()
             else
                 icon.testAuraData = nil
                 if icon.expiringTint then icon.expiringTint:Hide() end
-                if icon.expiringBorderAlphaContainer then
-                    icon.expiringBorderAlphaContainer:Hide()
-                    if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                        icon.expiringBorderPulse:Stop()
-                    end
-                end
+                if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
                 icon:Hide()
             end
         end
@@ -2471,8 +2437,8 @@ function DF:UpdateTestAbsorb(frame, testData)
             if customBar.bg then customBar.bg:Hide() end
             
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -2654,8 +2620,8 @@ function DF:UpdateTestAbsorb(frame, testData)
             if frame.absorbOvershieldGlow then frame.absorbOvershieldGlow:Hide() end
             
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -2841,8 +2807,8 @@ function DF:UpdateTestAbsorb(frame, testData)
             
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
             customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
@@ -3011,8 +2977,8 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             end
             
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -3137,8 +3103,8 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
             customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
@@ -3297,8 +3263,8 @@ function DF:UpdateTestHealPrediction(frame, testData)
             
             -- Inset by border size if frame border is enabled to avoid overlap
             local inset = 0
-            if db.showFrameBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+            if db.frameShowBorder ~= false then
+                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -3564,16 +3530,14 @@ function DF:UpdateTestPowerBar(frame, testData)
     local frameLevelOffset = db.resourceBarFrameLevel or 2
     bar:SetFrameLevel(frame:GetFrameLevel() + frameLevelOffset)
     
-    -- Border visibility, color, and frame level
+    -- Border via unified DF.Border backend (Stage 4.2). ctx.frame is the
+    -- test unit frame (carries dfIsTestFrame + index + isRaidFrame) so
+    -- Class / Role resolvers pull test class/role from GetTestUnitData.
     if bar.border then
         bar.border:SetFrameLevel(bar:GetFrameLevel() + 1)
-        if db.resourceBarBorderEnabled then
-            bar.border:Show()
-            local borderC = db.resourceBarBorderColor or {r = 0, g = 0, b = 0, a = 1}
-            bar.border:SetBackdropBorderColor(borderC.r, borderC.g, borderC.b, borderC.a or 1)
-        else
-            bar.border:Hide()
-        end
+        DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "resourceBar", {
+            frame = frame,
+        }))
     end
     
     -- Apply dead / health-based / OOR alpha
@@ -5010,8 +4974,7 @@ function DF:UpdateTestMissingBuff(frame)
         local x = db.missingBuffIconX or 0
         local y = db.missingBuffIconY or 0
         local borderSize = db.missingBuffIconBorderSize or 2
-        local bc = db.missingBuffIconBorderColor or {r = 1, g = 0, b = 0, a = 1}
-        
+
         -- Apply pixel perfect
         if db.pixelPerfect then
             iconSize = DF:PixelPerfect(iconSize)
@@ -5021,50 +4984,22 @@ function DF:UpdateTestMissingBuff(frame)
         -- Set icon size
         frame.missingBuffFrame:SetSize(iconSize, iconSize)
         
-        -- Apply border if enabled
+        -- Border via the unified DF.Border backend — mirrors the live
+        -- UpdateMissingBuffIcon path (Icons.lua) so toggling Show Border / size /
+        -- colour / style reflects live in test mode.  The legacy
+        -- missingBuffBorder* edge textures this used to poke no longer exist
+        -- after the DF.Border migration (Create.lua builds frame.missingBuffBorder).
         local showBorder = db.missingBuffIconShowBorder ~= false
-        if showBorder then
-            -- Set color on all border edges
-            if frame.missingBuffBorderLeft then
-                frame.missingBuffBorderLeft:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                frame.missingBuffBorderLeft:SetWidth(borderSize)
-                frame.missingBuffBorderLeft:Show()
-            end
-            if frame.missingBuffBorderRight then
-                frame.missingBuffBorderRight:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                frame.missingBuffBorderRight:SetWidth(borderSize)
-                frame.missingBuffBorderRight:Show()
-            end
-            if frame.missingBuffBorderTop then
-                frame.missingBuffBorderTop:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                frame.missingBuffBorderTop:SetHeight(borderSize)
-                frame.missingBuffBorderTop:ClearAllPoints()
-                frame.missingBuffBorderTop:SetPoint("TOPLEFT", borderSize, 0)
-                frame.missingBuffBorderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-                frame.missingBuffBorderTop:Show()
-            end
-            if frame.missingBuffBorderBottom then
-                frame.missingBuffBorderBottom:SetColorTexture(bc.r, bc.g, bc.b, bc.a or 1)
-                frame.missingBuffBorderBottom:SetHeight(borderSize)
-                frame.missingBuffBorderBottom:ClearAllPoints()
-                frame.missingBuffBorderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                frame.missingBuffBorderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-                frame.missingBuffBorderBottom:Show()
-            end
-            
-            frame.missingBuffIcon:ClearAllPoints()
-            frame.missingBuffIcon:SetPoint("TOPLEFT", borderSize, -borderSize)
-            frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-        else
-            -- Hide all border edges
-            if frame.missingBuffBorderLeft then frame.missingBuffBorderLeft:Hide() end
-            if frame.missingBuffBorderRight then frame.missingBuffBorderRight:Hide() end
-            if frame.missingBuffBorderTop then frame.missingBuffBorderTop:Hide() end
-            if frame.missingBuffBorderBottom then frame.missingBuffBorderBottom:Hide() end
-            frame.missingBuffIcon:ClearAllPoints()
-            frame.missingBuffIcon:SetPoint("TOPLEFT", 0, 0)
-            frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", 0, 0)
+        if frame.missingBuffBorder then
+            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+            spec.enabled = showBorder
+            spec.size    = borderSize
+            DF.Border:Apply(frame.missingBuffBorder, spec)
         end
+        local artInset = showBorder and borderSize or 0
+        frame.missingBuffIcon:ClearAllPoints()
+        frame.missingBuffIcon:SetPoint("TOPLEFT", artInset, -artInset)
+        frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -artInset, artInset)
         
         frame.missingBuffFrame:SetScale(scale)
         frame.missingBuffFrame:ClearAllPoints()
@@ -5178,46 +5113,24 @@ local function RenderTestDefensiveIcon(icon, db, textureID, iconSize, borderSize
         end
     end
 
-    -- Apply border if enabled
-    if showBorder then
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-            icon.borderLeft:SetWidth(borderSize)
-            icon.borderLeft:Show()
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-            icon.borderRight:SetWidth(borderSize)
-            icon.borderRight:Show()
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-            icon.borderTop:SetHeight(borderSize)
-            icon.borderTop:ClearAllPoints()
-            icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-            icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            icon.borderTop:Show()
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-            icon.borderBottom:SetHeight(borderSize)
-            icon.borderBottom:ClearAllPoints()
-            icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-            icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            icon.borderBottom:Show()
-        end
-        icon.texture:ClearAllPoints()
-        icon.texture:SetPoint("TOPLEFT", borderSize, -borderSize)
-        icon.texture:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-    else
-        if icon.borderLeft then icon.borderLeft:Hide() end
-        if icon.borderRight then icon.borderRight:Hide() end
-        if icon.borderTop then icon.borderTop:Hide() end
-        if icon.borderBottom then icon.borderBottom:Hide() end
-        icon.texture:ClearAllPoints()
-        icon.texture:SetPoint("TOPLEFT", 0, 0)
-        icon.texture:SetPoint("BOTTOMRIGHT", 0, 0)
+    -- Border (unified DF.Border backend). ctx.frame is the test unit frame
+    -- (carries dfIsTestFrame + index + isRaidFrame) so Class/Role resolvers
+    -- can pull the test class/role from GetTestUnitData. Stage 4.0.
+    -- spec.color is NOT overridden — BuildSpec resolves it per the
+    -- ColorSource setting; a static override would clobber CLASS/ROLE.
+    local artInset = showBorder and borderSize or 0
+    if icon.border then
+        local spec = DF.Border:BuildSpec(db, "defensiveIcon", {
+            frame = icon.unitFrame,
+            iconMode = true,
+        })
+        spec.enabled = showBorder
+        spec.size    = borderSize  -- already pixel-perfected above
+        DF.Border:Apply(icon.border, spec)
     end
+    icon.texture:ClearAllPoints()
+    icon.texture:SetPoint("TOPLEFT", artInset, -artInset)
+    icon.texture:SetPoint("BOTTOMRIGHT", -artInset, artInset)
 
     -- Size
     icon:SetSize(iconSize, iconSize)
@@ -5342,7 +5255,10 @@ function DF:UpdateTestDefensiveBar(frame, testData)
                 -- Frame level
                 local frameLevel = db.defensiveIconFrameLevel or 0
                 if frameLevel == 0 then
-                    icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 15)
+                    -- +26: above the buff/debuff auras (frame+40) and their
+                    -- borders, so the defensive alert sits on top.  Mirrors the
+                    -- live UpdateDefensiveBar + Core.lua auto re-level.
+                    icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 26)
                 else
                     icon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
                 end

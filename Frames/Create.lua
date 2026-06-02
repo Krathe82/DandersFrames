@@ -40,103 +40,35 @@ DFBindingTooltipTextLeft1:SetFontObject(GameTooltipText)
 
 -- ============================================================
 -- FRAME BORDER WIDGET
--- frame.border supports two modes sharing one SetBorderColor API:
---   * Solid (default): four ColorTexture edges — pixel-perfect, unchanged.
---   * Texture: a BackdropTemplate child using a LibSharedMedia border edgeFile.
--- DF:ApplyFrameBorder reconfigures the active mode from the db; recolour
--- consumers (live colour update, etc.) call frame.border:SetBorderColor and it
--- routes to whichever mode is active.
+-- The frame border is built on the unified DF.Border backend (Frames/Border.lua).
+-- frame.border keeps its established shape: top/bottom/left/right edges, a lazy
+-- `bd` backdrop child for Texture style, and a :SetBorderColor method that
+-- routes to whichever mode is active (used by live colour / aggro / dispel
+-- overlays). These thin wrappers translate the frame DB into a border spec.
 -- ============================================================
 
 function DF:CreateFrameBorder(frame, db)
-    local border = CreateFrame("Frame", nil, frame)
-    border:SetAllPoints()
-    border:SetFrameLevel(frame:GetFrameLevel() + 10)
-
-    border.top = border:CreateTexture(nil, "BORDER")
-    border.top:SetPoint("TOPLEFT", 0, 0)
-    border.top:SetPoint("TOPRIGHT", 0, 0)
-    border.bottom = border:CreateTexture(nil, "BORDER")
-    border.bottom:SetPoint("BOTTOMLEFT", 0, 0)
-    border.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
-    border.left = border:CreateTexture(nil, "BORDER")
-    border.left:SetPoint("TOPLEFT", 0, 0)
-    border.left:SetPoint("BOTTOMLEFT", 0, 0)
-    border.right = border:CreateTexture(nil, "BORDER")
-    border.right:SetPoint("TOPRIGHT", 0, 0)
-    border.right:SetPoint("BOTTOMRIGHT", 0, 0)
-
-    -- Recolour whichever mode is currently active (used by live colour updates,
-    -- aggro/threat/dispel overlays, etc.).
-    border.SetBorderColor = function(self, r, g, b, a)
-        a = a or 1
-        if self.activeTexture then
-            if self.bd then self.bd:SetBackdropBorderColor(r, g, b, a) end
-        else
-            self.top:SetColorTexture(r, g, b, a)
-            self.bottom:SetColorTexture(r, g, b, a)
-            self.left:SetColorTexture(r, g, b, a)
-            self.right:SetColorTexture(r, g, b, a)
-        end
-    end
-
-    frame.border = border
+    frame.border = DF.Border:New(frame)
     DF:ApplyFrameBorder(frame, db)
-    return border
+    return frame.border
 end
 
 function DF:ApplyFrameBorder(frame, db)
-    local border = frame and frame.border
-    if not border then return end
+    if not frame or not frame.border then return end
     db = db or (DF.GetFrameDB and DF:GetFrameDB(frame))
     if not db then return end
 
-    local edges = { border.top, border.bottom, border.left, border.right }
-
-    -- Hidden border: hide both modes.
-    if db.showFrameBorder == false then
-        for _, e in ipairs(edges) do if e then e:Hide() end end
-        if border.bd then border.bd:Hide() end
-        border.activeTexture = nil
-        return
-    end
-
-    local size = db.borderSize or 1
-    if db.pixelPerfect and DF.PixelPerfect then size = DF:PixelPerfect(size) end
-    local cr, cg, cb, ca = DF:GetFrameBorderColor(frame, db)
-    -- Only resolve an LSM edgeFile when the Texture style is selected; otherwise
-    -- fall through to the built-in solid four-edge border below.
-    local style = db.borderStyle or "SOLID"
-    local texture = db.borderTexture
-    local edgeFile = (style == "TEXTURE" and texture and texture ~= "" and texture ~= "SOLID" and DF.GetBorderTexturePath)
-        and DF:GetBorderTexturePath(texture) or nil
-
-    if not edgeFile then
-        -- Solid mode (default), or a texture that couldn't be resolved — fall
-        -- back to solid so the border never silently vanishes.
-        border.activeTexture = nil
-        if border.bd then border.bd:Hide() end
-        border.top:SetHeight(size)
-        border.bottom:SetHeight(size)
-        border.left:SetWidth(size)
-        border.right:SetWidth(size)
-        for _, e in ipairs(edges) do
-            e:SetColorTexture(cr, cg, cb, ca)
-            e:Show()
-        end
-    else
-        -- Texture mode: a BackdropTemplate child with the LSM border edgeFile.
-        for _, e in ipairs(edges) do if e then e:Hide() end end
-        if not border.bd then
-            border.bd = CreateFrame("Frame", nil, border, "BackdropTemplate")
-            border.bd:SetAllPoints(border)
-        end
-        local bd = border.bd
-        bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = (size > 0 and size) or 1 })
-        bd:SetBackdropBorderColor(cr, cg, cb, ca)
-        bd:Show()
-        border.activeTexture = texture
-    end
+    -- ctx lets BuildSpec resolve class / role colours via Border:Resolve*
+    -- helpers when the source is CLASS or ROLE. Resolvers fall through to
+    -- the static frameBorderColor picker when ctx is missing.
+    -- ctx.frame is required for test-mode preview: test frames have no
+    -- real unit, but they carry dfIsTestFrame + index + isRaidFrame so
+    -- the resolvers can pull class/role from GetTestUnitData (Stage 4.0
+    -- wired this for Defensive Icon; Frame Border was missed at the time).
+    DF.Border:Apply(frame.border, DF.Border:BuildSpec(db, "frame", {
+        unit  = frame.unit,
+        frame = frame,
+    }))
 end
 
 local BINDING_SHORT_NAMES = {
@@ -988,37 +920,22 @@ function DF:CreateFrameElementsExtended(frame, db)
     frame.missingBuffFrame:SetSize(24, 24)
     frame.missingBuffFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
     frame.missingBuffFrame:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 10)
-    
+
+    -- Unified border (Stage 4.1 — replaces the hand-rolled 4-edge block).
+    -- DF.Border:Apply at render time owns size / colour / style / gradient /
+    -- shadow / animation per the missingBuffIcon* db keys.
+    -- frameLevelOffset 0: keep the border co-planar with the icon (like the AD
+    -- icons and alpha2, which drew the border on the icon frame itself).  The
+    -- default +10 floats it ABOVE same-level aura icons while the art stays
+    -- below them — a visible layering split where the icon overlaps auras.
+    frame.missingBuffBorder = DF.Border:New(frame.missingBuffFrame, { frameLevelOffset = 0 })
+
     local mbBorderSize = 2
-    frame.missingBuffBorderLeft = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderLeft:SetPoint("TOPLEFT", 0, 0)
-    frame.missingBuffBorderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.missingBuffBorderLeft:SetWidth(mbBorderSize)
-    frame.missingBuffBorderLeft:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderRight = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderRight:SetPoint("TOPRIGHT", 0, 0)
-    frame.missingBuffBorderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.missingBuffBorderRight:SetWidth(mbBorderSize)
-    frame.missingBuffBorderRight:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderTop = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderTop:SetPoint("TOPLEFT", mbBorderSize, 0)
-    frame.missingBuffBorderTop:SetPoint("TOPRIGHT", -mbBorderSize, 0)
-    frame.missingBuffBorderTop:SetHeight(mbBorderSize)
-    frame.missingBuffBorderTop:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderBottom = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderBottom:SetPoint("BOTTOMLEFT", mbBorderSize, 0)
-    frame.missingBuffBorderBottom:SetPoint("BOTTOMRIGHT", -mbBorderSize, 0)
-    frame.missingBuffBorderBottom:SetHeight(mbBorderSize)
-    frame.missingBuffBorderBottom:SetColorTexture(1, 0, 0, 1)
-    
     frame.missingBuffIcon = frame.missingBuffFrame:CreateTexture(nil, "ARTWORK")
     frame.missingBuffIcon:SetPoint("TOPLEFT", mbBorderSize, -mbBorderSize)
     frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -mbBorderSize, mbBorderSize)
     frame.missingBuffIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    
+
     frame.missingBuffFrame:Hide()
     
     -- ========================================
@@ -1027,34 +944,23 @@ function DF:CreateFrameElementsExtended(frame, db)
     frame.defensiveIcon = CreateFrame("Frame", nil, frame.contentOverlay)
     frame.defensiveIcon:SetSize(24, 24)
     frame.defensiveIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    frame.defensiveIcon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 15)
+    -- +26 (not +15): sit above the buff/debuff auras AND their +25 borders, so
+    -- the defensive alert is never obscured.  Core.lua's auto re-level matches.
+    frame.defensiveIcon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 26)
     frame.defensiveIcon:Hide()
     
+    -- Border built on the unified DF.Border backend (Frames/Border.lua).
+    -- Live re-style (size / colour / style / texture) goes through
+    -- DF.Border:Apply in Core.lua's LightweightUpdateDefensiveIcon* helpers.
+    -- frameLevelOffset 0: co-planar with the icon (matches the AD icons and
+    -- alpha2, which drew the defensive border on the icon frame's BACKGROUND).
+    -- The default +10 floated the border above same-level aura icons while the
+    -- art stayed below them — the visible layering split when it overlaps auras.
+    frame.defensiveIcon.border = DF.Border:New(frame.defensiveIcon, { frameLevelOffset = 0 })
+
+    -- Artwork is inset by the current border size; the Lightweight* helpers
+    -- re-anchor when borderSize changes. defBorderSize seeds the default.
     local defBorderSize = 2
-    frame.defensiveIcon.borderLeft = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderLeft:SetPoint("TOPLEFT", 0, 0)
-    frame.defensiveIcon.borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.defensiveIcon.borderLeft:SetWidth(defBorderSize)
-    frame.defensiveIcon.borderLeft:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderRight = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderRight:SetPoint("TOPRIGHT", 0, 0)
-    frame.defensiveIcon.borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.defensiveIcon.borderRight:SetWidth(defBorderSize)
-    frame.defensiveIcon.borderRight:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderTop = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderTop:SetPoint("TOPLEFT", defBorderSize, 0)
-    frame.defensiveIcon.borderTop:SetPoint("TOPRIGHT", -defBorderSize, 0)
-    frame.defensiveIcon.borderTop:SetHeight(defBorderSize)
-    frame.defensiveIcon.borderTop:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderBottom = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderBottom:SetPoint("BOTTOMLEFT", defBorderSize, 0)
-    frame.defensiveIcon.borderBottom:SetPoint("BOTTOMRIGHT", -defBorderSize, 0)
-    frame.defensiveIcon.borderBottom:SetHeight(defBorderSize)
-    frame.defensiveIcon.borderBottom:SetColorTexture(0, 0.8, 0, 1)
-    
     frame.defensiveIcon.texture = frame.defensiveIcon:CreateTexture(nil, "ARTWORK")
     frame.defensiveIcon.texture:SetPoint("TOPLEFT", defBorderSize, -defBorderSize)
     frame.defensiveIcon.texture:SetPoint("BOTTOMRIGHT", -defBorderSize, defBorderSize)
@@ -1160,17 +1066,11 @@ function DF:CreateFrameElementsExtended(frame, db)
     powerBg:SetColorTexture(0, 0, 0, 0.8)
     frame.dfPowerBar.bg = powerBg
     
-    -- Power bar border
-    local powerBorder = CreateFrame("Frame", nil, frame.dfPowerBar, "BackdropTemplate")
-    powerBorder:SetPoint("TOPLEFT", -1, 1)
-    powerBorder:SetPoint("BOTTOMRIGHT", 1, -1)
-    powerBorder:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    powerBorder:SetBackdropBorderColor(0, 0, 0, 1)
-    powerBorder:Hide()
-    frame.dfPowerBar.border = powerBorder
+    -- Power / Resource bar border via the unified DF.Border backend
+    -- (Stage 4.2). ApplyResourceBarLayout in Frames/Bars.lua drives
+    -- BuildSpec + Apply on each update; border anchorTo defaults to the
+    -- bar itself so it surrounds the resource bar's bounds.
+    frame.dfPowerBar.border = DF.Border:New(frame.dfPowerBar)
     
     -- ========================================
     -- ABSORB BAR
@@ -1670,38 +1570,20 @@ function DF:CreateUnitFrame(unit, index, isRaid)
     frame.missingBuffFrame:SetSize(24, 24)
     frame.missingBuffFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
     frame.missingBuffFrame:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 10)
-    
-    -- Create actual edge borders instead of a background
+
+    -- Unified border (Stage 4.1 — replaces the hand-rolled 4-edge block).
+    -- frameLevelOffset 0: keep the border co-planar with the icon (like the AD
+    -- icons and alpha2, which drew the border on the icon frame itself).  The
+    -- default +10 floats it ABOVE same-level aura icons while the art stays
+    -- below them — a visible layering split where the icon overlaps auras.
+    frame.missingBuffBorder = DF.Border:New(frame.missingBuffFrame, { frameLevelOffset = 0 })
+
     local borderSize = 2
-    frame.missingBuffBorderLeft = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderLeft:SetPoint("TOPLEFT", 0, 0)
-    frame.missingBuffBorderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.missingBuffBorderLeft:SetWidth(borderSize)
-    frame.missingBuffBorderLeft:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderRight = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderRight:SetPoint("TOPRIGHT", 0, 0)
-    frame.missingBuffBorderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.missingBuffBorderRight:SetWidth(borderSize)
-    frame.missingBuffBorderRight:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderTop = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderTop:SetPoint("TOPLEFT", borderSize, 0)
-    frame.missingBuffBorderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-    frame.missingBuffBorderTop:SetHeight(borderSize)
-    frame.missingBuffBorderTop:SetColorTexture(1, 0, 0, 1)
-    
-    frame.missingBuffBorderBottom = frame.missingBuffFrame:CreateTexture(nil, "BACKGROUND")
-    frame.missingBuffBorderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-    frame.missingBuffBorderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-    frame.missingBuffBorderBottom:SetHeight(borderSize)
-    frame.missingBuffBorderBottom:SetColorTexture(1, 0, 0, 1)
-    
     frame.missingBuffIcon = frame.missingBuffFrame:CreateTexture(nil, "ARTWORK")
     frame.missingBuffIcon:SetPoint("TOPLEFT", borderSize, -borderSize)
     frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
     frame.missingBuffIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    
+
     frame.missingBuffFrame:Hide()
     
     -- ========================================
@@ -1710,35 +1592,24 @@ function DF:CreateUnitFrame(unit, index, isRaid)
     frame.defensiveIcon = CreateFrame("Frame", nil, frame.contentOverlay)
     frame.defensiveIcon:SetSize(24, 24)
     frame.defensiveIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    frame.defensiveIcon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 15)
+    -- +26 (not +15): sit above the buff/debuff auras AND their +25 borders, so
+    -- the defensive alert is never obscured.  Core.lua's auto re-level matches.
+    frame.defensiveIcon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 26)
     frame.defensiveIcon:Hide()
     
     -- Create actual edge borders instead of a background
+    -- Border built on the unified DF.Border backend (Frames/Border.lua).
+    -- Live re-style (size / colour / style / texture) goes through
+    -- DF.Border:Apply in Core.lua's LightweightUpdateDefensiveIcon* helpers.
+    -- frameLevelOffset 0: co-planar with the icon (matches the AD icons and
+    -- alpha2, which drew the defensive border on the icon frame's BACKGROUND).
+    -- The default +10 floated the border above same-level aura icons while the
+    -- art stayed below them — the visible layering split when it overlaps auras.
+    frame.defensiveIcon.border = DF.Border:New(frame.defensiveIcon, { frameLevelOffset = 0 })
+
+    -- Artwork is inset by the current border size; the Lightweight* helpers
+    -- re-anchor when borderSize changes. defBorderSize seeds the default.
     local defBorderSize = 2
-    frame.defensiveIcon.borderLeft = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderLeft:SetPoint("TOPLEFT", 0, 0)
-    frame.defensiveIcon.borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    frame.defensiveIcon.borderLeft:SetWidth(defBorderSize)
-    frame.defensiveIcon.borderLeft:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderRight = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderRight:SetPoint("TOPRIGHT", 0, 0)
-    frame.defensiveIcon.borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    frame.defensiveIcon.borderRight:SetWidth(defBorderSize)
-    frame.defensiveIcon.borderRight:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderTop = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderTop:SetPoint("TOPLEFT", defBorderSize, 0)
-    frame.defensiveIcon.borderTop:SetPoint("TOPRIGHT", -defBorderSize, 0)
-    frame.defensiveIcon.borderTop:SetHeight(defBorderSize)
-    frame.defensiveIcon.borderTop:SetColorTexture(0, 0.8, 0, 1)
-    
-    frame.defensiveIcon.borderBottom = frame.defensiveIcon:CreateTexture(nil, "BACKGROUND")
-    frame.defensiveIcon.borderBottom:SetPoint("BOTTOMLEFT", defBorderSize, 0)
-    frame.defensiveIcon.borderBottom:SetPoint("BOTTOMRIGHT", -defBorderSize, 0)
-    frame.defensiveIcon.borderBottom:SetHeight(defBorderSize)
-    frame.defensiveIcon.borderBottom:SetColorTexture(0, 0.8, 0, 1)
-    
     frame.defensiveIcon.texture = frame.defensiveIcon:CreateTexture(nil, "ARTWORK")
     frame.defensiveIcon.texture:SetPoint("TOPLEFT", defBorderSize, -defBorderSize)
     frame.defensiveIcon.texture:SetPoint("BOTTOMRIGHT", -defBorderSize, defBorderSize)
@@ -1852,17 +1723,11 @@ function DF:CreateUnitFrame(unit, index, isRaid)
     powerBg:SetColorTexture(0, 0, 0, 0.8)
     frame.dfPowerBar.bg = powerBg
     
-    -- Power bar border
-    local powerBorder = CreateFrame("Frame", nil, frame.dfPowerBar, "BackdropTemplate")
-    powerBorder:SetPoint("TOPLEFT", -1, 1)
-    powerBorder:SetPoint("BOTTOMRIGHT", 1, -1)
-    powerBorder:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    powerBorder:SetBackdropBorderColor(0, 0, 0, 1)
-    powerBorder:Hide()
-    frame.dfPowerBar.border = powerBorder
+    -- Power / Resource bar border via the unified DF.Border backend
+    -- (Stage 4.2). ApplyResourceBarLayout in Frames/Bars.lua drives
+    -- BuildSpec + Apply on each update; border anchorTo defaults to the
+    -- bar itself so it surrounds the resource bar's bounds.
+    frame.dfPowerBar.border = DF.Border:New(frame.dfPowerBar)
     
     -- ========================================
     -- ABSORB BAR
@@ -2367,12 +2232,12 @@ function DF:CreateAuraIcon(parent, index, auraType)
     local baseLevel = parent:GetFrameLevel()
     icon:SetFrameLevel(baseLevel + 40)
     
-    -- Border - use BACKGROUND layer so icon texture draws ON TOP of it
-    -- This creates a visible border around the edges where the icon doesn't cover
-    icon.border = icon:CreateTexture(nil, "BACKGROUND")
-    PixelUtil.SetPoint(icon.border, "TOPLEFT", icon, "TOPLEFT", -1, 1)
-    PixelUtil.SetPoint(icon.border, "BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
-    icon.border:SetColorTexture(0, 0, 0, 0.8)
+    -- Border — a unified DF.Border (solidOnly) is created LAZILY by
+    -- DF:ConfigureAuraIconBorder the first time this icon's border is enabled,
+    -- so disabled (e.g. default buff) borders allocate nothing.  Stored as
+    -- `icon.border`; recoloured per aura update via icon.border:SetColor
+    -- (secret-safe).  Show/Hide/SetAlpha/Masque-gate calls work on the frame.
+    icon.border = nil
     
     -- Normal texture - Masque expects this for proper button structure
     -- Using a 1x1 white pixel that's invisible by default (alpha 0)
@@ -2417,68 +2282,30 @@ function DF:CreateAuraIcon(parent, index, auraType)
     icon.expiringTint:SetBlendMode("ADD")
     icon.expiringTint:Hide()
     
-    -- Expiring border uses two containers:
-    -- Outer container: alpha controlled by API (visibility: 0 or 1)
-    -- Inner container: alpha controlled by animation (pulsate: 0.3 to 1)
-    -- This prevents API SetAlpha from conflicting with animation
-    
-    icon.expiringBorderAlphaContainer = CreateFrame("Frame", nil, icon.textOverlay)
-    icon.expiringBorderAlphaContainer:SetAllPoints(icon)
-    icon.expiringBorderAlphaContainer:SetFrameLevel(icon.textOverlay:GetFrameLevel())
-    icon.expiringBorderAlphaContainer:EnableMouse(false)  -- Don't intercept mouse
-    icon.expiringBorderAlphaContainer:Hide()
-    
-    icon.expiringBorderContainer = CreateFrame("Frame", nil, icon.expiringBorderAlphaContainer)
-    icon.expiringBorderContainer:SetAllPoints(icon)
-    icon.expiringBorderContainer:SetFrameLevel(icon.expiringBorderAlphaContainer:GetFrameLevel())
-    icon.expiringBorderContainer:EnableMouse(false)  -- Don't intercept mouse
-    
-    -- Expiring border - use 4 edge textures for hollow rectangle effect
-    -- Left and Right are full height, Top and Bottom fit between them (no corner overlap)
-    local borderThickness = 2
-    
-    icon.expiringBorderLeft = icon.expiringBorderContainer:CreateTexture(nil, "OVERLAY")
-    icon.expiringBorderLeft:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
-    icon.expiringBorderLeft:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", -1, -1)
-    icon.expiringBorderLeft:SetWidth(borderThickness)
-    icon.expiringBorderLeft:SetColorTexture(1, 1, 1, 1)
-    
-    icon.expiringBorderRight = icon.expiringBorderContainer:CreateTexture(nil, "OVERLAY")
-    icon.expiringBorderRight:SetPoint("TOPRIGHT", icon, "TOPRIGHT", 1, 1)
-    icon.expiringBorderRight:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
-    icon.expiringBorderRight:SetWidth(borderThickness)
-    icon.expiringBorderRight:SetColorTexture(1, 1, 1, 1)
-    
-    -- Top and bottom fit between left and right edges (no corner overlap)
-    icon.expiringBorderTop = icon.expiringBorderContainer:CreateTexture(nil, "OVERLAY")
-    icon.expiringBorderTop:SetPoint("TOPLEFT", icon.expiringBorderLeft, "TOPRIGHT", 0, 0)
-    icon.expiringBorderTop:SetPoint("TOPRIGHT", icon.expiringBorderRight, "TOPLEFT", 0, 0)
-    icon.expiringBorderTop:SetHeight(borderThickness)
-    icon.expiringBorderTop:SetColorTexture(1, 1, 1, 1)
-    
-    icon.expiringBorderBottom = icon.expiringBorderContainer:CreateTexture(nil, "OVERLAY")
-    icon.expiringBorderBottom:SetPoint("BOTTOMLEFT", icon.expiringBorderLeft, "BOTTOMRIGHT", 0, 0)
-    icon.expiringBorderBottom:SetPoint("BOTTOMRIGHT", icon.expiringBorderRight, "BOTTOMLEFT", 0, 0)
-    icon.expiringBorderBottom:SetHeight(borderThickness)
-    icon.expiringBorderBottom:SetColorTexture(1, 1, 1, 1)
-    
-    -- Pulse animation for inner container (doesn't conflict with outer container's alpha)
-    icon.expiringBorderPulse = icon.expiringBorderContainer:CreateAnimationGroup()
-    icon.expiringBorderPulse:SetLooping("REPEAT")
-    
-    local fadeOut = icon.expiringBorderPulse:CreateAnimation("Alpha")
-    fadeOut:SetFromAlpha(1)
-    fadeOut:SetToAlpha(0.3)
-    fadeOut:SetDuration(0.5)
-    fadeOut:SetOrder(1)
-    fadeOut:SetSmoothing("IN_OUT")
-    
-    local fadeIn = icon.expiringBorderPulse:CreateAnimation("Alpha")
-    fadeIn:SetFromAlpha(0.3)
-    fadeIn:SetToAlpha(1)
-    fadeIn:SetDuration(0.5)
-    fadeIn:SetOrder(2)
-    fadeIn:SetSmoothing("IN_OUT")
+    -- Expiring border — unified DF.Border, AD-style feature set (Expiring Colour
+    -- Override + the full Expiring Animation: DF Pulsate / Dash / glow / …).
+    -- Replaces the legacy two-container + 4-edge + AnimationGroup pulse.
+    --
+    -- Two-layer design (mirrors the legacy alphaContainer + container split):
+    --   * expiringBorderGate — a plain frame whose ALPHA carries the secret-safe
+    --     threshold/expiry visibility.  The aura timer drives it via
+    --     SetAlphaFromBoolean(hasExpiration, expiringAlpha, 0) — the only way to
+    --     consume the secret-tainted expiry curve without tainting Lua flow.
+    --   * expiringBorder — the DF.Border itself, parented to the gate so the
+    --     gate's alpha multiplies the border (and any animation alpha) without
+    --     the animation fighting the visibility channel.
+    -- A separate overlay above the normal border (+6) so it can show even when
+    -- the normal buff border is off.  solidOnly so the Color-by-Time curve can
+    -- recolour it per-tick with a secret colour (bare SetColorTexture, no taint);
+    -- ConfigureExpiringBorder re-creates it non-solidOnly when Color-by-Time is
+    -- off so the full style toolkit (gradient/texture) is available.
+    icon.expiringBorderGate = CreateFrame("Frame", nil, icon)
+    icon.expiringBorderGate:SetAllPoints(icon)
+    icon.expiringBorderGate:SetFrameLevel(icon:GetFrameLevel() + 6)
+    icon.expiringBorderGate:EnableMouse(false)
+    icon.expiringBorderGate:SetAlpha(0)
+    icon.expiringBorder = DF.Border:New(icon.expiringBorderGate, { solidOnly = true, frameLevelOffset = 0 })
+    icon.expiringBorder:Hide()
     
     -- Stack count (on textOverlay, above cooldown)
     icon.count = icon.textOverlay:CreateFontString(nil, "OVERLAY")

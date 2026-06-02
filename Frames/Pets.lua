@@ -55,15 +55,9 @@ function DF:CreatePetFrame(unit, ownerFrame, isRaid)
     frame.healthBar.bg:SetAllPoints()
     frame.healthBar.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
     
-    -- Border
-    frame.border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    frame.border:SetPoint("TOPLEFT", -1, 1)
-    frame.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    frame.border:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    frame.border:SetBackdropBorderColor(0, 0, 0, 1)
+    -- Border via the unified DF.Border backend (Stage 4.3).
+    -- ApplyPetFrameStyle drives BuildSpec + Apply on each update.
+    frame.border = DF.Border:New(frame)
     
     -- Name text — do NOT use SetFont() directly; use SetFontObject so that
     -- later SafeSetFont calls with font families can properly override
@@ -180,15 +174,9 @@ function DF:CreateTestPetFrame(unit, ownerTestFrame, isRaid)
     frame.healthBar.bg:SetAllPoints()
     frame.healthBar.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
 
-    -- Border
-    frame.border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    frame.border:SetPoint("TOPLEFT", -1, 1)
-    frame.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    frame.border:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    frame.border:SetBackdropBorderColor(0, 0, 0, 1)
+    -- Border via the unified DF.Border backend (Stage 4.3).
+    -- ApplyPetFrameStyle drives BuildSpec + Apply on each update.
+    frame.border = DF.Border:New(frame)
 
     -- Name text — do NOT use SetFont() directly; use SafeSetFont or SetFontObject
     -- so that later SafeSetFont calls with font families can properly override
@@ -498,13 +486,14 @@ function DF:ApplyPetFrameStyle(frame)
     local healthBgColor = db.petHealthBgColor or {r = 0.2, g = 0.2, b = 0.2, a = 0.8}
     frame.healthBar.bg:SetVertexColor(healthBgColor.r, healthBgColor.g, healthBgColor.b, healthBgColor.a or 0.8)
     
-    -- Border
-    if db.petShowBorder then
-        local borderColor = db.petBorderColor or {r = 0, g = 0, b = 0, a = 1}
-        frame.border:SetBackdropBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        frame.border:Show()
-    else
-        frame.border:Hide()
+    -- Border via unified DF.Border backend (Stage 4.3). No ctx — Class /
+    -- Role colour deliberately not exposed on Pet Frame: UnitClass("pet")
+    -- returns the pet family (Beast / Felguard / etc.), not a class token
+    -- that maps to RAID_CLASS_COLORS, so the resolver wouldn't produce a
+    -- useful colour. Re-visit only if a per-class-of-owner feature
+    -- becomes worth its own resolver.
+    if frame.border then
+        DF.Border:Apply(frame.border, DF.Border:BuildSpec(db, "pet"))
     end
     
     -- Name text styling - use SafeSetFont like main frames
