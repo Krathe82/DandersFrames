@@ -27,6 +27,10 @@ local function RegisterCustomMedia()
     LSM:Register(LSM.MediaType.FONT, "DF Expressway", "Interface\\AddOns\\DandersFrames\\Fonts\\Expressway.ttf", ALL_LOCALES)
     LSM:Register(LSM.MediaType.FONT, "DF Roboto SemiBold", "Interface\\AddOns\\DandersFrames\\Fonts\\Roboto-SemiBold.ttf", ALL_LOCALES)
     LSM:Register(LSM.MediaType.FONT, "DF Roboto Bold", "Interface\\AddOns\\DandersFrames\\Fonts\\Roboto-Bold.ttf", ALL_LOCALES)
+    -- Monospaced (tabular) Roboto for timer/countdown text: equal-width digits so a
+    -- counting-down number does not shift left/right as the digit values change.
+    LSM:Register(LSM.MediaType.FONT, "DF Roboto Mono SemiBold", "Interface\\AddOns\\DandersFrames\\Fonts\\RobotoMono-SemiBold.ttf", ALL_LOCALES)
+    LSM:Register(LSM.MediaType.FONT, "DF Roboto Mono Bold", "Interface\\AddOns\\DandersFrames\\Fonts\\RobotoMono-Bold.ttf", ALL_LOCALES)
     
     -- Register custom statusbar textures
     LSM:Register(LSM.MediaType.STATUSBAR, "DF Flat", "Interface\\Buttons\\WHITE8x8")
@@ -880,7 +884,15 @@ DF.PartyDefaults = {
     afkIconShowText = true,
     afkIconShowTimer = true,
     afkIconText = "AFK",
-    afkIconTextColor = {r = 1, g = 0.7725490927696228, b = 0.5411764979362488, a = 1},
+    afkIconTextColor = {r = 1, g = 0.5, b = 0, a = 1},
+    afkIconTimerColor = {r = 1, g = 0.5, b = 0, a = 1},
+    -- afkIconTimerFont intentionally unset: the timer inherits the global status-icon
+    -- font. The countdown no longer wobbles because ApplyTimerTextSettings LEFT-
+    -- justifies it (the changing seconds sit on the right with nothing to push). A
+    -- monospace font is still selectable if perfectly zero movement is wanted.
+    afkIconTimerFontSize = 10,
+    afkIconTimerX = 0,
+    afkIconTimerY = -1,
     afkIconX = 0,
     afkIconY = 2,
 
@@ -1958,7 +1970,7 @@ DF.PartyDefaults = {
     roleIconExternalDPS = "",
     roleIconExternalHealer = "",
     roleIconExternalTank = "",
-    roleIconOnlyInCombat = false,
+    roleIconHideInCombat = false,
     roleIconScale = 1,
     roleIconShowDPS = true,
     roleIconShowHealer = true,
@@ -2438,7 +2450,15 @@ DF.RaidDefaults = {
     afkIconShowText = true,
     afkIconShowTimer = true,
     afkIconText = "AFK",
-    afkIconTextColor = {r = 1, g = 0.7725490927696228, b = 0.5411764979362488, a = 1},
+    afkIconTextColor = {r = 1, g = 0.5, b = 0, a = 1},
+    afkIconTimerColor = {r = 1, g = 0.5, b = 0, a = 1},
+    -- afkIconTimerFont intentionally unset: the timer inherits the global status-icon
+    -- font. The countdown no longer wobbles because ApplyTimerTextSettings LEFT-
+    -- justifies it (the changing seconds sit on the right with nothing to push). A
+    -- monospace font is still selectable if perfectly zero movement is wanted.
+    afkIconTimerFontSize = 10,
+    afkIconTimerX = 0,
+    afkIconTimerY = -1,
     afkIconX = 0,
     afkIconY = 2,
 
@@ -3516,7 +3536,7 @@ DF.RaidDefaults = {
     roleIconExternalDPS = "",
     roleIconExternalHealer = "",
     roleIconExternalTank = "",
-    roleIconOnlyInCombat = false,
+    roleIconHideInCombat = false,
     roleIconScale = 1,
     roleIconShowDPS = true,
     roleIconShowHealer = true,

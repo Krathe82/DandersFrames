@@ -1896,6 +1896,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             db.targetedListFont = font; db.targetedListFontOutline = outline
             db.defensiveIconDurationFont = font; db.defensiveIconDurationOutline = outline
             db.statusIconFont = font; db.statusIconFontOutline = outline
+            -- AFK timer text inherits the status-icon font; clear any per-timer
+            -- override so it follows the freshly-applied global font.
+            db.afkIconTimerFont = nil; db.afkIconTimerOutline = nil
             if db.groupLabelFont ~= nil then
                 db.groupLabelFont = font; db.groupLabelOutline = outline
             end
@@ -1979,7 +1982,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== AFFECTED ELEMENTS GROUP (Column 2) =====
         local infoGroup = GUI:CreateSettingsGroup(self.child, 280)
         infoGroup:AddWidget(GUI:CreateHeader(self.child, L["Affected Elements"]), 40)
-        infoGroup:AddWidget(GUI:CreateLabel(self.child, L["• Name Text\n• Health Text\n• Status Text (Dead/Offline)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• Status Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"], 250), 235)
+        infoGroup:AddWidget(GUI:CreateLabel(self.child, L["• Name Text\n• Health Text\n• Status Text (Dead/Offline)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• All Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"], 250), 235)
         infoGroup:AddWidget(GUI:CreateLabel(self.child, L["Note: Font sizes are not changed. Adjust sizes in each element's page."], 250), 40)
         Add(infoGroup, nil, 2)
     end)
@@ -6687,7 +6690,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ============================================
         -- ICON TEXT SETTINGS (Collapsible, at top)
         -- ============================================
-        local textSection = Add(GUI:CreateCollapsibleSection(self.child, L["Icon Text Settings"], false, 250), 28, 1)
+        local textSection = Add(GUI:CreateCollapsibleSection(self.child, L["Icon Text Settings"], false, 270), 28, 1)
         
         local textLabel = Add(GUI:CreateLabel(self.child, L["Font settings for icons displayed as text (Summon, Res, AFK, etc.)"], 240), 30, 1)
         textSection:RegisterChild(textLabel)
@@ -6733,380 +6736,481 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ============================================
         -- ROLE ICON (Collapsible)
         -- ============================================
-        local roleSection = Add(GUI:CreateCollapsibleSection(self.child, L["Role Icon"], false, 250), 28, 1)
+        local roleSection = Add(GUI:CreateCollapsibleSection(self.child, L["Role Icon"], false, 270), 28, 1)
 
-        local roleStyle = Add(GUI:CreateDropdown(self.child, L["Icon Style"], roleStyleOptions, db, "roleIconStyle", function() DF:UpdateAllRoleIcons() end), 55, 1)
-        roleSection:RegisterChild(roleStyle)
+        -- Header preview: the Tank/Healer/DPS icons in the currently selected
+        -- style. Rebuilt live whenever the style or an external path changes.
+        local function UpdateRolePreview()
+            if not roleSection.SetPreviewIcons then return end
+            local icons = {}
+            for _, role in ipairs({ "TANK", "HEALER", "DAMAGER" }) do
+                -- tex may be an atlas name (no coords) or a texture path (+coords).
+                local tex, l, r, t, b = DF:GetRoleIconTexture(db, role)
+                if tex then
+                    icons[#icons + 1] = { texture = tex, coords = l and { l, r, t, b } or nil }
+                end
+            end
+            roleSection:SetPreviewIcons(icons)
+        end
 
-        local roleExtTank = Add(GUI:CreateEditBox(self.child, "Tank Icon Path", db, "roleIconExternalTank", function() DF:UpdateAllRoleIcons() end), 55, 1)
-        roleSection:RegisterChild(roleExtTank)
+        -- Small gap between the section header and the first box.
+        local roleHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        roleSection:RegisterChild(roleHeaderGap)
+
+        -- Settings
+        local roleSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "roleIcon:Settings" })
+        roleSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        roleSettings:AddWidget(GUI:CreateDropdown(self.child, L["Icon Style"], roleStyleOptions, db, "roleIconStyle", function() DF:UpdateAllRoleIcons(); UpdateRolePreview() end), 55)
+        local roleExtTank = roleSettings:AddWidget(GUI:CreateEditBox(self.child, "Tank Icon Path", db, "roleIconExternalTank", function() DF:UpdateAllRoleIcons(); UpdateRolePreview() end, nil, "Interface\\MyIcons\\Tank.tga"), 55)
         roleExtTank.hideOn = function(d) return d.roleIconStyle ~= "EXTERNAL" end
-
-        local roleExtHealer = Add(GUI:CreateEditBox(self.child, "Healer Icon Path", db, "roleIconExternalHealer", function() DF:UpdateAllRoleIcons() end), 55, 1)
-        roleSection:RegisterChild(roleExtHealer)
+        local roleExtHealer = roleSettings:AddWidget(GUI:CreateEditBox(self.child, "Healer Icon Path", db, "roleIconExternalHealer", function() DF:UpdateAllRoleIcons(); UpdateRolePreview() end, nil, "Interface\\MyIcons\\Healer.tga"), 55)
         roleExtHealer.hideOn = function(d) return d.roleIconStyle ~= "EXTERNAL" end
-
-        local roleExtDPS = Add(GUI:CreateEditBox(self.child, "DPS Icon Path", db, "roleIconExternalDPS", function() DF:UpdateAllRoleIcons() end), 55, 1)
-        roleSection:RegisterChild(roleExtDPS)
+        local roleExtDPS = roleSettings:AddWidget(GUI:CreateEditBox(self.child, "DPS Icon Path", db, "roleIconExternalDPS", function() DF:UpdateAllRoleIcons(); UpdateRolePreview() end, nil, "Interface\\MyIcons\\DPS.tga"), 55)
         roleExtDPS.hideOn = function(d) return d.roleIconStyle ~= "EXTERNAL" end
-
-        local roleExtNote = Add(GUI:CreateLabel(self.child, L["Enter WoW texture paths (file extensions are stripped automatically). Leave empty to use DF Icons as fallback."], 250), 40, 1)
-        roleSection:RegisterChild(roleExtNote)
+        local roleExtNote = roleSettings:AddWidget(GUI:CreateLabel(self.child, L["Paths are relative to your WoW folder and must start with Interface\\. Pasting a full path works — anything before 'Interface' is stripped. Leave empty for DF Icons."], 250), 70)
         roleExtNote.hideOn = function(d) return d.roleIconStyle ~= "EXTERNAL" end
+        -- Per-role filters: which roles ever show an icon (global — apply in and
+        -- out of combat). The Hide In Combat toggle (Appearance) is an independent gate.
+        roleSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show Tank"], db, "roleIconShowTank", function() DF:UpdateAllRoleIcons() end), 30)
+        roleSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show Healer"], db, "roleIconShowHealer", function() DF:UpdateAllRoleIcons() end), 30)
+        roleSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show DPS"], db, "roleIconShowDPS", function() DF:UpdateAllRoleIcons() end), 30)
+        Add(roleSettings, nil, 1)
+        roleSection:RegisterChild(roleSettings)
 
-        local roleOnlyInCombat = Add(GUI:CreateCheckbox(self.child, L["Show All Roles Out of Combat"], db, "roleIconOnlyInCombat", function() DF:UpdateAllRoleIcons() end), 30, 1)
-        roleSection:RegisterChild(roleOnlyInCombat)
+        -- Appearance
+        local roleAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "roleIcon:Appearance" })
+        roleAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        roleAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "roleIconScale", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55)
+        roleAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "roleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("role") end, true), 55)
+        roleAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "roleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("role") end, true), 55)
+        roleAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide In Combat"], db, "roleIconHideInCombat", function() DF:UpdateAllRoleIcons() end), 30)
+        Add(roleAppearance, nil, 1)
+        roleSection:RegisterChild(roleAppearance)
 
-        local roleOnlyInCombatDesc = Add(GUI:CreateLabel(self.child, L["When enabled, all role icons are shown outside of combat. The filters below only apply during combat."], 250), 40, 1)
-        roleSection:RegisterChild(roleOnlyInCombatDesc)
+        -- Position
+        local rolePosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "roleIcon:Position" })
+        rolePosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        rolePosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "roleIconAnchor", function() DF:LightweightUpdateIconPosition("role") end), 55)
+        rolePosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "roleIconX", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55)
+        rolePosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "roleIconY", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55)
+        Add(rolePosition, nil, 1)
+        roleSection:RegisterChild(rolePosition)
 
-        local roleShowTank = Add(GUI:CreateCheckbox(self.child, L["Show Tank"], db, "roleIconShowTank", function() DF:UpdateAllRoleIcons() end), 30, 1)
-        roleSection:RegisterChild(roleShowTank)
-        
-        local roleShowHealer = Add(GUI:CreateCheckbox(self.child, L["Show Healer"], db, "roleIconShowHealer", function() DF:UpdateAllRoleIcons() end), 30, 1)
-        roleSection:RegisterChild(roleShowHealer)
-        
-        local roleShowDPS = Add(GUI:CreateCheckbox(self.child, L["Show DPS"], db, "roleIconShowDPS", function() DF:UpdateAllRoleIcons() end), 30, 1)
-        roleSection:RegisterChild(roleShowDPS)
-        
-        local roleScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "roleIconScale", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55, 1)
-        roleSection:RegisterChild(roleScale)
-        
-        local roleAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "roleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("role") end, true), 55, 1)
-        roleSection:RegisterChild(roleAlpha)
-        
-        local roleAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "roleIconAnchor", function() DF:LightweightUpdateIconPosition("role") end), 55, 1)
-        roleSection:RegisterChild(roleAnchor)
-        
-        local roleX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "roleIconX", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55, 1)
-        roleSection:RegisterChild(roleX)
-        
-        local roleY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "roleIconY", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55, 1)
-        roleSection:RegisterChild(roleY)
-        
-        local roleLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "roleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("role") end, true), 55, 1)
-        roleSection:RegisterChild(roleLevel)
-        
+        -- Initial header preview for the current style.
+        UpdateRolePreview()
+
+        -- ============================================
+        -- STATUS-ICON HEADER PREVIEWS
+        -- Each status-icon section shows a representative swatch on its header
+        -- (or the configured status text when "Show as Text" is on), greyed out
+        -- when the section is disabled. Refreshers are registered globally and
+        -- re-run by hooked frame-update functions, so previews track live
+        -- enable/text changes without touching every control's callback.
+        -- ============================================
+        if not DF._iconPreviewHooked then
+            DF._iconPreviewHooked = true
+            if DF.UpdateAllFrames then
+                hooksecurefunc(DF, "UpdateAllFrames", function() DF:RefreshIconPreviews() end)
+            end
+            if DF.UpdateAllFramesStatusIcons then
+                hooksecurefunc(DF, "UpdateAllFramesStatusIcons", function() DF:RefreshIconPreviews() end)
+            end
+        end
+        if DF.iconPreviewRefreshers then wipe(DF.iconPreviewRefreshers) end
+
+        local function WireStatusPreview(section, opts)
+            local function refresh(force)
+                if not section.SetPreviewIcons then return end
+                if not force and not section:IsVisible() then return end
+                local enabled = (not opts.enableKey) or (db[opts.enableKey] ~= false)
+                -- Text entries use the icon's configured status-text colour so the
+                -- preview matches the frame (e.g. <prefix>IconTextColor).
+                local colorKey = opts.enableKey and opts.enableKey:gsub("Enabled$", "TextColor")
+                local textColor = colorKey and db[colorKey]
+                local entries = {}
+                if opts.showTextKey and db[opts.showTextKey] then
+                    for _, key in ipairs(opts.texts or {}) do
+                        entries[#entries + 1] = { text = db[key] or key, color = textColor }
+                    end
+                else
+                    for _, tex in ipairs(opts.icons or {}) do
+                        entries[#entries + 1] = { texture = tex }
+                    end
+                end
+                for _, e in ipairs(entries) do e.desaturate = not enabled end
+                section:SetPreviewIcons(entries)
+                section:SetPreviewDimmed(not enabled)
+            end
+            if DF.iconPreviewRefreshers then table.insert(DF.iconPreviewRefreshers, refresh) end
+            refresh(true)
+        end
+
         -- ============================================
         -- LEADER ICON (Collapsible)
         -- ============================================
-        local leaderSection = Add(GUI:CreateCollapsibleSection(self.child, L["Leader Icon"], false, 250), 28, 1)
+        local leaderSection = Add(GUI:CreateCollapsibleSection(self.child, L["Leader Icon"], false, 270), 28, 1)
+        WireStatusPreview(leaderSection, { enableKey = "leaderIconEnabled", icons = { "Interface\\GroupFrame\\UI-Group-LeaderIcon" } })
         
-        local leaderEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Leader Icon"], db, "leaderIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        leaderSection:RegisterChild(leaderEnabled)
-        
-        local leaderScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "leaderIconScale", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55, 1)
-        leaderSection:RegisterChild(leaderScale)
-        
-        local leaderAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "leaderIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("leader") end, true), 55, 1)
-        leaderSection:RegisterChild(leaderAlpha)
-        
-        local leaderHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "leaderIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        leaderSection:RegisterChild(leaderHide)
-        
-        local leaderAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "leaderIconAnchor", function() DF:LightweightUpdateIconPosition("leader") end), 55, 1)
-        leaderSection:RegisterChild(leaderAnchor)
-        
-        local leaderX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "leaderIconX", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55, 1)
-        leaderSection:RegisterChild(leaderX)
-        
-        local leaderY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "leaderIconY", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55, 1)
-        leaderSection:RegisterChild(leaderY)
-        
-        local leaderLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "leaderIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("leader") end, true), 55, 1)
-        leaderSection:RegisterChild(leaderLevel)
+        -- Small gap between the section header and the first box.
+        local leaderHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        leaderSection:RegisterChild(leaderHeaderGap)
+
+        -- Settings
+        local leaderSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "leaderIcon:Settings" })
+        leaderSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        leaderSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Leader Icon"], db, "leaderIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        Add(leaderSettings, nil, 1)
+        leaderSection:RegisterChild(leaderSettings)
+
+        -- Appearance
+        local leaderAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "leaderIcon:Appearance" })
+        leaderAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        leaderAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "leaderIconScale", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55)
+        leaderAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "leaderIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("leader") end, true), 55)
+        leaderAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "leaderIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("leader") end, true), 55)
+        leaderAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "leaderIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(leaderAppearance, nil, 1)
+        leaderSection:RegisterChild(leaderAppearance)
+
+        -- Position
+        local leaderPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "leaderIcon:Position" })
+        leaderPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        leaderPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "leaderIconAnchor", function() DF:LightweightUpdateIconPosition("leader") end), 55)
+        leaderPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "leaderIconX", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55)
+        leaderPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "leaderIconY", nil, function() DF:LightweightUpdateIconPosition("leader") end, true), 55)
+        Add(leaderPosition, nil, 1)
+        leaderSection:RegisterChild(leaderPosition)
         
         -- ============================================
         -- RAID TARGET ICON (Collapsible)
         -- ============================================
-        local raidTargetSection = Add(GUI:CreateCollapsibleSection(self.child, L["Raid Target Icon"], false, 250), 28, 1)
+        local raidTargetSection = Add(GUI:CreateCollapsibleSection(self.child, L["Target Marker Icon"], false, 270), 28, 1)
         
-        local rtEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Raid Target Icon"], db, "raidTargetIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        raidTargetSection:RegisterChild(rtEnabled)
-        
-        local rtScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "raidTargetIconScale", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55, 1)
-        raidTargetSection:RegisterChild(rtScale)
-        
-        local rtAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "raidTargetIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("raidTarget") end, true), 55, 1)
-        raidTargetSection:RegisterChild(rtAlpha)
-        
-        local rtHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "raidTargetIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        raidTargetSection:RegisterChild(rtHide)
-        
-        local rtAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "raidTargetIconAnchor", function() DF:LightweightUpdateIconPosition("raidTarget") end), 55, 1)
-        raidTargetSection:RegisterChild(rtAnchor)
-        
-        local rtX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "raidTargetIconX", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55, 1)
-        raidTargetSection:RegisterChild(rtX)
-        
-        local rtY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "raidTargetIconY", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55, 1)
-        raidTargetSection:RegisterChild(rtY)
-        
-        local rtLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "raidTargetIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("raidTarget") end, true), 55, 1)
-        raidTargetSection:RegisterChild(rtLevel)
+        -- Small gap between the section header and the first box.
+        local rtHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        raidTargetSection:RegisterChild(rtHeaderGap)
+
+        -- Settings
+        local rtSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidTargetIcon:Settings" })
+        rtSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        rtSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Target Marker Icon"], db, "raidTargetIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        Add(rtSettings, nil, 1)
+        raidTargetSection:RegisterChild(rtSettings)
+
+        -- Appearance
+        local rtAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidTargetIcon:Appearance" })
+        rtAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        rtAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "raidTargetIconScale", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55)
+        rtAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "raidTargetIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("raidTarget") end, true), 55)
+        rtAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "raidTargetIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("raidTarget") end, true), 55)
+        rtAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "raidTargetIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(rtAppearance, nil, 1)
+        raidTargetSection:RegisterChild(rtAppearance)
+
+        -- Position
+        local rtPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidTargetIcon:Position" })
+        rtPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        rtPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "raidTargetIconAnchor", function() DF:LightweightUpdateIconPosition("raidTarget") end), 55)
+        rtPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "raidTargetIconX", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55)
+        rtPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "raidTargetIconY", nil, function() DF:LightweightUpdateIconPosition("raidTarget") end, true), 55)
+        Add(rtPosition, nil, 1)
+        raidTargetSection:RegisterChild(rtPosition)
         
         -- ============================================
         -- READY CHECK ICON (Collapsible)
         -- ============================================
-        local readySection = Add(GUI:CreateCollapsibleSection(self.child, L["Ready Check Icon"], false, 250), 28, 1)
+        local readySection = Add(GUI:CreateCollapsibleSection(self.child, L["Ready Check Icon"], false, 270), 28, 1)
+        WireStatusPreview(readySection, { enableKey = "readyCheckIconEnabled", icons = { "UI-LFG-ReadyMark-Raid" } })
         
-        local rcEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Ready Check Icon"], db, "readyCheckIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        readySection:RegisterChild(rcEnabled)
-        
-        local rcScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "readyCheckIconScale", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55, 1)
-        readySection:RegisterChild(rcScale)
-        
-        local rcAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "readyCheckIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("readyCheck") end, true), 55, 1)
-        readySection:RegisterChild(rcAlpha)
-        
-        local rcHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "readyCheckIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        readySection:RegisterChild(rcHide)
-        
-        local rcAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "readyCheckIconAnchor", function() DF:LightweightUpdateIconPosition("readyCheck") end), 55, 1)
-        readySection:RegisterChild(rcAnchor)
-        
-        local rcX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "readyCheckIconX", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55, 1)
-        readySection:RegisterChild(rcX)
-        
-        local rcY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "readyCheckIconY", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55, 1)
-        readySection:RegisterChild(rcY)
-        
-        local rcPersist = Add(GUI:CreateSlider(self.child, L["Persist (sec)"], 0, 15, 1, db, "readyCheckIconPersist"), 55, 1)
-        readySection:RegisterChild(rcPersist)
-        
-        local rcLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "readyCheckIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("readyCheck") end, true), 55, 1)
-        readySection:RegisterChild(rcLevel)
+        -- Small gap between the section header and the first box.
+        local rcHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        readySection:RegisterChild(rcHeaderGap)
+
+        -- Settings
+        local rcSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "readyCheckIcon:Settings" })
+        rcSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        rcSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Ready Check Icon"], db, "readyCheckIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        rcSettings:AddWidget(GUI:CreateSlider(self.child, L["Persist (sec)"], 0, 15, 1, db, "readyCheckIconPersist"), 55)
+        Add(rcSettings, nil, 1)
+        readySection:RegisterChild(rcSettings)
+
+        -- Appearance
+        local rcAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "readyCheckIcon:Appearance" })
+        rcAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        rcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "readyCheckIconScale", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55)
+        rcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "readyCheckIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("readyCheck") end, true), 55)
+        rcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "readyCheckIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("readyCheck") end, true), 55)
+        rcAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "readyCheckIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(rcAppearance, nil, 1)
+        readySection:RegisterChild(rcAppearance)
+
+        -- Position
+        local rcPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "readyCheckIcon:Position" })
+        rcPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        rcPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "readyCheckIconAnchor", function() DF:LightweightUpdateIconPosition("readyCheck") end), 55)
+        rcPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "readyCheckIconX", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55)
+        rcPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "readyCheckIconY", nil, function() DF:LightweightUpdateIconPosition("readyCheck") end, true), 55)
+        Add(rcPosition, nil, 1)
+        readySection:RegisterChild(rcPosition)
         
         -- ============================================
         -- SUMMON ICON (Collapsible)
         -- ============================================
-        local summonSection = Add(GUI:CreateCollapsibleSection(self.child, L["Summon Icon"], false, 250), 28, 1)
+        local summonSection = Add(GUI:CreateCollapsibleSection(self.child, L["Summon Icon"], false, 270), 28, 1)
+        WireStatusPreview(summonSection, { enableKey = "summonIconEnabled", showTextKey = "summonIconShowText", icons = { "RaidFrame-Icon-SummonPending" }, texts = { "summonIconTextPending" } })
         
-        local sumEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Summon Icon"], db, "summonIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        summonSection:RegisterChild(sumEnabled)
-        
-        local sumShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "summonIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        summonSection:RegisterChild(sumShowText)
-        
-        local sumTextPending = Add(GUI:CreateEditBox(self.child, "Pending Text", db, "summonIconTextPending", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        summonSection:RegisterChild(sumTextPending)
-        
-        local sumTextAccepted = Add(GUI:CreateEditBox(self.child, "Accepted Text", db, "summonIconTextAccepted", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        summonSection:RegisterChild(sumTextAccepted)
-        
-        local sumTextDeclined = Add(GUI:CreateEditBox(self.child, "Declined Text", db, "summonIconTextDeclined", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        summonSection:RegisterChild(sumTextDeclined)
-        
-        local sumScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "summonIconScale", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55, 1)
-        summonSection:RegisterChild(sumScale)
-        
-        local sumAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "summonIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("summon") end, true), 55, 1)
-        summonSection:RegisterChild(sumAlpha)
-        
-        local sumHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "summonIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        summonSection:RegisterChild(sumHide)
-        
-        local sumAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "summonIconAnchor", function() DF:LightweightUpdateIconPosition("summon") end), 55, 1)
-        summonSection:RegisterChild(sumAnchor)
-        
-        local sumX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "summonIconX", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55, 1)
-        summonSection:RegisterChild(sumX)
-        
-        local sumY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "summonIconY", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55, 1)
-        summonSection:RegisterChild(sumY)
-        
-        local sumLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "summonIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("summon") end, true), 55, 1)
-        summonSection:RegisterChild(sumLevel)
+        -- Small gap between the section header and the first box.
+        local sumHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        summonSection:RegisterChild(sumHeaderGap)
+
+        -- Settings
+        local sumSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "summonIcon:Settings" })
+        sumSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        sumSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Summon Icon"], db, "summonIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        sumSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "summonIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        sumSettings:AddWidget(GUI:CreateEditBox(self.child, "Pending Text", db, "summonIconTextPending", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        sumSettings:AddWidget(GUI:CreateEditBox(self.child, "Accepted Text", db, "summonIconTextAccepted", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        sumSettings:AddWidget(GUI:CreateEditBox(self.child, "Declined Text", db, "summonIconTextDeclined", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        Add(sumSettings, nil, 1)
+        summonSection:RegisterChild(sumSettings)
+
+        -- Appearance
+        local sumAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "summonIcon:Appearance" })
+        sumAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        sumAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "summonIconScale", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55)
+        sumAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "summonIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("summon") end, true), 55)
+        sumAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "summonIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("summon") end, true), 55)
+        sumAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "summonIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(sumAppearance, nil, 1)
+        summonSection:RegisterChild(sumAppearance)
+
+        -- Position
+        local sumPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "summonIcon:Position" })
+        sumPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        sumPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "summonIconAnchor", function() DF:LightweightUpdateIconPosition("summon") end), 55)
+        sumPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "summonIconX", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55)
+        sumPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "summonIconY", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55)
+        Add(sumPosition, nil, 1)
+        summonSection:RegisterChild(sumPosition)
         
         -- ============================================
         -- RESURRECTION ICON (Collapsible)
         -- ============================================
-        local resSection = Add(GUI:CreateCollapsibleSection(self.child, L["Resurrection Icon"], false, 250), 28, 1)
+        local resSection = Add(GUI:CreateCollapsibleSection(self.child, L["Resurrection Icon"], false, 270), 28, 1)
+        WireStatusPreview(resSection, { enableKey = "resurrectionIconEnabled", showTextKey = "resurrectionIconShowText", icons = { "RaidFrame-Icon-Rez" }, texts = { "resurrectionIconTextCasting" } })
         
-        local resEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Resurrection Icon"], db, "resurrectionIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        resSection:RegisterChild(resEnabled)
-        
-        local resShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "resurrectionIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        resSection:RegisterChild(resShowText)
-        
-        local resTextCasting = Add(GUI:CreateEditBox(self.child, "Casting Text", db, "resurrectionIconTextCasting", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        resSection:RegisterChild(resTextCasting)
-        
-        local resTextPending = Add(GUI:CreateEditBox(self.child, "Pending Text", db, "resurrectionIconTextPending", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        resSection:RegisterChild(resTextPending)
-        
-        local resScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "resurrectionIconScale", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55, 1)
-        resSection:RegisterChild(resScale)
-        
-        local resAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "resurrectionIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("resurrection") end, true), 55, 1)
-        resSection:RegisterChild(resAlpha)
-        
-        local resAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "resurrectionIconAnchor", function() DF:LightweightUpdateIconPosition("resurrection") end), 55, 1)
-        resSection:RegisterChild(resAnchor)
-        
-        local resX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "resurrectionIconX", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55, 1)
-        resSection:RegisterChild(resX)
-        
-        local resY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "resurrectionIconY", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55, 1)
-        resSection:RegisterChild(resY)
-        
-        local resLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "resurrectionIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("resurrection") end, true), 55, 1)
-        resSection:RegisterChild(resLevel)
+        -- Small gap between the section header and the first box.
+        local resHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        resSection:RegisterChild(resHeaderGap)
+
+        -- Settings
+        local resSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "resurrectionIcon:Settings" })
+        resSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        resSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Resurrection Icon"], db, "resurrectionIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        resSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "resurrectionIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        resSettings:AddWidget(GUI:CreateEditBox(self.child, "Casting Text", db, "resurrectionIconTextCasting", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        resSettings:AddWidget(GUI:CreateEditBox(self.child, "Pending Text", db, "resurrectionIconTextPending", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        Add(resSettings, nil, 1)
+        resSection:RegisterChild(resSettings)
+
+        -- Appearance
+        local resAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "resurrectionIcon:Appearance" })
+        resAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        resAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "resurrectionIconScale", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55)
+        resAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "resurrectionIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("resurrection") end, true), 55)
+        resAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "resurrectionIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("resurrection") end, true), 55)
+        Add(resAppearance, nil, 1)
+        resSection:RegisterChild(resAppearance)
+
+        -- Position
+        local resPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "resurrectionIcon:Position" })
+        resPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        resPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "resurrectionIconAnchor", function() DF:LightweightUpdateIconPosition("resurrection") end), 55)
+        resPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "resurrectionIconX", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55)
+        resPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "resurrectionIconY", nil, function() DF:LightweightUpdateIconPosition("resurrection") end, true), 55)
+        Add(resPosition, nil, 1)
+        resSection:RegisterChild(resPosition)
         
         -- ============================================
         -- PHASED ICON (Collapsible)
         -- ============================================
-        local phasedSection = Add(GUI:CreateCollapsibleSection(self.child, L["Phased Icon"], false, 250), 28, 1)
+        local phasedSection = Add(GUI:CreateCollapsibleSection(self.child, L["Phased Icon"], false, 270), 28, 1)
+        WireStatusPreview(phasedSection, { enableKey = "phasedIconEnabled", showTextKey = "phasedIconShowText", icons = { "RaidFrame-Icon-Phasing" }, texts = { "phasedIconText" } })
         
-        local phEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Phased Icon"], db, "phasedIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        phasedSection:RegisterChild(phEnabled)
-        
-        local phShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "phasedIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        phasedSection:RegisterChild(phShowText)
-        
-        local phText = Add(GUI:CreateEditBox(self.child, "Status Text", db, "phasedIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        phasedSection:RegisterChild(phText)
-        
-        local phLFG = Add(GUI:CreateCheckbox(self.child, L["Show LFG Eye for Cross-Instance"], db, "phasedIconShowLFGEye", function() DF:UpdateAllFrames() end), 30, 1)
-        phasedSection:RegisterChild(phLFG)
-        
-        local phScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "phasedIconScale", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55, 1)
-        phasedSection:RegisterChild(phScale)
-        
-        local phAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "phasedIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("phased") end, true), 55, 1)
-        phasedSection:RegisterChild(phAlpha)
-        
-        local phHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "phasedIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        phasedSection:RegisterChild(phHide)
-        
-        local phAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "phasedIconAnchor", function() DF:LightweightUpdateIconPosition("phased") end), 55, 1)
-        phasedSection:RegisterChild(phAnchor)
-        
-        local phX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "phasedIconX", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55, 1)
-        phasedSection:RegisterChild(phX)
-        
-        local phY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "phasedIconY", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55, 1)
-        phasedSection:RegisterChild(phY)
-        
-        local phLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "phasedIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("phased") end, true), 55, 1)
-        phasedSection:RegisterChild(phLevel)
+        -- Small gap between the section header and the first box.
+        local phHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        phasedSection:RegisterChild(phHeaderGap)
+
+        -- Settings
+        local phSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "phasedIcon:Settings" })
+        phSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        phSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Phased Icon"], db, "phasedIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        phSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "phasedIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        phSettings:AddWidget(GUI:CreateEditBox(self.child, "Status Text", db, "phasedIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        phSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show LFG Eye for Cross-Instance"], db, "phasedIconShowLFGEye", function() DF:UpdateAllFrames() end), 30)
+        Add(phSettings, nil, 1)
+        phasedSection:RegisterChild(phSettings)
+
+        -- Appearance
+        local phAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "phasedIcon:Appearance" })
+        phAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        phAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "phasedIconScale", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55)
+        phAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "phasedIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("phased") end, true), 55)
+        phAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "phasedIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("phased") end, true), 55)
+        phAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "phasedIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(phAppearance, nil, 1)
+        phasedSection:RegisterChild(phAppearance)
+
+        -- Position
+        local phPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "phasedIcon:Position" })
+        phPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        phPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "phasedIconAnchor", function() DF:LightweightUpdateIconPosition("phased") end), 55)
+        phPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "phasedIconX", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55)
+        phPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "phasedIconY", nil, function() DF:LightweightUpdateIconPosition("phased") end, true), 55)
+        Add(phPosition, nil, 1)
+        phasedSection:RegisterChild(phPosition)
         
         -- ============================================
         -- AFK ICON (Collapsible)
         -- ============================================
-        local afkSection = Add(GUI:CreateCollapsibleSection(self.child, L["AFK Icon"], false, 250), 28, 1)
+        local afkSection = Add(GUI:CreateCollapsibleSection(self.child, L["AFK Icon"], false, 270), 28, 1)
+        WireStatusPreview(afkSection, { enableKey = "afkIconEnabled", showTextKey = "afkIconShowText", icons = { "characterupdate_clock-icon" }, texts = { "afkIconText" } })
         
-        local afkEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable AFK Icon"], db, "afkIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        afkSection:RegisterChild(afkEnabled)
-        
-        local afkShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "afkIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        afkSection:RegisterChild(afkShowText)
-        
-        local afkText = Add(GUI:CreateEditBox(self.child, "Status Text", db, "afkIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        afkSection:RegisterChild(afkText)
-        
-        local afkTimer = Add(GUI:CreateCheckbox(self.child, L["Show Timer"], db, "afkIconShowTimer", function() DF:UpdateAllFramesStatusIcons() end), 30, 1)
-        afkSection:RegisterChild(afkTimer)
-        
-        local afkScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "afkIconScale", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55, 1)
-        afkSection:RegisterChild(afkScale)
-        
-        local afkAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "afkIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("afk") end, true), 55, 1)
-        afkSection:RegisterChild(afkAlpha)
-        
-        local afkHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "afkIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        afkSection:RegisterChild(afkHide)
-        
-        local afkAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "afkIconAnchor", function() DF:LightweightUpdateIconPosition("afk") end), 55, 1)
-        afkSection:RegisterChild(afkAnchor)
-        
-        local afkX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "afkIconX", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55, 1)
-        afkSection:RegisterChild(afkX)
-        
-        local afkY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "afkIconY", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55, 1)
-        afkSection:RegisterChild(afkY)
-        
-        local afkLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "afkIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("afk") end, true), 55, 1)
-        afkSection:RegisterChild(afkLevel)
+        -- AFK options split into collapsible boxed sub-groups (Settings / Timer
+        -- Text / Appearance / Position), matching the Aura Designer layout. Each
+        -- box uses a unique collapseKey so the standard headers don't share
+        -- collapse state across icons/pages.
+        local afkTimerCB = function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end
+
+        -- Small gap between the section header and the first box.
+        local afkHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        afkSection:RegisterChild(afkHeaderGap)
+
+        -- Settings
+        local afkSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "afkIcon:Settings" })
+        afkSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        afkSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable AFK Icon"], db, "afkIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        afkSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "afkIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        afkSettings:AddWidget(GUI:CreateEditBox(self.child, "Status Text", db, "afkIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        afkSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show Timer"], db, "afkIconShowTimer", function() DF:UpdateAllFramesStatusIcons() end), 30)
+        -- In text mode the timer is merged into the status text, so the Timer
+        -- Text box is hidden; explain it inherits the main text styling.
+        local afkTimerInheritNote = afkSettings:AddWidget(GUI:CreateLabel(self.child, L["In Text mode the timer joins the status text and uses its font, colour and position."], 230), 40)
+        afkTimerInheritNote.hideOn = function(d) return not d.afkIconShowText or not d.afkIconShowTimer end
+        Add(afkSettings, nil, 1)
+        afkSection:RegisterChild(afkSettings)
+
+        -- Timer Text — elapsed-time text under the icon. Icon mode only (Show as
+        -- Text off) with Show Timer on, so the whole box is gated.
+        local afkTimerGroup = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "afkIcon:TimerText" })
+        afkTimerGroup:AddWidget(GUI:CreateHeader(self.child, L["Timer Text"]), 25)
+        afkTimerGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "afkIconTimerFont", afkTimerCB, "statusIconFont"), 55)
+        afkTimerGroup:AddWidget(GUI:CreateSlider(self.child, L["Size"], 6, 24, 1, db, "afkIconTimerFontSize", afkTimerCB, afkTimerCB, true), 55)
+        afkTimerGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Outline"], db, "afkIconTimerOutline", afkTimerCB, "statusIconFontOutline"), 55)
+        afkTimerGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Color"], db, "afkIconTimerColor", false, nil, afkTimerCB, true), 30)
+        afkTimerGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "afkIconTimerX", afkTimerCB, afkTimerCB, true), 55)
+        afkTimerGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "afkIconTimerY", afkTimerCB, afkTimerCB, true), 55)
+        Add(afkTimerGroup, nil, 1)
+        afkSection:RegisterChild(afkTimerGroup)
+        afkTimerGroup.hideOn = function(d) return not d.afkIconShowTimer or d.afkIconShowText end
+
+        -- Appearance
+        local afkAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "afkIcon:Appearance" })
+        afkAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        afkAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "afkIconScale", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55)
+        afkAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "afkIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("afk") end, true), 55)
+        afkAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "afkIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("afk") end, true), 55)
+        afkAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "afkIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(afkAppearance, nil, 1)
+        afkSection:RegisterChild(afkAppearance)
+
+        -- Position
+        local afkPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "afkIcon:Position" })
+        afkPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        afkPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "afkIconAnchor", function() DF:LightweightUpdateIconPosition("afk") end), 55)
+        afkPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "afkIconX", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55)
+        afkPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "afkIconY", nil, function() DF:LightweightUpdateIconPosition("afk") end, true), 55)
+        Add(afkPosition, nil, 1)
+        afkSection:RegisterChild(afkPosition)
         
         -- ============================================
         -- VEHICLE ICON (Collapsible)
         -- ============================================
-        local vehSection = Add(GUI:CreateCollapsibleSection(self.child, L["Vehicle Icon"], false, 250), 28, 1)
+        local vehSection = Add(GUI:CreateCollapsibleSection(self.child, L["Vehicle Icon"], false, 270), 28, 1)
+        WireStatusPreview(vehSection, { enableKey = "vehicleIconEnabled", showTextKey = "vehicleIconShowText", icons = { "RaidFrame-Icon-Vehicle" }, texts = { "vehicleIconText" } })
         
-        local vehEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Vehicle Icon"], db, "vehicleIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        vehSection:RegisterChild(vehEnabled)
-        
-        local vehShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "vehicleIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        vehSection:RegisterChild(vehShowText)
-        
-        local vehText = Add(GUI:CreateEditBox(self.child, "Status Text", db, "vehicleIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        vehSection:RegisterChild(vehText)
-        
-        local vehScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "vehicleIconScale", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55, 1)
-        vehSection:RegisterChild(vehScale)
-        
-        local vehAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "vehicleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("vehicle") end, true), 55, 1)
-        vehSection:RegisterChild(vehAlpha)
-        
-        local vehHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "vehicleIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        vehSection:RegisterChild(vehHide)
-        
-        local vehAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "vehicleIconAnchor", function() DF:LightweightUpdateIconPosition("vehicle") end), 55, 1)
-        vehSection:RegisterChild(vehAnchor)
-        
-        local vehX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "vehicleIconX", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55, 1)
-        vehSection:RegisterChild(vehX)
-        
-        local vehY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "vehicleIconY", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55, 1)
-        vehSection:RegisterChild(vehY)
-        
-        local vehLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "vehicleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("vehicle") end, true), 55, 1)
-        vehSection:RegisterChild(vehLevel)
+        -- Small gap between the section header and the first box.
+        local vehHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        vehSection:RegisterChild(vehHeaderGap)
+
+        -- Settings
+        local vehSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "vehicleIcon:Settings" })
+        vehSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        vehSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Vehicle Icon"], db, "vehicleIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        vehSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "vehicleIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        vehSettings:AddWidget(GUI:CreateEditBox(self.child, "Status Text", db, "vehicleIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        Add(vehSettings, nil, 1)
+        vehSection:RegisterChild(vehSettings)
+
+        -- Appearance
+        local vehAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "vehicleIcon:Appearance" })
+        vehAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        vehAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "vehicleIconScale", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55)
+        vehAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "vehicleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("vehicle") end, true), 55)
+        vehAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "vehicleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("vehicle") end, true), 55)
+        vehAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "vehicleIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(vehAppearance, nil, 1)
+        vehSection:RegisterChild(vehAppearance)
+
+        -- Position
+        local vehPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "vehicleIcon:Position" })
+        vehPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        vehPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "vehicleIconAnchor", function() DF:LightweightUpdateIconPosition("vehicle") end), 55)
+        vehPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "vehicleIconX", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55)
+        vehPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "vehicleIconY", nil, function() DF:LightweightUpdateIconPosition("vehicle") end, true), 55)
+        Add(vehPosition, nil, 1)
+        vehSection:RegisterChild(vehPosition)
         
         -- ============================================
         -- RAID ROLE ICON (Collapsible)
         -- ============================================
-        local rrSection = Add(GUI:CreateCollapsibleSection(self.child, L["Raid Role Icon (MT/MA)"], false, 250), 28, 1)
+        local rrSection = Add(GUI:CreateCollapsibleSection(self.child, L["Raid Role Icon (MT/MA)"], false, 270), 28, 1)
+        WireStatusPreview(rrSection, { enableKey = "raidRoleIconEnabled", showTextKey = "raidRoleIconShowText", icons = { "RaidFrame-Icon-MainTank", "RaidFrame-Icon-MainAssist" }, texts = { "raidRoleIconTextTank", "raidRoleIconTextAssist" } })
         
-        local rrEnabled = Add(GUI:CreateCheckbox(self.child, L["Enable Raid Role Icon"], db, "raidRoleIconEnabled", function() DF:UpdateAllFrames() end), 30, 1)
-        rrSection:RegisterChild(rrEnabled)
-        
-        local rrShowTank = Add(GUI:CreateCheckbox(self.child, L["Show Main Tank"], db, "raidRoleIconShowTank", function() DF:UpdateAllFrames() end), 30, 1)
-        rrSection:RegisterChild(rrShowTank)
-        
-        local rrShowAssist = Add(GUI:CreateCheckbox(self.child, L["Show Main Assist"], db, "raidRoleIconShowAssist", function() DF:UpdateAllFrames() end), 30, 1)
-        rrSection:RegisterChild(rrShowAssist)
-        
-        local rrShowText = Add(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "raidRoleIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30, 1)
-        rrSection:RegisterChild(rrShowText)
-        
-        local rrTextTank = Add(GUI:CreateEditBox(self.child, "Tank Text", db, "raidRoleIconTextTank", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        rrSection:RegisterChild(rrTextTank)
-        
-        local rrTextAssist = Add(GUI:CreateEditBox(self.child, "Assist Text", db, "raidRoleIconTextAssist", function() DF:UpdateAllFramesStatusIcons() end, 120), 55, 1)
-        rrSection:RegisterChild(rrTextAssist)
-        
-        local rrScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "raidRoleIconScale", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55, 1)
-        rrSection:RegisterChild(rrScale)
-        
-        local rrAlpha = Add(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "raidRoleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("raidRole") end, true), 55, 1)
-        rrSection:RegisterChild(rrAlpha)
-        
-        local rrHide = Add(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "raidRoleIconHideInCombat", function() DF:UpdateAllFrames() end), 30, 1)
-        rrSection:RegisterChild(rrHide)
-        
-        local rrAnchor = Add(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "raidRoleIconAnchor", function() DF:LightweightUpdateIconPosition("raidRole") end), 55, 1)
-        rrSection:RegisterChild(rrAnchor)
-        
-        local rrX = Add(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "raidRoleIconX", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55, 1)
-        rrSection:RegisterChild(rrX)
-        
-        local rrY = Add(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "raidRoleIconY", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55, 1)
-        rrSection:RegisterChild(rrY)
-        
-        local rrLevel = Add(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "raidRoleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("raidRole") end, true), 55, 1)
-        rrSection:RegisterChild(rrLevel)
+        -- Small gap between the section header and the first box.
+        local rrHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        rrSection:RegisterChild(rrHeaderGap)
+
+        -- Settings
+        local rrSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidRoleIcon:Settings" })
+        rrSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        rrSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Raid Role Icon"], db, "raidRoleIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        rrSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show Main Tank"], db, "raidRoleIconShowTank", function() DF:UpdateAllFrames() end), 30)
+        rrSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show Main Assist"], db, "raidRoleIconShowAssist", function() DF:UpdateAllFrames() end), 30)
+        rrSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "raidRoleIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        rrSettings:AddWidget(GUI:CreateEditBox(self.child, "Tank Text", db, "raidRoleIconTextTank", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        rrSettings:AddWidget(GUI:CreateEditBox(self.child, "Assist Text", db, "raidRoleIconTextAssist", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        Add(rrSettings, nil, 1)
+        rrSection:RegisterChild(rrSettings)
+
+        -- Appearance
+        local rrAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidRoleIcon:Appearance" })
+        rrAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        rrAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "raidRoleIconScale", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55)
+        rrAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "raidRoleIconAlpha", nil, function() DF:LightweightUpdateIconAlpha("raidRole") end, true), 55)
+        rrAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "raidRoleIconFrameLevel", nil, function() DF:LightweightUpdateFrameLevel("raidRole") end, true), 55)
+        rrAppearance:AddWidget(GUI:CreateCheckbox(self.child, L["Hide in Combat"], db, "raidRoleIconHideInCombat", function() DF:UpdateAllFrames() end), 30)
+        Add(rrAppearance, nil, 1)
+        rrSection:RegisterChild(rrAppearance)
+
+        -- Position
+        local rrPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "raidRoleIcon:Position" })
+        rrPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        rrPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "raidRoleIconAnchor", function() DF:LightweightUpdateIconPosition("raidRole") end), 55)
+        rrPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "raidRoleIconX", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55)
+        rrPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "raidRoleIconY", nil, function() DF:LightweightUpdateIconPosition("raidRole") end, true), 55)
+        Add(rrPosition, nil, 1)
+        rrSection:RegisterChild(rrPosition)
     end)
     
     -- Indicators > Highlights

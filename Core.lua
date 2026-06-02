@@ -4070,6 +4070,54 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- AFK text colour: the AFK text was previously hardcoded orange and
+        -- afkIconTextColor (its colour picker) was ignored. The picker is now
+        -- live; convert profiles still on the old peachy default to the orange
+        -- the text actually showed, so there's no visible change.
+        local function MigrateAFKTextColor(modeDb)
+            local c = modeDb and modeDb.afkIconTextColor
+            if type(c) == "table"
+               and math.abs((c.g or 0) - 0.7725490927696228) < 0.0001
+               and math.abs((c.b or 0) - 0.5411764979362488) < 0.0001 then
+                modeDb.afkIconTextColor = { r = 1, g = 0.5, b = 0, a = 1 }
+            end
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            MigrateAFKTextColor(DF.db[mode])
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    MigrateAFKTextColor(profile[mode])
+                end
+            end
+        end
+
+        -- AFK timer font: an earlier build force-stamped the monospace timer font
+        -- onto every profile to stop the countdown wobble. The wobble is actually
+        -- fixed by LEFT-justifying the timer (see ApplyTimerTextSettings) — the
+        -- mono font is no longer needed or defaulted. Clear that stamp ONCE so the
+        -- timer goes back to inheriting the global font; guard with a flag so a
+        -- deliberate mono choice made later is not wiped on the next reload.
+        if DandersFramesDB_v2 and not DandersFramesDB_v2.afkTimerMonoUnstamped then
+            local function UnstampAFKTimerFont(modeDb)
+                if modeDb and modeDb.afkIconTimerFont == "DF Roboto Mono SemiBold" then
+                    modeDb.afkIconTimerFont = nil
+                end
+            end
+            for _, mode in ipairs({"party", "raid"}) do
+                UnstampAFKTimerFont(DF.db[mode])
+            end
+            if DandersFramesDB_v2.profiles then
+                for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                    for _, mode in ipairs({"party", "raid"}) do
+                        UnstampAFKTimerFont(profile[mode])
+                    end
+                end
+            end
+            DandersFramesDB_v2.afkTimerMonoUnstamped = true
+        end
+
         -- v4.3.4: One-time forced upgrade of "dandersframes" mode users to
         -- "both" (Hybrid). Hybrid covers boss debuffs via Blizzard's
         -- container overlay, which DandersFrames-only mode misses entirely.

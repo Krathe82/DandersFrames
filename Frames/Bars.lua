@@ -2220,7 +2220,7 @@ function DF:UpdateRoleIcon(frame, source)
     
     -- Debug (use /df debugrole to enable)
     if DF.debugRoleIcons then
-        print("|cff00ffffDF ROLE:|r", frame.unit, "role=", role, "onlyInCombat=", db.roleIconOnlyInCombat, "InCombat=", inCombat)
+        print("|cff00ffffDF ROLE:|r", frame.unit, "role=", role, "hideInCombat=", db.roleIconHideInCombat, "InCombat=", inCombat)
     end
     
     if role == "NONE" then
@@ -2228,39 +2228,34 @@ function DF:UpdateRoleIcon(frame, source)
         return
     end
     
-    -- Determine if we should apply show settings
-    -- If "Show All Roles Out of Combat" is checked, role filters only apply during combat
-    -- Out of combat, all role icons show regardless of individual filter settings
-    local applySettings = true
-    if db.roleIconOnlyInCombat and not inCombat then
-        applySettings = false  -- Out of combat, show all icons
+    -- Per-role visibility filter (global — which roles ever show an icon).
+    local shouldShow = false
+    if role == "TANK" then
+        shouldShow = db.roleIconShowTank ~= false
+    elseif role == "HEALER" then
+        shouldShow = db.roleIconShowHealer ~= false
+    elseif role == "DAMAGER" then
+        shouldShow = db.roleIconShowDPS ~= false
     end
-    
-    local shouldShow = true
-    if applySettings then
-        -- Respect individual show settings
-        if role == "TANK" then
-            shouldShow = db.roleIconShowTank ~= false
-        elseif role == "HEALER" then
-            shouldShow = db.roleIconShowHealer ~= false
-        elseif role == "DAMAGER" then
-            shouldShow = db.roleIconShowDPS ~= false
-        end
+
+    -- Hide-in-combat timing gate — independent of the role filter. Refreshed on
+    -- combat transitions because Core's PLAYER_REGEN handlers call
+    -- UpdateAllRoleIcons.
+    if db.roleIconHideInCombat and inCombat then
+        shouldShow = false
     end
-    
+
     -- Debug
     if DF.debugRoleIcons then
-        print("|cff00ffffDF ROLE:|r   applySettings=", applySettings, "shouldShow=", shouldShow)
+        print("|cff00ffffDF ROLE:|r   shouldShow=", shouldShow, "hideInCombat=", db.roleIconHideInCombat, "inCombat=", inCombat)
     end
-    
+
     if not shouldShow then
         frame.roleIcon:Hide()
         return
     end
     
-    local tex, l, r, t, b = DF:GetRoleIconTexture(db, role)
-    frame.roleIcon.texture:SetTexture(tex)
-    frame.roleIcon.texture:SetTexCoord(l, r, t, b)
+    DF:SetIconTextureOrAtlas(frame.roleIcon.texture, DF:GetRoleIconTexture(db, role))
     
     frame.roleIcon:Show()
     
@@ -2455,10 +2450,10 @@ function DF:UpdateReadyCheckIcon(frame)
     local readyCheckStatus = GetReadyCheckStatus(frame.unit)
     
     if readyCheckStatus == "ready" then
-        frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+        DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-Ready")
         frame.readyCheckIcon:Show()
     elseif readyCheckStatus == "notready" then
-        frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-NotReady")
         frame.readyCheckIcon:Show()
     elseif readyCheckStatus == "waiting" then
         -- Check if player is AFK while waiting (enhanced ready check)
@@ -2472,9 +2467,9 @@ function DF:UpdateReadyCheckIcon(frame)
         
         if afkAccessible and isAFK then
             -- AFK state - show not ready icon (they likely won't respond)
-            frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+            DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-NotReady")
         else
-            frame.readyCheckIcon.texture:SetTexture("Interface\\RaidFrame\\ReadyCheck-Waiting")
+            DF:SetUpgradedStatusIcon(frame.readyCheckIcon.texture, "Interface\\RaidFrame\\ReadyCheck-Waiting")
         end
         frame.readyCheckIcon:Show()
     else
