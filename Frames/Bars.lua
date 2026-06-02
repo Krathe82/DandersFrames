@@ -128,8 +128,8 @@ function DF:ApplyResourceBarLayout(frame)
 
         -- Account for frame border inset (matches other bar calculations)
         local borderInset = 0
-        if db.showFrameBorder ~= false then
-            borderInset = db.borderSize or 1
+        if db.frameShowBorder ~= false then
+            borderInset = db.frameBorderSize or 1
         end
 
         if isVertical then
@@ -189,15 +189,14 @@ function DF:ApplyResourceBarLayout(frame)
             end
         end
         
-        -- Border visibility and color
+        -- Border via unified DF.Border backend (Stage 4.2). BuildSpec reads
+        -- canonical resourceBar*Border* keys; ctx.unit / ctx.frame let the
+        -- Class / Role colour resolvers fire on live and test frames alike.
         if bar.border then
-            if db.resourceBarBorderEnabled then
-                bar.border:Show()
-                local borderC = db.resourceBarBorderColor or {r = 0, g = 0, b = 0, a = 1}
-                bar.border:SetBackdropBorderColor(borderC.r, borderC.g, borderC.b, borderC.a or 1)
-            else
-                bar.border:Hide()
-            end
+            DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "resourceBar", {
+                unit  = frame.unit,
+                frame = frame,
+            }))
         end
 
         -- Set power value and color immediately so the bar doesn't appear white
@@ -336,8 +335,8 @@ local function AbsorbLayoutStateChanged(frame, db)
     if s.colR ~= col.r or s.colG ~= col.g or s.colB ~= col.b or s.colA ~= (col.a or 0.7) then return true end
 
     -- Border settings (affect inset calculations for attached/overlay modes)
-    if s.showFrameBorder ~= (db.showFrameBorder ~= false)                 then return true end
-    if s.borderSize      ~= (db.borderSize or 1)                          then return true end
+    if s.frameShowBorder ~= (db.frameShowBorder ~= false)                 then return true end
+    if s.frameBorderSize ~= (db.frameBorderSize or 1)                     then return true end
 
     -- Floating-mode specific
     if s.orientation     ~= (db.absorbBarOrientation or "HORIZONTAL")     then return true end
@@ -391,8 +390,8 @@ local function CacheAbsorbLayoutState(frame, db)
     s.oorAlpha        = db.oorAbsorbBarAlpha or 0.5
     local col = db.absorbBarColor or DEFAULT_ABSORB_COLOR
     s.colR, s.colG, s.colB, s.colA = col.r, col.g, col.b, col.a or 0.7
-    s.showFrameBorder = db.showFrameBorder ~= false
-    s.borderSize      = db.borderSize or 1
+    s.frameShowBorder = db.frameShowBorder ~= false
+    s.frameBorderSize = db.frameBorderSize or 1
     s.orientation     = db.absorbBarOrientation or "HORIZONTAL"
     s.width           = db.absorbBarWidth or 50
     s.height          = db.absorbBarHeight or 6
@@ -930,8 +929,8 @@ function DF:UpdateAbsorb(frame, testIndex)
         
         local healthOrient = db.healthOrientation or "HORIZONTAL"
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -1030,8 +1029,8 @@ function DF:UpdateAbsorb(frame, testIndex)
 
         local healthOrient = db.healthOrientation or "HORIZONTAL"
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -1186,8 +1185,8 @@ function DF:UpdateAbsorb(frame, testIndex)
         -- Use explicit points instead of SetAllPoints to ensure proper clipping
         -- Inset by border size if frame border is enabled to avoid overlap
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
         customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
@@ -1521,8 +1520,8 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         
         local healthOrient = db.healthOrientation or "HORIZONTAL"
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
@@ -1578,8 +1577,8 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         -- Use explicit points instead of SetAllPoints to ensure proper clipping
         -- Inset by border size if frame border is enabled to avoid overlap
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
@@ -1999,8 +1998,8 @@ function DF:UpdateHealPrediction(frame, testIndex)
         
         local healthOrient = db.healthOrientation or "HORIZONTAL"
         local inset = 0
-        if db.showFrameBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.borderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
+        if db.frameShowBorder ~= false then
+            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
         
         -- For test mode, we can use calculated positions

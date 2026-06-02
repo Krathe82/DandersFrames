@@ -193,6 +193,173 @@ end
 -- Expose for Engine.lua and post-import use
 DF.MigrateAuraDesignerSpecScope = MigrateToSpecScoped
 
+-- ============================================================
+-- STAGE 5.1b — ICON BORDER KEY MIGRATION
+-- Renames the legacy per-aura icon border keys to the canonical
+-- CreateBorderControls naming (matches every other unified-border
+-- consumer in the addon):
+--   borderEnabled   → ShowBorder
+--   borderThickness → BorderSize
+--   borderInset     → BorderInset  (case-only rename)
+--
+-- Walks every aura × every storage shape (typeKey-keyed sub-config
+-- and the newer indicators[] array) for every spec.  Idempotent —
+-- only renames when the new key is nil, so a partially-migrated
+-- config is safe.
+--
+-- Scope: icon (Stage 5.1) + square (Stage 5.2).  Bar (Stage 5.3) still
+-- reuses some of the same legacy key names (borderThickness, borderInset),
+-- so we stay type-scoped — only rename an instance's keys once that
+-- indicator type has migrated to the unified backend.  The icon and square
+-- differ only in the enable key: icon used `borderEnabled`, square used
+-- `showBorder`; both fold to canonical `ShowBorder`.
+-- ============================================================
+
+local function renameIconBorderKeys(t)
+    if type(t) ~= "table" then return end
+    if t.borderEnabled ~= nil and t.ShowBorder == nil then
+        t.ShowBorder, t.borderEnabled = t.borderEnabled, nil
+    end
+    if t.borderThickness ~= nil and t.BorderSize == nil then
+        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    end
+    if t.borderInset ~= nil and t.BorderInset == nil then
+        t.BorderInset, t.borderInset = t.borderInset, nil
+    end
+    -- Stage 5.1d.2: legacy expiringPulsate (boolean) → ExpiringAnimationType
+    -- (string).  expiringPulsate = true means the user wanted the AD legacy
+    -- alpha-fade pulse during expiring; that effect is now first-class as
+    -- DF_PULSATE.  False just clears the boolean — the new key defaults to
+    -- "NONE" which means no expiring animation override.
+    if t.expiringPulsate ~= nil and t.ExpiringAnimationType == nil then
+        if t.expiringPulsate == true then
+            t.ExpiringAnimationType = "DF_PULSATE"
+        end
+        t.expiringPulsate = nil
+    end
+end
+
+-- Square (Stage 5.2): border-key renames ONLY.  The square's enable key is
+-- `showBorder` (vs the icon's `borderEnabled`).  Deliberately does NOT touch
+-- `expiringPulsate` — on the square that's the FILL pulse, a different effect
+-- from the icon's border DF_PULSATE, so it stays a boolean.
+local function renameSquareBorderKeys(t)
+    if type(t) ~= "table" then return end
+    if t.showBorder ~= nil and t.ShowBorder == nil then
+        t.ShowBorder, t.showBorder = t.showBorder, nil
+    end
+    if t.borderThickness ~= nil and t.BorderSize == nil then
+        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    end
+    if t.borderInset ~= nil and t.BorderInset == nil then
+        t.BorderInset, t.borderInset = t.borderInset, nil
+    end
+end
+
+-- Bar (Stage 5.3): border-key renames.  Enable key is `showBorder` (like the
+-- square); the bar also carries a static `borderColor` table → canonical
+-- `BorderColor`.  The bar has no legacy inset key.
+local function renameBarBorderKeys(t)
+    if type(t) ~= "table" then return end
+    if t.showBorder ~= nil and t.ShowBorder == nil then
+        t.ShowBorder, t.showBorder = t.showBorder, nil
+    end
+    if t.borderThickness ~= nil and t.BorderSize == nil then
+        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    end
+    if t.borderColor ~= nil and t.BorderColor == nil then
+        t.BorderColor, t.borderColor = t.borderColor, nil
+    end
+end
+
+-- Border-type indicator (Stage 5.4): its legacy `style` enum maps onto a
+-- DF.Border style + animation combo.  One-way, lossy (the 5 styles become
+-- canonical Style/Animation combinations).  Gated on `style` being present so
+-- it runs once.
+local function renameBorderTypeKeys(t)
+    if type(t) ~= "table" then return end
+    if t.style == nil or t.BorderStyle ~= nil then return end
+    local thickness = t.thickness or 2
+    local inset     = t.inset or 0
+    local color     = t.color or { r = 0, g = 0, b = 0, a = 1 }
+    local legacy    = { Solid = "SOLID", Glow = "GLOW", Pulse = "SOLID" }
+    local style     = legacy[t.style] or t.style or "SOLID"
+    t.ShowBorder  = true
+    t.BorderInset = inset
+    t.BorderColor = color
+    if style == "GLOW" then
+        t.BorderStyle = "TEXTURE"; t.BorderTexture = "DF Glow"; t.BorderSize = thickness
+    elseif style == "DASHED" or style == "ANIMATED" then
+        t.BorderStyle = "SOLID"; t.BorderSize = 0
+        t.BorderAnimationType      = "DF_DASH"
+        t.BorderAnimationFrequency = (style == "ANIMATED") and 1 or 0
+        t.BorderAnimationThickness = thickness
+        t.BorderAnimationColor     = color
+        t.BorderAnimationInset     = inset
+    elseif style == "CORNERS" then
+        t.BorderStyle = "SOLID"; t.BorderSize = 0
+        t.BorderAnimationType      = "CORNERS_ONLY"
+        t.BorderAnimationThickness = thickness
+        t.BorderAnimationColor     = color
+    else  -- SOLID (and anything unknown)
+        t.BorderStyle = "SOLID"; t.BorderSize = thickness
+    end
+    t.style = nil; t.thickness = nil; t.inset = nil; t.color = nil
+end
+
+local function MigrateIconBorderKeysOnAuras(specAuras)
+    if type(specAuras) ~= "table" then return end
+    for _, auraCfg in pairs(specAuras) do
+        if type(auraCfg) == "table" then
+            -- Old shape: auraCfg.<type> sub-config.
+            if auraCfg.icon then renameIconBorderKeys(auraCfg.icon) end
+            if auraCfg.square then renameSquareBorderKeys(auraCfg.square) end
+            if auraCfg.bar then renameBarBorderKeys(auraCfg.bar) end
+            if auraCfg.border then renameBorderTypeKeys(auraCfg.border) end
+            -- New shape: auraCfg.indicators[i] — each instance carries its
+            -- own border keys when the user has overridden defaults.
+            if auraCfg.indicators then
+                for _, ind in ipairs(auraCfg.indicators) do
+                    if ind.type == "icon" then
+                        renameIconBorderKeys(ind)
+                    elseif ind.type == "square" then
+                        renameSquareBorderKeys(ind)
+                    elseif ind.type == "bar" then
+                        renameBarBorderKeys(ind)
+                    elseif ind.type == "border" then
+                        renameBorderTypeKeys(ind)
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function MigrateAuraDesignerIconBorderKeys(modeDb)
+    local adDB = modeDb and modeDb.auraDesigner
+    if not adDB or not adDB.auras then return end
+
+    -- Detect shape: pre-spec-scoping (flat aura configs) vs spec-scoped.
+    -- Mirrors MigrateAuraDesignerToInstances' detection so we stay correct
+    -- whether the spec-scope migration ran before us or not.
+    for _, val in pairs(adDB.auras) do
+        if type(val) == "table" then
+            if val.priority ~= nil or val.indicators ~= nil or val.icon ~= nil then
+                -- Flat: adDB.auras is { auraName → auraCfg }
+                MigrateIconBorderKeysOnAuras(adDB.auras)
+            else
+                -- Spec-scoped: adDB.auras is { specKey → { auraName → auraCfg } }
+                for _, specAuras in pairs(adDB.auras) do
+                    MigrateIconBorderKeysOnAuras(specAuras)
+                end
+            end
+        end
+        break  -- Only check first entry for shape detection
+    end
+end
+
+DF.MigrateAuraDesignerIconBorderKeys = MigrateAuraDesignerIconBorderKeys
+
 local function GetAuraDesignerDB()
     local adDB = db.auraDesigner
     if adDB and (not adDB._specScopedV1 or not adDB._specScopedV2) then
@@ -410,7 +577,14 @@ local function EnsureTypeConfig(auraName, typeKey)
                 -- Size & appearance (from global defaults)
                 size = gd.iconSize or 24, scale = gd.iconScale or 1.0, alpha = 1.0,
                 -- Border
-                borderEnabled = true, borderThickness = 1, borderInset = 1,
+                -- Canonical border keys (Stage 5.1b/c). Legacy names were
+                -- borderEnabled / borderThickness / borderInset; migrated
+                -- via DF:MigrateAuraDesignerIconBorderKeys on ADDON_LOADED.
+                -- ShowBorder/BorderSize/BorderInset are stored on the
+                -- aura's icon sub-config; everything else (style, colour,
+                -- gradient, shadow, offset, blend) reads from TYPE_DEFAULTS
+                -- via proxy fall-through until the user overrides it.
+                ShowBorder = true, BorderSize = 1, BorderInset = 1,
                 hideSwipe = false,
                 -- Duration text
                 showDuration = gd.showDuration ~= false,
@@ -438,8 +612,8 @@ local function EnsureTypeConfig(auraName, typeKey)
                 -- Appearance (from global defaults)
                 size = gd.iconSize or 24, scale = gd.iconScale or 1.0, alpha = 1.0,
                 color = {r = 1, g = 1, b = 1, a = 1},
-                -- Border
-                showBorder = true, borderThickness = 1, borderInset = 1,
+                -- Border (canonical keys, Stage 5.2; legacy migrated on load)
+                ShowBorder = true, BorderSize = 1, BorderInset = 1,
                 hideSwipe = false,
                 -- Duration text
                 showDuration = gd.showDuration ~= false,
@@ -471,9 +645,9 @@ local function EnsureTypeConfig(auraName, typeKey)
                 texture = "Interface\\TargetingFrame\\UI-StatusBar",
                 fillColor = {r = 1, g = 1, b = 1, a = 1},
                 bgColor = {r = 0, g = 0, b = 0, a = 0.5},
-                -- Border
-                showBorder = true, borderThickness = 1,
-                borderColor = {r = 0, g = 0, b = 0, a = 1},
+                -- Border (canonical keys, Stage 5.3; legacy migrated on load)
+                ShowBorder = true, BorderSize = 1, BorderInset = 0,
+                BorderColor = {r = 0, g = 0, b = 0, a = 1},
                 -- Alpha
                 alpha = 1.0,
                 -- Bar color by time
@@ -491,8 +665,11 @@ local function EnsureTypeConfig(auraName, typeKey)
             }
         elseif typeKey == "border" then
             auraCfg[typeKey] = {
-                style = "SOLID", color = {r = 1, g = 1, b = 1, a = 1},
-                thickness = 2, inset = 0,
+                -- Border (canonical keys, Stage 5.4; legacy style/thickness/
+                -- inset/color migrated on load)
+                ShowBorder = true, BorderStyle = "SOLID", BorderSize = 2, BorderInset = 0,
+                BorderColor = {r = 1, g = 1, b = 1, a = 1},
+                drawAboveFrameBorder = true,
                 expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
                 expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
                 expiringPulsate = false,
@@ -554,7 +731,51 @@ local TYPE_DEFAULTS = {
     icon = {
         anchor = "TOPLEFT", offsetX = 0, offsetY = 0,
         size = 24, scale = 1.0, alpha = 1.0,
-        borderEnabled = true, borderThickness = 1, borderInset = 1,
+        -- Canonical border keys (Stage 5.1b/c).  Legacy borderEnabled /
+        -- borderThickness / borderInset migrated on ADDON_LOADED via
+        -- DF:MigrateAuraDesignerIconBorderKeys.  BorderColor defaults to
+        -- the pre-migration hardcoded translucent black so existing users
+        -- see no visual change.  Style / Gradient* / Shadow* defaults seed
+        -- CreateBorderControls' dropdowns and pickers so they read sensible
+        -- values on first open.
+        ShowBorder = true, BorderSize = 1, BorderInset = 1,
+        BorderColor             = {r = 0, g = 0, b = 0, a = 0.8},
+        BorderStyle             = "SOLID",
+        BorderBlendMode         = "BLEND",
+        BorderOffsetX           = 0,
+        BorderOffsetY           = 0,
+        BorderGradientStartColor = {r = 0,    g = 0,    b = 0,    a = 1},
+        BorderGradientEndColor   = {r = 0.5,  g = 0.5,  b = 0.5,  a = 1},
+        BorderGradientDirection  = "HORIZONTAL",
+        BorderShadowEnabled      = false,
+        BorderShadowColor        = {r = 0, g = 0, b = 0, a = 0.8},
+        BorderShadowSize         = 1,
+        BorderShadowOffsetX      = 1,
+        BorderShadowOffsetY      = -1,
+        -- Animation defaults match Frame Border's Stage 3 defaults so the
+        -- behaviour of "pick PULSATE" reads the same across the addon.
+        -- BorderAnimationType = "NONE" means no continuous animation; the
+        -- spec.animation block is omitted by BuildSpec so Apply doesn't
+        -- start anything.  Picking a non-NONE type surfaces the relevant
+        -- tunables (helper handles hide/show per effect).
+        BorderAnimationType         = "NONE",
+        BorderAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        -- 1 Hz default ≈ 1-second cycle, matching the legacy AD Pulsate
+        -- Border pulse rate.  Frame Border / Defensive Icon use 0.25 which
+        -- reads as a slow gentle pulse at full-frame scale; at icon scale
+        -- (24px) the same rate looks like a static dim border because the
+        -- transitions are too gradual to perceive.
+        BorderAnimationFrequency    = 1,
+        BorderAnimationParticles    = 8,
+        BorderAnimationLength       = 8,
+        BorderAnimationThickness    = 3,
+        BorderAnimationScale        = 1,
+        BorderAnimationInset        = 0,
+        BorderAnimationOffsetX      = 0,
+        BorderAnimationOffsetY      = 0,
+        BorderAnimationMask         = false,
+        BorderAnimationSidesAxis    = "HORIZONTAL",
+        BorderAnimationCornerLength = 10,
         hideSwipe = false, hideIcon = false,
         showDuration = true, durationFont = "Friz Quadrata TT",
         durationScale = 1.0, durationOutline = "OUTLINE",
@@ -569,7 +790,46 @@ local TYPE_DEFAULTS = {
         stackColor = {r = 1, g = 1, b = 1, a = 1},
         expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
         expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
-        expiringPulsate = false,
+        -- Expiring Tint overlay (secret-safe).  Default OFF, red — also feeds the
+        -- colour picker's Default button via the proxy's __dfDefaults = TYPE_DEFAULTS.
+        expiringTintEnabled = false,
+        expiringTintColor = {r = 1, g = 0.2, b = 0.2, a = 0.5},  -- #FF3333 @ 50% (matches expiring border red)
+        expiringPulsate = false,  -- legacy; migrated to ExpiringAnimationType
+        -- Master enable for the whole Expiring feature.  Default true so
+        -- existing configs are unaffected; turning it OFF disables every
+        -- expiring override (colour / thickness / alpha / animation / pulse /
+        -- bounce) regardless of their individual settings, and hides the rest
+        -- of the Expiring panel.
+        expiringFeatureEnabled = true,
+        -- Stage 5.1d.2 + parity: full Border Animation effect set as the value
+        -- the expiring callback swaps into spec.animation when remaining <
+        -- threshold.  NONE = no animation override.  The expiring animation
+        -- carries its OWN complete tunable set (colour, particles, thickness,
+        -- offset, …) independent of the base Border Animation — mirrors the
+        -- base defaults so the two panels read identically.
+        ExpiringAnimationType         = "NONE",
+        ExpiringAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        ExpiringAnimationFrequency    = 1,
+        ExpiringAnimationParticles    = 8,
+        ExpiringAnimationLength       = 8,
+        ExpiringAnimationThickness    = 3,
+        ExpiringAnimationScale        = 1,
+        ExpiringAnimationInset        = 0,
+        ExpiringAnimationOffsetX      = 0,
+        ExpiringAnimationOffsetY      = 0,
+        ExpiringAnimationMask         = false,
+        ExpiringAnimationSidesAxis    = "HORIZONTAL",
+        ExpiringAnimationCornerLength = 10,
+        -- Stage 5.1d.3: per-state thickness + alpha overrides.  Default to
+        -- 1 / 1 — same thickness as the base (1) and slightly more opaque
+        -- than the base alpha (0.8), so out of the box a user enabling
+        -- Expiring Color Override sees the border tick to fully opaque red
+        -- below threshold (subtle "more solid" feel).  Move the sliders
+        -- higher / lower for stronger emphasis.  Only take effect when the
+        -- expiring ticker is running (i.e. user has at least one expiring
+        -- feature on — colour override, animation, alpha pulse, or bounce).
+        ExpiringBorderSize  = 1,
+        ExpiringBorderAlpha = 1,
         expiringWholeAlphaPulse = false, expiringBounce = false,
         frameLevel = 30, frameStrata = "INHERIT",
         showWhenMissing = false, missingDesaturate = false,
@@ -578,7 +838,38 @@ local TYPE_DEFAULTS = {
         anchor = "TOPLEFT", offsetX = 0, offsetY = 0,
         size = 24, scale = 1.0, alpha = 1.0,
         color = {r = 1, g = 1, b = 1, a = 1},
-        showBorder = true, borderThickness = 1, borderInset = 1,
+        -- Canonical border keys (Stage 5.2).  Legacy showBorder /
+        -- borderThickness / borderInset migrated on ADDON_LOADED.  BorderColor
+        -- defaults to opaque black, matching the square's pre-migration
+        -- hardcoded border so existing users see no change.  The rest seed
+        -- CreateBorderControls' dropdowns / pickers on first open.
+        ShowBorder = true, BorderSize = 1, BorderInset = 1,
+        BorderColor             = {r = 0, g = 0, b = 0, a = 1},
+        BorderStyle             = "SOLID",
+        BorderBlendMode         = "BLEND",
+        BorderOffsetX           = 0,
+        BorderOffsetY           = 0,
+        BorderGradientStartColor = {r = 0,    g = 0,    b = 0,    a = 1},
+        BorderGradientEndColor   = {r = 0.5,  g = 0.5,  b = 0.5,  a = 1},
+        BorderGradientDirection  = "HORIZONTAL",
+        BorderShadowEnabled      = false,
+        BorderShadowColor        = {r = 0, g = 0, b = 0, a = 0.8},
+        BorderShadowSize         = 1,
+        BorderShadowOffsetX      = 1,
+        BorderShadowOffsetY      = -1,
+        BorderAnimationType         = "NONE",
+        BorderAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        BorderAnimationFrequency    = 1,
+        BorderAnimationParticles    = 8,
+        BorderAnimationLength       = 8,
+        BorderAnimationThickness    = 3,
+        BorderAnimationScale        = 1,
+        BorderAnimationInset        = 0,
+        BorderAnimationOffsetX      = 0,
+        BorderAnimationOffsetY      = 0,
+        BorderAnimationMask         = false,
+        BorderAnimationSidesAxis    = "HORIZONTAL",
+        BorderAnimationCornerLength = 10,
         hideSwipe = false, hideIcon = false,
         showDuration = true, durationFont = "Friz Quadrata TT",
         durationScale = 1.0, durationOutline = "OUTLINE",
@@ -591,9 +882,34 @@ local TYPE_DEFAULTS = {
         stackOutline = "OUTLINE", stackAnchor = "BOTTOMRIGHT",
         stackX = 0, stackY = 0,
         stackColor = {r = 1, g = 1, b = 1, a = 1},
+        -- Master enable for the whole Expiring feature (Stage 5.2 — mirrors
+        -- the icon).  Default true so existing configs are unaffected.
+        expiringFeatureEnabled = true,
         expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
         expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        expiringTintEnabled = false,
+        expiringTintColor = {r = 1, g = 0.2, b = 0.2, a = 0.5},  -- #FF3333 @ 50% (matches expiring border red)
         expiringPulsate = false,
+        -- Stage 5.2 expiring-border overrides (shared backend with the icon).
+        -- ExpiringBorderColor is SEPARATE from the fill's expiringColor — the
+        -- fill and border each get their own expiring tint.  Defaults to the
+        -- same red so out of the box both "turn red", but they're independent.
+        ExpiringBorderColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        ExpiringBorderSize  = 1,
+        ExpiringBorderAlpha = 1,
+        ExpiringAnimationType         = "NONE",
+        ExpiringAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        ExpiringAnimationFrequency    = 1,
+        ExpiringAnimationParticles    = 8,
+        ExpiringAnimationLength       = 8,
+        ExpiringAnimationThickness    = 3,
+        ExpiringAnimationScale        = 1,
+        ExpiringAnimationInset        = 0,
+        ExpiringAnimationOffsetX      = 0,
+        ExpiringAnimationOffsetY      = 0,
+        ExpiringAnimationMask         = false,
+        ExpiringAnimationSidesAxis    = "HORIZONTAL",
+        ExpiringAnimationCornerLength = 10,
         expiringWholeAlphaPulse = false, expiringBounce = false,
         frameLevel = 30, frameStrata = "INHERIT",
         showWhenMissing = false,
@@ -605,12 +921,41 @@ local TYPE_DEFAULTS = {
         texture = "Interface\\TargetingFrame\\UI-StatusBar",
         fillColor = {r = 1, g = 1, b = 1, a = 1},
         bgColor = {r = 0, g = 0, b = 0, a = 0.5},
-        showBorder = true, borderThickness = 1,
-        borderColor = {r = 0, g = 0, b = 0, a = 1},
+        -- Canonical border keys (Stage 5.3).  Legacy showBorder /
+        -- borderThickness / borderColor migrated on ADDON_LOADED.  BorderInset
+        -- defaults to 0 so the ring sits FLUSH outside the bar as before.
+        -- BorderColor defaults to opaque black (the bar's pre-migration look).
+        ShowBorder = true, BorderSize = 1, BorderInset = 0,
+        BorderColor             = {r = 0, g = 0, b = 0, a = 1},
+        BorderStyle             = "SOLID",
+        BorderBlendMode         = "BLEND",
+        BorderGradientStartColor = {r = 0,    g = 0,    b = 0,    a = 1},
+        BorderGradientEndColor   = {r = 0.5,  g = 0.5,  b = 0.5,  a = 1},
+        BorderGradientDirection  = "HORIZONTAL",
+        BorderShadowEnabled      = false,
+        BorderShadowColor        = {r = 0, g = 0, b = 0, a = 0.8},
+        BorderShadowSize         = 1,
+        BorderShadowOffsetX      = 1,
+        BorderShadowOffsetY      = -1,
+        BorderAnimationType         = "NONE",
+        BorderAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        BorderAnimationFrequency    = 1,
+        BorderAnimationParticles    = 8,
+        BorderAnimationLength       = 8,
+        BorderAnimationThickness    = 3,
+        BorderAnimationScale        = 1,
+        BorderAnimationInset        = 0,
+        BorderAnimationOffsetX      = 0,
+        BorderAnimationOffsetY      = 0,
+        BorderAnimationMask         = false,
+        BorderAnimationSidesAxis    = "HORIZONTAL",
+        BorderAnimationCornerLength = 10,
         alpha = 1.0,
         barColorByTime = false,
         expiringEnabled = false, expiringThreshold = 5,
         expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        expiringTintEnabled = false,
+        expiringTintColor = {r = 1, g = 0.2, b = 0.2, a = 0.5},  -- #FF3333 @ 50% (matches expiring border red)
         showDuration = true, durationFont = "Friz Quadrata TT",
         durationScale = 1.0, durationOutline = "OUTLINE",
         durationAnchor = "CENTER", durationX = 0, durationY = 0,
@@ -621,6 +966,61 @@ local TYPE_DEFAULTS = {
     -- Frame-level types: mirror the inline literals in EnsureTypeConfig so the
     -- colour-picker Default button (and any other consumer of __dfDefaults) can
     -- resolve a default value for keys like "color" and "expiringColor".
+    -- Border-type (Stage 5.4): full canonical DF.Border defaults so
+    -- CreateBorderControls' dropdowns / pickers read sensible values.  The
+    -- legacy style/thickness/inset/color are migrated on load.
+    border = {
+        ShowBorder = true, BorderSize = 2, BorderInset = 0,
+        BorderColor             = {r = 1, g = 1, b = 1, a = 1},
+        BorderStyle             = "SOLID",
+        BorderBlendMode         = "BLEND",
+        BorderOffsetX           = 0,
+        BorderOffsetY           = 0,
+        BorderGradientStartColor = {r = 0,    g = 0,    b = 0,    a = 1},
+        BorderGradientEndColor   = {r = 0.5,  g = 0.5,  b = 0.5,  a = 1},
+        BorderGradientDirection  = "HORIZONTAL",
+        BorderShadowEnabled      = false,
+        BorderShadowColor        = {r = 0, g = 0, b = 0, a = 0.8},
+        BorderShadowSize         = 1,
+        BorderShadowOffsetX      = 1,
+        BorderShadowOffsetY      = -1,
+        BorderAnimationType         = "NONE",
+        BorderAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        BorderAnimationFrequency    = 1,
+        BorderAnimationParticles    = 8,
+        BorderAnimationLength       = 8,
+        BorderAnimationThickness    = 3,
+        BorderAnimationScale        = 1,
+        BorderAnimationInset        = 0,
+        BorderAnimationOffsetX      = 0,
+        BorderAnimationOffsetY      = 0,
+        BorderAnimationMask         = false,
+        BorderAnimationSidesAxis    = "HORIZONTAL",
+        BorderAnimationCornerLength = 10,
+        -- Draw above the frame's class border (parent+10) / aggro (parent+9).
+        drawAboveFrameBorder = true,
+        -- Expiring-border overrides (Stage 5.4 parity with icon/square).
+        expiringFeatureEnabled = true,
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        expiringPulsate = false,
+        ExpiringBorderSize  = 2,
+        ExpiringBorderAlpha = 1,
+        ExpiringAnimationType         = "NONE",
+        ExpiringAnimationColor        = {r = 0.95, g = 0.95, b = 0.32, a = 1},
+        ExpiringAnimationFrequency    = 1,
+        ExpiringAnimationParticles    = 8,
+        ExpiringAnimationLength       = 8,
+        ExpiringAnimationThickness    = 3,
+        ExpiringAnimationScale        = 1,
+        ExpiringAnimationInset        = 0,
+        ExpiringAnimationOffsetX      = 0,
+        ExpiringAnimationOffsetY      = 0,
+        ExpiringAnimationMask         = false,
+        ExpiringAnimationSidesAxis    = "HORIZONTAL",
+        ExpiringAnimationCornerLength = 10,
+        showWhenMissing = false,
+    },
     healthbar = {
         mode = "Replace", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
         expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
@@ -2013,17 +2413,10 @@ local function GetOrCreatePreviewCustomBorder(mockFrame, key)
     end
     local pool = mockFrame.dfPreviewCustomBorders
     if pool[key] then return pool[key] end
-
-    local ch = CreateFrame("Frame", nil, mockFrame)
-    ch:SetAllPoints()
-    ch:SetFrameLevel(mockFrame:GetFrameLevel() + 4) -- Below shared border (+5)
-    ch:Hide()
-    ch.topLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.bottomLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.leftLine = ch:CreateTexture(nil, "OVERLAY")
-    ch.rightLine = ch:CreateTexture(nil, "OVERLAY")
-    pool[key] = ch
-    return ch
+    -- Stage 5.4: preview uses DF.Border (mirrors the runtime), below the
+    -- shared preview border (+5).
+    pool[key] = DF.Border:New(mockFrame, { frameLevelOffset = 4, layer = "OVERLAY" })
+    return pool[key]
 end
 
 local function RefreshPreviewEffects()
@@ -2031,14 +2424,14 @@ local function RefreshPreviewEffects()
     local mockFrame = framePreview.mockFrame
     if not mockFrame then return end
 
-    -- Reset shared border overlay
-    if framePreview.borderOverlay and DF.ApplyHighlightStyle then
-        DF.ApplyHighlightStyle(framePreview.borderOverlay, "NONE", 2, 0, 1, 1, 1, 1)
+    -- Reset shared border overlay (Stage 5.4: DF.Border — hide edges + anim)
+    if framePreview.borderOverlay then
+        DF.Border:Apply(framePreview.borderOverlay, { enabled = false })
     end
     -- Reset custom border overlays
     if mockFrame.dfPreviewCustomBorders then
         for _, ch in pairs(mockFrame.dfPreviewCustomBorders) do
-            DF.ApplyHighlightStyle(ch, "NONE", 2, 0, 1, 1, 1, 1)
+            DF.Border:Apply(ch, { enabled = false })
         end
     end
     if framePreview.healthFill then
@@ -2060,29 +2453,20 @@ local function RefreshPreviewEffects()
     if type(auraCfg) ~= "table" then -- skip corrupted entries
     else
 
-    -- Border effect (uses highlight system for all 6 styles)
-    -- Mirrors live frame logic: shared borders use single overlay (first claim wins),
-    -- custom borders get independent per-aura overlays so multiple borders can stack.
-    if auraCfg.border and DF.ApplyHighlightStyle then
-        local clr = auraCfg.border.color or {r = 1, g = 1, b = 1, a = 1}
-        local thickness = auraCfg.border.thickness or 2
-        local inset = auraCfg.border.inset or 0
-        -- Migrate old style names (Solid→SOLID, Glow→GLOW, Pulse→SOLID)
-        local style = auraCfg.border.style or "SOLID"
-        if style == "Solid" then style = "SOLID"
-        elseif style == "Glow" then style = "GLOW"
-        elseif style == "Pulse" then style = "SOLID" end
-
+    -- Border effect (Stage 5.4: rendered via DF.Border, mirroring the runtime).
+    -- Config is canonical (migrated on load); BuildSpec resolves Style /
+    -- animation / gradient / etc.  Shared borders use a single overlay (first
+    -- claim wins); custom borders get independent per-aura overlays so multiple
+    -- can stack.
+    if auraCfg.border and auraCfg.border.ShowBorder ~= false then
+        local spec = DF.Border:BuildSpec(auraCfg.border, "")
+        if not spec.color then spec.color = { r = 1, g = 1, b = 1, a = 1 } end
+        spec.enabled = true
         if auraCfg.border.borderMode == "custom" then
-            -- Custom border: independent overlay per aura (can stack with shared + other custom)
-            local ch = GetOrCreatePreviewCustomBorder(mockFrame, auraName)
-            DF.ApplyHighlightStyle(ch, style, thickness, inset,
-                clr.r or 1, clr.g or 1, clr.b or 1, clr.a or 1)
+            DF.Border:Apply(GetOrCreatePreviewCustomBorder(mockFrame, auraName), spec)
         elseif not sharedBorderClaimed and framePreview.borderOverlay then
-            -- Shared border: first claim wins (matches live frame priority system)
             sharedBorderClaimed = true
-            DF.ApplyHighlightStyle(framePreview.borderOverlay, style, thickness, inset,
-                clr.r or 1, clr.g or 1, clr.b or 1, clr.a or 1)
+            DF.Border:Apply(framePreview.borderOverlay, spec)
         end
     end
 
@@ -2446,14 +2830,45 @@ end
 local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOffset, layoutGroup, indicatorID)
     local proxy = optProxy or CreateProxy(auraName, typeKey)
     local contentWidth = width or 248
+    -- widgets[] entries are {widget, height} so the reflow path can use
+    -- group.calculatedHeight (current after a LayoutChildren) while
+    -- non-group widgets fall back to the stored at-build-time height.
     local widgets = {}
-    local totalHeight = 10 + (yOffset or 0)  -- top padding + optional offset
+    local startY = 10 + (yOffset or 0)  -- top padding + optional offset
+    local totalHeight = startY
 
     local function AddWidget(widget, height)
         widget:SetPoint("TOPLEFT", parent, "TOPLEFT", 5, -totalHeight)
         if widget.SetWidth then widget:SetWidth(contentWidth - 10) end
-        tinsert(widgets, widget)
+        tinsert(widgets, { widget = widget, height = height or 30 })
         totalHeight = totalHeight + (height or 30)
+    end
+
+    -- Reflow all widgets in this BuildTypeContent's stack.  When a group's
+    -- LayoutChildren updates its own height (e.g. Border's animation
+    -- widgets show/hide), the siblings below were anchored at FIXED y
+    -- positions based on the old height — they stay put, causing overlap
+    -- (group grew) or large gap (group shrank).  Walk the list re-anchor
+    -- each widget at the running total height, reading the current
+    -- group.calculatedHeight for groups so the new layout flows correctly.
+    -- The host container's height is updated too so any parent scroll
+    -- range stays accurate.
+    parent.dfAD_ReflowWidgets = function()
+        local y = startY
+        for _, entry in ipairs(widgets) do
+            local w = entry.widget
+            local h
+            if w.calculatedHeight then
+                -- SettingsGroup tracks its current height after LayoutChildren.
+                h = w.calculatedHeight
+            else
+                h = entry.height
+            end
+            w:ClearAllPoints()
+            w:SetPoint("TOPLEFT", parent, "TOPLEFT", 5, -y)
+            y = y + h
+        end
+        parent:SetHeight(y)
     end
 
     local function AddGroup(header, buildFn, showSummary)
@@ -2466,6 +2881,25 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
         buildFn(group)
         local h = group:LayoutChildren()
         AddWidget(group, h)
+    end
+
+    -- Lightweight subheader for inline section dividers inside a
+    -- SettingsGroup.  Smaller and dimmer than GUI:CreateHeader (which is
+    -- for top-level group headers) — used in the Expiring section to
+    -- separate State Overrides from Icon Effects.  Returned as a Frame
+    -- so it composes with g:AddWidget like every other widget.
+    local function CreateInlineSubheader(text)
+        local frame = CreateFrame("Frame", nil, parent)
+        frame:SetHeight(18)
+        local label = frame:CreateFontString(nil, "OVERLAY")
+        if GUI.SetSettingsFont then
+            GUI:SetSettingsFont(label, 8, "")
+        end
+        label:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 1)
+        label:SetText(text)
+        local c = GetThemeColor()
+        label:SetTextColor(c.r, c.g, c.b, 0.75)
+        return frame
     end
 
     -- ── COPY FROM (placed indicators only: icon, square, bar) ──
@@ -2608,6 +3042,71 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
     -- Color picker callback shorthand — refreshes both the AD preview and live frames
     local function RPL() if RefreshPreviewLightweight then RefreshPreviewLightweight() end RefreshLiveFramesThrottled() end
 
+    -- Shared Expiring "State Overrides" panel for the BORDERED placed indicators
+    -- (icon / square / bar).  These three blocks were near-identical; this
+    -- collapses them to one builder parameterised by the few real differences
+    -- (opts): dualColor (square's separate fill+border colours), alphaHandleKey
+    -- (which colour's alpha the slider edits), thicknessMax, durationPriority
+    -- (bar), and iconEffects {fillPulsate, wholeAlpha, bounce}.  The master
+    -- enable, threshold row, State-Overrides rows, and the shared
+    -- CreateAnimationControls block are identical across all three.
+    -- (healthbar's Expiring is a different, border-less panel — not built here.)
+    -- AD's Expiring panel now renders through the SHARED GUI:CreateExpiringControls
+    -- (the same helper the standard buff aura icons use) — AD's design IS the
+    -- reference, so this is a thin adapter mapping AD's proxy keys + per-type
+    -- options (dualColor, alphaHandleKey, thicknessMax, durationPriority,
+    -- iconEffects) onto the shared helper.  RPL = repaint; AuraDesigner_RefreshPage
+    -- = full rebuild (threshold-mode toggle needs it).
+    local function AddExpiringBorderGroup(opts)
+        opts = opts or {}
+        AddGroup(L["Expiring"], function(g)
+            GUI:CreateExpiringControls(g, proxy, {
+                parent        = parent,
+                width         = contentWidth - 10,
+                masterLabel   = L["Enable Expiring"],
+                fullUpdate    = RPL,
+                lightColors   = RPL,
+                lightGeometry = RPL,
+                refreshStates = function()
+                    g:LayoutChildren()
+                    if parent.dfAD_ReflowWidgets then parent.dfAD_ReflowWidgets() end
+                end,
+                refreshPage   = function() DF:AuraDesigner_RefreshPage() end,
+                afterThreshold = opts.durationPriority and function(addGated)
+                    local dpRow, dpH = CreateExpiringDurationPriorityRow(parent, auraName, typeKey, contentWidth - 10)
+                    if dpRow then addGated(dpRow, dpH) end
+                end or nil,
+                keys = {
+                    master           = "expiringFeatureEnabled",
+                    threshold        = "expiringThreshold",
+                    thresholdMode    = "expiringThresholdMode",
+                    colorOverride    = "expiringEnabled",
+                    color            = "expiringColor",
+                    borderColor      = "ExpiringBorderColor",
+                    alphaHandleColor = opts.alphaHandleKey or "expiringColor",
+                    thickness        = "ExpiringBorderSize",
+                    animPrefix       = "ExpiringAnimation",
+                    fillPulsate      = "expiringPulsate",
+                    wholeAlpha       = "expiringWholeAlphaPulse",
+                    bounce           = "expiringBounce",
+                    tintEnable       = "expiringTintEnabled",
+                    tintColor        = "expiringTintColor",
+                },
+                include = {
+                    threshold     = true,
+                    colorOverride = true,
+                    dualColor     = opts.dualColor,
+                    alpha         = true,
+                    thickness     = true, thicknessMin = 0, thicknessMax = opts.thicknessMax or 5,
+                    animation     = true,
+                    iconEffects   = opts.iconEffects,
+                    tint          = true,  -- secret-safe; works on all auras
+                },
+                lightTint = RPL,
+            })
+        end)
+    end
+
     if typeKey == "icon" then
         -- Position
         AddGroup(L["Position"], function(g)
@@ -2647,12 +3146,68 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(desatCb, 28)
             if not proxy.showWhenMissing then desatCb:Hide() end
         end)
-        -- Border
+        -- Border (Stage 5.1c — unified controls via CreateBorderControls).
+        -- Show / Thickness / Inset are the same widgets as before; the helper
+        -- adds Style / Texture / Color / Gradient / Shadow / BlendMode /
+        -- Offset / Alpha on top.  Animation, classColor, roleColor, and the
+        -- colorByTime checkbox are deliberately omitted — animation isn't
+        -- wired through AD's expiring system yet, class/role don't fit aura
+        -- indicators (the indicator's job is to show aura state, not unit
+        -- identity), and AD's Expiring section already covers "colour by
+        -- time remaining" implicitly through its own colour curve.
         AddGroup(L["Border"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], proxy, "borderEnabled"), 28)
-            g:AddWidget(GUI:CreateSlider(parent, L["Border Thickness"], 1, 5, 1, proxy, "borderThickness"), 54)
-            g:AddWidget(GUI:CreateSlider(parent, L["Border Inset"], -3, 5, 1, proxy, "borderInset"), 54)
+            GUI:CreateBorderControls(g, proxy, "", {
+                parent  = parent,
+                include = {
+                    inset = true, offset = true, blendMode = true,
+                    gradient = true, shadow = true, alpha = true,
+                    animate = true,
+                },
+                -- IMPORTANT: AD's per-aura proxy only triggers
+                -- RefreshLiveFramesThrottled + RefreshPreviewLightweight
+                -- on direct key assignment (proxy.X = v) via __newindex.
+                -- CreateColorPicker and the Border Alpha slider mutate
+                -- SUB-TABLE fields (proxy.BorderColor.a = v) which reads
+                -- through __index then writes to the returned table — no
+                -- __newindex fires, no refresh runs, and both the live
+                -- frame AND the AD preview window stay on the pre-edit
+                -- colour until /reload.
+                --
+                -- RPL (defined above in BuildTypeContent) runs both the
+                -- preview refresh and the throttled live-frame refresh, so
+                -- colour-picker / alpha-slider / size-drag updates land
+                -- everywhere consistently within the 100ms debounce.
+                fullUpdate    = RPL,
+                lightUpdate   = RPL,
+                lightColors   = RPL,
+                -- refreshStates re-evaluates hideOn on the Border group's
+                -- widgets and then reflows the sibling groups below in the
+                -- card body so the Expiring / Duration Text / Stack Count
+                -- groups slide up or down to track the Border group's new
+                -- height.  Without the reflow, the Border group's internal
+                -- LayoutChildren updates its own height but the siblings
+                -- stay at fixed y positions — animation widgets surface
+                -- and overlap Expiring, or hide and leave a gap above
+                -- Expiring.  dfAD_ReflowWidgets is set on the BuildTypeContent
+                -- parent and walks the whole widget stack.
+                refreshStates = function()
+                    g:LayoutChildren()
+                    if parent.dfAD_ReflowWidgets then
+                        parent.dfAD_ReflowWidgets()
+                    end
+                end,
+                sizeMin = 1, sizeMax = 5, sizeStep = 1,
+            })
         end)
+        -- Expiring (moved up next to Border — the border's expiring colour and
+        -- the per-icon effects all key off the same threshold, so grouping
+        -- them adjacent reads more naturally than burying Expiring at the
+        -- bottom of the panel.)
+        -- Icon: single Expiring Colour, Whole Alpha Pulse + Bounce effects.
+        AddExpiringBorderGroup({
+            thicknessMax = 5,
+            iconEffects = { wholeAlpha = true, bounce = true },
+        })
         -- Duration Text
         AddGroup(L["Duration Text"], function(g)
             g:AddWidget(GUI:CreateCheckbox(parent, L["Show Duration Text"], proxy, "showDuration"), 28)
@@ -2680,15 +3235,6 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateSlider(parent, L["Stack Offset X"], -150, 150, 1, proxy, "stackX"), 54)
             g:AddWidget(GUI:CreateSlider(parent, L["Stack Offset Y"], -150, 150, 1, proxy, "stackY"), 54)
             g:AddWidget(GUI:CreateColorPicker(parent, L["Stack Text Color"], proxy, "stackColor", true, RPL, RPL, true), 28)
-        end)
-        -- Expiring
-        AddGroup(L["Expiring"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Expiring Color Override"], proxy, "expiringEnabled"), 28)
-            g:AddWidget(CreateExpiringThresholdRow(parent, proxy, contentWidth - 10), 54)
-            g:AddWidget(GUI:CreateColorPicker(parent, L["Expiring Color"], proxy, "expiringColor", true, RPL, RPL, true), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Pulsate Border"], proxy, "expiringPulsate"), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Whole Alpha Pulse"], proxy, "expiringWholeAlphaPulse"), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Bounce"], proxy, "expiringBounce"), 28)
         end)
 
     elseif typeKey == "square" then
@@ -2719,12 +3265,43 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                 DF.AuraDesigner.Engine:ForceRefreshAllFrames()
             end), 28)
         end)
-        -- Border
+        -- Border (Stage 5.2 — unified controls via CreateBorderControls).
+        -- Same full toolkit as the icon's base border: Style / Texture / Colour
+        -- / Gradient / Shadow / Blend / Offset / Alpha + Animation.  The
+        -- square's expiring system tints the FILL (not the border), so the
+        -- icon's expiring-border overrides are intentionally NOT added here.
         AddGroup(L["Border"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], proxy, "showBorder"), 28)
-            g:AddWidget(GUI:CreateSlider(parent, L["Border Thickness"], 1, 5, 1, proxy, "borderThickness"), 54)
-            g:AddWidget(GUI:CreateSlider(parent, L["Border Inset"], -3, 5, 1, proxy, "borderInset"), 54)
+            GUI:CreateBorderControls(g, proxy, "", {
+                parent  = parent,
+                include = {
+                    inset = true, offset = true, blendMode = true,
+                    gradient = true, shadow = true, alpha = true,
+                    animate = true,
+                },
+                fullUpdate    = RPL,
+                lightUpdate   = RPL,
+                lightColors   = RPL,
+                refreshStates = function()
+                    g:LayoutChildren()
+                    if parent.dfAD_ReflowWidgets then
+                        parent.dfAD_ReflowWidgets()
+                    end
+                end,
+                sizeMin = 1, sizeMax = 5, sizeStep = 1,
+            })
         end)
+        -- Expiring (moved up next to Border — matches the icon indicator's
+        -- panel ordering. Border colour, fill pulsate, alpha pulse, and bounce
+        -- all key off the same threshold; grouping them adjacent to Border
+        -- reads more naturally than burying Expiring at the bottom.)
+        -- Square: separate fill + border Expiring colours (alpha handle edits the
+        -- BORDER colour); Fill Pulsate + Whole Alpha Pulse + Bounce effects.
+        AddExpiringBorderGroup({
+            thicknessMax = 5,
+            dualColor = true,
+            alphaHandleKey = "ExpiringBorderColor",
+            iconEffects = { fillPulsate = true, wholeAlpha = true, bounce = true },
+        })
         -- Duration Text
         AddGroup(L["Duration Text"], function(g)
             g:AddWidget(GUI:CreateCheckbox(parent, L["Show Duration Text"], proxy, "showDuration"), 28)
@@ -2752,15 +3329,6 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateSlider(parent, L["Stack Offset X"], -150, 150, 1, proxy, "stackX"), 54)
             g:AddWidget(GUI:CreateSlider(parent, L["Stack Offset Y"], -150, 150, 1, proxy, "stackY"), 54)
             g:AddWidget(GUI:CreateColorPicker(parent, L["Stack Text Color"], proxy, "stackColor", true, RPL, RPL, true), 28)
-        end)
-        -- Expiring
-        AddGroup(L["Expiring"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Expiring Color Override"], proxy, "expiringEnabled"), 28)
-            g:AddWidget(CreateExpiringThresholdRow(parent, proxy, contentWidth - 10), 54)
-            g:AddWidget(GUI:CreateColorPicker(parent, L["Expiring Color"], proxy, "expiringColor", true, RPL, RPL, true), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Fill Pulsate"], proxy, "expiringPulsate"), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Whole Alpha Pulse"], proxy, "expiringWholeAlphaPulse"), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Bounce"], proxy, "expiringBounce"), 28)
         end)
 
     elseif typeKey == "bar" then
@@ -2804,11 +3372,30 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateSlider(parent, L["Frame Level"], -10, 30, 1, proxy, "frameLevel"), 54)
             g:AddWidget(GUI:CreateDropdown(parent, L["Frame Strata"], FRAME_STRATA_OPTIONS, proxy, "frameStrata"), 54)
         end)
-        -- Border
+        -- Border (Stage 5.3 — unified controls via CreateBorderControls).
+        -- Full toolkit (Style / Texture / Colour / Gradient / Shadow / Blend /
+        -- Inset / Alpha + Animation).  No offset (the bar has its own X/Y) and
+        -- no class/role (it's an aura bar, not unit identity).  The bar's
+        -- expiring tints the FILL via its colour curve, so the icon/square
+        -- expiring-border overrides are intentionally not added here.
         AddGroup(L["Border"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], proxy, "showBorder"), 28)
-            g:AddWidget(GUI:CreateSlider(parent, L["Border Thickness"], 1, 4, 1, proxy, "borderThickness"), 54)
-            g:AddWidget(GUI:CreateColorPicker(parent, L["Border Color"], proxy, "borderColor", true, RPL, RPL, true), 28)
+            GUI:CreateBorderControls(g, proxy, "", {
+                parent  = parent,
+                include = {
+                    inset = true, blendMode = true, gradient = true,
+                    shadow = true, alpha = true, animate = true,
+                },
+                fullUpdate    = RPL,
+                lightUpdate   = RPL,
+                lightColors   = RPL,
+                refreshStates = function()
+                    g:LayoutChildren()
+                    if parent.dfAD_ReflowWidgets then
+                        parent.dfAD_ReflowWidgets()
+                    end
+                end,
+                sizeMin = 1, sizeMax = 5, sizeStep = 1,
+            })
         end)
         -- Expiring
         AddGroup(L["Expiring"], function(g)
@@ -2833,25 +3420,47 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
         end)
 
     elseif typeKey == "border" then
-        -- Appearance
+        -- Appearance — full DF.Border toolkit (Stage 5.4).  The legacy 5
+        -- styles are now combinations: Solid = Style SOLID; Glow = Style
+        -- TEXTURE + DF Glow; Dashed/Animated = Border Thickness 0 + DF Dash
+        -- (speed 0 / >0); Corners = Border Thickness 0 + Corners Only.
+        -- include offset too — this border covers the whole frame, so nudging
+        -- it can be useful.  No class/role (it's an aura indicator).
         AddGroup(L["Appearance"], function(g)
-            g:AddWidget(GUI:CreateDropdown(parent, L["Style"], BORDER_STYLE_OPTIONS, proxy, "style"), 54)
-            g:AddWidget(GUI:CreateColorPicker(parent, L["Color"], proxy, "color", true, RPL, RPL, true), 28)
-            g:AddWidget(GUI:CreateSlider(parent, L["Thickness"], 1, 8, 1, proxy, "thickness"), 54)
-            g:AddWidget(GUI:CreateSlider(parent, L["Inset"], 0, 8, 1, proxy, "inset"), 54)
+            GUI:CreateBorderControls(g, proxy, "", {
+                parent  = parent,
+                include = {
+                    inset = true, offset = true, blendMode = true,
+                    gradient = true, shadow = true, alpha = true,
+                    animate = true,
+                },
+                fullUpdate    = RPL,
+                lightUpdate   = RPL,
+                lightColors   = RPL,
+                refreshStates = function()
+                    g:LayoutChildren()
+                    if parent.dfAD_ReflowWidgets then parent.dfAD_ReflowWidgets() end
+                end,
+                sizeMin = 0, sizeMax = 8, sizeStep = 1,
+            })
+            -- Draw order: lift this border above the frame's own class/role
+            -- border so it fully covers it (on by default).  Off tucks it back
+            -- underneath the frame border (the pre-5.4 stacking).
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Draw above frame border"], proxy, "drawAboveFrameBorder", RPL), 28)
             g:AddWidget(GUI:CreateCheckbox(parent, L["Show When Missing"], proxy, "showWhenMissing", function()
                 DF.AuraDesigner.Engine:ForceRefreshAllFrames()
             end), 28)
         end)
-        -- Expiring
-        AddGroup(L["Expiring"], function(g)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Expiring Color Override"], proxy, "expiringEnabled"), 28)
-            g:AddWidget(CreateExpiringThresholdRow(parent, proxy, contentWidth - 10), 54)
-            do local dpRow, dpH = CreateExpiringDurationPriorityRow(parent, auraName, typeKey, contentWidth - 10)
-            if dpRow then g:AddWidget(dpRow, dpH) end end
-            g:AddWidget(GUI:CreateColorPicker(parent, L["Expiring Color"], proxy, "expiringColor", true, RPL, RPL, true), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Pulsate"], proxy, "expiringPulsate"), 28)
-        end)
+        -- Expiring — full parity with icon/square (Stage 5.4): master enable +
+        -- State Overrides (border thickness / colour / alpha / animation swap)
+        -- + the existing Pulsate.  The Expiring Animation lets the border swap
+        -- effect below threshold (e.g. solid → marching DF Dash).
+        -- Bar: single Expiring Colour, thicker max (8), a duration-priority row,
+        -- and no Icon-Effects (bars don't pulse/bounce the whole icon).
+        AddExpiringBorderGroup({
+            thicknessMax = 8,
+            durationPriority = true,
+        })
 
     elseif typeKey == "healthbar" then
         -- Appearance
@@ -3755,16 +4364,9 @@ local function CreateFramePreview(parent, yOffset, rightPanelRef)
         container.hpText = hpText
     end
 
-    -- Border overlay (used when border effect is active)
-    -- Uses highlight-compatible structure so DF.ApplyHighlightStyle can render all 6 modes
-    container.borderOverlay = CreateFrame("Frame", nil, mockFrame)
-    container.borderOverlay:SetAllPoints()
-    container.borderOverlay:SetFrameLevel(mockFrame:GetFrameLevel() + 5)
-    container.borderOverlay.topLine = container.borderOverlay:CreateTexture(nil, "OVERLAY")
-    container.borderOverlay.bottomLine = container.borderOverlay:CreateTexture(nil, "OVERLAY")
-    container.borderOverlay.leftLine = container.borderOverlay:CreateTexture(nil, "OVERLAY")
-    container.borderOverlay.rightLine = container.borderOverlay:CreateTexture(nil, "OVERLAY")
-    container.borderOverlay:Hide()
+    -- Border overlay (used when border effect is active) — Stage 5.4: a
+    -- DF.Border widget covering the mock frame, mirroring the runtime.
+    container.borderOverlay = DF.Border:New(mockFrame, { frameLevelOffset = 5, layer = "OVERLAY" })
 
     -- Click background — no-op in new UI (was used to deselect aura in old tile view)
     local bgClick = CreateFrame("Button", nil, mockFrame)
@@ -5887,18 +6489,44 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     mainFrame = CreateFrame("Frame", nil, parent)
     mainFrame:SetAllPoints()
 
-    -- Override RefreshStates: Aura Designer uses its own layout system
+    -- Override RefreshStates: Aura Designer uses its own layout system.
+    --
+    -- This hook gets called by anything that walks the GUI parent chain
+    -- looking for a page with RefreshStates+children — including
+    -- CreateInfoBanner's TriggerHostRelayout after every measure cycle.
+    -- AuraDesigner_RefreshPage is a heavyweight rebuild (destroys +
+    -- recreates every effect card on the active tab), so firing it
+    -- from a banner's auto-resize cascade meant: each new banner from
+    -- BuildEffectsTab triggered SetText → schedule DoRecomputeHeight →
+    -- TriggerHostRelayout → page:RefreshStates → AuraDesigner_RefreshPage
+    -- → SwitchTab → BuildEffectsTab → create more banners → repeat at
+    -- ~9 Hz, locking up the GUI the moment the perf-warning banner
+    -- surfaced (because picking an animation triggered the chain).
+    --
+    -- The fix: only call AuraDesigner_RefreshPage when the page
+    -- dimensions actually changed.  GUI window resize cases (the real
+    -- reason this hook exists) still rebuild; banner-cascade-as-noop
+    -- cases stop the loop.
     page.RefreshStates = function(self)
         local pageH = self:GetHeight()
         self.child:SetHeight(pageH)
-        if self.child and GUI.contentFrame then
-            self.child:SetWidth(GUI.contentFrame:GetWidth() - 30)
+        local newW = GUI.contentFrame and (GUI.contentFrame:GetWidth() - 30) or nil
+        if self.child and newW then
+            self.child:SetWidth(newW)
         end
         -- Keep parent scroll at 0 — only the right panel should scroll
         local parentScroll = self:GetParent()
         if parentScroll and parentScroll.SetVerticalScroll then
             parentScroll:SetVerticalScroll(0)
         end
+        -- Skip the heavyweight rebuild when nothing actually changed —
+        -- only fire it on genuine size transitions (window resize / tab
+        -- switch / first show).
+        if self._lastRefreshStatesH == pageH and self._lastRefreshStatesW == newW then
+            return
+        end
+        self._lastRefreshStatesH = pageH
+        self._lastRefreshStatesW = newW
         DF:AuraDesigner_RefreshPage()
     end
 

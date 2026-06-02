@@ -326,49 +326,12 @@ auraTimerGroup:SetScript("OnLoop", function()
                                         elseif icon.expiringTint then
                                             icon.expiringTint:Hide()
                                         end
-                                        
-                                        -- Border
-                                        if icon.expiringBorderAlphaContainer and icon.expiringBorderEnabled then
-                                            icon.expiringBorderAlphaContainer:Show()
-                                            
-                                            if icon.expiringBorderColorByTime then
-                                                if icon.expiringBorderAlphaContainer.SetAlphaFromBoolean then
-                                                    icon.expiringBorderAlphaContainer:SetAlphaFromBoolean(hasExpiration, 1, 0)
-                                                else
-                                                    icon.expiringBorderAlphaContainer:SetAlpha(1)
-                                                end
-                                                
-                                                if not DF.expiringBorderColorCurve then
-                                                    local curve = C_CurveUtil.CreateColorCurve()
-                                                    curve:SetType(Enum.LuaCurveType.Linear)
-                                                    curve:AddPoint(0, CreateColor(1, 0, 0, 1))
-                                                    curve:AddPoint(0.3, CreateColor(1, 0.5, 0, 1))
-                                                    curve:AddPoint(0.5, CreateColor(1, 1, 0, 1))
-                                                    curve:AddPoint(1, CreateColor(0, 1, 0, 1))
-                                                    DF.expiringBorderColorCurve = curve
-                                                end
-                                                
-                                                local colorResult = durationObj:EvaluateRemainingPercent(DF.expiringBorderColorCurve)
-                                                if colorResult and colorResult.GetRGBA and icon.expiringBorderTop then
-                                                    icon.expiringBorderTop:SetColorTexture(colorResult:GetRGBA())
-                                                    icon.expiringBorderBottom:SetColorTexture(colorResult:GetRGBA())
-                                                    icon.expiringBorderLeft:SetColorTexture(colorResult:GetRGBA())
-                                                    icon.expiringBorderRight:SetColorTexture(colorResult:GetRGBA())
-                                                end
-                                            else
-                                                if icon.expiringBorderAlphaContainer.SetAlphaFromBoolean then
-                                                    icon.expiringBorderAlphaContainer:SetAlphaFromBoolean(hasExpiration, expiringAlpha, 0)
-                                                else
-                                                    icon.expiringBorderAlphaContainer:SetAlpha(expiringAlpha)
-                                                end
-                                            end
-                                            
-                                            if icon.expiringBorderPulsate and icon.expiringBorderPulse and not icon.expiringBorderPulse:IsPlaying() then
-                                                icon.expiringBorderPulse:Play()
-                                            end
-                                        elseif icon.expiringBorderAlphaContainer then
-                                            icon.expiringBorderAlphaContainer:Hide()
-                                        end
+
+                                        -- (Expiring BORDER is no longer driven here — it
+                                        -- registers with the shared DF.Expiring engine in
+                                        -- UpdateAuraIconsDirect and is driven by that one
+                                        -- ticker.  This timer keeps only the tint above,
+                                        -- which is buff-specific.)
                                     end
                                 end
                             end
@@ -2290,6 +2253,122 @@ function DF:CollectDebuffs(unit, maxAuras)
 end
 
 -- ============================================================
+-- BUFF EXPIRING BORDER — shared DF.Expiring engine glue
+--
+-- The buff expiring border registers the buff ICON with DF.Expiring (the same
+-- engine AD's indicators use).  The engine's ~3 FPS ticker evaluates the curve
+-- and calls these callbacks; they drive the secret-safe visibility gate
+-- (icon.expiringBorderGate alpha) and, in Color-by-Time mode, the border colour.
+-- Registering the icon (not the gate) lets the engine auto-clean on icon:Hide()
+-- exactly like AD.  The gate stays the secret-safe primitive because the engine's
+-- own hideWhenNotExpiring path is manual/preview-only (not secret-safe).
+-- Defined before both UpdateAuraIcons_Enhanced and UpdateAuraIconsDirect so both
+-- display paths can reference these module locals.
+-- ============================================================
+
+-- Cached expiring curves (shared with the tint path in the aura timer).
+local function GetBuffExpiringCurve(icon)
+    if not (C_CurveUtil and C_CurveUtil.CreateColorCurve) then return nil end
+    if icon.expiringBorderColorByTime then
+        -- Color-by-Time: red→green over the whole duration (alpha always 1, so
+        -- the gate stays visible the whole time and only the colour shifts).
+        if not DF.expiringBorderColorCurve then
+            local curve = C_CurveUtil.CreateColorCurve()
+            curve:SetType(Enum.LuaCurveType.Linear)
+            curve:AddPoint(0, CreateColor(1, 0, 0, 1))
+            curve:AddPoint(0.3, CreateColor(1, 0.5, 0, 1))
+            curve:AddPoint(0.5, CreateColor(1, 1, 0, 1))
+            curve:AddPoint(1, CreateColor(0, 1, 0, 1))
+            DF.expiringBorderColorCurve = curve
+        end
+        return DF.expiringBorderColorCurve
+    end
+    -- Static colour: a VISIBILITY step curve — alpha 1 below threshold, 0 above.
+    -- The painted border colour stays put; the gate alpha (= this curve's alpha)
+    -- shows/hides it.  Cached by threshold+mode (shared with the tint path).
+    local threshold = icon.expiringThreshold or 30
+    local useSeconds = icon.expiringThresholdMode == "SECONDS"
+    DF.expiringCurves = DF.expiringCurves or {}
+    local cacheKey = (useSeconds and "s" or "p") .. threshold
+    if not DF.expiringCurves[cacheKey] then
+        local curve = C_CurveUtil.CreateColorCurve()
+        curve:SetType(Enum.LuaCurveType.Step)
+        if useSeconds then
+            curve:AddPoint(0, CreateColor(1, 1, 1, 1))
+            curve:AddPoint(threshold, CreateColor(0, 0, 0, 0))
+            curve:AddPoint(600, CreateColor(0, 0, 0, 0))
+        else
+            curve:AddPoint(0, CreateColor(1, 1, 1, 1))
+            curve:AddPoint(threshold / 100, CreateColor(0, 0, 0, 0))
+            curve:AddPoint(1, CreateColor(0, 0, 0, 0))
+        end
+        DF.expiringCurves[cacheKey] = curve
+    end
+    return DF.expiringCurves[cacheKey]
+end
+
+-- API path: engine hands us the curve result (colour/alpha may be SECRET).
+local function BuffExpiringApplyResult(icon, result, entry)
+    local gate = icon.expiringBorderGate
+    if not gate or not result.GetRGBA then return end
+    if entry.colorByTime then
+        local eb = icon.expiringBorder
+        -- solidOnly border → SetColor is a bare SetColorTexture, secret-safe.
+        if eb and eb.SetColor then eb:SetColor(result:GetRGBA()) end
+        if gate.SetAlphaFromBoolean then
+            gate:SetAlphaFromBoolean(icon.hasExpiration, 1, 0)
+        else
+            gate:SetAlpha(1)
+        end
+    else
+        -- Visibility curve: result alpha is the (secret) show/hide signal.
+        if gate.SetAlphaFromBoolean then
+            gate:SetAlphaFromBoolean(icon.hasExpiration, select(4, result:GetRGBA()), 0)
+        else
+            gate:SetAlpha(select(4, result:GetRGBA()))
+        end
+    end
+end
+
+-- Preview/test path (non-secret): isExp is a plain bool.
+local function BuffExpiringApplyManual(icon, isExp, entry)
+    local gate = icon.expiringBorderGate
+    if not gate then return end
+    if entry.colorByTime then
+        gate:SetAlpha(1)
+    else
+        gate:SetAlpha(isExp and 1 or 0)
+    end
+end
+
+-- Register / refresh a buff icon's expiring border on the shared engine, or
+-- unregister when expiring is off.  Reuses icon.expiringEntry (no per-update
+-- allocation).  Engine auto-cleans the registry when icon:IsShown() is false.
+local function UpdateBuffExpiringRegistration(icon, unit, auraInstanceID)
+    if icon.expiringBorderEnabled and icon.expiringBorderGate then
+        local entry = icon.expiringEntry
+        if not entry then entry = {}; icon.expiringEntry = entry end
+        entry.unit = unit
+        entry.auraInstanceID = auraInstanceID
+        entry.threshold = icon.expiringThreshold or 30
+        entry.colorByTime = icon.expiringBorderColorByTime
+        -- Color-by-Time colours red→green over the FULL duration via a percent
+        -- curve, so it must always evaluate by percent regardless of the user's
+        -- threshold mode.  The static visibility curve honours the real mode.
+        entry.thresholdMode = entry.colorByTime and "PERCENT" or icon.expiringThresholdMode
+        entry.duration = icon.auraDuration
+        entry.expirationTime = icon.expirationTime
+        entry.colorCurve = GetBuffExpiringCurve(icon)
+        entry.applyResult = BuffExpiringApplyResult
+        entry.applyManual = BuffExpiringApplyManual
+        DF.Expiring:Register(icon, entry)
+    elseif icon.expiringEntry then
+        DF.Expiring:Unregister(icon)
+        if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
+    end
+end
+
+-- ============================================================
 -- ENHANCED AURA ICON UPDATE
 -- ============================================================
 
@@ -2410,6 +2489,12 @@ function DF:UpdateAuraIcons_Enhanced(frame, icons, auraType, maxAuras)
                 end
             end
 
+            -- Expiring border (BUFF only): register/refresh on the shared
+            -- DF.Expiring engine now that unit/aura/duration are known.
+            if auraType == "BUFF" then
+                UpdateBuffExpiringRegistration(icon, unit, auraInstanceID)
+            end
+
             -- Set cooldown
             SafeSetCooldown(icon.cooldown, auraData, unit)
 
@@ -2463,64 +2548,48 @@ function DF:UpdateAuraIcons_Enhanced(frame, icons, auraType, maxAuras)
             -- colored border showing through faded icon texture
             local unitDeadOrOffline = UnitIsDeadOrGhost(unit) or not UnitIsConnected(unit)
             
-            -- Set border color (normal border, not expiring) - only if we control borders
-            local borderEnabled = (auraType == "DEBUFF" and db.debuffBorderEnabled ~= false) or (auraType ~= "DEBUFF" and db.buffBorderEnabled ~= false)
-            if borderEnabled and not masqueBorderControl then
-                if auraType == "DEBUFF" and not unitDeadOrOffline then
-                    -- Use custom dispel type colors if enabled, via color curve API
-                    -- Only for living units - dead units can't be dispelled so colored border is meaningless
-                    if db.debuffBorderColorByType ~= false and auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and C_CurveUtil and C_CurveUtil.CreateColorCurve then
-                        -- Build or get cached debuff border color curve
-                        DF.debuffBorderCurve = DF.debuffBorderCurve or nil
-                        if not DF.debuffBorderCurve then
-                            local curve = C_CurveUtil.CreateColorCurve()
-                            curve:SetType(Enum.LuaCurveType.Step)
-                            
-                            -- Dispel type enum values from wago.tools/db2/SpellDispelType
-                            -- None = 0, Magic = 1, Curse = 2, Disease = 3, Poison = 4, Enrage = 9, Bleed = 11
-                            local noneColor = db.debuffBorderColorNone or {r = 0.8, g = 0.0, b = 0.0}
-                            local magicColor = db.debuffBorderColorMagic or {r = 0.2, g = 0.6, b = 1.0}
-                            local curseColor = db.debuffBorderColorCurse or {r = 0.6, g = 0.0, b = 1.0}
-                            local diseaseColor = db.debuffBorderColorDisease or {r = 0.6, g = 0.4, b = 0.0}
-                            local poisonColor = db.debuffBorderColorPoison or {r = 0.0, g = 0.6, b = 0.0}
-                            local bleedColor = db.debuffBorderColorBleed or {r = 1.0, g = 0.0, b = 0.0}
-                            
-                            curve:AddPoint(0, CreateColor(noneColor.r, noneColor.g, noneColor.b, 1.0))   -- None
-                            curve:AddPoint(1, CreateColor(magicColor.r, magicColor.g, magicColor.b, 1.0))   -- Magic
-                            curve:AddPoint(2, CreateColor(curseColor.r, curseColor.g, curseColor.b, 1.0))   -- Curse
-                            curve:AddPoint(3, CreateColor(diseaseColor.r, diseaseColor.g, diseaseColor.b, 1.0)) -- Disease
-                            curve:AddPoint(4, CreateColor(poisonColor.r, poisonColor.g, poisonColor.b, 1.0))   -- Poison
-                            curve:AddPoint(9, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))   -- Enrage
-                            curve:AddPoint(11, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))  -- Bleed
-                            
-                            DF.debuffBorderCurve = curve
-                        end
-                        
-                        -- Get color from API
-                        local borderColor = C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, DF.debuffBorderCurve)
-                        if borderColor then
-                            local r, g, b = 0.8, 0, 0
-                            if borderColor.GetRGBA then
-                                r, g, b = borderColor:GetRGB()
-                            elseif borderColor.r then
-                                r, g, b = borderColor.r, borderColor.g, borderColor.b
-                            end
-                            icon.border:SetColorTexture(r, g, b, 1.0)
-                        else
-                            -- Fallback to none color
-                            local c = db.debuffBorderColorNone or {r = 0.8, g = 0, b = 0}
-                            icon.border:SetColorTexture(c.r, c.g, c.b, 1.0)
-                        end
-                    else
-                        -- Color by type disabled or API not available - use default red
-                        icon.border:SetColorTexture(0.8, 0, 0, 1.0)
+            -- Border colour: only the debuff colour-by-type case recolours per-
+            -- update (secret dispel-type colour); static borders carry their
+            -- colour/style/animation from ConfigureAuraIconBorder (BuildSpec).
+            local borderEnabled = (auraType == "DEBUFF" and db.debuffShowBorder ~= false) or (auraType ~= "DEBUFF" and db.buffShowBorder ~= false)
+            if borderEnabled and not masqueBorderControl and icon.border then
+                if auraType == "DEBUFF" and db.debuffBorderColorByType ~= false and not unitDeadOrOffline
+                   and auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and C_CurveUtil and C_CurveUtil.CreateColorCurve then
+                    if not DF.debuffBorderCurve then
+                        local curve = C_CurveUtil.CreateColorCurve()
+                        curve:SetType(Enum.LuaCurveType.Step)
+                        local noneColor = db.debuffBorderColorNone or {r = 0.8, g = 0.0, b = 0.0}
+                        local magicColor = db.debuffBorderColorMagic or {r = 0.2, g = 0.6, b = 1.0}
+                        local curseColor = db.debuffBorderColorCurse or {r = 0.6, g = 0.0, b = 1.0}
+                        local diseaseColor = db.debuffBorderColorDisease or {r = 0.6, g = 0.4, b = 0.0}
+                        local poisonColor = db.debuffBorderColorPoison or {r = 0.0, g = 0.6, b = 0.0}
+                        local bleedColor = db.debuffBorderColorBleed or {r = 1.0, g = 0.0, b = 0.0}
+                        curve:AddPoint(0, CreateColor(noneColor.r, noneColor.g, noneColor.b, 1.0))
+                        curve:AddPoint(1, CreateColor(magicColor.r, magicColor.g, magicColor.b, 1.0))
+                        curve:AddPoint(2, CreateColor(curseColor.r, curseColor.g, curseColor.b, 1.0))
+                        curve:AddPoint(3, CreateColor(diseaseColor.r, diseaseColor.g, diseaseColor.b, 1.0))
+                        curve:AddPoint(4, CreateColor(poisonColor.r, poisonColor.g, poisonColor.b, 1.0))
+                        curve:AddPoint(9, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
+                        curve:AddPoint(11, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
+                        DF.debuffBorderCurve = curve
                     end
-                else
-                    icon.border:SetColorTexture(0, 0, 0, 1.0)  -- Black for buffs and dead/offline debuffs
+                    local borderColor = C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, DF.debuffBorderCurve)
+                    if borderColor then
+                        local r, g, b = 0.8, 0, 0
+                        if borderColor.GetRGBA then
+                            r, g, b = borderColor:GetRGB()
+                        elseif borderColor.r then
+                            r, g, b = borderColor.r, borderColor.g, borderColor.b
+                        end
+                        icon.border:SetColor(r, g, b, 1.0)
+                    else
+                        local c = db.debuffBorderColorNone or {r = 0.8, g = 0, b = 0}
+                        icon.border:SetColor(c.r, c.g, c.b, 1.0)
+                    end
+                    icon.border:SetAlpha(0.8)
                 end
-                icon.border:SetAlpha(0.8)
                 icon.border:Show()
-            elseif not masqueBorderControl then
+            elseif not masqueBorderControl and icon.border then
                 icon.border:Hide()
             end
             -- When masqueBorderControl is true, border visibility is handled by ApplyAuraLayout
@@ -2591,12 +2660,7 @@ function DF:UpdateAuraIcons_Enhanced(frame, icons, auraType, maxAuras)
         icon.auraDuration = nil
         if icon.duration then icon.duration:Hide() end
         if icon.expiringTint then icon.expiringTint:Hide() end
-        if icon.expiringBorderAlphaContainer then
-            icon.expiringBorderAlphaContainer:Hide()
-            if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                icon.expiringBorderPulse:Stop()
-            end
-        end
+        if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
         icon:Hide()
     end
     
@@ -2644,12 +2708,7 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
             icon.auraDuration = nil
             if icon.duration then icon.duration:Hide() end
             if icon.expiringTint then icon.expiringTint:Hide() end
-            if icon.expiringBorderAlphaContainer then
-                icon.expiringBorderAlphaContainer:Hide()
-                if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                    icon.expiringBorderPulse:Stop()
-                end
-            end
+            if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
             icon:Hide()
         end
         local countKey = auraType == "BUFF" and "buffDisplayedCount" or "debuffDisplayedCount"
@@ -2669,12 +2728,7 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
             icon.auraDuration = nil
             if icon.duration then icon.duration:Hide() end
             if icon.expiringTint then icon.expiringTint:Hide() end
-            if icon.expiringBorderAlphaContainer then
-                icon.expiringBorderAlphaContainer:Hide()
-                if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                    icon.expiringBorderPulse:Stop()
-                end
-            end
+            if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
             icon:Hide()
         end
         local countKey = auraType == "BUFF" and "buffDisplayedCount" or "debuffDisplayedCount"
@@ -2719,7 +2773,7 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
     local masqueBorderControl = db.masqueBorderControl and DF.Masque and masqueActive
 
     -- Pre-fetch: border enabled (once per call)
-    local borderEnabled = (auraType == "DEBUFF" and db.debuffBorderEnabled ~= false) or (auraType ~= "DEBUFF" and db.buffBorderEnabled ~= false)
+    local borderEnabled = (auraType == "DEBUFF" and db.debuffShowBorder ~= false) or (auraType ~= "DEBUFF" and db.buffShowBorder ~= false)
 
     -- Pre-fetch: dead/offline state (once per call, not per icon)
     local unitDeadOrOffline = UnitIsDeadOrGhost(unit) or not UnitIsConnected(unit)
@@ -2855,6 +2909,12 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
                         end
                     end
 
+                    -- Expiring border (BUFF only): register/refresh on the shared
+                    -- DF.Expiring engine now that unit/aura/duration are known.
+                    if auraType == "BUFF" then
+                        UpdateBuffExpiringRegistration(icon, unit, auraInstanceID)
+                    end
+
                     -- Set cooldown
                     SafeSetCooldown(icon.cooldown, auraData, unit)
 
@@ -2891,54 +2951,52 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
                         end
                     end
 
-                    -- Border color (normal, not expiring)
-                    if borderEnabled and not masqueBorderControl then
-                        if auraType == "DEBUFF" and not unitDeadOrOffline then
-                            if db.debuffBorderColorByType ~= false and C_UnitAuras.GetAuraDispelTypeColor and C_CurveUtil and C_CurveUtil.CreateColorCurve then
-                                if not DF.debuffBorderCurve then
-                                    local curve = C_CurveUtil.CreateColorCurve()
-                                    curve:SetType(Enum.LuaCurveType.Step)
+                    -- Border colour: only the debuff colour-by-type case recolours
+                    -- per-update (secret dispel-type colour).  Static borders
+                    -- (buffs, debuffs with colour-by-type off) carry their colour
+                    -- /style/animation from ConfigureAuraIconBorder (BuildSpec).
+                    if borderEnabled and not masqueBorderControl and icon.border then
+                        if auraType == "DEBUFF" and db.debuffBorderColorByType ~= false and not unitDeadOrOffline
+                           and C_UnitAuras.GetAuraDispelTypeColor and C_CurveUtil and C_CurveUtil.CreateColorCurve then
+                            if not DF.debuffBorderCurve then
+                                local curve = C_CurveUtil.CreateColorCurve()
+                                curve:SetType(Enum.LuaCurveType.Step)
 
-                                    local noneColor = db.debuffBorderColorNone or {r = 0.8, g = 0.0, b = 0.0}
-                                    local magicColor = db.debuffBorderColorMagic or {r = 0.2, g = 0.6, b = 1.0}
-                                    local curseColor = db.debuffBorderColorCurse or {r = 0.6, g = 0.0, b = 1.0}
-                                    local diseaseColor = db.debuffBorderColorDisease or {r = 0.6, g = 0.4, b = 0.0}
-                                    local poisonColor = db.debuffBorderColorPoison or {r = 0.0, g = 0.6, b = 0.0}
-                                    local bleedColor = db.debuffBorderColorBleed or {r = 1.0, g = 0.0, b = 0.0}
+                                local noneColor = db.debuffBorderColorNone or {r = 0.8, g = 0.0, b = 0.0}
+                                local magicColor = db.debuffBorderColorMagic or {r = 0.2, g = 0.6, b = 1.0}
+                                local curseColor = db.debuffBorderColorCurse or {r = 0.6, g = 0.0, b = 1.0}
+                                local diseaseColor = db.debuffBorderColorDisease or {r = 0.6, g = 0.4, b = 0.0}
+                                local poisonColor = db.debuffBorderColorPoison or {r = 0.0, g = 0.6, b = 0.0}
+                                local bleedColor = db.debuffBorderColorBleed or {r = 1.0, g = 0.0, b = 0.0}
 
-                                    curve:AddPoint(0, CreateColor(noneColor.r, noneColor.g, noneColor.b, 1.0))
-                                    curve:AddPoint(1, CreateColor(magicColor.r, magicColor.g, magicColor.b, 1.0))
-                                    curve:AddPoint(2, CreateColor(curseColor.r, curseColor.g, curseColor.b, 1.0))
-                                    curve:AddPoint(3, CreateColor(diseaseColor.r, diseaseColor.g, diseaseColor.b, 1.0))
-                                    curve:AddPoint(4, CreateColor(poisonColor.r, poisonColor.g, poisonColor.b, 1.0))
-                                    curve:AddPoint(9, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
-                                    curve:AddPoint(11, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
+                                curve:AddPoint(0, CreateColor(noneColor.r, noneColor.g, noneColor.b, 1.0))
+                                curve:AddPoint(1, CreateColor(magicColor.r, magicColor.g, magicColor.b, 1.0))
+                                curve:AddPoint(2, CreateColor(curseColor.r, curseColor.g, curseColor.b, 1.0))
+                                curve:AddPoint(3, CreateColor(diseaseColor.r, diseaseColor.g, diseaseColor.b, 1.0))
+                                curve:AddPoint(4, CreateColor(poisonColor.r, poisonColor.g, poisonColor.b, 1.0))
+                                curve:AddPoint(9, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
+                                curve:AddPoint(11, CreateColor(bleedColor.r, bleedColor.g, bleedColor.b, 1.0))
 
-                                    DF.debuffBorderCurve = curve
-                                end
-
-                                local borderColor = C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, DF.debuffBorderCurve)
-                                if borderColor then
-                                    local r, g, b = 0.8, 0, 0
-                                    if borderColor.GetRGBA then
-                                        r, g, b = borderColor:GetRGB()
-                                    elseif borderColor.r then
-                                        r, g, b = borderColor.r, borderColor.g, borderColor.b
-                                    end
-                                    icon.border:SetColorTexture(r, g, b, 1.0)
-                                else
-                                    local c = db.debuffBorderColorNone or {r = 0.8, g = 0, b = 0}
-                                    icon.border:SetColorTexture(c.r, c.g, c.b, 1.0)
-                                end
-                            else
-                                icon.border:SetColorTexture(0.8, 0, 0, 1.0)
+                                DF.debuffBorderCurve = curve
                             end
-                        else
-                            icon.border:SetColorTexture(0, 0, 0, 1.0)
+
+                            local borderColor = C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, DF.debuffBorderCurve)
+                            if borderColor then
+                                local r, g, b = 0.8, 0, 0
+                                if borderColor.GetRGBA then
+                                    r, g, b = borderColor:GetRGB()
+                                elseif borderColor.r then
+                                    r, g, b = borderColor.r, borderColor.g, borderColor.b
+                                end
+                                icon.border:SetColor(r, g, b, 1.0)
+                            else
+                                local c = db.debuffBorderColorNone or {r = 0.8, g = 0, b = 0}
+                                icon.border:SetColor(c.r, c.g, c.b, 1.0)
+                            end
+                            icon.border:SetAlpha(0.8)
                         end
-                        icon.border:SetAlpha(0.8)
                         icon.border:Show()
-                    elseif not masqueBorderControl then
+                    elseif not masqueBorderControl and icon.border then
                         icon.border:Hide()
                     end
 
@@ -3012,12 +3070,7 @@ function DF:UpdateAuraIconsDirect(frame, icons, auraType, maxAuras)
         icon.auraDuration = nil
         if icon.duration then icon.duration:Hide() end
         if icon.expiringTint then icon.expiringTint:Hide() end
-        if icon.expiringBorderAlphaContainer then
-            icon.expiringBorderAlphaContainer:Hide()
-            if icon.expiringBorderPulse and icon.expiringBorderPulse:IsPlaying() then
-                icon.expiringBorderPulse:Stop()
-            end
-        end
+        if icon.expiringBorderGate then icon.expiringBorderGate:SetAlpha(0) end
         icon:Hide()
     end
     

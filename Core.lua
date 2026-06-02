@@ -582,24 +582,22 @@ function DF:LightweightUpdatePowerBarSize()
 end
 
 -- Update only border thickness
-function DF:LightweightUpdateBorderThickness()
+-- Re-apply the frame border (size, style, texture, colour, show/hide) to every
+-- live frame in the current mode. The full update path only re-styles party
+-- frames (UpdateAllFrames -> ApplyFrameLayout); the raid path (UpdateRaidLayout)
+-- only repositions headers, so border changes wouldn't reach live raid frames
+-- without a reload. This mirrors LightweightUpdateBorderColor but reconfigures
+-- the whole border via ApplyFrameBorder, so it covers both party and raid.
+function DF:LightweightUpdateBorder()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
-    if not db then return end
-    
-    local thickness = db.borderThickness or 1
-    
+    if not db or not DF.ApplyFrameBorder then return end
+
     local function UpdateBorder(frame)
-        if not frame or not frame.borderTextures then return end
-        for _, tex in pairs(frame.borderTextures) do
-            if tex.isVertical then
-                tex:SetWidth(thickness)
-            else
-                tex:SetHeight(thickness)
-            end
-        end
+        if not frame or not frame.border then return end
+        DF:ApplyFrameBorder(frame, db)
     end
-    
+
     IterateFramesInMode(mode, UpdateBorder)
 end
 
@@ -818,7 +816,7 @@ function DF:LightweightUpdateAuraPosition(auraType)
     local paddingY = auraType == "buff" and (db.buffPaddingY or 1) or (db.debuffPaddingY or 1)
     local wrap = auraType == "buff" and (db.buffWrap or 4) or (db.debuffWrap or 4)
     local growth = auraType == "buff" and (db.buffGrowth or "LEFT_UP") or (db.debuffGrowth or "RIGHT_UP")
-    local borderThickness = auraType == "buff" and (db.buffBorderThickness or 1) or (db.debuffBorderThickness or 1)
+    local borderThickness = auraType == "buff" and (db.buffBorderSize or 1) or (db.debuffBorderSize or 1)
     
     -- Apply pixel-perfect sizing to size and scale together, adjusting for border
     if db.pixelPerfect then
@@ -1216,7 +1214,17 @@ function DF:LightweightUpdateDefensiveIcons()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
+
+    -- Test mode owns multi-defensive layout (including the CENTER-growth
+    -- second pass), so re-anchoring the primary icon here without re-running
+    -- that pass would un-centre it and visually overlap icon 2. Delegate to
+    -- the full test render — it's what fires on slider drop anyway, just done
+    -- per drag tick too.
+    if (DF.testMode or DF.raidTestMode) and DF.UpdateAllTestDefensiveBar then
+        DF:UpdateAllTestDefensiveBar()
+        return
+    end
+
     local size = db.defensiveIconSize or 24
     local scale = db.defensiveIconScale or 1
     local x = db.defensiveIconX or 0
@@ -1235,43 +1243,27 @@ function DF:LightweightUpdateDefensiveIcons()
         borderSize = DF:PixelPerfect(borderSize)
     end
     
-    local function UpdateIcon(frame)
-        if not frame or not frame.defensiveIcon then return end
-        local icon = frame.defensiveIcon
-        
-        -- Update size and scale
-        icon:SetSize(size, size)
-        icon:SetScale(scale)
-        
-        -- Update position
-        icon:ClearAllPoints()
-        icon:SetPoint(anchor, frame, anchor, x, y)
-        
-        -- Update border size
-        local showBorder = db.defensiveIconShowBorder ~= false
-        if showBorder and icon.texture then
-            icon.texture:ClearAllPoints()
-            icon.texture:SetPoint("TOPLEFT", borderSize, -borderSize)
-            icon.texture:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-            
-            -- Update edge border sizes
-            if icon.borderLeft then icon.borderLeft:SetWidth(borderSize) end
-            if icon.borderRight then icon.borderRight:SetWidth(borderSize) end
-            if icon.borderTop then
-                icon.borderTop:SetHeight(borderSize)
-                icon.borderTop:ClearAllPoints()
-                icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-                icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            end
-            if icon.borderBottom then
-                icon.borderBottom:SetHeight(borderSize)
-                icon.borderBottom:ClearAllPoints()
-                icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            end
+    -- Per-icon visual update: border + artwork inset + duration text. Anything
+    -- that's the same for the primary icon AND every multi-defensive bar icon
+    -- (sizes, fonts) lives here. Positioning and per-icon layout (which differs
+    -- across multi-bar slots) stays with UpdateAllDefensiveBars.
+    local showBorder = db.defensiveIconShowBorder ~= false
+    local artInset = showBorder and borderSize or 0
+
+    local function ApplyVisuals(icon)
+        if not icon then return end
+        if icon.border then
+            local spec = DF.Border:BuildSpec(db, "defensiveIcon", { iconMode = true })
+            spec.enabled = showBorder
+            spec.size    = borderSize  -- already pixel-perfected above
+            DF.Border:Apply(icon.border, spec)
         end
-        
-        -- Find nativeCooldownText if not already found
+        if icon.texture then
+            icon.texture:ClearAllPoints()
+            icon.texture:SetPoint("TOPLEFT", artInset, -artInset)
+            icon.texture:SetPoint("BOTTOMRIGHT", -artInset, artInset)
+        end
+
         if not icon.nativeCooldownText and icon.cooldown then
             local regions = {icon.cooldown:GetRegions()}
             for _, region in ipairs(regions) do
@@ -1281,8 +1273,6 @@ function DF:LightweightUpdateDefensiveIcons()
                 end
             end
         end
-        
-        -- Update duration text if it exists
         if icon.nativeCooldownText then
             local durationSize = 10 * durScale
             DF:SafeSetFont(icon.nativeCooldownText, durFont, durationSize, durOutline)
@@ -1290,7 +1280,32 @@ function DF:LightweightUpdateDefensiveIcons()
             icon.nativeCooldownText:SetPoint("CENTER", icon, "CENTER", durX, durY)
         end
     end
-    
+
+    local function UpdateIcon(frame)
+        if not frame or not frame.defensiveIcon then return end
+        local icon = frame.defensiveIcon
+
+        -- Size / scale / position belong to the primary icon only; multi-bar
+        -- slots are laid out by UpdateAllDefensiveBars.
+        icon:SetSize(size, size)
+        icon:SetScale(scale)
+        icon:ClearAllPoints()
+        icon:SetPoint(anchor, frame, anchor, x, y)
+
+        ApplyVisuals(icon)
+
+        -- Multi-defensive bar icons share the same border + artwork + duration
+        -- styling as the primary. Without this loop the border slider only
+        -- updated the leftmost icon mid-drag and the rest stayed at the old
+        -- border size, which in test mode also caused a layout reflow that
+        -- temporarily lost one icon.
+        if frame.defensiveBarIcons then
+            for _, extraIcon in pairs(frame.defensiveBarIcons) do
+                ApplyVisuals(extraIcon)
+            end
+        end
+    end
+
     IterateFramesInMode(mode, UpdateIcon)
 end
 
@@ -1320,32 +1335,21 @@ function DF:LightweightUpdateMissingBuff()
             frame.missingBuffFrame:ClearAllPoints()
             frame.missingBuffFrame:SetPoint(anchor, frame, anchor, x, y)
             
-            -- Update border size (positions icon within border)
+            -- Border via unified DF.Border backend (Stage 4.1). BuildSpec
+            -- reads canonical missingBuffIcon* keys; we override size with
+            -- the locally pixel-perfected value. Icon insets by visible
+            -- border thickness so artwork doesn't overlap edges.
+            if frame.missingBuffBorder then
+                local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+                spec.enabled = showBorder
+                spec.size    = borderSize
+                DF.Border:Apply(frame.missingBuffBorder, spec)
+            end
             if frame.missingBuffIcon then
+                local artInset = showBorder and borderSize or 0
                 frame.missingBuffIcon:ClearAllPoints()
-                if showBorder then
-                    frame.missingBuffIcon:SetPoint("TOPLEFT", borderSize, -borderSize)
-                    frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-                    
-                    -- Update edge border sizes
-                    if frame.missingBuffBorderLeft then frame.missingBuffBorderLeft:SetWidth(borderSize) end
-                    if frame.missingBuffBorderRight then frame.missingBuffBorderRight:SetWidth(borderSize) end
-                    if frame.missingBuffBorderTop then
-                        frame.missingBuffBorderTop:SetHeight(borderSize)
-                        frame.missingBuffBorderTop:ClearAllPoints()
-                        frame.missingBuffBorderTop:SetPoint("TOPLEFT", borderSize, 0)
-                        frame.missingBuffBorderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-                    end
-                    if frame.missingBuffBorderBottom then
-                        frame.missingBuffBorderBottom:SetHeight(borderSize)
-                        frame.missingBuffBorderBottom:ClearAllPoints()
-                        frame.missingBuffBorderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                        frame.missingBuffBorderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-                    end
-                else
-                    frame.missingBuffIcon:SetPoint("TOPLEFT", 0, 0)
-                    frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", 0, 0)
-                end
+                frame.missingBuffIcon:SetPoint("TOPLEFT", artInset, -artInset)
+                frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -artInset, artInset)
             end
         end
     end
@@ -1486,7 +1490,7 @@ function DF:LightweightUpdateAuraBorder(auraType)
     local iconsKey = auraType == "buff" and "buffIcons" or "debuffIcons"
     
     -- Regular border settings
-    local thickness = auraType == "buff" and (db.buffBorderThickness or 1) or (db.debuffBorderThickness or 1)
+    local thickness = auraType == "buff" and (db.buffBorderSize or 1) or (db.debuffBorderSize or 1)
     local inset = auraType == "buff" and (db.buffBorderInset or 0) or (db.debuffBorderInset or 0)
     
     -- Expiring border settings (buffs only)
@@ -1501,46 +1505,17 @@ function DF:LightweightUpdateAuraBorder(auraType)
         if not frame or not frame[iconsKey] then return end
         for idx, icon in ipairs(frame[iconsKey]) do
             if icon then
-                -- Update regular border
+                -- Update regular border (DF.Border geometry via shared helper).
+                -- Gated on icon.border, so it only reconfigures an existing
+                -- (enabled) border — pass enabled = true.
                 if icon.border then
-                    icon.border:ClearAllPoints()
-                    icon.border:SetPoint("TOPLEFT", -thickness + inset, thickness - inset)
-                    icon.border:SetPoint("BOTTOMRIGHT", thickness - inset, -thickness + inset)
+                    DF:ConfigureAuraIconBorder(icon, db, auraType, true)
                 end
                 
-                -- Update expiring border (buffs only) - store settings on icon
+                -- Update expiring border (buffs only) — re-configure the unified
+                -- DF.Border overlay (geometry/colour/style/animation) live.
                 if auraType == "buff" then
-                    icon.expiringBorderThickness = expiringThickness
-                    icon.expiringBorderInset = expiringInset
-                    
-                    -- Update expiring border textures if they exist
-                    if icon.expiringBorderTop then
-                        if DF.debugSliderUpdates and idx == 1 then
-                            print("  - Updating icon " .. idx .. " expiring border")
-                        end
-                        -- Set thickness
-                        icon.expiringBorderTop:SetHeight(expiringThickness)
-                        icon.expiringBorderBottom:SetHeight(expiringThickness)
-                        icon.expiringBorderLeft:SetWidth(expiringThickness)
-                        icon.expiringBorderRight:SetWidth(expiringThickness)
-                        
-                        -- Position with inset
-                        icon.expiringBorderLeft:ClearAllPoints()
-                        icon.expiringBorderLeft:SetPoint("TOPLEFT", icon, "TOPLEFT", expiringInset, -expiringInset)
-                        icon.expiringBorderLeft:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", expiringInset, expiringInset)
-                        
-                        icon.expiringBorderRight:ClearAllPoints()
-                        icon.expiringBorderRight:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -expiringInset, -expiringInset)
-                        icon.expiringBorderRight:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -expiringInset, expiringInset)
-                        
-                        icon.expiringBorderTop:ClearAllPoints()
-                        icon.expiringBorderTop:SetPoint("TOPLEFT", icon.expiringBorderLeft, "TOPRIGHT", 0, 0)
-                        icon.expiringBorderTop:SetPoint("TOPRIGHT", icon.expiringBorderRight, "TOPLEFT", 0, 0)
-                        
-                        icon.expiringBorderBottom:ClearAllPoints()
-                        icon.expiringBorderBottom:SetPoint("BOTTOMLEFT", icon.expiringBorderLeft, "BOTTOMRIGHT", 0, 0)
-                        icon.expiringBorderBottom:SetPoint("BOTTOMRIGHT", icon.expiringBorderRight, "BOTTOMLEFT", 0, 0)
-                    end
+                    DF:ConfigureExpiringBorder(icon, db, "buffExpiring")
                 end
             end
         end
@@ -1576,7 +1551,11 @@ function DF:LightweightUpdateFrameLevel(elementType)
             if level > 0 then
                 frame.defensiveIcon:SetFrameLevel(frameBaseLevel + level)
             else
-                frame.defensiveIcon:SetFrameLevel(baseLevel + 15)
+                -- +26 keeps the defensive icon above the buff/debuff auras AND
+                -- their borders: an aura icon sits at contentOverlay+15 with its
+                -- DF.Border +10 on top (= +25), so +26 clears the whole aura.
+                -- The defensive is an important alert and shouldn't be obscured.
+                frame.defensiveIcon:SetFrameLevel(baseLevel + 26)
             end
         elseif elementType == "role" and frame.roleIcon then
             local level = db.roleIconFrameLevel or 0
@@ -1636,33 +1615,79 @@ function DF:GetClassColor(class)
     return RAID_CLASS_COLORS[class] or DEFAULT_CLASS_COLOR
 end
 
--- Resolve the frame border colour: the static borderColor by default, or the
--- unit's class colour (RGB) with the static colour's alpha when borderClassColor
--- is enabled. Non-player / unknown-class units fall back to the static colour.
--- Handles test frames via their fake class data.
+-- Resolve the frame border colour: the static borderColor by default, or
+-- (Stage 2.1+) the unit's class / role colour with its own alpha slider when
+-- the canonical frameBorderColorSource picks one. Non-player / unknown-class
+-- units fall back to the static colour. Handles test frames via fake class
+-- and role data. Mirrors Border:BuildSpec so the lightweight live-update
+-- path (LightweightUpdateBorderColor) renders identically to the full Apply
+-- path on every drag tick of the colour picker / alpha slider.
 function DF:GetFrameBorderColor(frame, db)
-    local base = db.borderColor or DEFAULT_CLASS_COLOR
+    local base = db.frameBorderColor or DEFAULT_CLASS_COLOR
     local br, bg, bb, ba = base.r or 0, base.g or 0, base.b or 0, base.a or 1
-    if not (frame and db.borderClassColor) then
+
+    -- Resolve source the same way Border:BuildSpec does, so the lightweight
+    -- live-update path (LightweightUpdateBorderColor) renders identically to
+    -- the full Apply path. ColorSource is the canonical Stage 2 key; the
+    -- legacy booleans are honoured as fallback in case the migration shim
+    -- hasn't run yet for some code path.
+    local source = db.frameBorderColorSource
+    if not source then
+        if db.frameBorderUseClassColor     then source = "CLASS"
+        elseif db.frameBorderUseRoleColor  then source = "ROLE"
+        else                                    source = "STATIC" end
+    end
+    if source == "STATIC" or not frame then
         return br, bg, bb, ba
     end
 
-    local class
-    if frame.dfIsTestFrame then
-        local testData = DF.GetTestUnitData and DF:GetTestUnitData(frame.index, frame.isRaidFrame)
-        class = testData and testData.class
-    elseif frame.unit and UnitExists(frame.unit) then
-        -- No UnitIsPlayer gate: class-based NPC party members (e.g. follower
-        -- dungeon companions) have a class token too, and the class-coloured
-        -- health bars colour them, so the border should match. Units with no
-        -- class token (RAID_CLASS_COLORS miss) fall back to the static colour.
-        class = select(2, UnitClass(frame.unit))
+    -- CLASS / ROLE: RGB from the resolver, alpha from the picker's own alpha
+    -- component (frameBorderColor.a — same `ba` above). The unified Border
+    -- Alpha slider (Stage 2.4) edits this same component, so picker and
+    -- slider stay in sync automatically; no separate alpha key to read.
+    local a = ba
+
+    if source == "CLASS" then
+        local class
+        if frame.dfIsTestFrame then
+            local testData = DF.GetTestUnitData and DF:GetTestUnitData(frame.index, frame.isRaidFrame)
+            class = testData and testData.class
+        elseif frame.unit and UnitExists(frame.unit) then
+            -- No UnitIsPlayer gate: class-based NPC party members (e.g.
+            -- follower dungeon companions) have a class token too. Units
+            -- with no class token fall back to the static colour.
+            class = select(2, UnitClass(frame.unit))
+        end
+        if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+            local c = DF:GetClassColor(class)
+            return c.r, c.g, c.b, a
+        end
+        return br, bg, bb, a
+    elseif source == "ROLE" then
+        local rc = DF.db and DF.db.roleColors
+        local role
+        if frame.dfIsTestFrame then
+            local testData = DF.GetTestUnitData and DF:GetTestUnitData(frame.index, frame.isRaidFrame)
+            role = testData and testData.role
+        elseif frame.unit and UnitExists(frame.unit) and UnitGroupRolesAssigned then
+            role = UnitGroupRolesAssigned(frame.unit)
+            -- UnitGroupRolesAssigned returns "NONE" outside instances where
+            -- roles aren't assigned (solo, world content). For the player,
+            -- fall back to spec role so role colour stays meaningful. Other
+            -- units expose no public spec API; they stay on picker fallback.
+            if (not role or role == "NONE") and UnitIsUnit and UnitIsUnit(frame.unit, "player")
+               and GetSpecialization and GetSpecializationRole then
+                local spec = GetSpecialization()
+                if spec then role = GetSpecializationRole(spec) end
+            end
+        end
+        local c = rc and role and role ~= "NONE" and (rc[role] or rc[string.lower(role)])
+        if c then
+            return c.r or br, c.g or bg, c.b or bb, a
+        end
+        return br, bg, bb, a
     end
 
-    if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
-        local c = DF:GetClassColor(class)
-        return c.r, c.g, c.b, ba
-    end
     return br, bg, bb, ba
 end
 
@@ -2008,17 +2033,19 @@ function DF:LightweightUpdateBorderColor()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
+
     local function UpdateFrame(frame)
         if not frame or not frame.border then return end
         -- Route through SetBorderColor so it recolours whichever mode (solid
-        -- edges or texture backdrop) is currently active. Resolved per-frame so
-        -- class-coloured borders pick up each unit's colour.
+        -- edges or texture backdrop) is currently active. Resolved per-frame
+        -- via GetFrameBorderColor so class / role colours pick up each
+        -- unit's resolved colour, and the dedicated frameBorderAlpha slider
+        -- is honoured on every drag tick.
         if frame.border.SetBorderColor then
             frame.border:SetBorderColor(DF:GetFrameBorderColor(frame, db))
         end
     end
-    
+
     IterateFramesInMode(mode, UpdateFrame)
 end
 
@@ -2191,20 +2218,15 @@ function DF:LightweightUpdateExpiringBorderColor()
     local db = DF.db[mode]
     if not db then return end
     
-    local color = db.buffExpiringBorderColor or {r = 1, g = 0.5, b = 0, a = 1}
-    
     local function UpdateIcons(frame)
         if not frame or not frame.buffIcons then return end
         for _, icon in ipairs(frame.buffIcons) do
-            if icon and icon.expiringBorderTop then
-                icon.expiringBorderTop:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-                icon.expiringBorderBottom:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-                icon.expiringBorderLeft:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-                icon.expiringBorderRight:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-            end
+            -- Re-apply the unified expiring border so a live colour-picker change
+            -- repaints the static colour (and keeps style/animation in sync).
+            DF:ConfigureExpiringBorder(icon, db, "buffExpiring")
         end
     end
-    
+
     IterateFramesInMode(mode, UpdateIcons)
 end
 
@@ -2233,26 +2255,19 @@ function DF:LightweightUpdateMissingBuffBorderColor()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
-    local color = db.missingBuffIconBorderColor or {r = 1, g = 0, b = 0, a = 1}
-    
+
     local function UpdateIcon(frame)
-        if frame then
-            if frame.missingBuffBorderLeft then
-                frame.missingBuffBorderLeft:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-            end
-            if frame.missingBuffBorderRight then
-                frame.missingBuffBorderRight:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-            end
-            if frame.missingBuffBorderTop then
-                frame.missingBuffBorderTop:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-            end
-            if frame.missingBuffBorderBottom then
-                frame.missingBuffBorderBottom:SetColorTexture(color.r, color.g, color.b, color.a or 1)
-            end
+        if frame and frame.missingBuffBorder then
+            -- Route through BuildSpec + Apply (Stage 4.1) so the colour
+            -- pick respects ColorSource / gradient / etc. The full-render
+            -- path in Frames/Icons.lua does the same thing — keeping the
+            -- live drag-update consistent so dragging the picker on a
+            -- gradient or class-coloured border updates correctly.
+            DF.Border:Apply(frame.missingBuffBorder,
+                DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true }))
         end
     end
-    
+
     IterateFramesInMode(mode, UpdateIcon)
 end
 
@@ -2261,36 +2276,49 @@ function DF:LightweightUpdateDefensiveIconColors()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
+
+    -- Same test-mode delegation as LightweightUpdateDefensiveIcons: the test
+    -- render owns multi-defensive layout; touching individual icons here can
+    -- leave the primary anchored away from the centred-layout position.
+    if (DF.testMode or DF.raidTestMode) and DF.UpdateAllTestDefensiveBar then
+        DF:UpdateAllTestDefensiveBar()
+        return
+    end
+
     local borderColor = db.defensiveIconBorderColor or {r = 0, g = 0, b = 0, a = 1}
     local durationColor = db.defensiveIconDurationColor or {r = 1, g = 1, b = 1}
     
+    local function ApplyColors(icon, unit)
+        if not icon then return end
+        if icon.border then
+            -- ctx.unit lets the Class/Role resolvers fire on the live update
+            -- path. ctx.frame additionally lets test frames preview
+            -- Class/Role via GetTestUnitData (Stage 4.0). spec.color is NOT
+            -- overridden — BuildSpec resolves it via the ColorSource per
+            -- unit, so a static override here would clobber CLASS/ROLE.
+            local spec = DF.Border:BuildSpec(db, "defensiveIcon", {
+                unit  = unit,
+                frame = icon.unitFrame,
+                iconMode = true,
+            })
+            DF.Border:Apply(icon.border, spec)
+        end
+        -- Skip duration recolour when colorByTime is active — RenderDefensiveBarIcon owns it then.
+        if not db.defensiveIconDurationColorByTime and icon.nativeCooldownText then
+            icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+        end
+    end
+
     local function UpdateIcon(frame)
         if not frame or not frame.defensiveIcon then return end
-        local icon = frame.defensiveIcon
-        
-        -- Update border colors (edge borders)
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-        
-        -- Update duration text color (skip when colorByTime is active — RenderDefensiveBarIcon handles it)
-        if not db.defensiveIconDurationColorByTime then
-            if icon.nativeCooldownText then
-                icon.nativeCooldownText:SetTextColor(durationColor.r, durationColor.g, durationColor.b, 1)
+        ApplyColors(frame.defensiveIcon, frame.unit)
+        if frame.defensiveBarIcons then
+            for _, extraIcon in pairs(frame.defensiveBarIcons) do
+                ApplyColors(extraIcon, frame.unit)
             end
         end
     end
-    
+
     IterateFramesInMode(mode, UpdateIcon)
 end
 
@@ -2329,21 +2357,19 @@ function DF:LightweightUpdateResourceBarBorder()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
-    local enabled = db.resourceBarBorderEnabled
-    local borderColor = db.resourceBarBorderColor or {r = 0, g = 0, b = 0, a = 1}
-    
+
     local function UpdateFrame(frame)
         if not frame or not frame.dfPowerBar or not frame.dfPowerBar.border then return end
-        local border = frame.dfPowerBar.border
-        if enabled then
-            border:Show()
-            border:SetBackdropBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        else
-            border:Hide()
-        end
+        -- Route through BuildSpec + Apply (Stage 4.2) so the live drag-
+        -- update path renders identically to ApplyResourceBarLayout.
+        -- ctx.unit / ctx.frame let Class / Role resolvers fire.
+        DF.Border:Apply(frame.dfPowerBar.border,
+            DF.Border:BuildSpec(db, "resourceBar", {
+                unit  = frame.unit,
+                frame = frame,
+            }))
     end
-    
+
     IterateFramesInMode(mode, UpdateFrame)
 end
 
@@ -2352,14 +2378,16 @@ function DF:LightweightUpdateResourceBarBorderColor()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
-    local borderColor = db.resourceBarBorderColor or {r = 0, g = 0, b = 0, a = 1}
-    
+
     local function UpdateFrame(frame)
         if not frame or not frame.dfPowerBar or not frame.dfPowerBar.border then return end
-        frame.dfPowerBar.border:SetBackdropBorderColor(borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
+        DF.Border:Apply(frame.dfPowerBar.border,
+            DF.Border:BuildSpec(db, "resourceBar", {
+                unit  = frame.unit,
+                frame = frame,
+            }))
     end
-    
+
     IterateFramesInMode(mode, UpdateFrame)
 end
 
@@ -2479,7 +2507,7 @@ function DF:LightweightUpdateDebuffBorderColors()
     if not inTestMode then return end
     
     -- Skip if borders not enabled or not using color by type
-    if db.debuffBorderEnabled == false or db.debuffBorderColorByType == false then
+    if db.debuffShowBorder == false or db.debuffBorderColorByType == false then
         return
     end
     
@@ -2501,7 +2529,7 @@ function DF:LightweightUpdateDebuffBorderColors()
                 -- Get the debuff type stored on the icon (only set in test mode)
                 local debuffType = icon.debuffType
                 local color = colors[debuffType] or defaultColor
-                icon.border:SetColorTexture(color.r, color.g, color.b, 0.8)
+                icon.border:SetColor(color.r, color.g, color.b, 0.8)
             end
         end
     end
@@ -3035,6 +3063,121 @@ eventFrame:RegisterEvent("PLAYER_TALENT_UPDATE")  -- Fires when talents change
 eventFrame:RegisterEvent("UNIT_PET")  -- Fires when a pet is summoned/dismissed
 eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")  -- Fires when entering/leaving rested area
 
+-- One-shot copy of legacy Frame Border saved-variable keys to the canonical
+-- `frame*Border*` naming the unified DF.Border / CreateBorderControls helpers
+-- expect. Called per-mode from ADDON_LOADED. Idempotent: if the new key
+-- already exists in the profile we leave it (the user has saved with the new
+-- key); otherwise we adopt the legacy value. Legacy keys are NOT deleted so
+-- the migration can be safely re-run and old profiles stay readable by a
+-- previous addon version if the user rolls back.
+function DF:MigrateFrameBorderKeys(modeDb)
+    if not modeDb then return end
+    local function adopt(newKey, oldKey)
+        if modeDb[newKey] == nil and modeDb[oldKey] ~= nil then
+            modeDb[newKey] = modeDb[oldKey]
+        end
+    end
+    adopt("frameShowBorder",         "showFrameBorder")
+    adopt("frameBorderSize",         "borderSize")
+    adopt("frameBorderColor",        "borderColor")
+    adopt("frameBorderStyle",        "borderStyle")
+    adopt("frameBorderTexture",      "borderTexture")
+    adopt("frameBorderUseClassColor","borderClassColor")
+
+    -- ColorSource (single segmented key) supersedes the independent
+    -- UseClassColor / UseRoleColor booleans. Copy whichever was true into
+    -- the new key; leave the booleans intact so an old client can still
+    -- read them.
+    if modeDb.frameBorderColorSource == nil then
+        if modeDb.frameBorderUseClassColor     then modeDb.frameBorderColorSource = "CLASS"
+        elseif modeDb.frameBorderUseRoleColor  then modeDb.frameBorderColorSource = "ROLE"
+        end
+    end
+
+    -- Gradient was previously an independent boolean (`<prefix>BorderGradientEnabled`)
+    -- that overlaid on top of Style; Stage 2.3 folded it into Style as a
+    -- third option so the user can't get conflicting "Solid + Class Color +
+    -- Gradient" combinations. Adopt: if the old boolean is true and the
+    -- style isn't already explicitly set to TEXTURE (which would be a
+    -- deliberate other-mode choice), promote to "GRADIENT". Old boolean is
+    -- left in place for rollback safety.
+    local function adoptGradientStyle(prefix)
+        local styleKey   = prefix .. "BorderStyle"
+        local enabledKey = prefix .. "BorderGradientEnabled"
+        if modeDb[enabledKey] == true and modeDb[styleKey] ~= "TEXTURE"
+                and modeDb[styleKey] ~= "GRADIENT" then
+            modeDb[styleKey] = "GRADIENT"
+        end
+    end
+    adoptGradientStyle("frame")
+    adoptGradientStyle("defensiveIcon")
+end
+
+-- Move the role-border colour set from per-mode storage (Stage 2 default
+-- placement) up to profile level under DF.db.roleColors so the global Colors
+-- settings page can manage them alongside class colours. Idempotent: only
+-- adopts a mode-level value into profile-level when profile-level doesn't
+-- already have one set, and only seeds defaults when neither exists. Called
+-- once per ADDON_LOADED after both modes have been migrated.
+function DF:MigrateRoleBorderColors()
+    if not DF.db then return end
+    if not DF.db.roleColors then DF.db.roleColors = {} end
+    local rc = DF.db.roleColors
+
+    local DEFAULTS = {
+        TANK    = {r = 0.20, g = 0.55, b = 0.95, a = 1},
+        HEALER  = {r = 0.20, g = 0.80, b = 0.30, a = 1},
+        DAMAGER = {r = 0.85, g = 0.20, b = 0.20, a = 1},
+    }
+
+    -- Adopt from whichever mode-level set was customised first.
+    local sources = { DF.db.party, DF.db.raid }
+    local function adopt(role, modeKey)
+        if rc[role] then return end
+        for _, m in ipairs(sources) do
+            if m and m[modeKey] then rc[role] = m[modeKey]; return end
+        end
+        rc[role] = DEFAULTS[role]
+    end
+    adopt("TANK",    "roleBorderColorTank")
+    adopt("HEALER",  "roleBorderColorHealer")
+    adopt("DAMAGER", "roleBorderColorDamager")
+end
+
+-- Adopt the legacy `resourceBarBorderEnabled` boolean into the canonical
+-- `resourceBarShowBorder` key the unified DF.Border helper expects. Same
+-- pattern as MigrateFrameBorderKeys — idempotent, leaves the legacy key
+-- in place for rollback safety. Stage 4.2.
+function DF:MigrateResourceBarBorderKeys(modeDb)
+    if not modeDb then return end
+    if modeDb.resourceBarShowBorder == nil and modeDb.resourceBarBorderEnabled ~= nil then
+        modeDb.resourceBarShowBorder = modeDb.resourceBarBorderEnabled
+    end
+end
+
+-- Aura icon borders: rename the legacy buff/debuff keys to the canonical
+-- ShowBorder / BorderSize so they plug into BuildSpec + CreateBorderControls
+-- (Stage 5.5 Phase 2 — full border toolkit for buff/debuff). Same idempotent,
+-- leaves-the-legacy-key pattern as MigrateFrameBorderKeys.
+function DF:MigrateAuraBorderKeys(modeDb)
+    if not modeDb then return end
+    for _, p in ipairs({ "buff", "debuff" }) do
+        if modeDb[p .. "ShowBorder"] == nil and modeDb[p .. "BorderEnabled"] ~= nil then
+            modeDb[p .. "ShowBorder"] = modeDb[p .. "BorderEnabled"]
+        end
+        if modeDb[p .. "BorderSize"] == nil and modeDb[p .. "BorderThickness"] ~= nil then
+            modeDb[p .. "BorderSize"] = modeDb[p .. "BorderThickness"]
+        end
+    end
+    -- Expiring border: the legacy single Pulsate bool becomes the unified
+    -- Expiring Animation type (true -> DF Pulsate, false -> None).  Only seed
+    -- when an old key exists and the new one hasn't been set yet, so existing
+    -- configs keep their pulse and new profiles use their own default.
+    if modeDb.buffExpiringBorderAnimationType == nil and modeDb.buffExpiringBorderPulsate ~= nil then
+        modeDb.buffExpiringBorderAnimationType = modeDb.buffExpiringBorderPulsate and "DF_PULSATE" or "NONE"
+    end
+end
+
 -- The handler body is stored on DF as _MainEventDispatcher so the profiler
 -- can swap it for an instrumented version at runtime. The frame's actual
 -- script is a thin trampoline that calls through DF — re-binding takes
@@ -3182,8 +3325,37 @@ DF._MainEventDispatcher = function(self, event, arg1)
         if not DF.db.raid then DF.db.raid = DF:DeepCopy(DF.RaidDefaults) end
         
         -- Ensure raidAutoProfiles exists in current profile
-        if not DF.db.raidAutoProfiles then 
-            DF.db.raidAutoProfiles = DF:DeepCopy(DF.RaidAutoProfilesDefaults) 
+        if not DF.db.raidAutoProfiles then
+            DF.db.raidAutoProfiles = DF:DeepCopy(DF.RaidAutoProfilesDefaults)
+        end
+
+        -- Migrate legacy Frame Border keys (borderSize / showFrameBorder /
+        -- borderColor / borderStyle / borderTexture / borderClassColor /
+        -- frameBorderUseClassColor / frameBorderUseRoleColor) to the canonical
+        -- `frame*Border*` naming + new frameBorderColorSource segmented key.
+        -- One-shot copy per mode: if a new key already exists we leave it
+        -- (user has already saved with the new key); otherwise we adopt the
+        -- old value.
+        if DF.MigrateFrameBorderKeys then
+            DF:MigrateFrameBorderKeys(DF.db.party)
+            DF:MigrateFrameBorderKeys(DF.db.raid)
+        end
+        -- Resource Bar: resourceBarBorderEnabled → resourceBarShowBorder
+        -- (Stage 4.2 wire-up to the unified DF.Border helper).
+        if DF.MigrateResourceBarBorderKeys then
+            DF:MigrateResourceBarBorderKeys(DF.db.party)
+            DF:MigrateResourceBarBorderKeys(DF.db.raid)
+        end
+        -- Aura icons: buff/debuffBorderEnabled → ShowBorder, BorderThickness →
+        -- BorderSize (Stage 5.5 Phase 2 — full toolkit for buff/debuff borders).
+        if DF.MigrateAuraBorderKeys then
+            DF:MigrateAuraBorderKeys(DF.db.party)
+            DF:MigrateAuraBorderKeys(DF.db.raid)
+        end
+        -- Promote role border colours from per-mode storage to profile-level
+        -- DF.db.roleColors so the global Colors settings page manages them.
+        if DF.MigrateRoleBorderColors then
+            DF:MigrateRoleBorderColors()
         end
         
         -- Ensure classColors table exists (shared across party/raid)
@@ -3666,6 +3838,22 @@ DF._MainEventDispatcher = function(self, event, arg1)
             for profileName, profile in pairs(DandersFramesDB_v2.profiles) do
                 MigrateAuraDesignerToInstances(profile.party)
                 MigrateAuraDesignerToInstances(profile.raid)
+            end
+        end
+
+        -- Stage 5.1b: rename per-aura icon border keys to canonical
+        -- ShowBorder / BorderSize / BorderInset.  Idempotent; safe to
+        -- run on already-migrated configs.  Defined in
+        -- AuraDesigner/Options.lua; load order guarantees that file
+        -- has registered DF.MigrateAuraDesignerIconBorderKeys by here.
+        if DF.MigrateAuraDesignerIconBorderKeys then
+            DF:MigrateAuraDesignerIconBorderKeys(DF.db.party)
+            DF:MigrateAuraDesignerIconBorderKeys(DF.db.raid)
+            if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+                for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                    DF:MigrateAuraDesignerIconBorderKeys(profile.party)
+                    DF:MigrateAuraDesignerIconBorderKeys(profile.raid)
+                end
             end
         end
 

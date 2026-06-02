@@ -746,12 +746,16 @@ end
 --   dbTable/dbKey: reads/writes the selected value
 --   callback: called after a selection change
 --   totalWidth: total container width (buttons divide it evenly with small gaps)
-function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callback, totalWidth)
+function GUI:CreateSegmentedButtonGroup(parent, options, dbTable, dbKey, callback, totalWidth, minBtnWidthOpt)
     local container = CreateFrame("Frame", nil, parent)
     totalWidth = totalWidth or 560
     local btnHeight = 38  -- compact modern height: label + subtitle fit snugly
     local gap = 4
-    local minBtnWidth = 110  -- below this, buttons wrap to next row
+    -- minBtnWidth governs when buttons wrap. The default suits 2-3 segment
+    -- groups with full-word labels in the standard ~560px settings panels;
+    -- caller can pass a smaller value when packing more / shorter segments
+    -- into a narrower group (e.g. a 260px border-controls column).
+    local minBtnWidth = minBtnWidthOpt or 110
     container:SetSize(totalWidth, btnHeight)
 
     local n = #options
@@ -1029,6 +1033,23 @@ function GUI:CreateInfoBanner(parent, opts)
                 end
             end
             g:LayoutChildren()
+            -- Also bubble up to the page so its column layout sees the
+            -- group's new calculatedHeight. Without this, sibling groups
+            -- in the same column stay anchored to the OLD bottom of this
+            -- group, and the group's backdrop (now taller) visibly
+            -- overshoots past those siblings' anchor — rendering as an
+            -- empty rectangle of group backdrop above the next group.
+            -- Hit when an animation type is first selected in a border
+            -- panel: banner appears, async recompute grows the group,
+            -- next group below stays put, gap shows.
+            local p = g:GetParent()
+            while p do
+                if type(p.RefreshStates) == "function" and p.children then
+                    p:RefreshStates()
+                    return
+                end
+                p = p:GetParent()
+            end
             return
         end
         -- Otherwise, walk up to find a host page.
@@ -1053,9 +1074,28 @@ function GUI:CreateInfoBanner(parent, opts)
     end
 
     local pending = false
+    -- Set whenever a RecomputeHeight() request was deferred because the
+    -- banner was invisible.  Cleared once a real recompute runs after the
+    -- banner becomes visible.  OnShow checks this flag to decide whether to
+    -- trigger a fresh recompute when the widget surfaces.
+    local deferredWhileHidden = false
     local function DoRecomputeHeight()
         pending = false
         if recomputing then return end
+        -- Skip when the banner is hidden — GetStringHeight on a hidden
+        -- FontString returns an unreliable value (width depends on the
+        -- parent's layout having run, and LayoutChildren doesn't SetWidth
+        -- on hidden widgets), and the resulting SetHeight + Trigger­Host­
+        -- Relayout cascade costs real work proportional to the host
+        -- SettingsGroup's widget count.  For consumers that mount banners
+        -- behind hideOn predicates that default to true (animation perf
+        -- warning at type=NONE) this used to fire one cascade per banner
+        -- at every GUI open — N indicator cards × ~25-widget group ×
+        -- proxy-backed dbTable in Aura Designer = sustained lockup.
+        if not banner:IsVisible() then
+            deferredWhileHidden = true
+            return
+        end
         local h = math.ceil(MeasureContent())
         -- Chrome: 13 px top (icon at -10, text nudged -3) + 9 px bottom = 22 px.
         local newH = math.max(opts.minHeight or 28, h + 22)
@@ -1094,9 +1134,35 @@ function GUI:CreateInfoBanner(parent, opts)
         end
     end
 
-    banner:SetScript("OnSizeChanged", function()
-        RecomputeHeight()
-    end)
+    -- opts.staticHeight: skip ALL recompute machinery (no OnSizeChanged
+    -- binding, no OnShow re-measure, no DoRecomputeHeight cascade).
+    -- For consumers whose text never changes after construction AND who
+    -- can predict a sensible fixed height up front (e.g. animation perf
+    -- warning).  Avoids the SetHeight → OnSizeChanged → TriggerHostRelayout
+    -- → g:LayoutChildren feedback loop that, in container layouts where
+    -- LayoutChildren re-fires SetWidth on every pass (Aura Designer's
+    -- indicator card body), drops FPS the moment the banner surfaces.
+    if not opts.staticHeight then
+        -- Only width changes affect the wrapped string height — height
+        -- changes (which our own SetHeight inside DoRecomputeHeight triggers)
+        -- don't.  Filtering on width breaks part of the feedback loop, but
+        -- doesn't help when the host layout fires OnSizeChanged per frame
+        -- with same-or-different widths (some scroll-frame containers do).
+        local lastMeasuredWidth
+        banner:SetScript("OnSizeChanged", function(self, w, _)
+            if w == lastMeasuredWidth then return end
+            lastMeasuredWidth = w
+            RecomputeHeight()
+        end)
+        banner:SetScript("OnShow", function()
+            if deferredWhileHidden then
+                deferredWhileHidden = false
+                cachedH = nil
+                lastMeasuredWidth = nil
+                RecomputeHeight()
+            end
+        end)
+    end
     banner._RecomputeHeight = RecomputeHeight
 
     function banner:SetIconTexture(path)
@@ -2490,7 +2556,15 @@ function GUI:CreateEditBox(parent, label, dbTable, dbKey, callback, width)
     return frame
 end
 
-function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, callback, lightweightUpdate, usePreviewMode)
+-- customGet / customSet (optional, matches CreateDropdown's pattern): when
+-- provided, the slider routes its reads and writes through these functions
+-- instead of dbTable[dbKey] directly. Used by widgets whose underlying value
+-- lives inside a nested table (e.g. Border Alpha → <prefix>BorderColor.a),
+-- where the plain `dbTable[dbKey] = v` path can't express the nesting.
+-- Consumers that pass customSet typically pass dbKey = nil so the
+-- auto-profile override system doesn't track a key that doesn't exist at the
+-- top level of dbTable.
+function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, callback, lightweightUpdate, usePreviewMode, customGet, customSet)
     local container = CreateFrame("Frame", nil, parent)
     container:SetSize(260, 50)
     
@@ -2612,6 +2686,19 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
         end
     end
     
+    -- Wrapper for both pathways: customGet/Set when provided, dbTable[dbKey]
+    -- otherwise. Centralising this avoids a sprinkling of `if customGet then`
+    -- across every place the slider touches its value.
+    local function ReadValue()
+        if customGet then return customGet() end
+        if dbTable then return dbTable[dbKey] end
+        return nil
+    end
+    local function WriteValue(v)
+        if customSet then return customSet(v) end
+        if dbTable then dbTable[dbKey] = v end
+    end
+
     local function UpdateValue(val)
         val = val or minVal
         suppressCallback = true
@@ -2629,7 +2716,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
     slider:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" then
             isDragging = true
-            local funcName = lightweightUpdate and (dbKey .. " lightweight") or nil
+            local funcName = lightweightUpdate and ((dbKey or label or "slider") .. " lightweight") or nil
             DF:OnSliderDragStart(lightweightUpdate, funcName, sliderUsePreviewMode)
         end
     end)
@@ -2647,12 +2734,13 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
     end)
     
     slider:SetScript("OnShow", function()
-        if dbTable then UpdateValue(dbTable[dbKey]) end
+        local v = ReadValue()
+        if v ~= nil then UpdateValue(v) end
     end)
-    
+
     slider:SetScript("OnValueChanged", function(self, value)
         if suppressCallback then return end
-        if not dbTable then return end
+        if not (dbTable or customSet) then return end
         if step >= 1 then
             value = math.floor(value + 0.5)
         else
@@ -2660,7 +2748,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
         end
 
         -- Runtime override protection: redirect to baseline, skip refresh
-        if GUI.SelectedMode == "raid" and DF.AutoProfilesUI
+        if dbKey and GUI.SelectedMode == "raid" and DF.AutoProfilesUI
            and DF.AutoProfilesUI:HandleRuntimeWrite(dbKey, value) then
             if not input:HasFocus() then input:SetText(FormatValue(value)) end
             UpdateFill()
@@ -2668,7 +2756,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
             return
         end
 
-        dbTable[dbKey] = value
+        WriteValue(value)
 
         -- If editing a profile, also set the override
         if DF.AutoProfilesUI and DF.AutoProfilesUI:IsEditing() and dbKey then
@@ -2693,7 +2781,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
             val = math.max(minVal, math.min(maxVal, val))
 
             -- Runtime override protection: redirect to baseline, skip refresh
-            if GUI.SelectedMode == "raid" and DF.AutoProfilesUI
+            if dbKey and GUI.SelectedMode == "raid" and DF.AutoProfilesUI
                and DF.AutoProfilesUI:HandleRuntimeWrite(dbKey, val) then
                 self:SetText(FormatValue(val))
                 suppressCallback = true
@@ -2705,7 +2793,7 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
                 return
             end
 
-            dbTable[dbKey] = val
+            WriteValue(val)
             suppressCallback = true
             slider:SetValue(val)
             suppressCallback = false
@@ -2734,17 +2822,18 @@ function GUI:CreateSlider(parent, label, minVal, maxVal, step, dbTable, dbKey, c
             -- Guaranteed full update (SetValue may not fire OnValueChanged if value didn't change)
             DF:UpdateAll()
         else
-            UpdateValue(dbTable[dbKey])
+            local v = ReadValue(); if v ~= nil then UpdateValue(v) end
         end
         self:ClearFocus()
     end)
-    
+
     input:SetScript("OnEscapePressed", function(self)
-        UpdateValue(dbTable[dbKey])
+        local v = ReadValue(); if v ~= nil then UpdateValue(v) end
         self:ClearFocus()
     end)
-    
-    if dbTable then UpdateValue(dbTable[dbKey]) end
+
+    local initial = ReadValue()
+    if initial ~= nil then UpdateValue(initial) end
     
     -- SEARCH: Register this setting with slider metadata
     if DF.Search and dbKey and type(dbKey) == "string" then
@@ -3209,6 +3298,752 @@ function GUI:CreateShadowCheckbox(parent, label, dbTable, dbKey, callback)
     local get = function() return DF:OutlineHasShadow(dbTable[dbKey]) end
     local set = function(val) dbTable[dbKey] = DF:ComposeOutline(DF:OutlineFlag(dbTable[dbKey]), val) end
     return GUI:CreateCheckbox(parent, label or L["Shadow"], dbTable, dbKey, callback, get, set)
+end
+
+-- ============================================================
+-- UNIFIED BORDER CONTROL SET
+-- Drops the canonical Show / Style / Texture / Size / Colour controls plus
+-- whichever optional Phase B controls the consumer opts into (offset, inset,
+-- blendMode, gradient, shadow). Saved-variable keys are built from a single
+-- camelCase `prefix` (e.g. "defensiveIcon" → "defensiveIconBorderSize"), so
+-- consumers add one call instead of hand-rolling ~6-15 widgets each.
+--
+-- Each opts.include flag is per-element: "tailor-made to what makes logical
+-- sense" — the API exposes everything, but consumers opt in only to what fits
+-- their element. Returns a table of widget references so the caller can add
+-- per-element extras (dispel-type colour, pulsate, etc.) afterwards.
+--
+-- opts = {
+--   parent       = the panel widget (e.g. self.child) — same first arg the
+--                  underlying CreateCheckbox/Slider/etc. take
+--   include      = { offset=, inset=, blendMode=, gradient=, shadow=,
+--                    classColor=, roleColor=, colorByTime=, colorByType= }
+--   fullUpdate   = callback for full re-render (drop / value-set)
+--   lightUpdate  = callback for slider-drag (size, offsets, shadow sliders)
+--   lightColors  = callback for live colour-picker preview
+--   refreshStates = optional hook fired when Show/Gradient/Shadow toggles
+--                   change visibility of other widgets
+--   hideWhen     = optional predicate fn(db) → bool. When true, EVERY widget
+--                  (including the Show toggle itself) hides — used by
+--                  consumers whose border section sits inside a parent panel
+--                  with its own enable toggle (e.g. defensiveIconEnabled).
+--   sizeMin / sizeMax / sizeStep      = slider range overrides
+--   offsetMin / offsetMax / offsetStep
+-- }
+-- ============================================================
+-- CreateAnimationControls — the Border Animation control set
+-- (Type dropdown + every per-effect tunable), extracted so the base
+-- Border Animation panel (CreateBorderControls / include.animate) AND
+-- Aura Designer's Expiring Animation override render an IDENTICAL set of
+-- widgets from ONE source. Add or remove an effect / tunable here and both
+-- panels update together — no drift.
+--
+--   group       = SettingsGroup the widgets are added to
+--   dbTable     = db / proxy the widgets read & write
+--   animPrefix  = key namespace; widgets target dbTable[animPrefix .. suffix]
+--                 (base border: "<prefix>BorderAnimation"; AD expiring:
+--                 "ExpiringAnimation")
+-- opts:
+--   parent        = frame parent for the widgets
+--   fullUpdate    = heavy refresh callback (dropdown / slider-release / colour)
+--   lightUpdate   = light refresh callback (slider-drag)
+--   lightColors   = live colour-picker preview callback (needed for AD's
+--                   proxy, whose sub-table colour writes skip __newindex)
+--   typeLabel     = label for the Type dropdown
+--   hideExtra     = optional predicate; when true the WHOLE block hides
+--                   (the border panel folds the block under Show Border;
+--                   the always-visible Expiring override omits it)
+--   onTypeChange  = runs after the Type dropdown changes (re-layout / reflow)
+--   perfBanner    = show the per-border FPS warning banner (default true)
+-- Returns the widget table (animationType, animationColor, … ) so the caller
+-- can merge the handles into its own control table.
+-- ============================================================
+function GUI:CreateAnimationControls(group, dbTable, animPrefix, opts)
+    opts = opts or {}
+    local parent       = opts.parent
+    local fullUpdate   = opts.fullUpdate or function() end
+    local lightUpdate  = opts.lightUpdate
+    local lightColors  = opts.lightColors
+    local typeLabel    = opts.typeLabel or L["Border Animation"]
+    local hideExtra    = opts.hideExtra
+    local onTypeChange = opts.onTypeChange or function() end
+    local showPerfBanner = opts.perfBanner ~= false
+
+    local function aKey(suffix) return animPrefix .. suffix end
+    local animTypeKey = aKey("Type")
+    local function animType() return dbTable[animTypeKey] or "NONE" end
+    local function extraOff() return (hideExtra and hideExtra()) or false end
+    local function animOff()  return extraOff() or animType() == "NONE" end
+
+    -- Sets of effect types each tunable applies to (truthiness on a
+    -- string-keyed set). Mirrors the per-effect parameter map — keep in
+    -- sync with StartAnimation's branches in Frames/Border.lua.
+    -- DF_DASH: Frequency = march SPEED (0 = static dashed), Thickness = dash
+    -- thickness, Inset = dash inset.
+    local hasFrequency = { PULSATE=1, DF_PULSATE=1, CHASE=1, FLASH=1, PROC=1,
+                           WIPE=1, RIPPLE=1, SEGMENT_REVEAL=1, DF_DASH=1 }
+    local hasParticles = { PULSATE=1, CHASE=1 }
+    local hasThickness = { PULSATE=1, WIPE=1, RIPPLE=1, SEGMENT_REVEAL=1,
+                           SIDES_ONLY=1, CORNERS_ONLY=1, DF_DASH=1 }
+    -- Inset / Offset apply to every non-NONE effect EXCEPT DF_PULSATE (which
+    -- modulates the border's own edges and has no separate animRect).
+    local hasPositioning = { PULSATE=1, CHASE=1, FLASH=1, PROC=1, WIPE=1, RIPPLE=1,
+                             SEGMENT_REVEAL=1, SIDES_ONLY=1, CORNERS_ONLY=1, DF_DASH=1 }
+    local pulsateOnly  = { PULSATE=1 }
+    local chaseOnly    = { CHASE=1 }
+    local sidesOnly    = { SIDES_ONLY=1 }
+    local cornersOnly  = { CORNERS_ONLY=1 }
+    local function hideUnless(set)
+        return function()
+            if animOff() then return true end
+            return not set[animType()]
+        end
+    end
+
+    local w = {}
+
+    -- DF_PULSATE sits next to PULSATE so users compare them at a glance —
+    -- both "pulse" effects, but the LCG one renders a particle ring outside
+    -- the border while DF Pulsate fades the border's own edge alpha.
+    w.animationType = group:AddWidget(GUI:CreateDropdown(parent, typeLabel,
+        {
+            NONE = L["None"],
+            PULSATE = L["Pulsate"],
+            DF_PULSATE = L["DF Pulsate"],
+            CHASE = L["Chase"],
+            FLASH = L["Flash"],
+            PROC = L["Proc"],
+            WIPE = L["Wipe"],
+            RIPPLE = L["Ripple"],
+            SEGMENT_REVEAL = L["Segment Reveal"],
+            SIDES_ONLY = L["Sides Only"],
+            CORNERS_ONLY = L["Corners Only"],
+            DF_DASH = L["DF Dash"],
+            -- None first (the "off" option), then alphabetical by label.
+            _order = { "NONE", "CHASE", "CORNERS_ONLY", "DF_DASH", "DF_PULSATE",
+                       "FLASH", "PROC", "PULSATE", "RIPPLE", "SEGMENT_REVEAL",
+                       "SIDES_ONLY", "WIPE" },
+        },
+        dbTable, animTypeKey, onTypeChange), 55)
+    -- Type dropdown respects only the extra gate (e.g. Show Border). With no
+    -- extra gate (Expiring override) it's always visible.
+    w.animationType.hideOn = hideExtra or function() return false end
+
+    -- Perf warning: animations run an OnUpdate (or LCG internal animation)
+    -- per active border, which adds up in 20-30 player raids.
+    if showPerfBanner then
+        local perfBanner = GUI:CreateInfoBanner(parent, {
+            tone = "warning",
+            text = L["Animations run per-border and may impact FPS in larger raids. Use sparingly on high-priority alerts."],
+            staticHeight = true,
+            minHeight    = 56,
+        })
+        w.animationPerfBanner = group:AddWidget(perfBanner, perfBanner.layoutHeight)
+        w.animationPerfBanner.hideOn = animOff
+    end
+
+    -- Animation colour applies to every effect except DF_PULSATE (which
+    -- modulates the border's own edge alpha — no separate colour). lightColors
+    -- is threaded through so AD's proxy gets live preview while dragging.
+    w.animationColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Animation Colour"],
+        dbTable, aKey("Color"), true, fullUpdate, lightColors, lightColors ~= nil), 35)
+    w.animationColor.hideOn = function()
+        return animOff() or animType() == "DF_PULSATE"
+    end
+
+    -- Min 0: DF_DASH reads Frequency as march speed, so 0 = static dashed.
+    -- The LCG glows treat 0 as their default rate (clamped in StartAnimation),
+    -- and the OnUpdate effects fall back to a sensible default period at 0.
+    w.animationFrequency = group:AddWidget(GUI:CreateSlider(parent, L["Animation Frequency"],
+        0, 4, 0.05, dbTable, aKey("Frequency"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationFrequency.hideOn = hideUnless(hasFrequency)
+
+    w.animationParticles = group:AddWidget(GUI:CreateSlider(parent, L["Animation Particles"],
+        1, 16, 1, dbTable, aKey("Particles"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationParticles.hideOn = hideUnless(hasParticles)
+
+    w.animationLength = group:AddWidget(GUI:CreateSlider(parent, L["Animation Length"],
+        1, 30, 1, dbTable, aKey("Length"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationLength.hideOn = hideUnless(pulsateOnly)
+
+    w.animationThickness = group:AddWidget(GUI:CreateSlider(parent, L["Animation Thickness"],
+        1, 12, 1, dbTable, aKey("Thickness"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationThickness.hideOn = hideUnless(hasThickness)
+
+    w.animationScale = group:AddWidget(GUI:CreateSlider(parent, L["Animation Scale"],
+        0.5, 3, 0.05, dbTable, aKey("Scale"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationScale.hideOn = hideUnless(chaseOnly)
+
+    w.animationInset = group:AddWidget(GUI:CreateSlider(parent, L["Animation Inset"],
+        -50, 50, 1, dbTable, aKey("Inset"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationInset.hideOn = hideUnless(hasPositioning)
+
+    w.animationOffsetX = group:AddWidget(GUI:CreateSlider(parent, L["Animation Offset X"],
+        -50, 50, 1, dbTable, aKey("OffsetX"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationOffsetX.hideOn = hideUnless(hasPositioning)
+
+    w.animationOffsetY = group:AddWidget(GUI:CreateSlider(parent, L["Animation Offset Y"],
+        -50, 50, 1, dbTable, aKey("OffsetY"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationOffsetY.hideOn = hideUnless(hasPositioning)
+
+    w.animationMask = group:AddWidget(GUI:CreateCheckbox(parent, L["Pulsate Backing Frame"],
+        dbTable, aKey("Mask"), fullUpdate), 30)
+    w.animationMask.hideOn = hideUnless(pulsateOnly)
+
+    w.animationSidesAxis = group:AddWidget(GUI:CreateDropdown(parent, L["Sides Axis"],
+        { HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"] },
+        dbTable, aKey("SidesAxis"), fullUpdate), 55)
+    w.animationSidesAxis.hideOn = hideUnless(sidesOnly)
+
+    w.animationCornerLength = group:AddWidget(GUI:CreateSlider(parent, L["Corner Length"],
+        2, 40, 1, dbTable, aKey("CornerLength"),
+        fullUpdate, lightUpdate, true), 55)
+    w.animationCornerLength.hideOn = hideUnless(cornersOnly)
+
+    return w
+end
+
+-- ============================================================
+function GUI:CreateBorderControls(group, dbTable, prefix, opts)
+    opts = opts or {}
+    local parent       = opts.parent
+    local include      = opts.include or {}
+    local fullUpdate   = opts.fullUpdate or function() end
+    local lightUpdate  = opts.lightUpdate
+    local lightColors  = opts.lightColors
+    local refreshStates = opts.refreshStates
+    local hideWhen     = opts.hideWhen
+
+    local sizeMin, sizeMax, sizeStep = opts.sizeMin or 0, opts.sizeMax or 8, opts.sizeStep or 1
+    local offMin, offMax, offStep    = opts.offsetMin or -50, opts.offsetMax or 50, opts.offsetStep or 1
+
+    local function key(suffix) return prefix .. suffix end
+    local showKey = key("ShowBorder")
+    -- The Show toggle only respects the parent-level hideWhen. Everything
+    -- else respects hideWhen OR the Show toggle being off.
+    --
+    -- hideOn predicates IGNORE the table arg LayoutChildren passes (which is
+    -- always `DF.db[GUI.SelectedMode]`) and read from the captured `dbTable`
+    -- instead.  For consumers whose dbTable == DF.db[mode] (Frame Border,
+    -- Defensive Icon, etc.) the two are identical so behaviour is unchanged.
+    -- For consumers with a different dbTable — notably Aura Designer's
+    -- per-aura proxy — this is the only way the visibility predicates see
+    -- the actual border state (e.g. proxy.BorderStyle, not the unrelated
+    -- DF.db.party.BorderStyle which doesn't exist).
+    local function hideShow() return hideWhen and hideWhen(dbTable) or false end
+    local function hideOff()  return hideShow() or dbTable[showKey] == false end
+
+    local w = {}
+
+    w.show = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], dbTable, showKey, function()
+        if refreshStates then refreshStates() end
+        fullUpdate()
+    end), 30)
+    w.show.hideOn = hideShow
+
+    -- Slider label reads "Border Thickness" (more meaningful than "Size") but
+    -- the underlying db key stays `<prefix>BorderSize` and spec.size in the
+    -- backend stays the same — purely a user-facing rename, no migration.
+    w.size = group:AddWidget(GUI:CreateSlider(parent, L["Border Thickness"], sizeMin, sizeMax, sizeStep,
+        dbTable, key("BorderSize"), fullUpdate, lightUpdate, true), 55)
+    w.size.hideOn = hideOff
+
+    -- Gradient is a STYLE, not a separate toggle. When the consumer opts into
+    -- gradient via include.gradient, we expose GRADIENT as a third dropdown
+    -- option. Otherwise the dropdown is the original SOLID / TEXTURE pair.
+    local styleOptions = { SOLID = L["Solid"], TEXTURE = L["Texture"],
+        _order = { "SOLID", "TEXTURE" } }
+    if include.gradient then
+        styleOptions.GRADIENT = L["Gradient"]
+        -- Insert GRADIENT between SOLID and TEXTURE so the order reads
+        -- "simple colour → two colours → custom texture" in the dropdown.
+        styleOptions._order = { "SOLID", "GRADIENT", "TEXTURE" }
+    end
+    w.style = group:AddWidget(GUI:CreateDropdown(parent, L["Border Style"],
+        styleOptions, dbTable, key("BorderStyle"), function()
+            -- Match the frame border: pick the first LSM border when switching
+            -- to Texture without one configured.
+            if dbTable[key("BorderStyle")] == "TEXTURE" then
+                local list = DF.GetBorderList and DF:GetBorderList() or nil
+                local t = dbTable[key("BorderTexture")]
+                if list and (not t or t == "" or t == "SOLID") then
+                    dbTable[key("BorderTexture")] = next(list)
+                end
+            end
+            if refreshStates then refreshStates() end
+            fullUpdate()
+        end), 55)
+    w.style.hideOn = hideOff
+
+    -- isGradient is declared up here so the Style-dependent widget cluster
+    -- (Texture under TEXTURE style, gradient pickers under GRADIENT style)
+    -- can sit immediately below the Style dropdown — the consequence of the
+    -- user's style choice reads top-to-bottom without scrolling past
+    -- unrelated inset / offset / blend controls first.
+    local function isGradient() return dbTable[key("BorderStyle")] == "GRADIENT" end
+
+    w.texture = group:AddWidget(GUI:CreateDropdown(parent, L["Border Texture"],
+        DF:GetBorderList(), dbTable, key("BorderTexture"), fullUpdate), 55)
+    w.texture.hideOn = function()
+        return hideOff() or dbTable[key("BorderStyle")] ~= "TEXTURE"
+    end
+
+    -- Gradient pickers — only visible under Style = GRADIENT.  Grouped here
+    -- (between Texture and the Colour Source dropdown) so all style-dependent
+    -- widgets sit directly under the Style dropdown that controls them.
+    -- The standalone "Border Gradient" checkbox was removed when Style
+    -- absorbed it; Style is now the single source of truth so it's not
+    -- possible to pick "Solid + Class Color" then have a Gradient checkbox
+    -- stomp the class colour (the previous UX bug).  Legacy
+    -- `<prefix>BorderGradientEnabled = true` profiles are migrated to
+    -- `<prefix>BorderStyle = "GRADIENT"` on db load.
+    if include.gradient then
+        local function gradHide() return hideOff() or not isGradient() end
+
+        w.gradientStart = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient Start Colour"],
+            dbTable, key("BorderGradientStartColor"), true, fullUpdate), 35)
+        w.gradientStart.hideOn = gradHide
+        w.gradientEnd = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient End Colour"],
+            dbTable, key("BorderGradientEndColor"), true, fullUpdate), 35)
+        w.gradientEnd.hideOn = gradHide
+        w.gradientDirection = group:AddWidget(GUI:CreateDropdown(parent, L["Gradient Direction"],
+            { HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"] },
+            dbTable, key("BorderGradientDirection"), fullUpdate), 55)
+        w.gradientDirection.hideOn = gradHide
+    end
+
+    -- Colour Source dropdown sits ABOVE the colour picker so the relationship
+    -- "source → resulting colour" reads top-to-bottom in the panel. The
+    -- options table is built dynamically: Static is always present; Class
+    -- and Role are added if the consumer opted in via the matching include.
+    -- Hidden in GRADIENT style — gradient owns its own colours, no resolver
+    -- chain applies (see Border:BuildSpec).
+    local sourceKey = key("BorderColorSource")
+    local hasSourceDropdown = include.classColor or include.roleColor
+    if hasSourceDropdown then
+        local sourceOptions = { STATIC = L["Static"], _order = { "STATIC" } }
+        if include.classColor then
+            sourceOptions.CLASS = L["Class"]
+            sourceOptions._order[#sourceOptions._order + 1] = "CLASS"
+        end
+        if include.roleColor then
+            sourceOptions.ROLE = L["Role"]
+            sourceOptions._order[#sourceOptions._order + 1] = "ROLE"
+        end
+        -- Default the source from the legacy boolean keys when first opened.
+        if dbTable[sourceKey] == nil then
+            if dbTable[key("BorderUseClassColor")]     then dbTable[sourceKey] = "CLASS"
+            elseif dbTable[key("BorderUseRoleColor")]  then dbTable[sourceKey] = "ROLE"
+            else                                            dbTable[sourceKey] = "STATIC" end
+        end
+        w.colorSource = group:AddWidget(GUI:CreateDropdown(parent, L["Border Color Source"],
+            sourceOptions, dbTable, sourceKey, function()
+                if refreshStates then refreshStates() end
+                fullUpdate()
+            end), 55)
+        w.colorSource.hideOn = function() return hideOff() or isGradient() end
+    end
+
+    -- Static colour picker — only visible when source is STATIC (or when the
+    -- consumer didn't enable any resolver at all, so source doesn't exist).
+    -- Hidden in GRADIENT style (gradient uses its own start/end pickers).
+    w.color = group:AddWidget(GUI:CreateColorPicker(parent, L["Border Color"], dbTable, key("BorderColor"),
+        true, fullUpdate, lightColors, lightColors ~= nil), 35)
+    w.color.hideOn = function()
+        if hideOff() or isGradient() then return true end
+        if hasSourceDropdown then
+            local src = dbTable[sourceKey] or "STATIC"
+            return src ~= "STATIC"
+        end
+        return false
+    end
+
+    -- Unified Border Alpha slider — opt-in via include.alpha. Reads / writes
+    -- the SAME alpha component the colour picker exposes
+    -- (<prefix>BorderColor.a), so the slider is just a convenient handle for
+    -- the picker's alpha bar — no separate alpha key to migrate or keep in
+    -- sync. Visible in STATIC / CLASS / ROLE; hidden in GRADIENT (where the
+    -- two gradient pickers each carry their own alpha, and a single slider
+    -- has no obvious meaning).
+    if include.alpha then
+        -- Ensure the underlying colour table has an alpha component so the
+        -- slider doesn't read nil on first open. The picker also seeds .a but
+        -- we don't depend on widget-creation order.
+        local c = dbTable[key("BorderColor")]
+        if type(c) ~= "table" then
+            c = { r = 0, g = 0, b = 0, a = 1 }
+            dbTable[key("BorderColor")] = c
+        end
+        if c.a == nil then c.a = 1 end
+
+        w.alpha = group:AddWidget(GUI:CreateSlider(parent, L["Border Alpha"], 0, 1, 0.05,
+            nil, nil, fullUpdate, lightColors or lightUpdate, true,
+            function() return dbTable[key("BorderColor")].a or 1 end,
+            function(v)  dbTable[key("BorderColor")].a = v end), 55)
+        w.alpha.hideOn = function() return hideOff() or isGradient() end
+    end
+
+    if include.inset then
+        w.inset = group:AddWidget(GUI:CreateSlider(parent, L["Border Inset"], -20, 20, 1,
+            dbTable, key("BorderInset"), fullUpdate, lightUpdate, true), 55)
+        w.inset.hideOn = hideOff
+    end
+
+    if include.offset then
+        w.offsetX = group:AddWidget(GUI:CreateSlider(parent, L["Border Offset X"], offMin, offMax, offStep,
+            dbTable, key("BorderOffsetX"), fullUpdate, lightUpdate, true), 55)
+        w.offsetX.hideOn = hideOff
+        w.offsetY = group:AddWidget(GUI:CreateSlider(parent, L["Border Offset Y"], offMin, offMax, offStep,
+            dbTable, key("BorderOffsetY"), fullUpdate, lightUpdate, true), 55)
+        w.offsetY.hideOn = hideOff
+    end
+
+    if include.blendMode then
+        w.blendMode = group:AddWidget(GUI:CreateDropdown(parent, L["Border Blend Mode"],
+            { BLEND = L["Blend"], ADD = L["Add"], MOD = L["Mod"], DISABLE = L["Disable"] },
+            dbTable, key("BorderBlendMode"), fullUpdate), 55)
+        w.blendMode.hideOn = hideOff
+    end
+
+    if include.shadow then
+        local shadowOnKey = key("BorderShadowEnabled")
+        w.shadowEnabled = group:AddWidget(GUI:CreateCheckbox(parent, L["Border Shadow"], dbTable, shadowOnKey, function()
+            if refreshStates then refreshStates() end
+            fullUpdate()
+        end), 30)
+        w.shadowEnabled.hideOn = hideOff
+        local function shadowHide() return hideOff() or dbTable[shadowOnKey] == false end
+
+        w.shadowColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Shadow Colour"],
+            dbTable, key("BorderShadowColor"), true, fullUpdate), 35)
+        w.shadowColor.hideOn = shadowHide
+        w.shadowSize = group:AddWidget(GUI:CreateSlider(parent, L["Shadow Size"], 0, 10, 1,
+            dbTable, key("BorderShadowSize"), fullUpdate, lightUpdate, true), 55)
+        w.shadowSize.hideOn = shadowHide
+        w.shadowOffsetX = group:AddWidget(GUI:CreateSlider(parent, L["Shadow Offset X"], -10, 10, 1,
+            dbTable, key("BorderShadowOffsetX"), fullUpdate, lightUpdate, true), 55)
+        w.shadowOffsetX.hideOn = shadowHide
+        w.shadowOffsetY = group:AddWidget(GUI:CreateSlider(parent, L["Shadow Offset Y"], -10, 10, 1,
+            dbTable, key("BorderShadowOffsetY"), fullUpdate, lightUpdate, true), 55)
+        w.shadowOffsetY.hideOn = shadowHide
+    end
+
+    -- ===== Animation (Stage 3) =====
+    -- include.animate drops the full Border Animation control set (Type
+    -- dropdown + per-effect tunables, each with a hideOn keyed to the effect
+    -- it applies to). Built from the shared GUI:CreateAnimationControls so the
+    -- base panel and AD's Expiring override never drift. The whole block folds
+    -- under Show Border via hideExtra = hideOff. Widget handles are merged back
+    -- onto `w` so existing references (w.animationType, …) are preserved.
+    if include.animate then
+        local aw = GUI:CreateAnimationControls(group, dbTable, key("BorderAnimation"), {
+            parent       = parent,
+            fullUpdate   = fullUpdate,
+            lightUpdate  = lightUpdate,
+            lightColors  = lightColors,
+            typeLabel    = L["Border Animation"],
+            hideExtra    = hideOff,
+            onTypeChange = function()
+                if refreshStates then refreshStates() end
+                fullUpdate()
+            end,
+        })
+        for k, v in pairs(aw) do w[k] = v end
+    end
+
+    -- ===== Colour resolver toggles (Stage 2) =====
+    -- These flip BorderColor's source from the static picker to a per-unit /
+    -- per-aura / per-tick computation. BuildSpec applies them in priority
+    -- order (type > time > class > role > static) when the consumer passes
+    -- ctx to BuildSpec. The static colour picker still controls the fallback
+    -- (when ctx is missing or the resolver yields nil).
+
+    -- (Colour Source dropdown + Static colour picker + Alpha slider are wired
+    -- earlier, above the inset/offset/blendMode/gradient/shadow block, so the
+    -- relationship "source → colour" reads top-to-bottom in the panel.)
+
+    if include.colorByTime then
+        w.colorByTime = group:AddWidget(GUI:CreateCheckbox(parent, L["Color by Time Remaining"], dbTable, key("BorderColorByTime"), fullUpdate), 30)
+        w.colorByTime.hideOn = hideOff
+        -- The actual colour curve picker is consumer-specific (e.g. AD's
+        -- existing expiring colour curve) and is added by the consumer
+        -- alongside this checkbox.
+    end
+
+    if include.colorByType then
+        w.colorByType = group:AddWidget(GUI:CreateCheckbox(parent, L["Color by Aura Type"], dbTable, key("BorderColorByType"), fullUpdate), 30)
+        w.colorByType.hideOn = hideOff
+    end
+
+    return w
+end
+
+-- ============================================================
+-- EXPIRING CONTROLS (shared) — the Aura Designer expiring panel is the
+-- reference design; this helper reproduces it EXACTLY (master enable →
+-- Percent/Seconds toggle threshold → State Overrides → thickness / colour /
+-- alpha / animation → optional extras) so EVERY expiring consumer (AD
+-- icon/square/bar AND the standard buff aura icons) renders the same flow and
+-- look.  Per-consumer differences are `include.*` flags + an explicit `keys`
+-- map (expiring DB key names diverge: AD uses `expiring*`/`Expiring*` on a
+-- proxy, buff uses `buffExpiring*`), so a row simply HIDES when it doesn't apply
+-- to that consumer — never a separate hand-built panel.
+-- ============================================================
+
+-- Small dim inline subheader (section divider inside a SettingsGroup), matching
+-- AD's "State Overrides" / "Icon Effects" dividers.
+function GUI:CreateExpiringSubheader(parent, text)
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetHeight(18)
+    local label = frame:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(label, 8, "")
+    label:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 1)
+    label:SetText(text)
+    local c = GetThemeColor()
+    label:SetTextColor(c.r, c.g, c.b, 0.75)
+    return frame
+end
+
+-- Threshold slider + a compact Percent/Seconds TOGGLE BUTTON (AD's design).
+-- The slider's label/range switch with the mode, so the row rebuilds the page
+-- on toggle via opts.refreshPage.  Keys are parameterised (thresholdKey /
+-- thresholdModeKey) so any consumer's DB schema works.
+function GUI:CreateExpiringThresholdRow(parent, dbTable, opts)
+    opts = opts or {}
+    local tKey = opts.thresholdKey
+    local mKey = opts.thresholdModeKey
+    local refresh = opts.refreshPage or function() end
+    local width = opts.width or 248
+    local isSeconds = mKey and dbTable[mKey] == "SECONDS"
+
+    local container = CreateFrame("Frame", nil, parent)
+    container:SetHeight(54)
+    container:SetWidth(width)
+
+    local label, minV, maxV, step
+    if isSeconds then
+        label = L["Expiring Threshold (seconds)"]
+        minV, maxV, step = 1, 60, 1
+        if tKey and dbTable[tKey] and dbTable[tKey] > 60 then dbTable[tKey] = 10 end
+    else
+        label = L["Expiring Threshold (%)"]
+        minV, maxV, step = 5, 100, 5
+        if tKey and dbTable[tKey] and dbTable[tKey] < 5 then dbTable[tKey] = 30 end
+    end
+
+    local slider = GUI:CreateSlider(container, label, minV, maxV, step, dbTable, tKey)
+    slider:SetPoint("TOPLEFT", 0, 0)
+    slider:SetWidth(width)
+
+    local modeBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
+    modeBtn:SetSize(56, 18)
+    modeBtn:SetPoint("BOTTOMRIGHT", slider, "TOPRIGHT", -10, 2)
+    modeBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1,
+    })
+    modeBtn:SetBackdropColor(0.14, 0.14, 0.17, 1)
+    modeBtn:SetBackdropBorderColor(0.30, 0.30, 0.35, 0.8)
+
+    local modeText = modeBtn:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(modeText, 9, "")
+    modeText:SetPoint("CENTER", 0, 0)
+    modeText:SetText(isSeconds and L["Seconds"] or L["Percent"])
+    modeText:SetTextColor(0.9, 0.9, 0.9)
+
+    modeBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.18, 0.18, 0.22, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Threshold Mode"])
+        GameTooltip:AddLine(isSeconds and L["Currently: Seconds. Click for Percent."] or L["Currently: Percent. Click for Seconds."], 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    modeBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.14, 0.14, 0.17, 1)
+        GameTooltip:Hide()
+    end)
+    modeBtn:SetScript("OnClick", function()
+        if not mKey then return end
+        if dbTable[mKey] == "SECONDS" then
+            dbTable[mKey] = "PERCENT"
+            if tKey then dbTable[tKey] = 30 end
+        else
+            dbTable[mKey] = "SECONDS"
+            if tKey then dbTable[tKey] = 10 end
+        end
+        refresh()
+    end)
+
+    return container
+end
+
+-- The full shared expiring panel.  opts:
+--   parent, fullUpdate, lightColors, lightGeometry, refreshStates, refreshPage,
+--   width, masterLabel, colorLabel,
+--   keys = { master, threshold, thresholdMode, borderEnable, colorByTime,
+--            colorOverride, color, borderColor, alphaHandleColor, thickness,
+--            inset, animPrefix, tintEnable, tintColor,
+--            fillPulsate, wholeAlpha, bounce },
+--   include = { threshold, borderEnable, colorByTime, colorOverride, alpha,
+--               dualColor, thickness, thicknessMin, thicknessMax, inset,
+--               animation, tint, iconEffects = {fillPulsate,wholeAlpha,bounce} }
+function GUI:CreateExpiringControls(group, dbTable, opts)
+    opts = opts or {}
+    local parent        = opts.parent
+    local K             = opts.keys or {}
+    local inc           = opts.include or {}
+    local fullUpdate    = opts.fullUpdate or function() end
+    local lightColors   = opts.lightColors
+    local lightGeometry = opts.lightGeometry
+    local refreshStates = opts.refreshStates or function() end
+    local refreshPage   = opts.refreshPage or function() end
+
+    local w = {}
+
+    -- Master gate (whole feature off) and the border-row gate (master off OR a
+    -- separate Show-Expiring-Border toggle off, when the consumer has one).
+    local function masterOff()
+        return (K.master and dbTable[K.master] == false) or false
+    end
+    local function borderOff()
+        if masterOff() then return true end
+        if K.borderEnable and dbTable[K.borderEnable] == false then return true end
+        return false
+    end
+    -- HIDE (not grey) rows that don't apply — the consumer's refreshStates
+    -- reflows the group so hidden rows collapse.
+    local function addGated(widget, h, gate)
+        widget.hideOn = gate or masterOff
+        return group:AddWidget(widget, h)
+    end
+
+    if K.master then
+        w.master = group:AddWidget(GUI:CreateCheckbox(parent, opts.masterLabel or L["Enable Expiring"], dbTable, K.master, function()
+            -- Reflow (collapse/expand the gated rows) + repaint; no full page
+            -- rebuild — only the threshold-mode toggle needs refreshPage.
+            refreshStates(); fullUpdate()
+        end), 30)
+    end
+
+    if inc.threshold ~= false and K.threshold then
+        addGated(GUI:CreateExpiringThresholdRow(parent, dbTable, {
+            thresholdKey = K.threshold, thresholdModeKey = K.thresholdMode,
+            width = opts.width,
+            refreshPage = function() refreshStates(); refreshPage() end,
+        }), 54)
+    end
+
+    -- Consumer hook for an extra row directly under the threshold (e.g. AD bar's
+    -- duration-priority row).  Receives addGated(widget, height[, gate]).
+    if opts.afterThreshold then opts.afterThreshold(addGated, masterOff) end
+
+    if inc.borderEnable and K.borderEnable then
+        w.borderEnable = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Expiring Border"], dbTable, K.borderEnable, function()
+            refreshStates(); fullUpdate()
+        end), 30)
+        w.borderEnable.hideOn = masterOff
+    end
+
+    addGated(GUI:CreateExpiringSubheader(parent, L["State Overrides"]), 18, borderOff)
+
+    if inc.thickness ~= false and K.thickness then
+        addGated(GUI:CreateSlider(parent, L["Expiring Border Thickness"],
+            inc.thicknessMin or 0, inc.thicknessMax or 5, 1,
+            dbTable, K.thickness, fullUpdate, lightGeometry, true), 55, borderOff)
+    end
+
+    if inc.inset and K.inset then
+        addGated(GUI:CreateSlider(parent, L["Expiring Border Inset"],
+            -3, 3, 1, dbTable, K.inset, fullUpdate, lightGeometry, true), 55, borderOff)
+    end
+
+    if inc.colorByTime and K.colorByTime then
+        w.colorByTime = addGated(GUI:CreateCheckbox(parent, L["Color by Time Remaining"], dbTable, K.colorByTime, function()
+            refreshStates(); fullUpdate()
+        end), 30, borderOff)
+    end
+
+    if inc.colorOverride and K.colorOverride then
+        addGated(GUI:CreateCheckbox(parent, L["Expiring Color Override"], dbTable, K.colorOverride, fullUpdate), 30, borderOff)
+    end
+
+    if K.color then
+        -- Single-colour consumers (icon / bar / buff) label it "Expiring Border
+        -- Color" to match the square's border picker; the square's dual case adds
+        -- a separate "Expiring Fill Color" above it.
+        local label = opts.colorLabel or (inc.dualColor and L["Expiring Fill Color"] or L["Expiring Border Color"])
+        local cp = GUI:CreateColorPicker(parent, label, dbTable, K.color, true, fullUpdate, lightColors, lightColors ~= nil)
+        -- Hidden when the border is off OR (buff) Color-by-Time owns the colour.
+        cp.hideOn = function()
+            if borderOff() then return true end
+            if K.colorByTime and dbTable[K.colorByTime] then return true end
+            return false
+        end
+        group:AddWidget(cp, 35)
+        w.color = cp
+    end
+
+    if inc.dualColor and K.borderColor then
+        addGated(GUI:CreateColorPicker(parent, L["Expiring Border Color"], dbTable, K.borderColor, true, fullUpdate, lightColors, lightColors ~= nil), 35, borderOff)
+    end
+
+    if inc.alpha then
+        local alphaKey = K.alphaHandleColor or K.color
+        addGated(GUI:CreateSlider(parent, L["Expiring Border Alpha"], 0, 1, 0.05, nil, nil, fullUpdate, lightColors, true,
+            function() local c = dbTable[alphaKey]; return (c and (c.a or c[4])) or 1 end,
+            function(v) local c = dbTable[alphaKey]; if type(c) == "table" then c.a = v end end), 55, borderOff)
+    end
+
+    if inc.animation ~= false and K.animPrefix then
+        local aw = GUI:CreateAnimationControls(group, dbTable, K.animPrefix, {
+            parent      = parent,
+            fullUpdate  = fullUpdate,
+            lightUpdate = lightGeometry,
+            lightColors = lightColors,
+            typeLabel   = L["Expiring Animation"],
+            perfBanner  = true,
+            hideExtra   = borderOff,
+            onTypeChange = function() refreshStates() end,
+        })
+        for k, v in pairs(aw) do w[k] = v end
+    end
+
+    -- "Expiring Effects" — whole-element responses to the aura crossing its
+    -- threshold (anim effects + Tint), under ONE shared subheader so every
+    -- consumer reads the same.  Rows appear per consumer via include flags.
+    local fx = inc.iconEffects
+    local hasTint = inc.tint and K.tintEnable
+    if fx or hasTint then
+        addGated(GUI:CreateExpiringSubheader(parent, L["Expiring Effects"]), 18)
+    end
+    if fx then
+        if fx.fillPulsate and K.fillPulsate then addGated(GUI:CreateCheckbox(parent, L["Fill Pulsate"], dbTable, K.fillPulsate, fullUpdate), 30) end
+        if fx.wholeAlpha and K.wholeAlpha then addGated(GUI:CreateCheckbox(parent, L["Whole Alpha Pulse"], dbTable, K.wholeAlpha, fullUpdate), 30) end
+        if fx.bounce and K.bounce then addGated(GUI:CreateCheckbox(parent, L["Bounce"], dbTable, K.bounce, fullUpdate), 30) end
+    end
+    if hasTint then
+        -- Toggling tint must reflow the section so the Tint Color picker's hideOn
+        -- re-evaluates (else the picker only appears after a full page rebuild).
+        addGated(GUI:CreateCheckbox(parent, L["Show Expiring Tint"], dbTable, K.tintEnable, function()
+            refreshStates(); fullUpdate()
+        end), 30)
+        if K.tintColor then
+            local lightTint = opts.lightTint
+            local tc = GUI:CreateColorPicker(parent, L["Tint Color"], dbTable, K.tintColor, true, fullUpdate, lightTint, lightTint ~= nil)
+            tc.hideOn = function() return masterOff() or dbTable[K.tintEnable] == false end
+            group:AddWidget(tc, 35)
+        end
+    end
+
+    return w
 end
 
 -- ============================================================

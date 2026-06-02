@@ -151,34 +151,15 @@ local function GetOrCreateDefensiveBarIcon(frame, index)
     -- Create a new icon frame cloned from the same pattern as Create.lua
     icon = CreateFrame("Frame", nil, frame.contentOverlay)
     icon:SetSize(24, 24)
-    icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 15)
+    icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 26)
     icon:Hide()
 
+    -- Border on the unified DF.Border backend. RenderDefensiveBarIcon does the
+    -- live restyle via DF.Border:Apply on each update.  frameLevelOffset 0 keeps
+    -- it co-planar with the icon (matches frame.defensiveIcon).
+    icon.border = DF.Border:New(icon, { frameLevelOffset = 0 })
+
     local borderSize = 2
-    icon.borderLeft = icon:CreateTexture(nil, "BACKGROUND")
-    icon.borderLeft:SetPoint("TOPLEFT", 0, 0)
-    icon.borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    icon.borderLeft:SetWidth(borderSize)
-    icon.borderLeft:SetColorTexture(0, 0.8, 0, 1)
-
-    icon.borderRight = icon:CreateTexture(nil, "BACKGROUND")
-    icon.borderRight:SetPoint("TOPRIGHT", 0, 0)
-    icon.borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    icon.borderRight:SetWidth(borderSize)
-    icon.borderRight:SetColorTexture(0, 0.8, 0, 1)
-
-    icon.borderTop = icon:CreateTexture(nil, "BACKGROUND")
-    icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-    icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-    icon.borderTop:SetHeight(borderSize)
-    icon.borderTop:SetColorTexture(0, 0.8, 0, 1)
-
-    icon.borderBottom = icon:CreateTexture(nil, "BACKGROUND")
-    icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-    icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-    icon.borderBottom:SetHeight(borderSize)
-    icon.borderBottom:SetColorTexture(0, 0.8, 0, 1)
-
     icon.texture = icon:CreateTexture(nil, "ARTWORK")
     icon.texture:SetPoint("TOPLEFT", borderSize, -borderSize)
     icon.texture:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
@@ -462,46 +443,31 @@ local function RenderDefensiveBarIcon(icon, unit, auraInstanceID, db, iconSize, 
         end
     end
 
-    -- Border
-    if showBorder then
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            icon.borderLeft:SetWidth(borderSize)
-            icon.borderLeft:Show()
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            icon.borderRight:SetWidth(borderSize)
-            icon.borderRight:Show()
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            icon.borderTop:SetHeight(borderSize)
-            icon.borderTop:ClearAllPoints()
-            icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-            icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            icon.borderTop:Show()
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-            icon.borderBottom:SetHeight(borderSize)
-            icon.borderBottom:ClearAllPoints()
-            icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-            icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            icon.borderBottom:Show()
-        end
-        icon.texture:ClearAllPoints()
-        icon.texture:SetPoint("TOPLEFT", borderSize, -borderSize)
-        icon.texture:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-    else
-        if icon.borderLeft then icon.borderLeft:Hide() end
-        if icon.borderRight then icon.borderRight:Hide() end
-        if icon.borderTop then icon.borderTop:Hide() end
-        if icon.borderBottom then icon.borderBottom:Hide() end
-        icon.texture:ClearAllPoints()
-        icon.texture:SetPoint("TOPLEFT", 0, 0)
-        icon.texture:SetPoint("BOTTOMRIGHT", 0, 0)
+    -- Border (unified DF.Border backend). BuildSpec reads the canonical db
+    -- keys; we override `enabled`/`size`/`color` with the locally-computed
+    -- values (already pixel-perfected, and color may come from the live
+    -- update path with overrides applied). ctx.unit feeds the Class/Role
+    -- colour resolvers (Stage 4.0 — defensive icons get class/role colour
+    -- so the user can see at a glance WHO used the defensive).
+    local artInset = showBorder and borderSize or 0
+    if icon.border then
+        local spec = DF.Border:BuildSpec(db, "defensiveIcon", {
+            unit  = unit,
+            frame = icon.unitFrame,  -- lets test frames resolve Class/Role via test data
+            iconMode = true,         -- outward icon-border geometry (shared)
+        })
+        spec.enabled = showBorder
+        spec.size    = borderSize
+        -- spec.color is NOT overridden: BuildSpec has already resolved it
+        -- per the ColorSource setting (STATIC / CLASS / ROLE), and a static
+        -- override here would clobber CLASS/ROLE picks. Pre-Stage-2 the
+        -- override was harmless because everything resolved to the static
+        -- db colour anyway.
+        DF.Border:Apply(icon.border, spec)
     end
+    icon.texture:ClearAllPoints()
+    icon.texture:SetPoint("TOPLEFT", artInset, -artInset)
+    icon.texture:SetPoint("BOTTOMRIGHT", -artInset, artInset)
 
     icon:SetSize(iconSize, iconSize)
     icon:Show()
@@ -900,60 +866,28 @@ function DF:UpdateMissingBuffIcon(frame, forceUpdate)
         -- Show the missing buff icon
         frame.missingBuffIcon:SetTexture(missingIcon)
         
-        -- Apply border if enabled
+        -- Border via unified DF.Border backend (Stage 4.1). BuildSpec reads
+        -- the canonical missingBuffIcon* keys; we override size with the
+        -- locally-pixel-perfected value. Icon insets by the visible border
+        -- thickness so the artwork doesn't overlap the border edges (or
+        -- sits flush with the frame when the border is off).
         local showBorder = db.missingBuffIconShowBorder ~= false
-        if showBorder then
-            -- PERF: Use module-level default instead of inline table
-            local bc = db.missingBuffIconBorderColor or DEFAULT_MISSING_BUFF_BORDER_COLOR
-            local borderSize = db.missingBuffIconBorderSize or 2
-            
-            -- Apply pixel perfect to border size 
-            if db.pixelPerfect then
-                borderSize = DF:PixelPerfect(borderSize)
-            end
-            
-            -- Set color on all border edges
-            if frame.missingBuffBorderLeft then
-                frame.missingBuffBorderLeft:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-                frame.missingBuffBorderLeft:SetWidth(borderSize)
-                frame.missingBuffBorderLeft:Show()
-            end
-            if frame.missingBuffBorderRight then
-                frame.missingBuffBorderRight:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-                frame.missingBuffBorderRight:SetWidth(borderSize)
-                frame.missingBuffBorderRight:Show()
-            end
-            if frame.missingBuffBorderTop then
-                frame.missingBuffBorderTop:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-                frame.missingBuffBorderTop:SetHeight(borderSize)
-                frame.missingBuffBorderTop:ClearAllPoints()
-                frame.missingBuffBorderTop:SetPoint("TOPLEFT", borderSize, 0)
-                frame.missingBuffBorderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-                frame.missingBuffBorderTop:Show()
-            end
-            if frame.missingBuffBorderBottom then
-                frame.missingBuffBorderBottom:SetColorTexture(bc.r, bc.g, bc.b, bc.a)
-                frame.missingBuffBorderBottom:SetHeight(borderSize)
-                frame.missingBuffBorderBottom:ClearAllPoints()
-                frame.missingBuffBorderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                frame.missingBuffBorderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-                frame.missingBuffBorderBottom:Show()
-            end
-            
-            -- Adjust icon position for border
-            frame.missingBuffIcon:ClearAllPoints()
-            frame.missingBuffIcon:SetPoint("TOPLEFT", borderSize, -borderSize)
-            frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -borderSize, borderSize)
-        else
-            -- Hide all border edges
-            if frame.missingBuffBorderLeft then frame.missingBuffBorderLeft:Hide() end
-            if frame.missingBuffBorderRight then frame.missingBuffBorderRight:Hide() end
-            if frame.missingBuffBorderTop then frame.missingBuffBorderTop:Hide() end
-            if frame.missingBuffBorderBottom then frame.missingBuffBorderBottom:Hide() end
-            frame.missingBuffIcon:ClearAllPoints()
-            frame.missingBuffIcon:SetPoint("TOPLEFT", 0, 0)
-            frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", 0, 0)
+        local borderSize = db.missingBuffIconBorderSize or 2
+        if db.pixelPerfect then
+            borderSize = DF:PixelPerfect(borderSize)
         end
+
+        if frame.missingBuffBorder then
+            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+            spec.enabled = showBorder
+            spec.size    = borderSize
+            DF.Border:Apply(frame.missingBuffBorder, spec)
+        end
+
+        local artInset = showBorder and borderSize or 0
+        frame.missingBuffIcon:ClearAllPoints()
+        frame.missingBuffIcon:SetPoint("TOPLEFT", artInset, -artInset)
+        frame.missingBuffIcon:SetPoint("BOTTOMRIGHT", -artInset, artInset)
         
         -- Apply positioning
         local scale = db.missingBuffIconScale or 1.5
@@ -1150,7 +1084,7 @@ function DF:UpdateDefensiveBar(frame)
                     -- Frame level
                     local frameLevel = db.defensiveIconFrameLevel or 0
                     if frameLevel == 0 then
-                        icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 15)
+                        icon:SetFrameLevel(frame.contentOverlay:GetFrameLevel() + 26)
                     else
                         icon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
                     end

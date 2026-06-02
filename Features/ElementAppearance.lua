@@ -928,16 +928,12 @@ function DF:UpdateMissingBuffAppearance(frame)
     if db.oorEnabled then
         local oorAlpha = db.oorMissingBuffAlpha or 0.5
         ApplyOORAlpha(frame.missingBuffIcon, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(frame.missingBuffBorderLeft, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(frame.missingBuffBorderRight, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(frame.missingBuffBorderTop, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(frame.missingBuffBorderBottom, inRange, alpha, oorAlpha)
+        -- Border is the unified DF.Border frame now (was 4 edge textures pre-
+        -- migration); fade the whole border frame like frame.border / icon.border.
+        ApplyOORAlpha(frame.missingBuffBorder, inRange, alpha, oorAlpha)
     else
         frame.missingBuffIcon:SetAlpha(alpha)
-        if frame.missingBuffBorderLeft then frame.missingBuffBorderLeft:SetAlpha(alpha) end
-        if frame.missingBuffBorderRight then frame.missingBuffBorderRight:SetAlpha(alpha) end
-        if frame.missingBuffBorderTop then frame.missingBuffBorderTop:SetAlpha(alpha) end
-        if frame.missingBuffBorderBottom then frame.missingBuffBorderBottom:SetAlpha(alpha) end
+        if frame.missingBuffBorder then frame.missingBuffBorder:SetAlpha(alpha) end
     end
 end
 
@@ -1059,10 +1055,7 @@ function DF:UpdateDefensiveIconAppearance(frame)
     if db.oorEnabled then
         local oorAlpha = db.oorDefensiveIconAlpha or 0.5
         ApplyOORAlpha(icon.texture, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(icon.borderLeft, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(icon.borderRight, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(icon.borderTop, inRange, alpha, oorAlpha)
-        ApplyOORAlpha(icon.borderBottom, inRange, alpha, oorAlpha)
+        ApplyOORAlpha(icon.border, inRange, alpha, oorAlpha)
         ApplyOORAlpha(icon.cooldown, inRange, alpha, oorAlpha)
         ApplyOORAlpha(icon.count, inRange, alpha, oorAlpha)
 
@@ -1070,20 +1063,14 @@ function DF:UpdateDefensiveIconAppearance(frame)
         if frame.defensiveBarIcons then
             for _, extraIcon in pairs(frame.defensiveBarIcons) do
                 ApplyOORAlpha(extraIcon.texture, inRange, alpha, oorAlpha)
-                ApplyOORAlpha(extraIcon.borderLeft, inRange, alpha, oorAlpha)
-                ApplyOORAlpha(extraIcon.borderRight, inRange, alpha, oorAlpha)
-                ApplyOORAlpha(extraIcon.borderTop, inRange, alpha, oorAlpha)
-                ApplyOORAlpha(extraIcon.borderBottom, inRange, alpha, oorAlpha)
+                ApplyOORAlpha(extraIcon.border, inRange, alpha, oorAlpha)
                 ApplyOORAlpha(extraIcon.cooldown, inRange, alpha, oorAlpha)
                 ApplyOORAlpha(extraIcon.count, inRange, alpha, oorAlpha)
             end
         end
     else
         if icon.texture then icon.texture:SetAlpha(alpha) end
-        if icon.borderLeft then icon.borderLeft:SetAlpha(alpha) end
-        if icon.borderRight then icon.borderRight:SetAlpha(alpha) end
-        if icon.borderTop then icon.borderTop:SetAlpha(alpha) end
-        if icon.borderBottom then icon.borderBottom:SetAlpha(alpha) end
+        if icon.border  then icon.border:SetAlpha(alpha)  end
         if icon.cooldown then icon.cooldown:SetAlpha(alpha) end
         if icon.count then icon.count:SetAlpha(alpha) end
 
@@ -1091,10 +1078,7 @@ function DF:UpdateDefensiveIconAppearance(frame)
         if frame.defensiveBarIcons then
             for _, extraIcon in pairs(frame.defensiveBarIcons) do
                 if extraIcon.texture then extraIcon.texture:SetAlpha(alpha) end
-                if extraIcon.borderLeft then extraIcon.borderLeft:SetAlpha(alpha) end
-                if extraIcon.borderRight then extraIcon.borderRight:SetAlpha(alpha) end
-                if extraIcon.borderTop then extraIcon.borderTop:SetAlpha(alpha) end
-                if extraIcon.borderBottom then extraIcon.borderBottom:SetAlpha(alpha) end
+                if extraIcon.border  then extraIcon.border:SetAlpha(alpha)  end
                 if extraIcon.cooldown then extraIcon.cooldown:SetAlpha(alpha) end
                 if extraIcon.count then extraIcon.count:SetAlpha(alpha) end
             end

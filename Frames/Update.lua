@@ -1442,6 +1442,131 @@ function DF:ApplyFrameStyle(frame)
 end
 
 -- Apply layout settings to buff or debuff icons
+-- ============================================================================
+-- Aura icon border (DF.Border) geometry — configure-once.
+-- icon.border is a solidOnly DF.Border lazily created here on first enable.
+-- This sets its band geometry + the icon-art inset; the aura hot path recolours
+-- (icon.border:SetColor, secret-safe).  Called from layout and the lightweight
+-- slider path — never per aura update.
+--
+-- Geometry mirrors the Aura Designer icon (AuraDesigner/Indicators.lua): the art
+-- is inset by the border thickness and the band frames that ring, nudged outward
+-- by BorderInset (spec.size = thickness, spec.inset = -inset, texture inset =
+-- thickness).  Identical model, so aura icons and AD icons read the same.
+-- ============================================================================
+function DF:ConfigureAuraIconBorder(icon, db, prefix, enabled)
+    if not icon then return end
+    if not enabled then
+        -- Border off: full-size art; drop any existing border.  Lazy — a disabled
+        -- icon never allocates a DF.Border.
+        DF.Border:SetIconArtInset(icon.texture, 0, false)
+        if icon.border and icon.border.SetColor then
+            DF.Border:Apply(icon.border, { enabled = false })
+        end
+        return
+    end
+    local thickness = math.max(1, db[prefix .. "BorderSize"] or 1)
+    -- Debuff colour-by-type recolours per-update with a SECRET (dispel-type)
+    -- colour, which needs a solidOnly border (SOLID, no gradient) + the
+    -- per-update SetColor path.  Everything else (buffs, debuffs with
+    -- colour-by-type OFF) is a STATIC-colour border: full toolkit, configure
+    -- once via BuildSpec, never recoloured.
+    local dynamic = (prefix == "debuff") and (db.debuffBorderColorByType ~= false)
+    -- (Re)create the border if its solidOnly mode no longer matches (the flag is
+    -- fixed at New; toggling colour-by-type flips the mode).
+    local border = icon.border
+    if not border or not border.SetColor or border._solidOnly ~= dynamic then
+        if border and border.Hide then border:Hide() end
+        border = DF.Border:New(icon, { solidOnly = dynamic, frameLevelOffset = 3 })
+        icon.border = border
+    end
+    DF.Border:SetIconArtInset(icon.texture, thickness, true)
+    -- Full toolkit via BuildSpec (iconMode = outward geometry); style/gradient/
+    -- texture/animation/colour/shadow all honoured for static borders.
+    local spec = DF.Border:BuildSpec(db, prefix, { iconMode = true })
+    spec.enabled = true
+    spec.size = thickness
+    if dynamic then
+        -- A gradient/animation can't carry a per-tick secret colour — force SOLID;
+        -- the per-update recolour supplies the dispel-type colour.
+        spec.style = "SOLID"; spec.gradient = nil; spec.animation = nil
+    end
+    DF.Border:Apply(border, spec)
+end
+
+-- Configure the unified expiring border overlay (BUFFS only) from the
+-- `<prefix>` key set (prefix = "buffExpiring": buffExpiringBorderEnabled /
+-- Thickness / Inset / Color / ColorByTime / AnimationType / …).  Configure-once
+-- at layout: paints the static colour + geometry and STARTS the configured
+-- animation; the aura timer then only raises/lowers the gate alpha (threshold
+-- visibility) and, in Color-by-Time mode, recolours per-tick.  The animation
+-- runs continuously while configured (gate alpha hides it above threshold) —
+-- same model the legacy pulse used.
+function DF:ConfigureExpiringBorder(icon, db, prefix)
+    if not icon then return end
+    local gate = icon.expiringBorderGate
+    local eb = icon.expiringBorder
+    if not gate or not eb then return end
+
+    -- The master "Enable Expiring Indicators" (<prefix>Enabled, e.g.
+    -- buffExpiringEnabled) gates the WHOLE feature — the border only shows when
+    -- BOTH it and "Show Expiring Border" (<prefix>BorderEnabled) are on.  Mirrors
+    -- AD's expiringFeatureEnabled master.  (nil = on, matching the default.)
+    local enabled = db[prefix .. "Enabled"] ~= false and db[prefix .. "BorderEnabled"]
+    icon.expiringBorderEnabled = enabled and true or false
+    local colorByTime = db[prefix .. "BorderColorByTime"] and true or false
+    icon.expiringBorderColorByTime = colorByTime
+
+    if not enabled then
+        DF.Border:Apply(eb, { enabled = false })  -- hides edges + stops animation
+        if eb.Hide then eb:Hide() end
+        gate:SetAlpha(0)
+        -- Drop any live engine registration so the shared ticker stops driving
+        -- this icon's gate (the per-aura hot path re-registers when re-enabled).
+        if DF.Expiring then DF.Expiring:Unregister(icon) end
+        icon.expiringEntry = nil
+        return
+    end
+
+    -- Color-by-Time recolours per-tick with a SECRET colour, which needs a
+    -- solidOnly border (bare SetColorTexture, no CreateColor/gradient).  When
+    -- it's off the colour is static, so the full style toolkit is available.
+    -- The flag is fixed at New, so re-create when the mode flips.
+    if eb._solidOnly ~= colorByTime then
+        if eb.Hide then eb:Hide() end
+        eb = DF.Border:New(gate, { solidOnly = colorByTime, frameLevelOffset = 0 })
+        icon.expiringBorder = eb
+    end
+
+    local thickness = math.max(1, db[prefix .. "BorderThickness"] or 2)
+    if db.pixelPerfect then thickness = DF:PixelPerfect(thickness) end
+    -- Expiring inset already uses the outward-negative convention (matches
+    -- DF.Border spec.inset directly), so pass it through WITHOUT the iconMode
+    -- sign flip the normal aura border uses.
+    local inset = db[prefix .. "BorderInset"] or -1
+
+    -- Full toolkit (style/gradient/texture/animation) from the expiring keys.
+    local spec = DF.Border:BuildSpec(db, prefix)
+    spec.enabled = true
+    spec.size = thickness
+    spec.inset = inset
+    spec.color = db[prefix .. "BorderColor"]
+    if colorByTime then
+        -- Per-tick secret recolour can't be a two-stop gradient — force a SOLID
+        -- base; the timer supplies the duration-curve colour.
+        spec.style = "SOLID"; spec.gradient = nil
+    end
+    -- The inner border frame is created Hidden (Create.lua); show it so its edges
+    -- render and the animation driver runs.  Visibility is governed by the GATE
+    -- alpha, not the frame's shown state, so this stays Shown while configured.
+    if eb.Show then eb:Show() end
+    DF.Border:Apply(eb, spec)  -- paints edges + starts the configured animation
+
+    -- Start hidden (gate alpha 0); the timer raises it when expiring so a
+    -- freshly-laid-out icon never flashes the expiring border.
+    gate:SetAlpha(0)
+end
+
 function DF:ApplyAuraLayout(frame, auraType)
     if not frame then return end
     -- When AD is enabled: skip buff layout only if showBuffs is off (AD replaces them).
@@ -1515,11 +1640,7 @@ function DF:ApplyAuraLayout(frame, auraType)
     local expiringThreshold = 30
     local expiringThresholdMode = "PERCENT"
     local expiringBorderEnabled = false
-    local expiringBorderColor = DEFAULT_EXPIRING_BORDER_COLOR
     local expiringBorderColorByTime = false
-    local expiringBorderPulsate = false
-    local expiringBorderThickness = 2
-    local expiringBorderInset = -1
     local expiringTintEnabled = false
     local expiringTintColor = DEFAULT_EXPIRING_TINT_COLOR
     
@@ -1528,35 +1649,27 @@ function DF:ApplyAuraLayout(frame, auraType)
         expiringThreshold = db.buffExpiringThreshold or 30
         expiringThresholdMode = db.buffExpiringThresholdMode or "PERCENT"
         expiringBorderEnabled = db.buffExpiringBorderEnabled or false
-        expiringBorderColor = db.buffExpiringBorderColor or DEFAULT_EXPIRING_BORDER_COLOR
         expiringBorderColorByTime = db.buffExpiringBorderColorByTime or false
-        expiringBorderPulsate = db.buffExpiringBorderPulsate or false
-        expiringBorderThickness = db.buffExpiringBorderThickness or 2
-        expiringBorderInset = db.buffExpiringBorderInset or -1
         expiringTintEnabled = db.buffExpiringTintEnabled or false
         expiringTintColor = db.buffExpiringTintColor or DEFAULT_EXPIRING_TINT_COLOR
     end
     -- Note: Debuffs don't use expiring indicators - their borders are used for debuff types
-    
-    -- Apply pixel-perfect sizing to expiring border thickness 
-    if db.pixelPerfect and auraType == "BUFF" then
-        expiringBorderThickness = DF:PixelPerfect(expiringBorderThickness)
-    end
-    
+    -- (Expiring border pixel-perfect sizing is handled inside ConfigureExpiringBorder.)
+
     -- Debuff border settings (use pre-calculated borderThickness if this is debuff type)
-    local debuffBorderThickness = auraType == "DEBUFF" and borderThickness or (db.debuffBorderThickness or 1)
+    local debuffBorderSize = auraType == "DEBUFF" and borderThickness or (db.debuffBorderSize or 1)
     local debuffBorderInset = db.debuffBorderInset or 1
     
     -- Buff border settings (use pre-calculated borderThickness if this is buff type)
-    local buffBorderThickness = auraType == "BUFF" and borderThickness or (db.buffBorderThickness or 1)
+    local buffBorderSize = auraType == "BUFF" and borderThickness or (db.buffBorderSize or 1)
     local buffBorderInset = db.buffBorderInset or 1
     
     -- Apply pixel-perfect sizing to the other type's border thickness (the current type was already done)
     if db.pixelPerfect then
         if auraType == "BUFF" then
-            debuffBorderThickness = DF:PixelPerfect(debuffBorderThickness)
+            debuffBorderSize = DF:PixelPerfect(debuffBorderSize)
         else
-            buffBorderThickness = DF:PixelPerfect(buffBorderThickness)
+            buffBorderSize = DF:PixelPerfect(buffBorderSize)
         end
     end
     
@@ -1601,11 +1714,7 @@ function DF:ApplyAuraLayout(frame, auraType)
         icon.expiringThreshold = expiringThreshold
         icon.expiringThresholdMode = expiringThresholdMode
         icon.expiringBorderEnabled = expiringBorderEnabled
-        icon.expiringBorderColor = expiringBorderColor
         icon.expiringBorderColorByTime = expiringBorderColorByTime
-        icon.expiringBorderPulsate = expiringBorderPulsate
-        icon.expiringBorderThickness = expiringBorderThickness
-        icon.expiringBorderInset = expiringBorderInset
         icon.expiringTintEnabled = expiringTintEnabled
         icon.expiringTintColor = expiringTintColor
         
@@ -1712,7 +1821,7 @@ function DF:ApplyAuraLayout(frame, auraType)
             -- Texture and layer reset (skip if Masque is actively skinning and controlling borders)
             if not (masqueActive and masqueBorderControl) then
                 -- Get border thickness for icon texture inset calculation
-                local borderThickness = auraType == "DEBUFF" and debuffBorderThickness or buffBorderThickness
+                local borderThickness = auraType == "DEBUFF" and debuffBorderSize or buffBorderSize
                 -- Ensure at least 1 pixel inset for visibility
                 local textureInset = math.max(1, borderThickness)
                 
@@ -1732,55 +1841,33 @@ function DF:ApplyAuraLayout(frame, auraType)
                 end
             end
             
-            -- Apply border thickness and inset (only if we control borders)
-            if icon.border and not (masqueActive and masqueBorderControl) then
-                local borderThickness = auraType == "DEBUFF" and debuffBorderThickness or buffBorderThickness
-                local borderInset = auraType == "DEBUFF" and debuffBorderInset or buffBorderInset
-                icon.border:ClearAllPoints()
-                icon.border:SetPoint("TOPLEFT", -borderThickness + borderInset, borderThickness - borderInset)
-                icon.border:SetPoint("BOTTOMRIGHT", borderThickness - borderInset, -borderThickness + borderInset)
+            -- Configure the border geometry via the shared helper (only if we
+            -- control borders).  Lazy: the helper creates the DF.Border when the
+            -- border is enabled and restores full-size art when it's off.
+            if not (masqueActive and masqueBorderControl) then
+                local prefix = (auraType == "DEBUFF") and "debuff" or "buff"
+                -- MUST match the Auras hot-path borderEnabled expression exactly,
+                -- or the colour path could try to show a border we never created.
+                local borderEnabled = (auraType == "DEBUFF" and db.debuffShowBorder ~= false)
+                    or (auraType ~= "DEBUFF" and db.buffShowBorder ~= false)
+                DF:ConfigureAuraIconBorder(icon, db, prefix, borderEnabled)
             end
             
             -- Expiring tint overlay
             if icon.expiringTint then
                 icon.expiringTint:SetColorTexture(expiringTintColor.r, expiringTintColor.g, expiringTintColor.b, expiringTintColor.a)
+                -- The master "Enable Expiring Indicators" gates the tint too.  The
+                -- aura timer only DRIVES the tint while the master is on, so hide
+                -- it here on layout (runs on the master toggle via UpdateAllFrames)
+                -- — otherwise a tint shown before the toggle would linger.
+                if not expiringEnabled then icon.expiringTint:Hide() end
             end
             
-            -- Expiring border (4 edge textures) - apply thickness and inset
-            if icon.expiringBorderTop then
-                local thickness = expiringBorderThickness
-                local inset = expiringBorderInset
-                
-                -- Only set static color if NOT in colorByTime mode (OnUpdate handles color in that mode)
-                if not expiringBorderColorByTime then
-                    icon.expiringBorderTop:SetVertexColor(expiringBorderColor.r, expiringBorderColor.g, expiringBorderColor.b, expiringBorderColor.a or 1)
-                    icon.expiringBorderBottom:SetVertexColor(expiringBorderColor.r, expiringBorderColor.g, expiringBorderColor.b, expiringBorderColor.a or 1)
-                    icon.expiringBorderLeft:SetVertexColor(expiringBorderColor.r, expiringBorderColor.g, expiringBorderColor.b, expiringBorderColor.a or 1)
-                    icon.expiringBorderRight:SetVertexColor(expiringBorderColor.r, expiringBorderColor.g, expiringBorderColor.b, expiringBorderColor.a or 1)
-                end
-                
-                -- Set thickness
-                icon.expiringBorderTop:SetHeight(thickness)
-                icon.expiringBorderBottom:SetHeight(thickness)
-                icon.expiringBorderLeft:SetWidth(thickness)
-                icon.expiringBorderRight:SetWidth(thickness)
-                
-                -- Position with inset (negative inset = outset)
-                icon.expiringBorderLeft:ClearAllPoints()
-                icon.expiringBorderLeft:SetPoint("TOPLEFT", icon, "TOPLEFT", inset, -inset)
-                icon.expiringBorderLeft:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", inset, inset)
-                
-                icon.expiringBorderRight:ClearAllPoints()
-                icon.expiringBorderRight:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -inset, -inset)
-                icon.expiringBorderRight:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -inset, inset)
-                
-                icon.expiringBorderTop:ClearAllPoints()
-                icon.expiringBorderTop:SetPoint("TOPLEFT", icon.expiringBorderLeft, "TOPRIGHT", 0, 0)
-                icon.expiringBorderTop:SetPoint("TOPRIGHT", icon.expiringBorderRight, "TOPLEFT", 0, 0)
-                
-                icon.expiringBorderBottom:ClearAllPoints()
-                icon.expiringBorderBottom:SetPoint("BOTTOMLEFT", icon.expiringBorderLeft, "BOTTOMRIGHT", 0, 0)
-                icon.expiringBorderBottom:SetPoint("BOTTOMRIGHT", icon.expiringBorderRight, "BOTTOMLEFT", 0, 0)
+            -- Expiring border (BUFFS only) — unified DF.Border overlay, configured
+            -- once here (geometry/colour/style/animation).  The aura timer drives
+            -- the gate alpha (threshold visibility) and Color-by-Time recolour.
+            if auraType == "BUFF" then
+                DF:ConfigureExpiringBorder(icon, db, "buffExpiring")
             end
             
             -- Cooldown swipe settings
