@@ -5773,7 +5773,9 @@ end
 -- feature gate off — both helpers are no-ops on stable builds.
 function DF:UpdateAllTestTargetedList()
     local db = DF:GetDB()
-    if db and db.testShowTargetedList and DF.ShowTestTargetedList then
+    -- Gate the test display on the feature's master Enable too — a disabled
+    -- targeted list must not show in test mode even if "show in test" is ticked.
+    if db and db.testShowTargetedList and db.targetedListEnabled and DF.ShowTestTargetedList then
         DF:ShowTestTargetedList()
     elseif DF.HideTestTargetedList then
         DF:HideTestTargetedList()

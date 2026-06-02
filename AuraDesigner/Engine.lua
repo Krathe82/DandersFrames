@@ -1138,8 +1138,16 @@ function Engine:ForceRefreshAllFrames()
     end
 
     local function TryUpdate(frame)
-        if frame and frame:IsVisible() and DF:IsAuraDesignerEnabled(frame) then
-            Engine:UpdateFrame(frame)
+        if not frame then return end
+        if DF:IsAuraDesignerEnabled(frame) then
+            if frame:IsVisible() then
+                Engine:UpdateFrame(frame)
+            end
+        else
+            -- AD is OFF for this frame's mode (toggled off, or a profile swap to
+            -- an AD-off profile) — tear down any leftover indicators so they
+            -- don't freeze on screen (timers stopped) until the next /reload.
+            Engine:ClearFrame(frame)
         end
     end
 

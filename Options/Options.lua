@@ -5357,7 +5357,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.PreviewPrivateAuraAnchors then DF:PreviewPrivateAuraAnchors() end
             if DF.UpdateAllTestBossDebuffs then DF:UpdateAllTestBossDebuffs() end
             self:RefreshStates()
-        end, true), 55)
+        end, true), 40)
         iconSize.hideOn = HideBossDebuffOptions
 
         -- Stack text warning note + "Show me" button container
@@ -5383,15 +5383,17 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end)
         showMeBtn:SetScript("OnEnter", function(s) s:SetBackdropBorderColor(0.6, 0.6, 0.6, 1) end)
         showMeBtn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.4, 0.4, 0.4, 1) end)
-        local stackNote = sizeGroup:AddWidget(stackNoteContainer, 65)
+        local stackNote = sizeGroup:AddWidget(stackNoteContainer, 76)
         stackNote.hideOn = function(d)
             return not d.bossDebuffsEnabled or (d.bossDebuffsIconSize or 20) >= 30
         end
-        local borderScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Scale"], 0, 2.0, 0.1, db, "bossDebuffsBorderScale", nil, function()
+        local borderScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Scale"], -5, 5, 1, db, "bossDebuffsBorderScale", nil, function()
             if DF.PreviewPrivateAuraAnchors then DF:PreviewPrivateAuraAnchors() end
             if DF.UpdateAllTestBossDebuffs then DF:UpdateAllTestBossDebuffs() end
-        end, true), 55)
+        end, true), 40)
         borderScale.hideOn = HideBossDebuffOptions
+        local borderScaleNote = sizeGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFFD100Tip:|r Set border scale to a negative value to hide the border entirely.", 250), 50)
+        borderScaleNote.hideOn = HideBossDebuffOptions
         local spacing = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 20, 1, db, "bossDebuffsSpacing", nil, function()
             if DF.UpdateAllPrivateAuraPositions then DF:UpdateAllPrivateAuraPositions() end
             if DF.UpdateAllTestBossDebuffs then DF:UpdateAllTestBossDebuffs() end
@@ -6161,6 +6163,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable"], db, "targetedListEnabled", function()
                 self:RefreshStates()
                 if DF.ToggleTargetedList then DF:ToggleTargetedList(db.targetedListEnabled) end
+                -- Reflect the enable change in test mode immediately (so disabling
+                -- hides the test display, not just the live bars).
+                if DF.UpdateAllTestTargetedList then DF:UpdateAllTestTargetedList() end
             end), 30)
             local tlImportantOnly = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Important Spells Only"], db, "targetedListImportantOnly", TargetedListUpdate), 30)
             tlImportantOnly.disableOn = HideTLOptions
@@ -6755,13 +6760,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local roleOnlyInCombatDesc = Add(GUI:CreateLabel(self.child, L["When enabled, all role icons are shown outside of combat. The filters below only apply during combat."], 250), 40, 1)
         roleSection:RegisterChild(roleOnlyInCombatDesc)
 
-        local roleShowTank = Add(GUI:CreateCheckbox(self.child, L["Show Tank"], db, "roleIconShowTank", nil), 30, 1)
+        local roleShowTank = Add(GUI:CreateCheckbox(self.child, L["Show Tank"], db, "roleIconShowTank", function() DF:UpdateAllRoleIcons() end), 30, 1)
         roleSection:RegisterChild(roleShowTank)
         
-        local roleShowHealer = Add(GUI:CreateCheckbox(self.child, L["Show Healer"], db, "roleIconShowHealer", nil), 30, 1)
+        local roleShowHealer = Add(GUI:CreateCheckbox(self.child, L["Show Healer"], db, "roleIconShowHealer", function() DF:UpdateAllRoleIcons() end), 30, 1)
         roleSection:RegisterChild(roleShowHealer)
         
-        local roleShowDPS = Add(GUI:CreateCheckbox(self.child, L["Show DPS"], db, "roleIconShowDPS", nil), 30, 1)
+        local roleShowDPS = Add(GUI:CreateCheckbox(self.child, L["Show DPS"], db, "roleIconShowDPS", function() DF:UpdateAllRoleIcons() end), 30, 1)
         roleSection:RegisterChild(roleShowDPS)
         
         local roleScale = Add(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "roleIconScale", nil, function() DF:LightweightUpdateIconPosition("role") end, true), 55, 1)

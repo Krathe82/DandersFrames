@@ -4030,6 +4030,9 @@ local function CreateEnableBanner(parent)
                 DF:AuraDesigner_RefreshPage()
                 DF:InvalidateAuraLayout()
                 DF:UpdateAllFrames()
+                if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
+                    DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+                end
             end, function()
                 -- Cancelled — revert checkbox
                 self:SetChecked(false)
@@ -4040,6 +4043,11 @@ local function CreateEnableBanner(parent)
             DF:AuraDesigner_RefreshPage()
             DF:InvalidateAuraLayout()
             DF:UpdateAllFrames()
+            -- Sync AD indicators to the now-disabled state — clears the leftover
+            -- indicators instead of leaving them frozen on screen until /reload.
+            if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
+                DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+            end
         end
     end)
 
