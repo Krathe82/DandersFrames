@@ -3539,17 +3539,22 @@ DF._MainEventDispatcher = function(self, event, arg1)
         end
 
         -- Recolour the Reduced Max Health bar off solid black.
-        -- The old default was opaque black {0,0,0,1}; flip any profile still on
-        -- that exact value to the new translucent grey (#757575CB). One-time per
-        -- mode (flag) so a user who deliberately picks black afterwards isn't
-        -- reverted, and any already-customised (non-black) colour is left alone.
+        -- The old shipped default was opaque black {0,0,0,1}, which reads as empty
+        -- space on a dark bar. Flip any profile still on one of our prior defaults
+        -- — that black, OR the short-lived in-development grey #757575CB — to the
+        -- new #808080CD (50% grey @ ~80% alpha). One-time per mode (flag) so a
+        -- later deliberate colour choice isn't reverted; non-matching (customised)
+        -- colours are left alone. (The #757575CB branch only matters to in-dev
+        -- testers; no released build ever shipped that value.)
         local function recolorReducedMaxHealth(modeDb)
-            if modeDb and not modeDb._reducedMaxHealthRecolorV1 then
+            if modeDb and not modeDb._reducedMaxHealthRecolorV2 then
                 local c = modeDb.reducedMaxHealthColor
-                if c and c.r == 0 and c.g == 0 and c.b == 0 and c.a == 1 then
-                    modeDb.reducedMaxHealthColor = { r = 0.4588, g = 0.4588, b = 0.4588, a = 0.7961 }
+                local isOldBlack = c and c.r == 0 and c.g == 0 and c.b == 0 and c.a == 1
+                local isDevGrey  = c and c.r == 0.4588 and c.g == 0.4588 and c.b == 0.4588 and c.a == 0.7961
+                if isOldBlack or isDevGrey then
+                    modeDb.reducedMaxHealthColor = { r = 0.502, g = 0.502, b = 0.502, a = 0.8039 }
                 end
-                modeDb._reducedMaxHealthRecolorV1 = true
+                modeDb._reducedMaxHealthRecolorV2 = true
             end
         end
         for _, mode in ipairs({"party", "raid"}) do
