@@ -3538,6 +3538,31 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- Recolour the Reduced Max Health bar off solid black.
+        -- The old default was opaque black {0,0,0,1}; flip any profile still on
+        -- that exact value to the new translucent grey (#757575CB). One-time per
+        -- mode (flag) so a user who deliberately picks black afterwards isn't
+        -- reverted, and any already-customised (non-black) colour is left alone.
+        local function recolorReducedMaxHealth(modeDb)
+            if modeDb and not modeDb._reducedMaxHealthRecolorV1 then
+                local c = modeDb.reducedMaxHealthColor
+                if c and c.r == 0 and c.g == 0 and c.b == 0 and c.a == 1 then
+                    modeDb.reducedMaxHealthColor = { r = 0.4588, g = 0.4588, b = 0.4588, a = 0.7961 }
+                end
+                modeDb._reducedMaxHealthRecolorV1 = true
+            end
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            recolorReducedMaxHealth(DF.db[mode])
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    recolorReducedMaxHealth(profile[mode])
+                end
+            end
+        end
+
         -- Migrate the legacy `groupLabelShadow` (duplicate-fontstring shadow) into
         -- the new composite outline encoding from PR #115. If the user previously
         -- had the legacy shadow on, prepend "SHADOW;" to groupLabelOutline so they
