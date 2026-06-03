@@ -12,7 +12,7 @@ local L = DF.L
 
 DF.TestData = {
     units = {
-        {name = "Tankerino", class = "WARRIOR", role = "TANK", specID = 73, health = 1.0, maxHealth = 100000, absorb = 0.20, healAbsorb = 0, healPrediction = 0.15, status = nil, outOfRange = false, isLeader = true, raidTarget = 8, dispelType = nil, centerStatus = nil, isMainTank = true, isAFK = false, isPhased = false, inVehicle = false, hasMyBuff = true, reducedMaxPct = 0.20},  -- Skull marker, leader, main tank, has HoT
+        {name = "Tankerino", class = "WARRIOR", role = "TANK", specID = 73, health = 1.0, maxHealth = 100000, absorb = 0.20, healAbsorb = 0, healPrediction = 0.15, status = nil, outOfRange = false, isLeader = true, raidTarget = 8, dispelType = nil, centerStatus = nil, isMainTank = true, isAFK = false, isPhased = false, inVehicle = false, isBGCarrier = true, hasMyBuff = true, reducedMaxPct = 0.20},  -- Skull marker, leader, main tank, has HoT, carrying objective
         {name = "Healsworth", class = "PRIEST", role = "HEALER", specID = 257, health = 0.95, maxHealth = 85000, absorb = 0.10, healAbsorb = 0, healPrediction = 0.05, status = nil, outOfRange = false, isAssist = true, raidTarget = nil, dispelType = "Magic", centerStatus = "summon", isMainAssist = true, isAFK = false, isPhased = false, inVehicle = false, hasMyBuff = false, reducedMaxPct = 0},  -- Assistant, main assist, summon pending
         {name = "Мишок", class = "MAGE", role = "DAMAGER", specID = 63, health = 0.60, maxHealth = 75000, absorb = 0, healAbsorb = 0.15, healPrediction = 0.15, status = nil, outOfRange = true, raidTarget = 1, dispelType = "Curse", centerStatus = nil, isAFK = true, isPhased = false, inVehicle = false, hasMyBuff = true, reducedMaxPct = 0},  -- Star marker, AFK, has HoT
         {name = "Alexandrosthegreat", class = "PALADIN", role = "DAMAGER", specID = 70, health = 0, maxHealth = 90000, absorb = 0, healAbsorb = 0, healPrediction = 0, status = "Dead", outOfRange = false, raidTarget = nil, dispelType = nil, centerStatus = "resurrect", isAFK = false, isPhased = false, inVehicle = false, hasMyBuff = false, reducedMaxPct = 0},  -- Dead unit, being resurrected
@@ -28,26 +28,26 @@ DF.TestData = {
         {icon = "Interface\\Icons\\Spell_Holy_Restoration", name = "Restoration", duration = 8, stacks = 0},
         {icon = "Interface\\Icons\\Spell_Holy_GreaterHeal", name = "Greater Heal", duration = 6, stacks = 2},
         {icon = "Interface\\Icons\\Spell_Nature_LightningShield", name = "Lightning Shield", duration = 600, stacks = 9},
-        {icon = "Interface\\Icons\\Spell_Holy_SealOfRighteousness", name = "Seal of Righteousness", duration = 0, stacks = 0},
-        {icon = "Interface\\Icons\\Spell_Magic_GreaterBlessingOfKings", name = "Blessing of Kings", duration = 0, stacks = 0},
+        {icon = "Interface\\Icons\\Spell_Holy_DivineShield", name = "Seal of Righteousness", duration = 0, stacks = 0},
+        {icon = "Interface\\Icons\\Spell_Holy_WordFortitude", name = "Blessing of Kings", duration = 0, stacks = 0},
     },
     debuffs = {
         {icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", name = "Shadow Word: Pain", duration = 18, stacks = 0, debuffType = "Magic"},
         {icon = "Interface\\Icons\\Spell_Nature_NullifyPoison", name = "Deadly Poison", duration = 8, stacks = 2, debuffType = "Poison"},
-        {icon = "Interface\\Icons\\Spell_Shadow_CurseOfTongues", name = "Curse of Tongues", duration = 30, stacks = 0, debuffType = "Curse"},
+        {icon = "Interface\\Icons\\Spell_Shadow_CurseOfSargeras", name = "Curse of Tongues", duration = 30, stacks = 0, debuffType = "Curse"},
         {icon = "Interface\\Icons\\Ability_Rogue_Garrote", name = "Garrote", duration = 18, stacks = 0, debuffType = nil},
-        {icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", name = "Disease", duration = 21, stacks = 0, debuffType = "Disease"},
+        {icon = "Interface\\Icons\\Spell_Shadow_AbominationExplosion", name = "Disease", duration = 21, stacks = 0, debuffType = "Disease"},
         {icon = "Interface\\Icons\\Spell_Fire_Immolation", name = "Immolate", duration = 15, stacks = 0, debuffType = "Magic"},
         {icon = "Interface\\Icons\\Ability_Druid_Rake", name = "Rake", duration = 15, stacks = 0, debuffType = nil},
         {icon = "Interface\\Icons\\Spell_Nature_Slow", name = "Slow", duration = 12, stacks = 0, debuffType = "Magic"},
-        {icon = "Interface\\Icons\\Ability_Creature_Disease_05", name = "Plague", duration = 24, stacks = 3, debuffType = "Disease"},
+        {icon = "Interface\\Icons\\Spell_DeathKnight_FrostFever", name = "Plague", duration = 24, stacks = 3, debuffType = "Disease"},
         {icon = "Interface\\Icons\\Spell_Shadow_Possession", name = "Fear", duration = 8, stacks = 0, debuffType = "Magic"},
     },
     -- Boss debuffs (Private Auras) - these simulate what boss mechanics look like
     bossDebuffs = {
-        {icon = "Interface\\Icons\\Spell_Shadow_ShadesOfDarkness", name = "Ethereal Shackles", duration = 8, debuffType = "Magic"},
-        {icon = "Interface\\Icons\\Spell_Fire_FelFlameBreath", name = "Searing Brand", duration = 12, debuffType = "Magic"},
-        {icon = "Interface\\Icons\\Ability_Warlock_ShadowFlame", name = "Shadow Burn", duration = 6, debuffType = nil},
+        {icon = "Interface\\Icons\\Spell_Shadow_MindFlay", name = "Ethereal Shackles", duration = 8, debuffType = "Magic"},
+        {icon = "Interface\\Icons\\Spell_Fire_Fireball02", name = "Searing Brand", duration = 12, debuffType = "Magic"},
+        {icon = "Interface\\Icons\\Spell_Shadow_ShadowBolt", name = "Shadow Burn", duration = 6, debuffType = nil},
         {icon = "Interface\\Icons\\Spell_Shadow_DevouringPlague", name = "Devouring Void", duration = 10, debuffType = "Magic"},
     },
     animationTimer = nil,
@@ -257,6 +257,7 @@ function DF:GetTestUnitData(index, isRaid, isBoss)
             isAFK = (i == 3 or i == 15),  -- Frames 3 and 15
             isPhased = (i == 4 or i == 20),  -- Frames 4 and 20
             inVehicle = (i == 5 or i == 30),  -- Frames 5 and 30
+            isBGCarrier = (i == 2 or i == 10),  -- Frames 2 and 10 carry an objective
         }
         
         -- Apply animation if enabled
@@ -304,6 +305,7 @@ function DF:GetTestUnitData(index, isRaid, isBoss)
         isAFK = data.isAFK,
         isPhased = data.isPhased,
         inVehicle = data.inVehicle,
+        isBGCarrier = data.isBGCarrier,
     }
     
     -- Don't animate dead or offline units
@@ -1534,7 +1536,35 @@ function DF:UpdateTestStatusIcons(frame, testData)
             frame.summonIcon:Hide()
         end
     end
-    
+
+    -- BG Objective Carrier Icon
+    if frame.bgCarrierIcon then
+        if not db.bgCarrierIconEnabled or db.testShowStatusIcons == false then
+            frame.bgCarrierIcon:Hide()
+        elseif testData.isBGCarrier then
+            DF:SetUpgradedStatusIcon(frame.bgCarrierIcon.texture, "Interface\\Icons\\inv_bannerpvp_02")
+
+            local scale = db.bgCarrierIconScale or 1.0
+            local anchor = db.bgCarrierIconAnchor or "CENTER"
+            local x = db.bgCarrierIconX or 0
+            local y = db.bgCarrierIconY or 0
+            frame.bgCarrierIcon:SetScale(scale)
+            frame.bgCarrierIcon:ClearAllPoints()
+            frame.bgCarrierIcon:SetPoint(anchor, frame, anchor, x, y)
+            frame.bgCarrierIcon:SetAlpha(db.bgCarrierIconAlpha or 1)
+
+            ShowTestIconAsText(frame.bgCarrierIcon, db.bgCarrierIconText or "FC", db.bgCarrierIconShowText, db, "bgCarrierIcon")
+            frame.bgCarrierIcon:Show()
+
+            local frameLevel = db.bgCarrierIconFrameLevel or 0
+            if frameLevel > 0 then
+                frame.bgCarrierIcon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
+            end
+        else
+            frame.bgCarrierIcon:Hide()
+        end
+    end
+
     -- Resurrection Icon
     if frame.resurrectionIcon then
         if not db.resurrectionIconEnabled or db.testShowStatusIcons == false then

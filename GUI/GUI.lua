@@ -418,6 +418,13 @@ function GUI:CreateCollapsibleSection(parent, text, defaultExpanded, width)
                 local co = data.coords
                 DF:SetIconTextureOrAtlas(slot.tex, data.texture, co and co[1], co and co[2], co and co[3], co and co[4])
                 slot.tex:SetDesaturated(dim)
+                -- Optional per-entry inset: textures that fill their cell edge-to-edge
+                -- (e.g. raid-target markers) read bigger than the padded status-icon
+                -- atlases. data.inset shrinks the swatch to match.
+                local pad = data.inset or 0
+                slot.tex:ClearAllPoints()
+                slot.tex:SetPoint("TOPLEFT", slot, "TOPLEFT", pad, -pad)
+                slot.tex:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -pad, pad)
                 slot.tex:Show()
             end
             slot:SetWidth(w)

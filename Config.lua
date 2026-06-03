@@ -876,12 +876,12 @@ DF.PartyDefaults = {
 
     -- AFK Icon
     afkIconAlpha = 0.8,
-    afkIconAnchor = "BOTTOM",
+    afkIconAnchor = "CENTER",
     afkIconEnabled = true,
     afkIconFrameLevel = 0,
     afkIconHideInCombat = true,
-    afkIconScale = 1,
-    afkIconShowText = true,
+    afkIconScale = 0.7,
+    afkIconShowText = false,
     afkIconShowTimer = true,
     afkIconText = "AFK",
     afkIconTextColor = {r = 1, g = 0.5, b = 0, a = 1},
@@ -890,11 +890,11 @@ DF.PartyDefaults = {
     -- font. The countdown no longer wobbles because ApplyTimerTextSettings LEFT-
     -- justifies it (the changing seconds sit on the right with nothing to push). A
     -- monospace font is still selectable if perfectly zero movement is wanted.
-    afkIconTimerFontSize = 10,
+    afkIconTimerFontSize = 16,
     afkIconTimerX = 0,
-    afkIconTimerY = -1,
+    afkIconTimerY = 1,
     afkIconX = 0,
-    afkIconY = 2,
+    afkIconY = 0,
 
     -- Aggro Highlight
     aggroColorHighThreat = {r = 1, g = 1, b = 0.47},
@@ -2030,18 +2030,30 @@ DF.PartyDefaults = {
 
     -- Summon Icon
     summonIconAlpha = 1,
-    summonIconAnchor = "BOTTOM",
+    summonIconAnchor = "CENTER",
     summonIconEnabled = true,
     summonIconFrameLevel = 0,
     summonIconHideInCombat = false,
     summonIconScale = 1.5,
-    summonIconShowText = true,
+    summonIconShowText = false,
     summonIconTextAccepted = "Accepted",
     summonIconTextColor = {r = 0.6, g = 0.2, b = 1},
     summonIconTextDeclined = "Declined",
     summonIconTextPending = "Summon",
     summonIconX = 0,
-    summonIconY = 9,
+    summonIconY = 0,
+
+    -- BG Objective Carrier Icon (flag / orb carrier)
+    bgCarrierIconAlpha = 1,
+    bgCarrierIconAnchor = "CENTER",
+    bgCarrierIconEnabled = true,
+    bgCarrierIconFrameLevel = 0,
+    bgCarrierIconScale = 1,
+    bgCarrierIconShowText = false,
+    bgCarrierIconText = "FC",
+    bgCarrierIconTextColor = {r = 1, g = 0.82, b = 0},
+    bgCarrierIconX = 0,
+    bgCarrierIconY = 0,
 
     -- Targeted Spells (on-frame)
     targetedSpellAlpha = 1,
@@ -2441,12 +2453,12 @@ DF.RaidDefaults = {
 
     -- AFK Icon
     afkIconAlpha = 0.8,
-    afkIconAnchor = "BOTTOM",
+    afkIconAnchor = "CENTER",
     afkIconEnabled = true,
     afkIconFrameLevel = 0,
     afkIconHideInCombat = true,
-    afkIconScale = 1,
-    afkIconShowText = true,
+    afkIconScale = 0.7,
+    afkIconShowText = false,
     afkIconShowTimer = true,
     afkIconText = "AFK",
     afkIconTextColor = {r = 1, g = 0.5, b = 0, a = 1},
@@ -2455,11 +2467,11 @@ DF.RaidDefaults = {
     -- font. The countdown no longer wobbles because ApplyTimerTextSettings LEFT-
     -- justifies it (the changing seconds sit on the right with nothing to push). A
     -- monospace font is still selectable if perfectly zero movement is wanted.
-    afkIconTimerFontSize = 10,
+    afkIconTimerFontSize = 16,
     afkIconTimerX = 0,
-    afkIconTimerY = -1,
+    afkIconTimerY = 1,
     afkIconX = 0,
-    afkIconY = 2,
+    afkIconY = 0,
 
     -- Aggro Highlight
     aggroColorHighThreat = {r = 1, g = 1, b = 0.47},
@@ -3595,18 +3607,30 @@ DF.RaidDefaults = {
 
     -- Summon Icon
     summonIconAlpha = 1,
-    summonIconAnchor = "BOTTOM",
+    summonIconAnchor = "CENTER",
     summonIconEnabled = true,
     summonIconFrameLevel = 0,
     summonIconHideInCombat = false,
     summonIconScale = 1.5,
-    summonIconShowText = true,
+    summonIconShowText = false,
     summonIconTextAccepted = "Accepted",
     summonIconTextColor = {r = 0.6, g = 0.2, b = 1},
     summonIconTextDeclined = "Declined",
     summonIconTextPending = "Summon",
     summonIconX = 0,
-    summonIconY = 9,
+    summonIconY = 0,
+
+    -- BG Objective Carrier Icon (flag / orb carrier)
+    bgCarrierIconAlpha = 1,
+    bgCarrierIconAnchor = "CENTER",
+    bgCarrierIconEnabled = true,
+    bgCarrierIconFrameLevel = 0,
+    bgCarrierIconScale = 1,
+    bgCarrierIconShowText = false,
+    bgCarrierIconText = "FC",
+    bgCarrierIconTextColor = {r = 1, g = 0.82, b = 0},
+    bgCarrierIconX = 0,
+    bgCarrierIconY = 0,
 
     -- Targeted Spells (on-frame)
     targetedSpellAlpha = 1,
