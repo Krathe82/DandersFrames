@@ -239,10 +239,29 @@ function LiveSource:GetPowerTypeToken()
     return token or "MANA"
 end
 
+-- "RUNIC_POWER" -> "Runic Power", "FOCUS" -> "Focus". Used as a guaranteed
+-- fallback so we never leak a raw token like "POWER_TYPE_FOCUS" to the display.
+local function prettyPowerToken(token)
+    local parts = {}
+    for word in token:gmatch("[^_]+") do
+        parts[#parts + 1] = word:sub(1, 1):upper() .. word:sub(2):lower()
+    end
+    return table.concat(parts, " ")
+end
+
 function LiveSource:GetPowerTypeString()
     local _, token = UnitPowerType(self.unit)
     if not token then return "" end
-    return _G["POWER_TYPE_" .. token] or token
+    -- WoW exposes localized power-type names as BARE-token global strings
+    -- (FOCUS = "Focus", MANA = "Mana", RUNIC_POWER = "Runic Power"). The old
+    -- "POWER_TYPE_"..token lookup hit no such global and leaked the raw key
+    -- ("POWER_TYPE_FOCUS"). Prefer the localized global; fall back to a
+    -- title-cased token if it's missing.
+    local name = _G[token]
+    if type(name) == "string" and name ~= "" then
+        return name
+    end
+    return prettyPowerToken(token)
 end
 
 function LiveSource:GetAbsorbAmount()
@@ -250,25 +269,14 @@ function LiveSource:GetAbsorbAmount()
 end
 
 function LiveSource:GetOvershieldAmount()
-    -- Uses the calculator's clamp-mode trick. See Frames/Bars.lua:495-503
-    -- for the canonical absorb-calculator usage. The calculator returns
-    -- (clampedAmount, isClamped).
-    --
-    -- KNOWN LIMITATION: computing overshield as `total - clamped` requires
-    -- arithmetic on two secret values, which throws on Midnight. There is
-    -- no current secret-safe path; this resolver will error in restricted
-    -- contexts. Listed as a TODO until a secret-safe alternative is found
-    -- (e.g. a calculator method that returns excess directly).
-    local calc = self.frame and self.frame.absorbCalculator
-    if not calc or not _G.UnitGetDetailedHealPrediction or not calc.GetDamageAbsorbs then return 0 end
-    calc:SetDamageAbsorbClampMode(1)  -- 1 = Clamp to Missing Health
-    UnitGetDetailedHealPrediction(self.unit, nil, calc)
-    local clamped = calc:GetDamageAbsorbs()
-    if not clamped then return 0 end
-    local total = UnitGetTotalAbsorbs(self.unit) or 0
-    local excess = total - clamped
-    if not excess or excess <= 0 then return 0 end
-    return excess
+    -- DISABLED on Midnight. Overshield = (total absorb) - (absorb clamped to
+    -- missing health), but both are SECRET numbers and subtracting them throws
+    -- "arithmetic on a secret value". There is no current secret-safe path to
+    -- the excess (Cell hits the same wall and shows full absorbs instead). The
+    -- overshield_amount content type is removed from the picker until a
+    -- secret-safe API (e.g. a calculator method returning the excess directly)
+    -- exists. Returning 0 keeps any orphaned element blank instead of erroring.
+    return 0
 end
 
 function LiveSource:GetHealAbsorbAmount()
@@ -276,16 +284,24 @@ function LiveSource:GetHealAbsorbAmount()
 end
 
 function LiveSource:GetIncomingHealTotal()
-    -- Prefer cached value from UpdateHealPrediction (Phase C stash)
-    if self.frame and self.frame.dfTotalHeals ~= nil then
-        return self.frame.dfTotalHeals
+    -- Prefer the value stashed by UpdateHealPrediction. It may be a SECRET
+    -- number on Midnight, so test IsSecret BEFORE the `~= nil` comparison —
+    -- comparing a secret with ~= throws "execution tainted" (same class as
+    -- the dfInRange guard in Range.lua). A secret value is, by definition,
+    -- present, so the IsSecret branch short-circuits the nil check.
+    if self.frame then
+        local v = self.frame.dfTotalHeals
+        if getMS().IsSecret(v) then return v end
+        if v ~= nil then return v end
     end
     return UnitGetIncomingHeals(self.unit) or 0
 end
 
 function LiveSource:GetIncomingHealFromPlayer()
-    if self.frame and self.frame.dfMyHeals ~= nil then
-        return self.frame.dfMyHeals
+    if self.frame then
+        local v = self.frame.dfMyHeals
+        if getMS().IsSecret(v) then return v end
+        if v ~= nil then return v end
     end
     return UnitGetIncomingHeals(self.unit, "player") or 0
 end
@@ -307,11 +323,19 @@ function LiveSource:IsFeignDeath()
 end
 
 function LiveSource:GetAggroFlag()
+    -- Prefer the value stashed by UpdateHighlights (Features/Highlights.lua)
+    -- so we don't call UnitThreatSituation a second time per refresh.
+    if self.frame and self.frame.dfThreatStatus ~= nil then
+        return self.frame.dfThreatStatus
+    end
     return UnitThreatSituation(self.unit) or 0
 end
 
 function LiveSource:GetThreatPercent()
-    local _, _, pct = UnitDetailedThreatSituation("player", self.unit)
+    -- This unit's scaled threat % against its current target (e.g. a raid
+    -- member's threat on the boss). The old ("player", unit) form measured the
+    -- PLAYER's threat against this unit, which is always nil on friendly frames.
+    local _, _, pct = UnitDetailedThreatSituation(self.unit, self.unit .. "target")
     return pct
 end
 

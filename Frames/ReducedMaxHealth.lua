@@ -150,6 +150,10 @@ function DF:UpdateAllVisibleReducedMaxHealth(unit)
     local function updateFrame(frame)
         if frame and frame:IsShown() and (not unit or frame.unit == unit) then
             DF:UpdateReducedMaxHealth(frame)
+            -- TD: hp_max_reduction is a "health"-hinted element. It's driven by
+            -- UNIT_MAX_HEALTH_MODIFIERS_CHANGED (not UNIT_MAXHEALTH), so the
+            -- dispatcher's health hook doesn't cover it — refresh here instead.
+            if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
         end
     end
 

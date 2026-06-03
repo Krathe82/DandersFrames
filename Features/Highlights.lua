@@ -673,6 +673,15 @@ function DF:UpdateHighlights(frame, forceSelection, forceAggro)
             isAggro = status and status > 0
         end
     end
+
+    -- TD: stash the threat status (already fetched above for the aggro border)
+    -- so the TextDesigner LiveSource reads it without a second
+    -- UnitThreatSituation call, then refresh threat text elements. Done here
+    -- (right after the value is known) rather than at the function tail so it
+    -- still fires on the visible/live path. Hint-filtered, so it's a no-op
+    -- unless an aggro_flag / threat_percent element exists.
+    frame.dfThreatStatus = status
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "threat") end
     
     -- Get modes
     local selectionMode = db.selectionHighlightMode or "SOLID"

@@ -1301,6 +1301,12 @@ function DF:UpdateRangeAppearance(frame)
         -- We only need to update the frame-level OOR alpha here.
         DF:UpdateFrameAppearance(frame)
     end
+
+    -- TD live rendering: range_text refresh. This is the single choke point
+    -- every UpdateRange path (and the range ticker) funnels through, so it
+    -- catches the fast-path cache-hit cases a hook on UpdateRange's tail would
+    -- miss. Hint-filtered, so it's a no-op unless a range_text element exists.
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "range") end
 end
 
 -- ============================================================

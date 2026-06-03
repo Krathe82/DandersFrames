@@ -8652,6 +8652,18 @@ local function FindPinnedFrameForUnit(unit)
     return nil
 end
 
+-- TextDesigner live-text refresh helper. No-op unless the TD module loaded
+-- (alpha builds only — DF.UpdateTextDesigner is nil otherwise). Driven from
+-- the central dispatcher rather than from each update function's tail, so the
+-- refresh fires once per event regardless of which fast/slow internal path the
+-- update function took (the big bar functions have fast-path early returns that
+-- a tail hook would miss, leaving text stale in combat).
+local function tdRefresh(frame, pinnedFrame, hint)
+    if not DF.UpdateTextDesigner then return end
+    if frame then DF:UpdateTextDesigner(frame, hint) end
+    if pinnedFrame then DF:UpdateTextDesigner(pinnedFrame, hint) end
+end
+
 headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
     -- Skip if headers not initialized
     if not DF.headersInitialized then return end
@@ -8692,6 +8704,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     DF:UpdateHealthFast(pinnedFrame)
                 end
             end
+            tdRefresh(frame, pinnedFrame, "health")
         end
         return
     end
@@ -8717,6 +8730,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     DF:UpdatePower(pinnedFrame)
                 end
             end
+            tdRefresh(frame, pinnedFrame, "power")
         end
         return
     end
@@ -8754,6 +8768,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     DF:UpdateName(pinnedFrame)
                 end
             end
+            tdRefresh(frame, pinnedFrame, "name")
         end
         return
     end
@@ -8967,6 +8982,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
             if pinnedFrame then
                 DF:UpdateAbsorb(pinnedFrame)
             end
+            tdRefresh(frame, pinnedFrame, "absorb")
         end
         return
     end
@@ -8983,6 +8999,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
             if pinnedFrame then
                 DF:UpdateHealAbsorb(pinnedFrame)
             end
+            tdRefresh(frame, pinnedFrame, "absorb")
         end
         return
     end
@@ -9000,6 +9017,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
             if pinnedFrame then
                 DF:UpdateHealPrediction(pinnedFrame)
             end
+            tdRefresh(frame, pinnedFrame, "heal")
         end
         return
     end
@@ -9133,6 +9151,9 @@ function externalDefSubscriber:OnUnitAura(event, unit)
             DF:UpdateExternalDefIcon(pinnedFrame)
         end
     end
+    -- TD: feign-death status_text changes show up as auras (UnitIsFeignDeath),
+    -- so refresh status text (under the "health" hint) on aura updates.
+    tdRefresh(frame, pinnedFrame, "health")
 end
 DF:RegisterRosterUnitEvent(externalDefSubscriber, "UNIT_AURA", "OnUnitAura")
 

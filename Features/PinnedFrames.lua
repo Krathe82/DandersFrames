@@ -720,6 +720,10 @@ function PinnedFrames:CreateBossFrames(setIndex, container)
                 if DF.UpdateHealthFast then DF:UpdateHealthFast(self) end
                 if event == "UNIT_MAX_HEALTH_MODIFIERS_CHANGED" and DF.UpdateReducedMaxHealth then
                     DF:UpdateReducedMaxHealth(self)
+                    -- TD: hp_max_reduction refresh for pinned frames. Only on this
+                    -- event — the central dispatcher already covers pinned frames
+                    -- for UNIT_HEALTH/MAXHEALTH, but it doesn't handle this one.
+                    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(self, "health") end
                 end
 
             elseif event == "UNIT_POWER_UPDATE"

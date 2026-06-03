@@ -124,15 +124,20 @@ local CONTENT_TYPES = {
     { key = "power_type_string", label = L["Power Type String"],          category = "power"    },
     -- Shields & Heals
     { key = "absorb_amount",     label = L["Absorb Amount"],              category = "shields"  },
-    { key = "overshield_amount", label = L["Overshield Amount"],          category = "shields"  },
+    -- overshield_amount is disabled: computing it needs secret-value arithmetic
+    -- (total - clamped) which throws on Midnight. No secret-safe path exists yet.
+    -- { key = "overshield_amount", label = L["Overshield Amount"],          category = "shields"  },
     { key = "heal_absorb_amount",label = L["Heal Absorb Amount"],         category = "shields"  },
     { key = "incoming_heal",     label = L["Incoming Heal"],              category = "shields"  },
-    { key = "incoming_heal_mine",label = L["Incoming Heal From Me Only"], category = "shields"  },
+    -- incoming_heal_mine removed from the picker: in practice it reads identical
+    -- to incoming_heal in-game. Resolver/getter left intact for any existing
+    -- elements; just not offered as a new choice.
+    -- { key = "incoming_heal_mine",label = L["Incoming Heal From Me Only"], category = "shields"  },
     -- Status
     { key = "status_text",       label = L["Dead / Offline / Ghost"],     category = "status"   },
     -- Threat & Range
     { key = "aggro_flag",        label = L["Aggro Flag"],                 category = "threat"   },
-    { key = "threat_percent",    label = L["Threat %"],                   category = "threat"   },
+    { key = "threat_percent",    label = L["Threat on Current Target"],   category = "threat"   },
     { key = "range_text",        label = L["In-Range / OOR Text"],        category = "threat"   },
     -- Group
     { key = "group",             label = L["Text Group"],                 category = "group"    },
@@ -204,18 +209,24 @@ local BuildPicker
 -- tdDB / state / page are needed by the Text Group branch so its nested
 -- add/remove callbacks can trigger a card-list re-render.
 -- `card` is the parent settings group; the Label edit box updates card.title.
-local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart)
-    local label = CreateSectionLabel(GUI, parent, L["Content"])
-    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
-    local y = yStart - SECTION_LABEL_HEIGHT
+-- isGroupItem: when true this renders the per-item editor for a text-group
+-- item. It skips the "Content" section header and the element-label edit box
+-- (group items don't have their own display name), but keeps every type-specific
+-- field (abbreviate / hide-0 / hide-% / decimals / custom text / aggro & range
+-- text / name length / group-number format). Font/anchor/offset stay group-level.
+local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart, isGroupItem)
+    local y = yStart
+    if not isGroupItem then
+        local label = CreateSectionLabel(GUI, parent, L["Content"])
+        label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
+        y = yStart - SECTION_LABEL_HEIGHT
+    end
 
     local ct = FindContentType(elem.contentType)
     if not ct then return y end
 
-    -- ── Label (optional) ─────────────────────────────────────
-    -- A user-friendly name for this element. Falls back to the content type
-    -- name when empty. Used in the card header title and the Anchor To
-    -- dropdown's options.
+    -- ── Label (optional) — skipped for group items (no per-item display name) ──
+    if not isGroupItem then
     elem.label = elem.label or ""
     local labelEdit = GUI:CreateEditBox(parent, L["Label (optional)"], elem, "label", function()
         if card and card.title then
@@ -251,6 +262,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     labelEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     -- CreateEditBox is label-above style; row is taller than other widgets.
     y = y - EDIT_BOX_ROW_H
+    end  -- not isGroupItem
 
     -- Numeric types: abbreviate checkbox
     if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "hp_deficit"
@@ -267,6 +279,21 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         abbrev:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
+        -- Hide-when-0 toggle (numeric amounts + deficits — defaults ON).
+        -- Secret-safe zero detection happens in the resolver via MS.IsZeroAmount.
+        -- Deficits hide at 0 (full health) when on; show "0" when off.
+        if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "power_current"
+           or ct.key == "absorb_amount" or ct.key == "heal_absorb_amount"
+           or ct.key == "incoming_heal"
+           or ct.key == "hp_deficit" or ct.key == "power_deficit" then
+            if elem.hideWhenZero == nil then elem.hideWhenZero = true end
+            local hideZero = GUI:CreateCheckbox(parent, L["Hide when 0"], elem, "hideWhenZero", function()
+                if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+            end)
+            hideZero:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+            y = y - FIELD_ROW_HEIGHT
+        end
+
     -- Percent types: decimals slider
     elseif ct.key == "hp_percent" or ct.key == "power_percent"
            or ct.key == "hp_max_reduction" or ct.key == "threat_percent" then
@@ -276,6 +303,13 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         end
         local dec = GUI:CreateSlider(parent, L["Decimal Places"], 0, 2, 1, elem, "decimals", decCB, decCB)
         dec:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - FIELD_ROW_HEIGHT
+
+        -- Hide % Symbol toggle (defaults OFF — show the % like before).
+        local hidePct = GUI:CreateCheckbox(parent, L["Hide % Symbol"], elem, "hidePercent", function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end)
+        hidePct:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
     -- Name: length cap + truncate mode
@@ -322,13 +356,44 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         fmtDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
+    -- Aggro flag: editable text for each of the 3 threat levels.
+    elseif ct.key == "aggro_flag" then
+        if elem.aggroText1 == nil then elem.aggroText1 = "+" end
+        if elem.aggroText2 == nil then elem.aggroText2 = "++" end
+        if elem.aggroText3 == nil then elem.aggroText3 = "AGGRO" end
+        local aggroCB = function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end
+        local a1 = GUI:CreateEditBox(parent, L["Gaining Aggro Text"], elem, "aggroText1", aggroCB, 120)
+        a1:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - EDIT_BOX_ROW_H
+        local a2 = GUI:CreateEditBox(parent, L["Tanking Text"], elem, "aggroText2", aggroCB, 120)
+        a2:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - EDIT_BOX_ROW_H
+        local a3 = GUI:CreateEditBox(parent, L["Has Aggro Text"], elem, "aggroText3", aggroCB, 120)
+        a3:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - EDIT_BOX_ROW_H
+
+    -- Range text: editable in-range / out-of-range text.
+    elseif ct.key == "range_text" then
+        elem.rangeInText = elem.rangeInText or ""
+        if elem.rangeOutText == nil then elem.rangeOutText = "OOR" end
+        local rangeCB = function()
+            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+        end
+        local rin = GUI:CreateEditBox(parent, L["In Range Text"], elem, "rangeInText", rangeCB, 120)
+        rin:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - EDIT_BOX_ROW_H
+        local rout = GUI:CreateEditBox(parent, L["Out of Range Text"], elem, "rangeOutText", rangeCB, 120)
+        rout:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        y = y - EDIT_BOX_ROW_H
+
     -- Text Group: concatenates 2+ child content values with a user separator.
     -- Phase 1 stores groupItems / groupSeparator on the element; Phase 2 will
     -- wire the runtime renderer.
     elseif ct.key == "group" then
         elem.groupItems = elem.groupItems or {}
         elem.groupSeparator = elem.groupSeparator or " / "
-        if elem.abbreviate == nil then elem.abbreviate = true end
 
         local mediaPath = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\"
 
@@ -353,14 +418,10 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         sepEdit:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - EDIT_BOX_ROW_H
 
-        -- Abbreviate toggle — applies to every numeric item in the group.
-        -- The group resolver passes elem.abbreviate to each item's resolver
-        -- so child values inherit the parent group's setting.
-        local groupAbbrev = GUI:CreateCheckbox(parent, L["Abbreviate"], elem, "abbreviate", function()
-            if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-        end)
-        groupAbbrev:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
-        y = y - FIELD_ROW_HEIGHT
+        -- NOTE: Abbreviate / Hide-when-0 / Hide-% / Colour are now PER ITEM
+        -- (edited by expanding each item below), not group-wide. Font, size,
+        -- outline, anchor and offset remain group-level (Appearance / Position
+        -- sections) since the group renders as a single FontString.
 
         -- Items label
         local itemsLabel = parent:CreateFontString(nil, "OVERLAY")
@@ -370,7 +431,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         itemsLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - 16
 
-        -- Items list — one row per item in elem.groupItems
+        -- Items list — one bar per item (mirrors AuraDesigner's layout-group
+        -- member rows: a distinct backdrop bar, up/down arrows stacked on the
+        -- left, label in the middle, remove X on the right).
         if #elem.groupItems == 0 then
             local emptyLbl = parent:CreateFontString(nil, "OVERLAY")
             GUI:SetSettingsFont(emptyLbl, 10, "")
@@ -379,25 +442,68 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
             emptyLbl:SetPoint("TOPLEFT", parent, "TOPLEFT", 26, y)
             y = y - 18
         else
-            for itemIdx, itemKey in ipairs(elem.groupItems) do
-                local itemCT = FindContentType(itemKey)
-                local itemRow = CreateFrame("Frame", nil, parent)
-                itemRow:SetHeight(20)
-                itemRow:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
-                itemRow:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -22, y)
+            if state then state.tdExpandedItems = state.tdExpandedItems or {} end
+            for itemIdx, rawItem in ipairs(elem.groupItems) do
+                -- Normalise to an elem-like table so per-item settings persist,
+                -- then read its type. Each item is its own mini-element.
+                local item = DF.TextDesigner.Resolver.NormalizeGroupItem(rawItem)
+                elem.groupItems[itemIdx] = item
+                local typeKey = item.contentType
+                local itemCT = FindContentType(typeKey)
+                local capturedIdx = itemIdx
+                local capturedItem = item
+                local isExpanded = state and state.tdExpandedItems[item]
 
-                local itemLabel = itemRow:CreateFontString(nil, "OVERLAY")
-                GUI:SetSettingsFont(itemLabel, 10, "")
-                itemLabel:SetPoint("LEFT", itemRow, "LEFT", 4, 0)
-                itemLabel:SetText(itemIdx .. ". " .. (itemCT and itemCT.label or itemKey))
-                itemLabel:SetTextColor(0.9, 0.9, 0.9)
+                local itemRow = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+                itemRow:SetHeight(28)
+                itemRow:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+                itemRow:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -14, y)
+                ApplyBackdrop(itemRow,
+                    {r = 0.11, g = 0.11, b = 0.11, a = 1},
+                    {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.3})
 
-                -- Remove button — hand-drawn X cross (smaller variant for in-row).
-                -- Two rotated SetColorTexture lines mirror AuraDesigner's pattern
-                -- (AuraDesigner/Options.lua:4412-4433).
+                -- Up/Down arrows stacked vertically on the LEFT. Only created
+                -- when the move is possible (first row has no up, last has no down).
+                if capturedIdx > 1 then
+                    local upBtn = CreateFrame("Button", nil, itemRow)
+                    upBtn:SetSize(20, 13)
+                    upBtn:SetPoint("TOPLEFT", 2, -1)
+                    local upIcon = upBtn:CreateTexture(nil, "OVERLAY")
+                    upIcon:SetSize(12, 12)
+                    upIcon:SetPoint("CENTER", 0, 0)
+                    upIcon:SetTexture(mediaPath .. "expand_more")
+                    upIcon:SetRotation(math.pi)  -- 180° = points up
+                    upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+                    upBtn:SetScript("OnEnter", function() upIcon:SetVertexColor(1, 1, 1) end)
+                    upBtn:SetScript("OnLeave", function() upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
+                    upBtn:SetScript("OnClick", function()
+                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx - 1] =
+                            elem.groupItems[capturedIdx - 1], elem.groupItems[capturedIdx]
+                        ReRender()
+                    end)
+                end
+                if capturedIdx < #elem.groupItems then
+                    local downBtn = CreateFrame("Button", nil, itemRow)
+                    downBtn:SetSize(20, 13)
+                    downBtn:SetPoint("BOTTOMLEFT", 2, 1)
+                    local downIcon = downBtn:CreateTexture(nil, "OVERLAY")
+                    downIcon:SetSize(12, 12)
+                    downIcon:SetPoint("CENTER", 0, 0)
+                    downIcon:SetTexture(mediaPath .. "expand_more")
+                    downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+                    downBtn:SetScript("OnEnter", function() downIcon:SetVertexColor(1, 1, 1) end)
+                    downBtn:SetScript("OnLeave", function() downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
+                    downBtn:SetScript("OnClick", function()
+                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx + 1] =
+                            elem.groupItems[capturedIdx + 1], elem.groupItems[capturedIdx]
+                        ReRender()
+                    end)
+                end
+
+                -- Remove button — hand-drawn X cross on the right.
                 local removeBtn = CreateFrame("Button", nil, itemRow, "BackdropTemplate")
                 removeBtn:SetSize(16, 16)
-                removeBtn:SetPoint("RIGHT", itemRow, "RIGHT", -4, 0)
+                removeBtn:SetPoint("RIGHT", itemRow, "RIGHT", -6, 0)
                 local rxSize, rxThick = 10, 1.5
                 local rline1 = removeBtn:CreateTexture(nil, "OVERLAY")
                 rline1:SetSize(rxSize, rxThick)
@@ -417,54 +523,85 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                     rline1:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
                     rline2:SetColorTexture(C_DESTRUCTIVE.r, C_DESTRUCTIVE.g, C_DESTRUCTIVE.b, C_DESTRUCTIVE.a)
                 end)
-                local capturedIdx = itemIdx
                 removeBtn:SetScript("OnClick", function()
+                    if state and state.tdExpandedItems then state.tdExpandedItems[capturedItem] = nil end
                     table.remove(elem.groupItems, capturedIdx)
                     ReRender()
                 end)
 
-                -- Up arrow — moves this item one slot earlier in the list.
-                -- Hidden on the first row (nothing to swap into).
-                local upBtn = CreateFrame("Button", nil, itemRow)
-                upBtn:SetSize(14, 14)
-                upBtn:SetPoint("RIGHT", removeBtn, "LEFT", -8, 0)
-                local upIcon = upBtn:CreateTexture(nil, "OVERLAY")
-                upIcon:SetAllPoints()
-                upIcon:SetTexture(mediaPath .. "expand_more")
-                upIcon:SetRotation(math.pi)  -- 180° = up
-                upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
-                upBtn:SetScript("OnEnter", function() upIcon:SetVertexColor(1, 1, 1) end)
-                upBtn:SetScript("OnLeave", function() upIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
-                upBtn:SetScript("OnClick", function()
-                    if capturedIdx > 1 then
-                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx - 1] =
-                            elem.groupItems[capturedIdx - 1], elem.groupItems[capturedIdx]
-                        ReRender()
-                    end
+                -- Customise button (left of the remove X) — toggles the per-item
+                -- editor inline (AD-style). A text button instead of a chevron so
+                -- it isn't confused with the up/down move arrows.
+                local custBtn = CreateFrame("Button", nil, itemRow, "BackdropTemplate")
+                custBtn:SetSize(70, 18)
+                custBtn:SetPoint("RIGHT", removeBtn, "LEFT", -6, 0)
+                local tc = GUI:GetThemeColor()
+                ApplyBackdrop(custBtn,
+                    {r = tc.r * 0.15, g = tc.g * 0.15, b = tc.b * 0.15, a = 1},
+                    {r = tc.r * 0.40, g = tc.g * 0.40, b = tc.b * 0.40, a = 0.7})
+                local custText = custBtn:CreateFontString(nil, "OVERLAY")
+                GUI:SetSettingsFont(custText, 9, "")
+                custText:SetPoint("CENTER", 0, 0)
+                custText:SetText(isExpanded and L["Done"] or L["Customise"])
+                custText:SetTextColor(tc.r, tc.g, tc.b)
+                custBtn:SetScript("OnEnter", function() custText:SetTextColor(1, 1, 1) end)
+                custBtn:SetScript("OnLeave", function() custText:SetTextColor(tc.r, tc.g, tc.b) end)
+                custBtn:SetScript("OnClick", function()
+                    if not state then return end
+                    state.tdExpandedItems[capturedItem] = not state.tdExpandedItems[capturedItem]
+                    ReRender()
                 end)
-                if capturedIdx == 1 then upBtn:Hide() end
 
-                -- Down arrow — moves this item one slot later in the list.
-                -- Hidden on the last row.
-                local downBtn = CreateFrame("Button", nil, itemRow)
-                downBtn:SetSize(14, 14)
-                downBtn:SetPoint("RIGHT", upBtn, "LEFT", -2, 0)
-                local downIcon = downBtn:CreateTexture(nil, "OVERLAY")
-                downIcon:SetAllPoints()
-                downIcon:SetTexture(mediaPath .. "expand_more")
-                downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
-                downBtn:SetScript("OnEnter", function() downIcon:SetVertexColor(1, 1, 1) end)
-                downBtn:SetScript("OnLeave", function() downIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b) end)
-                downBtn:SetScript("OnClick", function()
-                    if capturedIdx < #elem.groupItems then
-                        elem.groupItems[capturedIdx], elem.groupItems[capturedIdx + 1] =
-                            elem.groupItems[capturedIdx + 1], elem.groupItems[capturedIdx]
-                        ReRender()
+                -- Label — type name; for custom text show the literal text so the
+                -- item is identifiable while collapsed.
+                local labelText
+                if typeKey == "custom_static" then
+                    local t = capturedItem.staticText
+                    labelText = (t and t ~= "" and ('"' .. t .. '"')) or L["Custom Static Text"]
+                else
+                    labelText = (itemCT and itemCT.label) or typeKey
+                end
+                local itemLabel = itemRow:CreateFontString(nil, "OVERLAY")
+                GUI:SetSettingsFont(itemLabel, 10, "")
+                itemLabel:SetPoint("LEFT", itemRow, "LEFT", 26, 0)
+                itemLabel:SetPoint("RIGHT", custBtn, "LEFT", -6, 0)
+                itemLabel:SetJustifyH("LEFT")
+                itemLabel:SetWordWrap(false)
+                itemLabel:SetText(capturedIdx .. ". " .. labelText)
+                itemLabel:SetTextColor(0.9, 0.9, 0.9)
+
+                y = y - 32
+
+                -- Per-item editor (expanded): the item's own content + format
+                -- fields, plus per-item colour. Font/anchor/offset stay group-level.
+                if isExpanded then
+                    local yEnd = BuildContentSection(GUI, parent, capturedItem, tdDB, state, page, card, y, true)
+                    local colorCB = function()
+                        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
                     end
-                end)
-                if capturedIdx == #elem.groupItems then downBtn:Hide() end
-
-                y = y - 22
+                    -- Lightweight refresh (preview mock only) for the colour drag
+                    -- so we don't full-refresh every frame on each tick.
+                    local colorLight = function()
+                        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+                    end
+                    -- Use Class Color (takes precedence over a custom colour).
+                    local useClass = GUI:CreateCheckbox(parent, L["Use Class Color"], capturedItem, "useClassColor", colorCB)
+                    useClass:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, yEnd)
+                    yEnd = yEnd - FIELD_ROW_HEIGHT
+                    local useColor = GUI:CreateCheckbox(parent, L["Custom Color"], capturedItem, "useColor", function()
+                        if capturedItem.useColor and not capturedItem.color then
+                            capturedItem.color = {r = 1, g = 1, b = 1, a = 1}
+                        end
+                        colorCB()
+                    end)
+                    useColor:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, yEnd)
+                    yEnd = yEnd - FIELD_ROW_HEIGHT
+                    capturedItem.color = capturedItem.color or {r = 1, g = 1, b = 1, a = 1}
+                    local colorPick = GUI:CreateColorPicker(parent, L["Color"], capturedItem, "color", true, colorCB, colorLight, true)
+                    colorPick:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, yEnd)
+                    yEnd = yEnd - FIELD_ROW_HEIGHT
+                    y = yEnd - 6
+                end
             end
         end
 
@@ -476,7 +613,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
             if not BuildPicker then return end
             if card and not card._addItemPicker then
                 card._addItemPicker = BuildPicker(GUI, parent, tdDB, function(typeKey)
-                    table.insert(elem.groupItems, typeKey)
+                    -- Each item is its own mini-element table so per-item
+                    -- settings (text, abbreviate, hide-0, hide-%, colour) persist.
+                    table.insert(elem.groupItems, { contentType = typeKey })
                     ReRender()
                 end, "group")
             end
@@ -490,7 +629,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                 picker:Open(addItemBtn, "left")
             end
         end)
-        addItemBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 22, y)
+        -- Full-width CTA (matches AuraDesigner's "+ Add aura" button).
+        addItemBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        addItemBtn:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -14, y)
 
         -- Theme-tint the button to match AuraDesigner's CTA pattern.
         do
@@ -513,7 +654,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         y = y - 32
     end
     -- Types with no Content-section fields fall through:
-    -- class, status_text, aggro_flag, range_text, power_type_string, race_level_faction.
+    -- class, status_text, power_type_string, race_level_faction.
     -- They render only the section header (no fields), which is fine.
 
     return y - SECTION_GAP
@@ -647,7 +788,11 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
     local colorPicker = GUI:CreateColorPicker(parent, L["Color"], elem, "color", true, function()
         elem.overrides.color = true
         if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-    end)
+    end, function()
+        -- Lightweight (preview-only) refresh while dragging the colour picker;
+        -- the full RefreshAll runs once on close. Avoids per-tick all-frames lag.
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+    end, true)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
@@ -2347,7 +2492,10 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     shadowCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
-    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, refreshCB)
+    local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, refreshCB, function()
+        -- Lightweight preview-only refresh during the colour drag.
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+    end, true)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 

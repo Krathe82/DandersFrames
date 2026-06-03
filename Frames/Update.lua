@@ -1202,8 +1202,10 @@ function DF:UpdateHealthFast(frame)
     if DF.UpdateADTintHealth then
         DF:UpdateADTintHealth(frame)
     end
-
-    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
+    -- NOTE: the TextDesigner "health" refresh is driven from the central
+    -- event dispatcher (Frames/Headers.lua), not here. UpdateHealthFast has
+    -- fast-path early returns (e.g. lines ~1024/1071) that a tail hook would
+    -- miss, leaving text stale in the common in-combat case.
 end
 
 -- ============================================================

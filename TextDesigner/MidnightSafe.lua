@@ -67,19 +67,48 @@ function MS.Truncate(v)
     return result or ""
 end
 
+-- Secret-safe "is this amount zero (or absent)?" check.
+--
+-- You CANNOT do this with a Lua comparison: `v == 0` throws on a secret number,
+-- and even `TruncateWhenZero(v) == ""` throws when the truncated result is a
+-- secret-tainted empty string (a secret zero stays "shown"). The reliable
+-- technique — the same one the legacy health-deficit text uses — is to push the
+-- value through a FontString: SetText accepts a secret string, and GetText()
+-- hands back a PLAIN (untainted) string you can safely compare. The hidden
+-- scratch FontString below launders the secret for us.
+local zeroScratch
+function MS.IsZeroAmount(v)
+    if v == nil then return true end
+    if not zeroScratch then
+        zeroScratch = UIParent:CreateFontString(nil, "BACKGROUND")
+        -- A font MUST be set before SetText, or it errors "Font not set".
+        -- The string is never shown — any valid font object works.
+        zeroScratch:SetFontObject(GameFontNormal)
+        zeroScratch:Hide()
+    end
+    -- TruncateWhenZero -> "" for zero (secret-safe; AllowedWhenTainted).
+    -- SetText("") makes GetText() return nil; a non-zero value comes back as a
+    -- (possibly SECRET) string. We must NOT compare it with == (that taints —
+    -- comparing a secret string throws). Only a truthiness/nil test is allowed,
+    -- which is exactly what the legacy health-deficit text relies on.
+    zeroScratch:SetText(TruncateWhenZero(v))
+    return not zeroScratch:GetText()  -- nil (zero) -> blank; any string -> show
+end
+
 -- Format a (possibly secret) percent as a display string.
 -- If the value is secret, uses RoundToNearestString (secret-safe).
 -- If not secret, uses standard formatting with decimals.
-function MS.PctText(pct, decimals)
+function MS.PctText(pct, decimals, hidePercent)
     if pct == nil then return "" end
     decimals = decimals or 0
+    local suffix = hidePercent and "" or "%"
     if MS.IsSecret(pct) then
         -- Secret path — must use C_StringUtil
         local precision = decimals == 0 and 1 or (10 ^ -decimals)
-        return RoundToNearestString(pct, precision) .. "%"
+        return RoundToNearestString(pct, precision) .. suffix
     end
     -- Non-secret path — standard format
-    return format("%." .. decimals .. "f%%", pct)
+    return format("%." .. decimals .. "f", pct) .. suffix
 end
 
 -- Format a number as a display string respecting "abbreviate" setting.

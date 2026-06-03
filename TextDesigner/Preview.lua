@@ -32,6 +32,19 @@ end
 -- Refreshes all TD FontStrings on the bound mock frame using
 -- synthetic mock data. Called on settings changes (FullRebuildCards,
 -- eye-icon toggle, master toggle).
+-- Cheap refresh: ONLY the preview mock frame, no live frames. Use this as the
+-- lightweight callback during continuous edits (e.g. dragging the colour
+-- picker) so we don't hammer every party/raid frame with a full refresh each
+-- tick — that's what made colour changes lag. The full RefreshAll runs once on
+-- release.
+function Preview:RefreshPreview()
+    if not activeMockFrame or not activeTdDB then return end
+    local Render = DF.TextDesigner.Render
+    local DataSource = DF.TextDesigner.DataSource
+    if not Render or not DataSource then return end
+    Render:UpdateFrame(activeMockFrame, activeTdDB, DataSource.Mock(), "all", true)
+end
+
 function Preview:RefreshAll()
     DF:Debug("TD", "Preview:RefreshAll called, mockFrame=%s tdDB=%s",
         tostring(activeMockFrame), tostring(activeTdDB))

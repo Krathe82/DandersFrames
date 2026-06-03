@@ -35,6 +35,56 @@ local function applyNameTrunc(name, elem)
     end
 end
 
+-- Secret-safe zero check for amount values. Delegates to MS.IsZeroAmount, which
+-- launders the value through a FontString (the only reliable way to test a
+-- secret zero — a plain `== ""` comparison taints and lets secret zeros through,
+-- which is why the first attempt at hide-when-0 didn't work).
+local function isBlankAmount(v)
+    return getMS().IsZeroAmount(v)
+end
+
+-- Format a numeric amount respecting Abbreviate + Hide-when-0.
+-- hideWhenZero defaults ON (only an explicit false disables it), so amounts
+-- blank out at zero unless the element opts out. Returns "" when hidden/absent.
+local function formatAmount(v, abbreviate, hideWhenZero)
+    if hideWhenZero ~= false and isBlankAmount(v) then return "" end
+    return getMS().FormatNumber(v, abbreviate)
+end
+
+-- Wrap text in a |cAARRGGBB...|r colour escape. Safe with secret text: the
+-- prefix is built with format() (plain) and concatenated, and the whole thing
+-- goes straight to FontString:SetText. Used for per-item colours in groups,
+-- since a group is one FontString and can only multi-colour via escapes.
+local function colorize(text, c)
+    if not c then return text end
+    local floor = math.floor
+    local a = floor((c.a or 1) * 255 + 0.5)
+    local r = floor((c.r or 1) * 255 + 0.5)
+    local g = floor((c.g or 1) * 255 + 0.5)
+    local b = floor((c.b or 1) * 255 + 0.5)
+    return string.format("|c%02x%02x%02x%02x", a, r, g, b) .. text .. "|r"
+end
+
+-- Normalise a group item to an elem-like table { contentType = ... }.
+-- Items are stored either as a plain type-key string (legacy / unedited) or a
+-- table. Older custom-text items used { type=, text= }; migrate those to
+-- { contentType=, staticText= } in place. For a string this returns a NEW
+-- transient table (callers that need persistence must assign it back).
+local function normalizeGroupItem(rawItem)
+    if type(rawItem) == "table" then
+        if rawItem.contentType == nil and rawItem.type ~= nil then
+            rawItem.contentType = rawItem.type
+            rawItem.type = nil
+        end
+        if rawItem.staticText == nil and rawItem.text ~= nil then
+            rawItem.staticText = rawItem.text
+            rawItem.text = nil
+        end
+        return rawItem
+    end
+    return { contentType = rawItem }
+end
+
 -- ============================================================
 -- INDIVIDUAL RESOLVERS
 -- ============================================================
@@ -83,28 +133,28 @@ end
 -- ───── Health ─────
 
 RESOLVERS.hp_current = function(elem, source)
-    return getMS().FormatNumber(source:GetHPCurrent(), elem.abbreviate)
+    return formatAmount(source:GetHPCurrent(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.hp_max = function(elem, source)
-    return getMS().FormatNumber(source:GetHPMax(), elem.abbreviate)
+    return formatAmount(source:GetHPMax(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.hp_percent = function(elem, source)
-    return getMS().PctText(source:GetHPPercent(), elem.decimals or 0)
+    return getMS().PctText(source:GetHPPercent(), elem.decimals or 0, elem.hidePercent)
 end
 
 RESOLVERS.hp_deficit = function(elem, source)
+    -- isBlankAmount launders the value through a FontString so secret zeros are
+    -- detected correctly. At zero (full health): hide when Hide-when-0 is on
+    -- (default), otherwise show a plain "0" (no minus). Nonzero: "-NNN".
     local v = source:GetHPDeficit()
     if v == nil then return "" end
-    local MS = getMS()
-    local s = MS.Truncate(v)
-    -- MS.Truncate returns "" when v was zero (nil from TruncateWhenZero).
-    -- A secret string is always non-zero by definition, so the IsSecret
-    -- short-circuit avoids the `s == ""` comparison throwing on secrets.
-    if not MS.IsSecret(s) and s == "" then return "" end
-    if elem.abbreviate then s = MS.Abbr(v) end
-    return "-" .. s
+    if isBlankAmount(v) then
+        if elem.hideWhenZero ~= false then return "" end
+        return "0"
+    end
+    return "-" .. getMS().FormatNumber(v, elem.abbreviate)
 end
 
 RESOLVERS.hp_max_reduction = function(elem, source)
@@ -114,28 +164,27 @@ RESOLVERS.hp_max_reduction = function(elem, source)
     -- Defensive: if value is <= 1, multiply by 100 for display.
     local v = pct
     if pct <= 1 then v = pct * 100 end
-    return string.format("-%.0f%%", v)
+    return string.format(elem.hidePercent and "-%.0f" or "-%.0f%%", v)
 end
 
 -- ───── Power ─────
 
 RESOLVERS.power_current = function(elem, source)
-    return getMS().FormatNumber(source:GetPowerCurrent(), elem.abbreviate)
+    return formatAmount(source:GetPowerCurrent(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.power_percent = function(elem, source)
-    return getMS().PctText(source:GetPowerPercent(), elem.decimals or 0)
+    return getMS().PctText(source:GetPowerPercent(), elem.decimals or 0, elem.hidePercent)
 end
 
 RESOLVERS.power_deficit = function(elem, source)
     local v = source:GetPowerDeficit()
     if v == nil then return "" end
-    local MS = getMS()
-    local s = MS.Truncate(v)
-    -- Same secret-safe pattern as hp_deficit (see above).
-    if not MS.IsSecret(s) and s == "" then return "" end
-    if elem.abbreviate then s = MS.Abbr(v) end
-    return "-" .. s
+    if isBlankAmount(v) then
+        if elem.hideWhenZero ~= false then return "" end
+        return "0"
+    end
+    return "-" .. getMS().FormatNumber(v, elem.abbreviate)
 end
 
 RESOLVERS.power_type_string = function(elem, source)
@@ -145,32 +194,28 @@ end
 -- ───── Shields & Heals ─────
 
 RESOLVERS.absorb_amount = function(elem, source)
-    local v = source:GetAbsorbAmount()
-    if v == nil or v == 0 then return "" end
-    return getMS().FormatNumber(v, elem.abbreviate)
+    return formatAmount(source:GetAbsorbAmount(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.overshield_amount = function(elem, source)
-    local v = source:GetOvershieldAmount()
-    if v == nil or v == 0 then return "" end
-    return getMS().FormatNumber(v, elem.abbreviate)
+    return formatAmount(source:GetOvershieldAmount(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.heal_absorb_amount = function(elem, source)
-    local v = source:GetHealAbsorbAmount()
-    if v == nil or v == 0 then return "" end
-    return getMS().FormatNumber(v, elem.abbreviate)
+    return formatAmount(source:GetHealAbsorbAmount(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.incoming_heal = function(elem, source)
     local v = source:GetIncomingHealTotal()
-    if v == nil or v == 0 then return "" end
+    if v == nil then return "" end
+    if elem.hideWhenZero ~= false and isBlankAmount(v) then return "" end
     return "+" .. getMS().FormatNumber(v, elem.abbreviate)
 end
 
 RESOLVERS.incoming_heal_mine = function(elem, source)
     local v = source:GetIncomingHealFromPlayer()
-    if v == nil or v == 0 then return "" end
+    if v == nil then return "" end
+    if elem.hideWhenZero ~= false and isBlankAmount(v) then return "" end
     return "+" .. getMS().FormatNumber(v, elem.abbreviate)
 end
 
@@ -185,11 +230,12 @@ RESOLVERS.status_text = function(elem, source)
 end
 
 RESOLVERS.aggro_flag = function(elem, source)
+    -- UnitThreatSituation is a plain 0-3 (threat is not secret), so == is safe.
+    -- Each level's text is editable; nil falls back to the default, "" hides it.
     local s = source:GetAggroFlag() or 0
-    if s == 0 then return ""
-    elseif s == 1 then return "+"
-    elseif s == 2 then return "++"
-    elseif s == 3 then return L["AGGRO"]
+    if s == 1 then return elem.aggroText1 or "+"
+    elseif s == 2 then return elem.aggroText2 or "++"
+    elseif s == 3 then return elem.aggroText3 or L["AGGRO"]
     end
     return ""
 end
@@ -201,11 +247,16 @@ RESOLVERS.threat_percent = function(elem, source)
     -- compare to 0, so pass through (the display will show "0%" rather
     -- than blank, which is acceptable).
     if not getMS().IsSecret(pct) and pct == 0 then return "" end
-    return getMS().PctText(pct, elem.decimals or 0)
+    return getMS().PctText(pct, elem.decimals or 0, elem.hidePercent)
 end
 
 RESOLVERS.range_text = function(elem, source)
-    return source:IsInRange() and "" or L["OOR"]
+    -- Editable text for both states. In-range defaults to blank (show nothing),
+    -- out-of-range defaults to "OOR". nil falls back to the default; "" hides.
+    if source:IsInRange() then
+        return elem.rangeInText or ""
+    end
+    return elem.rangeOutText or L["OOR"]
 end
 
 -- ───── Group (meta) ─────
@@ -215,40 +266,62 @@ end
 -- implementation will deduplicate against per-item rendering once
 -- live rendering ships; preview just shows the static concatenation.)
 RESOLVERS.group = function(elem, source)
-    -- groupItems is an array of typeKey strings.
-    -- Each item resolves as if it were a standalone element (with
-    -- default settings since group items don't have their own elem
-    -- table). The group's separator joins them.
+    -- groupItems is an array whose entries are either a typeKey string (live
+    -- data) or a table { type = "custom_static", text = "..." } for custom text.
+    -- Each item resolves as if it were a standalone element (settings cascade
+    -- from the group). The group's separator joins the non-empty results.
     if not elem.groupItems or #elem.groupItems == 0 then
         DF:Debug("TD", "group resolver: elem id=%s has no groupItems", tostring(elem.id))
         return ""
     end
     DF:Debug("TD", "group resolver: elem id=%s items=%d separator=%q",
         tostring(elem.id), #elem.groupItems, tostring(elem.groupSeparator or " / "))
-    -- Group's abbreviate setting cascades to every numeric child item.
-    -- Default to true for backward compat with pre-toggle groups.
-    local groupAbbrev = elem.abbreviate
-    if groupAbbrev == nil then groupAbbrev = true end
+    local MS = getMS()
     local parts = {}
-    for i, typeKey in ipairs(elem.groupItems) do
+    for i, rawItem in ipairs(elem.groupItems) do
+        -- Each item carries its OWN formatting (per-item, not cascaded from the
+        -- group). Missing flags fall back to the standard per-type defaults.
+        local item = normalizeGroupItem(rawItem)
+        local typeKey = item.contentType
         local itemResolver = RESOLVERS[typeKey]
         if not itemResolver then
             DF:Debug("TD", "  [%d] %s: NO RESOLVER", i, tostring(typeKey))
         else
-            -- Pass a minimal elem-like table for per-item formatting.
-            -- abbreviate inherits from the parent group element.
-            local itemElem = { contentType = typeKey, abbreviate = groupAbbrev, decimals = 0 }
+            local ab = item.abbreviate; if ab == nil then ab = true end
+            local hz = item.hideWhenZero; if hz == nil then hz = true end
+            local itemElem = {
+                contentType  = typeKey,
+                abbreviate   = ab,
+                hideWhenZero = hz,
+                hidePercent  = item.hidePercent,
+                decimals     = item.decimals or 0,
+                staticText   = item.staticText,
+                aggroText1   = item.aggroText1,
+                aggroText2   = item.aggroText2,
+                aggroText3   = item.aggroText3,
+                rangeInText  = item.rangeInText,
+                rangeOutText = item.rangeOutText,
+                nameLength   = item.nameLength,
+                truncateMode = item.truncateMode,
+                groupFormat  = item.groupFormat,
+            }
             local v = itemResolver(itemElem, source)
-            local MS = getMS()
             local isSec = MS.IsSecret(v)
-            DF:Debug("TD", "  [%d] %s: type=%s secret=%s raw=%s",
-                i, typeKey, type(v), tostring(isSec),
-                (isSec or type(v) ~= "string") and "<secret/other>" or tostring(v):sub(1, 40))
             if v then
                 -- Secret strings can't be compared with == (taints execution);
                 -- skip the empty-string check when v is secret. Secret strings
-                -- are never empty in practice.
+                -- are never empty in practice. Apply the per-item colour to the
+                -- non-empty result before joining.
                 if isSec or v ~= "" then
+                    -- Per-item colour: class colour wins, then a custom colour,
+                    -- else the group's base font colour (no escape wrapping).
+                    if item.useClassColor then
+                        local token = source:GetClassToken()
+                        local cc = token and _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[token]
+                        v = cc and colorize(v, cc) or v
+                    elseif item.useColor then
+                        v = colorize(v, item.color)
+                    end
                     parts[#parts+1] = v
                 end
             end
@@ -295,3 +368,7 @@ end
 
 -- Expose for debugging
 DF.TextDesigner.Resolver._RESOLVERS = RESOLVERS
+
+-- Shared with Options.lua so the items list can persist-normalise group items
+-- (string / legacy {type,text} → { contentType = ... } table) before editing.
+DF.TextDesigner.Resolver.NormalizeGroupItem = normalizeGroupItem

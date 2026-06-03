@@ -1795,6 +1795,14 @@ function DF:UpdateHealPrediction(frame, testIndex)
             local amount, amountFromHealer, amountFromOthers, clamped = calc:GetIncomingHeals()
             myHeals, othersHeals = amountFromHealer, amountFromOthers
 
+            -- TD stash: expose the full heal breakdown so the TextDesigner
+            -- LiveSource reads it without a second calculator pass. dfTotalHeals
+            -- is the ALL-incoming total (not the showMode-filtered value), so
+            -- the incoming_heal text is correct regardless of the bar's mode.
+            frame.dfTotalHeals = amount
+            frame.dfMyHeals = amountFromHealer
+            frame.dfOthersHeals = amountFromOthers
+
             if showMode == "MINE" then
                 incomingHeals = amountFromHealer
             elseif showMode == "OTHERS" then
@@ -2189,10 +2197,9 @@ function DF:UpdateName(frame)
         end
     end
 
-    -- TD live rendering: refresh name/class/race text elements for this frame.
-    -- Alpha-gated via runtime check — DF.UpdateTextDesigner only exists when
-    -- the TD module loaded.
-    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "name") end
+    -- NOTE: the TextDesigner "name" refresh is driven from the central event
+    -- dispatcher (Frames/Headers.lua UNIT_NAME_UPDATE branch), not here, for
+    -- consistency with the other live text hooks.
 end
 
 function DF:UpdateRoleIcon(frame, source)
