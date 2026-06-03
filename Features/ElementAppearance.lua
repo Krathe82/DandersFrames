@@ -1129,6 +1129,23 @@ function DF:UpdateAuraDesignerAppearance(frame)
 
     local inRange = GetInRange(frame)
 
+    -- Keep the AD tint/replace overlay inset off the frame border. This is also
+    -- done in ApplyHealthBar, but that only runs on an aura (re)apply — a range
+    -- transition doesn't re-run it, so without re-anchoring here the overlay kept
+    -- its full-frame extent and showed over the border until the next aura tick.
+    -- This pass runs on the range change, so the inset lands immediately.
+    local _ov = frame.dfAD and frame.dfAD.tintOverlay
+    if _ov and frame.healthBar then
+        local _bi = (frame.border and frame.border:IsShown() and db.frameBorderSize) or 0
+        _ov:ClearAllPoints()
+        if _bi > 0 then
+            _ov:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", _bi, -_bi)
+            _ov:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -_bi, _bi)
+        else
+            _ov:SetAllPoints(frame.healthBar)
+        end
+    end
+
     if db.oorEnabled then
         local oorAlpha = db.oorAuraDesignerAlpha or 0.2
 
@@ -1305,6 +1322,12 @@ function DF:UpdateAllElementAppearances(frame)
     DF:UpdateFrameAppearance(frame)
     
     -- Update each element
+    -- AD appearance first: it writes healthbarEffectiveBlend (the OOR-aware bar
+    -- alpha) that UpdateHealthBarAppearance reads below. Running it afterwards left a
+    -- one-tick lag where, on first going out of range, the underlying replace-mode
+    -- bar texture kept its in-range (full) alpha for a frame while the border had
+    -- already faded — so the AD colour briefly bled through the border.
+    DF:UpdateAuraDesignerAppearance(frame)
     DF:UpdateHealthBarAppearance(frame)
     DF:UpdateMissingHealthBarAppearance(frame)
     DF:UpdateBackgroundAppearance(frame)
@@ -1328,7 +1351,6 @@ function DF:UpdateAllElementAppearances(frame)
     DF:UpdateHealPredictionBarAppearance(frame)
     DF:UpdateDefensiveIconAppearance(frame)
     DF:UpdateTargetedSpellAppearance(frame)
-    DF:UpdateAuraDesignerAppearance(frame)
     -- Class power pips (player frame only): reparent/alpha for health fade (party or raid player frame)
     if DF.UpdateClassPowerAlpha and (frame == DF.playerFrame or (frame.unit and frame.isRaidFrame and UnitIsUnit(frame.unit, "player"))) then
         DF.UpdateClassPowerAlpha()
