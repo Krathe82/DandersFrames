@@ -1228,6 +1228,22 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
 
     local overlay = GetOrCreateTintOverlay(frame)
     if overlay then
+        -- Keep the AD overlay off the frame border. With framePadding 0 the health
+        -- bar fills the whole frame and the border is drawn inward over its edge, so
+        -- a full-bar overlay sits *under* the border. Out of range the border fades
+        -- to its OOR alpha and the AD colour beneath shows through it, tinting the
+        -- border (e.g. green over a class-coloured border). Inset the overlay by the
+        -- border thickness so it never reaches under the border.
+        local _fdb = DF:GetFrameDB(frame)
+        local _bInset = (frame.border and frame.border:IsShown() and _fdb and _fdb.frameBorderSize) or 0
+        overlay:ClearAllPoints()
+        if _bInset > 0 then
+            overlay:SetPoint("TOPLEFT", healthBar, "TOPLEFT", _bInset, -_bInset)
+            overlay:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -_bInset, _bInset)
+        else
+            overlay:SetAllPoints(healthBar)
+        end
+
         -- Re-sync texture in case the health bar's texture changed since the overlay
         -- was first created (frame recycled to a different unit can swap textures).
         local currentTex = healthBar:GetStatusBarTexture()
