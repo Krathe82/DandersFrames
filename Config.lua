@@ -1518,7 +1518,7 @@ DF.PartyDefaults = {
     -- Reduced Max Health Bar
     reducedMaxHealthBlendMode = "BLEND",
     reducedMaxHealthClipHealthBar = true,
-    reducedMaxHealthColor = {r = 0.4588, g = 0.4588, b = 0.4588, a = 0.7961},
+    reducedMaxHealthColor = {r = 0.502, g = 0.502, b = 0.502, a = 0.8039},
     reducedMaxHealthEnabled = true,
     reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Stripes",
 
@@ -3075,7 +3075,7 @@ DF.RaidDefaults = {
     -- Reduced Max Health Bar
     reducedMaxHealthBlendMode = "BLEND",
     reducedMaxHealthClipHealthBar = true,
-    reducedMaxHealthColor = {r = 0.4588, g = 0.4588, b = 0.4588, a = 0.7961},
+    reducedMaxHealthColor = {r = 0.502, g = 0.502, b = 0.502, a = 0.8039},
     reducedMaxHealthEnabled = true,
     reducedMaxHealthTexture = "Interface\\AddOns\\DandersFrames\\Media\\DF_Stripes",
 
