@@ -20,6 +20,8 @@ local GetReadyCheckStatus = GetReadyCheckStatus
 local GetPartyAssignment = GetPartyAssignment
 local GetRaidRosterInfo = GetRaidRosterInfo
 local IsInRaid = IsInRaid
+local IsInInstance = IsInInstance
+local UnitPvpClassification = UnitPvpClassification
 local InCombatLockdown = InCombatLockdown
 local CreateFrame = CreateFrame
 
@@ -164,7 +166,15 @@ function DF:CreateStatusIcons(frame)
     frame.raidRoleIcon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 2)
     frame.raidRoleIcon.text:SetTextColor(1, 1, 0, 1)  -- Yellow for raid role
     -- Texture set dynamically based on role
-    
+
+    -- ========================================
+    -- BG OBJECTIVE CARRIER ICON (flag / orb carrier)
+    -- ========================================
+    frame.bgCarrierIcon = CreateStatusIcon(overlay, 18)
+    frame.bgCarrierIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    DF:SetUpgradedStatusIcon(frame.bgCarrierIcon.texture, "Interface\\Icons\\inv_bannerpvp_03")
+    frame.bgCarrierIcon.text:SetTextColor(1, 0.82, 0, 1)  -- Gold for objective carrier
+
     -- ========================================
     -- CENTER STATUS ICON (DEPRECATED - backward compat)
     -- ========================================
@@ -986,18 +996,75 @@ function DF:UpdateRaidRoleIcon(frame)
 end
 
 -- ============================================================
+-- BG OBJECTIVE CARRIER ICON
+-- Lights up when the unit is carrying a battleground objective
+-- (WSG/TP flag, Kotmogu orb, etc.). Detection uses
+-- UnitPvpClassification — an official, non-secret API — so it does
+-- NOT depend on Blizzard's compact raid frames being enabled, and
+-- only ever queries the frame's own (friendly, in-group) unit.
+-- UnitPvpClassification returns an Enum.PvPUnitClassification value
+-- (or -1 outside objective PvP); we only render flags + orbs.
+-- ============================================================
+local PVP_CARRIER_TEXTURES = {
+    [0]  = "Interface\\Icons\\inv_bannerpvp_01",  -- FlagCarrierHorde
+    [1]  = "Interface\\Icons\\inv_bannerpvp_02",  -- FlagCarrierAlliance
+    [2]  = "Interface\\Icons\\inv_bannerpvp_03",  -- FlagCarrierNeutral
+    [7]  = 1119885,                               -- OrbCarrierBlue
+    [8]  = 1119886,                               -- OrbCarrierGreen
+    [9]  = 1119887,                               -- OrbCarrierOrange
+    [10] = 1119887,                               -- OrbCarrierPurple (reuse orb art)
+}
+
+function DF:UpdateBGCarrierIcon(frame)
+    if not frame or not frame.unit or not frame.bgCarrierIcon then return end
+
+    local db = DF:GetFrameDB(frame)
+    if not db or not db.bgCarrierIconEnabled then
+        frame.bgCarrierIcon:Hide()
+        return
+    end
+
+    local unit = frame.unit
+    if not UnitExists(unit) or not UnitPvpClassification then
+        frame.bgCarrierIcon:Hide()
+        return
+    end
+
+    local classification
+    pcall(function() classification = UnitPvpClassification(unit) end)
+
+    -- Outside objective PvP this is -1 / nil. Guard secret values too.
+    if not canaccessvalue(classification) or type(classification) ~= "number" then
+        frame.bgCarrierIcon:Hide()
+        return
+    end
+
+    local texture = PVP_CARRIER_TEXTURES[classification]
+    if not texture then
+        frame.bgCarrierIcon:Hide()
+        return
+    end
+
+    DF:SetUpgradedStatusIcon(frame.bgCarrierIcon.texture, texture)
+    ApplyIconSettings(frame.bgCarrierIcon, db, "bgCarrierIcon")
+    ShowIconAsText(frame.bgCarrierIcon, db.bgCarrierIconText or "FC", db.bgCarrierIconShowText)
+    frame.bgCarrierIcon:Show()
+end
+
+-- ============================================================
 -- UPDATE ALL STATUS ICONS FOR A FRAME
 -- Convenience function to update all icons at once
 -- ============================================================
 function DF:UpdateAllStatusIcons(frame)
     if not frame then return end
-    
+
     DF:UpdateSummonIcon(frame)
     DF:UpdateResurrectionIcon(frame)
     DF:UpdatePhasedIcon(frame)
     DF:UpdateAFKIcon(frame)
     DF:UpdateVehicleIcon(frame)
     DF:UpdateRaidRoleIcon(frame)
+    DF:UpdateBGCarrierIcon(frame)
 end
 
 -- ============================================================
@@ -1085,6 +1152,42 @@ afkTickerFrame:SetScript("OnUpdate", function(self, elapsed)
                 end
             end
         end
+    end
+end)
+
+-- ============================================================
+-- BG CARRIER TICKER
+-- UnitPvpClassification has no change event, so poll while in a
+-- PvP instance and the icon is enabled. Cheap: only runs inside
+-- battlegrounds / arenas, and only when enabled in party or raid.
+-- ============================================================
+local bgCarrierTickerFrame = CreateFrame("Frame")
+local bgCarrierInterval = 0.5
+local bgCarrierElapsed = 0
+
+bgCarrierTickerFrame:SetScript("OnUpdate", function(self, elapsed)
+    bgCarrierElapsed = bgCarrierElapsed + elapsed
+    if bgCarrierElapsed < bgCarrierInterval then return end
+    bgCarrierElapsed = 0
+
+    -- Only relevant inside a PvP instance (battleground / arena / Blitz).
+    local inInstance, instanceType = IsInInstance()
+    if not inInstance or (instanceType ~= "pvp" and instanceType ~= "arena") then return end
+
+    local partyDb = DF:GetDB()
+    local raidDb = DF:GetRaidDB()
+    local partyEnabled = partyDb and partyDb.bgCarrierIconEnabled
+    local raidEnabled = raidDb and raidDb.bgCarrierIconEnabled
+    if not partyEnabled and not raidEnabled then return end
+
+    if DF.IterateAllFrames then
+        DF:IterateAllFrames(function(frame)
+            if not frame.unit or not frame.bgCarrierIcon then return end
+            local isParty = not frame.isRaidFrame
+            if (isParty and partyEnabled) or (not isParty and raidEnabled) then
+                DF:UpdateBGCarrierIcon(frame)
+            end
+        end)
     end
 end)
 

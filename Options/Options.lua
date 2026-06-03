@@ -6667,7 +6667,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     local pageIcons = CreateSubTab("indicators", "indicators_icons", L["Icons"])
     BuildPage(pageIcons, function(self, db, Add, AddSpace, AddSyncPoint)
         -- Copy button at top
-        Add(CreateCopyButton(self.child, {"roleIcon", "leaderIcon", "raidTargetIcon", "readyCheckIcon", "summonIcon", "resurrectionIcon", "phasedIcon", "afkIcon", "vehicleIcon", "raidRoleIcon", "statusIconFont", "statusIconFontSize", "statusIconFontOutline"}, L["Icons"], "indicators_icons"), 25, 2)
+        Add(CreateCopyButton(self.child, {"roleIcon", "leaderIcon", "raidTargetIcon", "readyCheckIcon", "summonIcon", "resurrectionIcon", "phasedIcon", "afkIcon", "vehicleIcon", "raidRoleIcon", "bgCarrierIcon", "statusIconFont", "statusIconFontSize", "statusIconFontOutline"}, L["Icons"], "indicators_icons"), 25, 2)
         
         local anchorOptions = {
             CENTER = L["Center"],
@@ -6732,7 +6732,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         local raidRoleColor = Add(GUI:CreateColorPicker(self.child, L["Raid Role (MT/MA)"], db, "raidRoleIconTextColor", false, nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 30, 1)
         textSection:RegisterChild(raidRoleColor)
-        
+
+        local bgCarrierColor = Add(GUI:CreateColorPicker(self.child, L["BG Carrier"], db, "bgCarrierIconTextColor", false, nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 30, 1)
+        textSection:RegisterChild(bgCarrierColor)
+
         -- ============================================
         -- ROLE ICON (Collapsible)
         -- ============================================
@@ -6833,8 +6836,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         entries[#entries + 1] = { text = db[key] or key, color = textColor }
                     end
                 else
-                    for _, tex in ipairs(opts.icons or {}) do
-                        entries[#entries + 1] = { texture = tex }
+                    for _, ic in ipairs(opts.icons or {}) do
+                        if type(ic) == "table" then
+                            -- table form: { texture = <path OR atlas name>, coords = {l,r,t,b} }
+                            -- for icons that need a texcoord slice (e.g. raid-target markers
+                            -- off the shared UI-RaidTargetingIcons sheet). SetIconTextureOrAtlas
+                            -- auto-detects atlas vs path, so a plain texture string still works.
+                            entries[#entries + 1] = { texture = ic.texture, coords = ic.coords, inset = ic.inset }
+                        else
+                            entries[#entries + 1] = { texture = ic }
+                        end
                     end
                 end
                 for _, e in ipairs(entries) do e.desaturate = not enabled end
@@ -6885,6 +6896,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- RAID TARGET ICON (Collapsible)
         -- ============================================
         local raidTargetSection = Add(GUI:CreateCollapsibleSection(self.child, L["Target Marker Icon"], false, 270), 28, 1)
+        -- Header preview: the four most-used markers (square / cross / triangle / circle),
+        -- sliced from the classic raid-target sheet via texcoords (the atlas form won't render here).
+        WireStatusPreview(raidTargetSection, { enableKey = "raidTargetIconEnabled", icons = {
+            { texture = "Interface\\TargetingFrame\\UI-RaidTargetingIcons", coords = { 0.25, 0.5,  0.25, 0.5  }, inset = 2 },  -- square   (6)
+            { texture = "Interface\\TargetingFrame\\UI-RaidTargetingIcons", coords = { 0.5,  0.75, 0.25, 0.5  }, inset = 2 },  -- cross    (7)
+            { texture = "Interface\\TargetingFrame\\UI-RaidTargetingIcons", coords = { 0.75, 1.0,  0.0,  0.25 }, inset = 2 },  -- triangle (4)
+            { texture = "Interface\\TargetingFrame\\UI-RaidTargetingIcons", coords = { 0.25, 0.5,  0.0,  0.25 }, inset = 2 },  -- circle   (2)
+        } })
         
         -- Small gap between the section header and the first box.
         local rtHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
@@ -6992,7 +7011,48 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         sumPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "summonIconY", nil, function() DF:LightweightUpdateIconPosition("summon") end, true), 55)
         Add(sumPosition, nil, 1)
         summonSection:RegisterChild(sumPosition)
-        
+
+        -- ============================================
+        -- BG OBJECTIVE CARRIER ICON (Collapsible)
+        -- Lights up a unit carrying a battleground objective
+        -- (flag / orb). Detection is UnitPvpClassification, so it
+        -- works with Blizzard raid frames fully disabled.
+        -- ============================================
+        local bgCarrierSection = Add(GUI:CreateCollapsibleSection(self.child, L["BG Carrier Icon"], false, 270), 28, 1)
+        WireStatusPreview(bgCarrierSection, { enableKey = "bgCarrierIconEnabled", showTextKey = "bgCarrierIconShowText", icons = { "Interface\\Icons\\inv_bannerpvp_02" }, texts = { "bgCarrierIconText" } })
+
+        -- Small gap between the section header and the first box.
+        local bgcHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        bgCarrierSection:RegisterChild(bgcHeaderGap)
+
+        -- Settings
+        local bgcSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "bgCarrierIcon:Settings" })
+        bgcSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        bgcSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable BG Carrier Icon"], db, "bgCarrierIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        bgcSettings:AddWidget(GUI:CreateLabel(self.child, L["Shows on a friendly party/raid member carrying a battleground objective (flag, orb). Only active inside battlegrounds."], 240), 44)
+        bgcSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Show as Text"], db, "bgCarrierIconShowText", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 30)
+        bgcSettings:AddWidget(GUI:CreateEditBox(self.child, "Carrier Text", db, "bgCarrierIconText", function() DF:UpdateAllFramesStatusIcons() end, 120), 55)
+        Add(bgcSettings, nil, 1)
+        bgCarrierSection:RegisterChild(bgcSettings)
+
+        -- Appearance
+        local bgcAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "bgCarrierIcon:Appearance" })
+        bgcAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        bgcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "bgCarrierIconScale", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        bgcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "bgCarrierIconAlpha", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        bgcAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "bgCarrierIconFrameLevel", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        Add(bgcAppearance, nil, 1)
+        bgCarrierSection:RegisterChild(bgcAppearance)
+
+        -- Position
+        local bgcPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "bgCarrierIcon:Position" })
+        bgcPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        bgcPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "bgCarrierIconAnchor", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 55)
+        bgcPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "bgCarrierIconX", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        bgcPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "bgCarrierIconY", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        Add(bgcPosition, nil, 1)
+        bgCarrierSection:RegisterChild(bgcPosition)
+
         -- ============================================
         -- RESURRECTION ICON (Collapsible)
         -- ============================================

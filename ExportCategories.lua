@@ -557,7 +557,8 @@ DF.ExportCategories = {
         "afkIconTextColor",
         "vehicleIconTextColor",
         "raidRoleIconTextColor",
-        
+        "bgCarrierIconTextColor",
+
         -- Role Icon
         "showRoleIcon",
         "roleIconAnchor",
@@ -707,7 +708,18 @@ DF.ExportCategories = {
         "raidRoleIconShowText",
         "raidRoleIconTextTank",
         "raidRoleIconTextAssist",
-        
+
+        -- BG Objective Carrier Icon
+        "bgCarrierIconEnabled",
+        "bgCarrierIconAnchor",
+        "bgCarrierIconX",
+        "bgCarrierIconY",
+        "bgCarrierIconScale",
+        "bgCarrierIconAlpha",
+        "bgCarrierIconFrameLevel",
+        "bgCarrierIconShowText",
+        "bgCarrierIconText",
+
         -- Defensive Icon
         "defensiveIconEnabled",
         "defensiveIconAnchor",
