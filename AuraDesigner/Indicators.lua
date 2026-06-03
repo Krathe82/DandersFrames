@@ -1254,8 +1254,15 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                 -- here so SetValue's reset is a no-op; the frame alpha channel it
                 -- doesn't touch carries the real opacity, and UpdateHealthBarAppearance
                 -- re-asserts it on every health event (see ElementAppearance.lua).
+                --
+                -- Use the OOR-aware effective blend (the alpha UpdateAuraDesignerAppearance
+                -- last wrote for the current range state), falling back to the configured
+                -- alpha on first apply / in range. Without this, every re-apply (UNIT_AURA)
+                -- snapped the underlying bar back to full opacity while the OOR path held
+                -- it faded — on a phased/out-of-range unit, whose auras the client re-syncs
+                -- constantly, the two fought and the bar flickered (element-specific OOR mode).
                 hbTex:SetVertexColor(r, g, b)
-                hbTex:SetAlpha(a)
+                hbTex:SetAlpha(state.healthbarEffectiveBlend or a)
             end
         else
             -- Tint mode: the underlying bar must show its normal colour through the overlay.
