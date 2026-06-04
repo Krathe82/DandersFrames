@@ -35,7 +35,7 @@ is_minor_or_major_bump() {
 
 # Extract only the header + first ## [x.y.z] section from CHANGELOG.md
 trim_to_first_section() {
-    echo "$1" | awk '/^## \[/ { count++; if (count > 1) exit } { print }'
+    echo "$1" | awk '/^## \[/ { count++ } count <= 1 { print }'
 }
 
 # Check if CHANGELOG.md has a curated section for an unreleased version.
