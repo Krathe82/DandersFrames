@@ -155,8 +155,8 @@ local function SetMissingHealthBarValue(bar, unit, frame)
     if not texture or texture == "" then
         texture = db and db.healthTexture or "Interface\\TargetingFrame\\UI-StatusBar"
     end
-    bar:SetStatusBarTexture(texture)
-    
+    DF:SafeSetStatusBarTexture(bar, texture)
+
     -- Update color based on color mode
     local colorMode = db and db.missingHealthColorMode or "CUSTOM"
     local r, g, b, a

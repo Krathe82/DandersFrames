@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### New Features
+
+* (Frames) Missing textures now fall back to a bundled default instead of rendering black. If a profile you import references a custom or shared-media texture you don't have installed (or the addon that provided it was removed), the affected health bar, background or other bar now uses DandersFrames' default texture and shows a one-time notice — rather than a black/blank bar. (Requires WoW 12.0.7; on earlier versions there is no change.) (by Krathe)
+
 ## [4.4.0]
 
 * Behind-the-scenes improvements and groundwork for upcoming features.

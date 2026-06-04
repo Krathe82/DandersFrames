@@ -487,8 +487,8 @@ function DF:ApplyPetFrameStyle(frame)
     
     -- Update health bar texture - use path directly (dropdown saves paths)
     local texture = db.petTexture or "Interface\\TargetingFrame\\UI-StatusBar"
-    frame.healthBar:SetStatusBarTexture(texture)
-    frame.healthBar.bg:SetTexture(texture)
+    DF:SafeSetStatusBarTexture(frame.healthBar, texture)
+    DF:SafeSetTexture(frame.healthBar.bg, texture)
     
     -- Background color
     local bgColor = db.petBackgroundColor or {r = 0.1, g = 0.1, b = 0.1, a = 0.8}
