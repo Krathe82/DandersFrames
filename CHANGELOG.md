@@ -1,5 +1,21 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### New Features
+
+* (Frames) **Unified border system** — every border (frame, buff/debuff icons, aura bars, defensive icons, missing-buff, resource bar, pet frames, targeted spells) now runs through one engine with consistent **Style / Colour / Alpha / Gradient** controls. (by Krathe)
+* (Borders) Added optional **border animations** — 10 effects (pulse, wipe, ripple, segment reveal, sides/corners-only, proc glow, dash, and more), available wherever a border is drawn. (by Krathe)
+
+### Improvements
+
+* (Performance) The expiring-border ticker now **throttles and staggers per entry** to cut overhead when many borders are expiring at once. (by Krathe)
+
+### Bug Fixes
+
+* (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
+* (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
+
 ## [4.3.12]
 
 ### New Features
