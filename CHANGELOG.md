@@ -1,5 +1,9 @@
 # DandersFrames Changelog
 
+## [4.4.0]
+
+* Behind-the-scenes improvements and groundwork for upcoming features.
+
 ## [4.3.12]
 
 ### New Features
