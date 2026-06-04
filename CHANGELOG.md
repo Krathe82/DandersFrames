@@ -12,11 +12,17 @@
 * (Performance) The expiring-border ticker now **throttles and staggers per entry** to cut overhead when many borders are expiring at once. (by Krathe)
 * (Defaults) Tuned some new-profile defaults — buff icon sizing/spacing, stack-count offsets, Stack/Duration outline shadow, and a flush expiring-border inset. (by Krathe)
 * (Reduced Max Health) The reduced-max-health bar's default colour is now a **translucent grey (50% @ ~80% alpha)** instead of opaque black, so it reads clearly on a dark health bar; profiles still on the old solid black are migrated automatically (a customised colour is left alone). (by Krathe)
+* (Boss Debuffs) **Border Scale** can now go negative to hide the icon border, with a wider range, a step of 1, and an explanatory tip. (by Krathe)
 
 ### Bug Fixes
 
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
+* (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
+* (Aura Designer) Indicators are torn down when the Aura Designer is disabled, and re-applied on **profile swap**. (by Krathe)
+* (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
+* (Aura Designer) The replace-mode health-bar highlight no longer **flickers** on phased or out-of-range units. (by Krathe)
+* (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
 
 ## [4.4.0]
 
