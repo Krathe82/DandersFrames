@@ -10,6 +10,8 @@
 ### Improvements
 
 * (Performance) The expiring-border ticker now **throttles and staggers per entry** to cut overhead when many borders are expiring at once. (by Krathe)
+* (Defaults) Tuned some new-profile defaults — buff icon sizing/spacing, stack-count offsets, Stack/Duration outline shadow, and a flush expiring-border inset. (by Krathe)
+* (Reduced Max Health) The reduced-max-health bar's default colour is now a **translucent grey (50% @ ~80% alpha)** instead of opaque black, so it reads clearly on a dark health bar; profiles still on the old solid black are migrated automatically (a customised colour is left alone). (by Krathe)
 
 ### Bug Fixes
 
