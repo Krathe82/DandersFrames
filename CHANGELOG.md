@@ -6,6 +6,12 @@
 
 * (Frames) **Unified border system** — every border (frame, buff/debuff icons, aura bars, defensive icons, missing-buff, resource bar, pet frames, targeted spells) now runs through one engine with consistent **Style / Colour / Alpha / Gradient** controls. (by Krathe)
 * (Borders) Added optional **border animations** — 10 effects (pulse, wipe, ripple, segment reveal, sides/corners-only, proc glow, dash, and more), available wherever a border is drawn. (by Krathe)
+* (Icons) Status icons now use crisp **modern Blizzard atlas art** (ready check, summon, resurrect, phased, vehicle, main tank/assist, AFK), with automatic fallback to the legacy texture. (by Krathe)
+* (Icons) Each status-icon section header now shows a **live preview** — the icon swatch, or its status text when "Show as Text" is on — greyed out when the icon is disabled. (by Krathe)
+* (Icons) New **BG objective carrier icon** — lights up a friendly party/raid member carrying a battleground objective (flag or orb), so you can spot the carrier on your frames. (by Krathe)
+* (Role Icon) **Custom role icons** — choose Blizzard, DF, or your own external texture per role (Tank / Healer / DPS). (by Krathe)
+* (AFK Icon) Dedicated **Timer Text** controls for the elapsed-time counter (font, size, outline, colour, offset). The countdown is zero-padded `MM:SS`, left-justified and stays steady as it ticks. (by Krathe)
+* (Fonts) Bundled **Roboto Mono** (SemiBold/Bold) — a monospaced option for perfectly static countdown text. (by Krathe)
 
 ### Improvements
 
@@ -13,6 +19,9 @@
 * (Defaults) Tuned some new-profile defaults — buff icon sizing/spacing, stack-count offsets, Stack/Duration outline shadow, and a flush expiring-border inset. (by Krathe)
 * (Reduced Max Health) The reduced-max-health bar's default colour is now a **translucent grey (50% @ ~80% alpha)** instead of opaque black, so it reads clearly on a dark health bar; profiles still on the old solid black are migrated automatically (a customised colour is left alone). (by Krathe)
 * (Boss Debuffs) **Border Scale** can now go negative to hide the icon border, with a wider range, a step of 1, and an explanatory tip. (by Krathe)
+* (Icons) Reorganised **every status-icon's settings into collapsible Settings / Appearance / Position boxes** (matching the Aura Designer layout), so each section is easier to scan. (by Krathe)
+* (Icons) Status-icon font, size, colour and position changes now apply to **live frames instantly** — no `/reload`. (by Krathe)
+* (Icons) Renamed **"Raid Target Icon" → "Target Marker Icon"**, and its header preview now shows the four common markers (square / cross / triangle / circle). (by Krathe)
 
 ### Bug Fixes
 
@@ -23,6 +32,8 @@
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **flickers** on phased or out-of-range units. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
+* (AFK Timer) The elapsed-time countdown no longer **shifts left/right** as it ticks. (by Krathe)
+* (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 
 ## [4.3.12]
 
