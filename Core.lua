@@ -4567,6 +4567,15 @@ DF._MainEventDispatcher = function(self, event, arg1)
         -- Post-initialization updates (frames already created at ADDON_LOADED)
         -- These need a delay to let Blizzard addons settle and world to be ready
         C_Timer.After(0.5, function()
+            -- One-time migration of legacy name/health/status text settings into
+            -- Text Designer elements. Naturally idempotent (per-mode guard +
+            -- migratedFromLegacy flag), so re-running on every login is a no-op
+            -- once it has run. Alpha-only — the function only exists when the
+            -- Text Designer files are loaded.
+            if DF.MigrateTextDesignerFromLegacy then
+                DF:MigrateTextDesignerFromLegacy()
+            end
+
             -- CRITICAL: Update power bars now that unit data is available
             -- At ADDON_LOADED, UnitPower() etc may return 0 before player is loaded
             -- Power bar updates don't require combat protection

@@ -539,6 +539,10 @@ function DF:UpdateTestFrameHealthOnly(frame, index)
         frame.dfDispelOverlay.gradient:SetMinMaxValues(0, 1)
         frame.dfDispelOverlay.gradient:SetValue(health)
     end
+
+    -- Text Designer: re-render health-category text so TD follows the animated
+    -- health value (TestSource reads frame.testAnimatedHealth while animating).
+    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "health") end
 end
 
 -- Stop test mode animation
@@ -1099,7 +1103,23 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
             frame.dfTestOutOfRange = false
         end
     end
-    
+
+    -- Text Designer: render TD text on this test frame using its simulated
+    -- per-unit data. Gated inside DF:UpdateTextDesigner via frame.dfIsTestFrame
+    -- + db.testShowTextDesigner; no-op when the TD module isn't loaded.
+    if DF.UpdateTextDesigner then
+        DF:UpdateTextDesigner(frame, "all")
+        -- Mirror live frames: hide the built-in name/health/status text whenever
+        -- "Hide Legacy Text" is on — independent of the TD test toggle, so
+        -- disabling TD in test doesn't bring the old text (e.g. "Dead") back.
+        -- Runs after the text was set/shown above.
+        if DF.IsLegacyTextHidden and DF:IsLegacyTextHidden(frame) then
+            if frame.nameText then frame.nameText:Hide() end
+            if frame.healthText then frame.healthText:Hide() end
+            if frame.statusText then frame.statusText:Hide() end
+        end
+    end
+
     -- Update test icons (role, leader, raid target)
     if db.testShowIcons ~= false then
         DF:UpdateTestIcons(frame, testData)
@@ -6628,6 +6648,26 @@ function DF:CreateTestPanel()
     end, "bars_classpower")
     panel.showOutOfRangeCheck = secBars:AddCheckbox("Out of Range", "testShowOutOfRange", nil, "display_fading")
     panel.showReducedMaxCheck = secBars:AddCheckbox("Reduced Max Health", "testShowReducedMaxHealth", nil, "bars_health")
+    -- Text Designer is alpha-gated; only offer the toggle when the module loaded.
+    if DF.UpdateTextDesigner then
+        -- Default ON: seed any profile that predates the Config default so the
+        -- checkbox shows checked (migration timing can otherwise leave it nil).
+        local pdb, rdb = DF:GetDB(), DF:GetRaidDB()
+        if pdb and pdb.testShowTextDesigner == nil then pdb.testShowTextDesigner = true end
+        if rdb and rdb.testShowTextDesigner == nil then rdb.testShowTextDesigner = true end
+        panel.showTextDesignerCheck = secBars:AddCheckbox("Text Designer", "testShowTextDesigner", function()
+            if DF.UpdateTextDesigner then
+                for i = 0, 4 do
+                    local f = DF.testPartyFrames and DF.testPartyFrames[i]
+                    if f then DF:UpdateTextDesigner(f, "all") end
+                end
+                for i = 1, 40 do
+                    local f = DF.testRaidFrames and DF.testRaidFrames[i]
+                    if f then DF:UpdateTextDesigner(f, "all") end
+                end
+            end
+        end, "text_designer")  -- pageId → makes the label a quick link to the TD tab
+    end
 
     -- --- AURAS ---
     local secAuras = CreateSection(panel, "Auras", "auras")
@@ -6907,6 +6947,9 @@ function DF:CreateTestPanel()
         self.showClassPowerCheck:SetChecked(db.testShowClassPower ~= false)
         self.showOutOfRangeCheck:SetChecked(db.testShowOutOfRange)
         self.showReducedMaxCheck:SetChecked(db.testShowReducedMaxHealth ~= false)
+        if self.showTextDesignerCheck then
+            self.showTextDesignerCheck:SetChecked(db.testShowTextDesigner ~= false)
+        end
         self.showAurasCheck:SetChecked(db.testShowAuras)
         self.showBossDebuffsCheck:SetChecked(db.testShowBossDebuffs)
         self.showDispelGlowCheck:SetChecked(db.testShowDispelGlow)

@@ -1963,6 +1963,7 @@ DF.PartyDefaults = {
     testShowTargetedSpell = false,
     testShowClassPower = true,
     testShowAuraDesigner = false,
+    testShowTextDesigner = true,
 
     -- Tooltip settings
     tooltipAuraAnchor = "DEFAULT",
@@ -3204,6 +3205,7 @@ DF.RaidDefaults = {
     testShowTargetedSpell = false,
     testShowClassPower = true,
     testShowAuraDesigner = false,
+    testShowTextDesigner = true,
 
     -- Tooltip settings
     tooltipAuraAnchor = "DEFAULT",

@@ -51,6 +51,13 @@ local function formatAmount(v, abbreviate, hideWhenZero)
     return getMS().FormatNumber(v, abbreviate)
 end
 
+-- Health/power value text auto-hides on dead / offline / ghost units
+-- (mirrors normal frames — a dead unit shows its status, not "0%"/"0"). There
+-- is no per-state option; feigning units keep their real health.
+local function deadHidden(elem, source)
+    return source:IsDead() or (not source:IsConnected()) or source:IsGhost()
+end
+
 -- Wrap text in a |cAARRGGBB...|r colour escape. Safe with secret text: the
 -- prefix is built with format() (plain) and concatenated, and the whole thing
 -- goes straight to FontString:SetText. Used for per-item colours in groups,
@@ -113,11 +120,28 @@ RESOLVERS.group_number = function(elem, source)
     else return "G" .. tostring(n) end  -- STANDALONE default
 end
 
+RESOLVERS.level = function(elem, source)
+    -- GetLevel already returns either a number or the string "??" (it handles
+    -- the secret / unknown / <=0 cases), so just coerce — never compare here.
+    local lvl = source:GetLevel()
+    if lvl == nil then return "" end
+    return tostring(lvl)
+end
+
+RESOLVERS.race = function(elem, source)
+    return getMS().SafeText(source:GetRace() or "")
+end
+
+RESOLVERS.faction = function(elem, source)
+    return getMS().SafeText(source:GetFaction() or "")
+end
+
+-- Kept for backward compat with any element saved before level/race/faction
+-- were split into separate content types. No longer offered in the picker.
 RESOLVERS.race_level_faction = function(elem, source)
     local race = source:GetRace() or ""
     local lvl = source:GetLevel() or "??"
     local fac = source:GetFaction() or ""
-    -- Format: "80 Draenei (Alliance)" — adjust per elem.format if needed
     local parts = {}
     if lvl and lvl ~= "" then parts[#parts+1] = tostring(lvl) end
     if race and race ~= "" then parts[#parts+1] = race end
@@ -133,18 +157,22 @@ end
 -- ───── Health ─────
 
 RESOLVERS.hp_current = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     return formatAmount(source:GetHPCurrent(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.hp_max = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     return formatAmount(source:GetHPMax(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.hp_percent = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     return getMS().PctText(source:GetHPPercent(), elem.decimals or 0, elem.hidePercent)
 end
 
 RESOLVERS.hp_deficit = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     -- isBlankAmount launders the value through a FontString so secret zeros are
     -- detected correctly. At zero (full health): hide when Hide-when-0 is on
     -- (default), otherwise show a plain "0" (no minus). Nonzero: "-NNN".
@@ -158,6 +186,7 @@ RESOLVERS.hp_deficit = function(elem, source)
 end
 
 RESOLVERS.hp_max_reduction = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     local pct = source:GetHPMaxReductionPct() or 0
     if pct == 0 then return "" end
     -- API returns 0..1 in some patches and 0..100 in others.
@@ -170,14 +199,17 @@ end
 -- ───── Power ─────
 
 RESOLVERS.power_current = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     return formatAmount(source:GetPowerCurrent(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.power_percent = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     return getMS().PctText(source:GetPowerPercent(), elem.decimals or 0, elem.hidePercent)
 end
 
 RESOLVERS.power_deficit = function(elem, source)
+    if deadHidden(elem, source) then return "" end
     local v = source:GetPowerDeficit()
     if v == nil then return "" end
     if isBlankAmount(v) then
@@ -195,10 +227,6 @@ end
 
 RESOLVERS.absorb_amount = function(elem, source)
     return formatAmount(source:GetAbsorbAmount(), elem.abbreviate, elem.hideWhenZero)
-end
-
-RESOLVERS.overshield_amount = function(elem, source)
-    return formatAmount(source:GetOvershieldAmount(), elem.abbreviate, elem.hideWhenZero)
 end
 
 RESOLVERS.heal_absorb_amount = function(elem, source)
@@ -226,6 +254,9 @@ RESOLVERS.status_text = function(elem, source)
     if source:IsFeignDeath() then return L["FD"] end
     if source:IsGhost() then return L["Ghost"] end
     if source:IsDead() then return L["Dead"] end
+    -- Preview only: the mock unit is "alive", so show a sample status so the
+    -- element is visible and stylable. NOT applied to test/live sources.
+    if source._isPreviewSample and source:_isPreviewSample() then return L["Dead"] end
     return ""
 end
 
@@ -254,7 +285,14 @@ RESOLVERS.range_text = function(elem, source)
     -- Editable text for both states. In-range defaults to blank (show nothing),
     -- out-of-range defaults to "OOR". nil falls back to the default; "" hides.
     if source:IsInRange() then
-        return elem.rangeInText or ""
+        local inText = elem.rangeInText or ""
+        -- Preview: the mock unit is in range. If there's no in-range text to
+        -- show, fall back to the OOR sample so the element is visible/stylable.
+        -- NOT applied to test/live sources.
+        if inText == "" and source._isPreviewSample and source:_isPreviewSample() then
+            return elem.rangeOutText or L["OOR"]
+        end
+        return inText
     end
     return elem.rangeOutText or L["OOR"]
 end

@@ -23,7 +23,7 @@ end
 -- MOCK DATA — synthetic values for the preview
 --
 -- The unit is alive, connected, in-range, with a slight max-HP debuff,
--- a small overshield + heal absorb, and some threat. This exercises
+-- a small absorb + heal absorb, and some threat. This exercises
 -- as many content types as possible in a single static state.
 --
 -- Content types that INTENTIONALLY render empty in this baseline:
@@ -57,9 +57,8 @@ local MOCK_DATA = {
     powerDeficit     = 124460,
     powerTypeToken   = "MANA",
     powerTypeString  = "Mana",
-    -- Shields & Heals (added overshield + heal_absorb)
+    -- Shields & Heals (absorb + heal_absorb)
     absorbAmount     = 25000,
-    overshieldAmount = 8000,
     healAbsorbAmount = 5000,
     incomingHealTotal = 12000,
     incomingHealFromPlayer = 8000,
@@ -84,6 +83,11 @@ local MockSource = {}
 MockSource.__index = MockSource
 
 function MockSource:_isMock() return true end
+-- Marks the single preview mock unit (NOT the per-frame test source). The
+-- status_text resolver uses this to show a sample status in the preview even
+-- though the mock unit is "alive", so the element is visible/stylable. Test
+-- frames must NOT set this — they show real per-unit status (no overlap).
+function MockSource:_isPreviewSample() return true end
 
 function MockSource:GetName() return MOCK_DATA.name end
 function MockSource:GetClassToken() return MOCK_DATA.classToken end
@@ -107,7 +111,6 @@ function MockSource:GetPowerTypeToken() return MOCK_DATA.powerTypeToken end
 function MockSource:GetPowerTypeString() return MOCK_DATA.powerTypeString end
 
 function MockSource:GetAbsorbAmount() return MOCK_DATA.absorbAmount end
-function MockSource:GetOvershieldAmount() return MOCK_DATA.overshieldAmount end
 function MockSource:GetHealAbsorbAmount() return MOCK_DATA.healAbsorbAmount end
 function MockSource:GetIncomingHealTotal() return MOCK_DATA.incomingHealTotal end
 function MockSource:GetIncomingHealFromPlayer() return MOCK_DATA.incomingHealFromPlayer end
@@ -268,17 +271,6 @@ function LiveSource:GetAbsorbAmount()
     return UnitGetTotalAbsorbs(self.unit) or 0
 end
 
-function LiveSource:GetOvershieldAmount()
-    -- DISABLED on Midnight. Overshield = (total absorb) - (absorb clamped to
-    -- missing health), but both are SECRET numbers and subtracting them throws
-    -- "arithmetic on a secret value". There is no current secret-safe path to
-    -- the excess (Cell hits the same wall and shows full absorbs instead). The
-    -- overshield_amount content type is removed from the picker until a
-    -- secret-safe API (e.g. a calculator method returning the excess directly)
-    -- exists. Returning 0 keeps any orphaned element blank instead of erroring.
-    return 0
-end
-
 function LiveSource:GetHealAbsorbAmount()
     return UnitGetTotalHealAbsorbs(self.unit) or 0
 end
@@ -353,5 +345,108 @@ function DataSource.Live(frame)
     local instance = setmetatable({}, LiveSource)
     instance.frame = frame
     instance.unit = frame and frame.unit or nil
+    return instance
+end
+
+-- ============================================================
+-- TEST FACTORY
+-- Reads per-unit simulated data (DF:GetTestUnitData) so TD text renders on
+-- /df test frames with values that vary per frame. Crucially, status text and
+-- range text come from each unit's own test data, so "Dead" / "OOR" only show
+-- on the units actually simulated in those states (no overlapping text).
+-- ============================================================
+
+local TestSource = {}
+TestSource.__index = TestSource
+
+function TestSource:_isMock() return true end  -- non-secret synthetic data
+
+local function tdata(self) return self.data or {} end
+
+-- Health as 0-1. While the "Animate Health" test demo is running, the bar
+-- follows frame.testAnimatedHealth — use it so TD health text tracks the
+-- animation. Otherwise fall back to the static simulated value.
+local function animHP01(self)
+    local f = self.frame
+    if f and f.testAnimatedHealth ~= nil and DF.TestData and DF.TestData.animationTimer then
+        return f.testAnimatedHealth
+    end
+    return tdata(self).healthPercent or 0
+end
+
+function TestSource:GetName() return tdata(self).name or "" end
+function TestSource:GetClassToken() return tdata(self).class end
+function TestSource:GetClassLocalized()
+    local c = tdata(self).class
+    if not c then return "" end
+    return (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[c]) or c
+end
+function TestSource:GetGroupNumber()
+    if self.isRaid and self.index then return math.ceil(self.index / 5) end
+    return nil
+end
+function TestSource:GetLevel() return tdata(self).level or UnitLevel("player") or 80 end
+function TestSource:GetRace() return tdata(self).race or "" end
+function TestSource:GetFaction() return tdata(self).faction or "" end
+
+function TestSource:GetHPMax() return tdata(self).maxHealth or 0 end
+function TestSource:GetHPCurrent() return math.floor(animHP01(self) * (tdata(self).maxHealth or 0)) end
+function TestSource:GetHPPercent() return animHP01(self) * 100 end
+function TestSource:GetHPDeficit()
+    local maxH = tdata(self).maxHealth or 0
+    return maxH - math.floor(animHP01(self) * maxH)
+end
+function TestSource:GetHPMaxReductionPct() return tdata(self).reducedMaxPct or 0 end
+
+function TestSource:GetPowerCurrent()
+    local d = tdata(self)
+    return math.floor((d.powerPercent or 0) * (d.maxHealth or 100000))
+end
+function TestSource:GetPowerMax() return tdata(self).maxHealth or 100000 end
+function TestSource:GetPowerPercent() return (tdata(self).powerPercent or 0) * 100 end
+function TestSource:GetPowerDeficit()
+    local d = tdata(self)
+    local maxP = d.maxHealth or 100000
+    return maxP - math.floor((d.powerPercent or 0) * maxP)
+end
+function TestSource:GetPowerTypeToken() return "MANA" end
+function TestSource:GetPowerTypeString() return _G["POWER_TYPE_MANA"] or "Mana" end
+
+function TestSource:GetAbsorbAmount()
+    local d = tdata(self); return (d.absorbPercent or 0) * (d.maxHealth or 0)
+end
+function TestSource:GetHealAbsorbAmount()
+    local d = tdata(self); return (d.healAbsorbPercent or 0) * (d.maxHealth or 0)
+end
+function TestSource:GetIncomingHealTotal()
+    local d = tdata(self); return (d.healPredictionPercent or 0) * (d.maxHealth or 0)
+end
+function TestSource:GetIncomingHealFromPlayer() return self:GetIncomingHealTotal() end
+
+-- Status comes straight from this unit's simulated state. Test data only sets
+-- status = "Dead" (on a few indices); offline/feign/ghost aren't simulated.
+function TestSource:IsDead() return tdata(self).status == "Dead" end
+function TestSource:IsGhost() return tdata(self).status == "Ghost" end
+function TestSource:IsConnected() return tdata(self).status ~= "Offline" end
+function TestSource:IsFeignDeath() return tdata(self).status == "FD" end
+function TestSource:GetAggroFlag() return 0 end          -- threat not simulated in test
+function TestSource:GetThreatPercent() return nil end
+function TestSource:IsInRange() return not tdata(self).outOfRange end
+
+function DataSource.Test(frame)
+    local instance = setmetatable({}, TestSource)
+    instance.frame = frame
+    if frame and frame.dfIsPinnedTestFrame then
+        instance.index = frame.dfTestIndex
+        instance.isRaid = false
+        instance.isBoss = true
+    else
+        instance.index = frame and frame.index
+        instance.isRaid = frame and frame.isRaidFrame or false
+        instance.isBoss = false
+    end
+    if DF.GetTestUnitData and instance.index ~= nil then
+        instance.data = DF:GetTestUnitData(instance.index, instance.isRaid, instance.isBoss)
+    end
     return instance
 end

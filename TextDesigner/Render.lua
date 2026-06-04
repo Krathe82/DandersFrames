@@ -22,7 +22,10 @@ local CONTENT_HINTS = {
     -- name (identity)
     name              = "name",
     class             = "name",
-    race_level_faction= "name",
+    level             = "name",
+    race              = "name",
+    faction           = "name",
+    race_level_faction= "name",  -- legacy combined type (kept for migration)
     group_number      = "name",
     custom_static     = "name",  -- static, refreshes only on settings change
     -- health
@@ -31,7 +34,7 @@ local CONTENT_HINTS = {
     hp_percent        = "health",
     hp_deficit        = "health",
     hp_max_reduction  = "health",
-    status_text       = "health",
+    status_text       = "health",  -- legacy combined type (kept for migration)
     -- power
     power_current     = "power",
     power_percent     = "power",
@@ -39,7 +42,6 @@ local CONTENT_HINTS = {
     power_type_string = "power",
     -- absorbs / heals
     absorb_amount     = "absorb",
-    overshield_amount = "absorb",
     heal_absorb_amount= "absorb",
     incoming_heal     = "heal",
     incoming_heal_mine= "heal",
@@ -288,6 +290,23 @@ function DF:UpdateTextDesigner(frame, hint)
         tostring(frame.unit), tostring(hint),
         tostring(db.textDesigner.enabled),
         db.textDesigner.elements and #db.textDesigner.elements or -1)
+
+    -- Test frames: use the per-unit Test data source and gate on the test-mode
+    -- toggle (db.testShowTextDesigner) rather than the live master toggle. Like
+    -- the preview, ignore the master toggle so designers can see their layout
+    -- while building. When the test toggle is off, hide any TD text on the frame.
+    if frame.dfIsTestFrame then
+        if db.testShowTextDesigner == false then
+            if frame._tdFontStrings then
+                for _, fs in pairs(frame._tdFontStrings) do fs:Hide() end
+            end
+            return
+        end
+        local source = DF.TextDesigner.DataSource.Test(frame)
+        Render:UpdateFrame(frame, db.textDesigner, source, hint, true)  -- isPreview=true
+        return
+    end
+
     local source = DF.TextDesigner.DataSource.Live(frame)
     Render:UpdateFrame(frame, db.textDesigner, source, hint)
 end

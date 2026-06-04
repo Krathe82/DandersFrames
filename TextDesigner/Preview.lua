@@ -45,23 +45,9 @@ function Preview:RefreshPreview()
     Render:UpdateFrame(activeMockFrame, activeTdDB, DataSource.Mock(), "all", true)
 end
 
-function Preview:RefreshAll()
-    DF:Debug("TD", "Preview:RefreshAll called, mockFrame=%s tdDB=%s",
-        tostring(activeMockFrame), tostring(activeTdDB))
-    if not activeMockFrame or not activeTdDB then return end
-    local Render = DF.TextDesigner.Render
-    local DataSource = DF.TextDesigner.DataSource
-    if not Render or not DataSource then return end
-    local source = DataSource.Mock()
-    -- isPreview=true so the master "Enable Text Designer" toggle does NOT
-    -- hide preview text — the preview is for "see what your text will look
-    -- like when enabled".
-    Render:UpdateFrame(activeMockFrame, activeTdDB, source, "all", true)
-
-    -- Also refresh live frames so settings changes take effect immediately
-    -- without waiting for the next UNIT_* event. Minor architectural
-    -- compromise (Preview knows about live frames) but keeps refresh logic
-    -- in one place.
+-- Refreshes every live unit frame + pinned boss frame's TD text. Separated out
+-- so RefreshAll and the throttled drag path can share it.
+function Preview:RefreshLiveFrames()
     if DF.UpdateTextDesigner and DF.unitFrameMap then
         for _, frame in pairs(DF.unitFrameMap) do
             DF:UpdateTextDesigner(frame, "all")
@@ -79,6 +65,26 @@ function Preview:RefreshAll()
             end
         end
     end
+end
+
+function Preview:RefreshAll()
+    DF:Debug("TD", "Preview:RefreshAll called, mockFrame=%s tdDB=%s",
+        tostring(activeMockFrame), tostring(activeTdDB))
+    self:RefreshPreview()
+    self:RefreshLiveFrames()
+end
+
+-- Throttled refresh for continuous edits (colour-picker drag). The preview mock
+-- frame updates every call (one frame, cheap); live frames update at most every
+-- ~0.03s so dragging stays live without a full all-frames refresh every tick
+-- (that was the lag). The full RefreshAll still runs once on release.
+local lastThrottledLive = 0
+function Preview:RefreshThrottled()
+    self:RefreshPreview()
+    local now = GetTime and GetTime() or 0
+    if now > 0 and (now - lastThrottledLive) < 0.03 then return end
+    lastThrottledLive = now
+    self:RefreshLiveFrames()
 end
 
 -- Returns the currently bound mock frame.

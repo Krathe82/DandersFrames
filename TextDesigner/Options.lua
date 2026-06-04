@@ -109,7 +109,9 @@ local CONTENT_TYPES = {
     { key = "name",              label = L["Name"],                       category = "identity" },
     { key = "class",             label = L["Class"],                      category = "identity" },
     { key = "group_number",      label = L["Group Number"],               category = "identity" },
-    { key = "race_level_faction",label = L["Race / Level / Faction"],     category = "identity" },
+    { key = "level",             label = L["Level"],                      category = "identity" },
+    { key = "race",              label = L["Race"],                       category = "identity" },
+    { key = "faction",           label = L["Faction"],                    category = "identity" },
     { key = "custom_static",     label = L["Custom Static Text"],         category = "identity" },
     -- Health
     { key = "hp_current",        label = L["Current HP"],                 category = "health"   },
@@ -124,9 +126,7 @@ local CONTENT_TYPES = {
     { key = "power_type_string", label = L["Power Type String"],          category = "power"    },
     -- Shields & Heals
     { key = "absorb_amount",     label = L["Absorb Amount"],              category = "shields"  },
-    -- overshield_amount is disabled: computing it needs secret-value arithmetic
-    -- (total - clamped) which throws on Midnight. No secret-safe path exists yet.
-    -- { key = "overshield_amount", label = L["Overshield Amount"],          category = "shields"  },
+    -- (overshield_amount removed — needs secret-value arithmetic that throws on Midnight)
     { key = "heal_absorb_amount",label = L["Heal Absorb Amount"],         category = "shields"  },
     { key = "incoming_heal",     label = L["Incoming Heal"],              category = "shields"  },
     -- incoming_heal_mine removed from the picker: in practice it reads identical
@@ -267,7 +267,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
     -- Numeric types: abbreviate checkbox
     if ct.key == "hp_current" or ct.key == "hp_max" or ct.key == "hp_deficit"
        or ct.key == "power_current" or ct.key == "power_deficit"
-       or ct.key == "absorb_amount" or ct.key == "overshield_amount"
+       or ct.key == "absorb_amount"
        or ct.key == "heal_absorb_amount"
        or ct.key == "incoming_heal" or ct.key == "incoming_heal_mine"
     then
@@ -579,10 +579,10 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
                     local colorCB = function()
                         if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
                     end
-                    -- Lightweight refresh (preview mock only) for the colour drag
-                    -- so we don't full-refresh every frame on each tick.
+                    -- Throttled refresh for the colour drag: preview updates
+                    -- every tick, live frames at most ~30/s (live but not laggy).
                     local colorLight = function()
-                        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+                        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshThrottled() end
                     end
                     -- Use Class Color (takes precedence over a custom colour).
                     local useClass = GUI:CreateCheckbox(parent, L["Use Class Color"], capturedItem, "useClassColor", colorCB)
@@ -654,8 +654,9 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         y = y - 32
     end
     -- Types with no Content-section fields fall through:
-    -- class, status_text, power_type_string, race_level_faction.
-    -- They render only the section header (no fields), which is fine.
+    -- class, power_type_string, level, race, faction (and the legacy
+    -- race_level_faction / status_text). They render only the section header,
+    -- which is fine.
 
     return y - SECTION_GAP
 end
@@ -789,9 +790,9 @@ local function BuildAppearanceSection(GUI, parent, elem, card, yStart)
         elem.overrides.color = true
         if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
     end, function()
-        -- Lightweight (preview-only) refresh while dragging the colour picker;
-        -- the full RefreshAll runs once on close. Avoids per-tick all-frames lag.
-        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+        -- Throttled refresh while dragging: preview every tick, live frames
+        -- ~30/s — live but not laggy. Full RefreshAll runs once on close.
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshThrottled() end
     end, true)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
@@ -2493,8 +2494,8 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     y = y - 44
 
     local colorPicker = GUI:CreateColorPicker(parent, L["Color"], defaults, "color", true, refreshCB, function()
-        -- Lightweight preview-only refresh during the colour drag.
-        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshPreview() end
+        -- Throttled refresh during the colour drag (live, not laggy).
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshThrottled() end
     end, true)
     colorPicker:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
@@ -2533,6 +2534,32 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
         if DF.UpdateAllFrames then DF:UpdateAllFrames() end
     end)
     hideLegacyCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    y = y - 44
+
+    -- ── IMPORT CURRENT TEXT SETTINGS ──────────────────────────
+    -- Rebuilds the element list from the addon's built-in name / health /
+    -- status text settings (force = overwrite). Lets users seed the Text
+    -- Designer from their existing layout, or re-sync after tweaking the
+    -- legacy text settings.
+    local importDesc = parent:CreateFontString(nil, "OVERLAY")
+    GUI:SetSettingsFont(importDesc, 10, "")
+    importDesc:SetText(L["Rebuild the element list from your current built-in name, health, and status text. This replaces all existing Text Designer elements for this mode."])
+    importDesc:SetWidth(parent:GetWidth() - 28)
+    importDesc:SetJustifyH("LEFT")
+    importDesc:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+    importDesc:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    y = y - 36
+
+    local importBtn = GUI:CreateButton(parent, L["Import Current Text Settings"], 220, 24, function()
+        if DF.MigrateTextDesignerFromLegacy then
+            DF:MigrateTextDesignerFromLegacy(true)  -- force = rebuild from current legacy settings
+        end
+        if DF.TextDesigner.FullRebuildCards then
+            DF.TextDesigner.FullRebuildCards(GUI, page, tdDB, state)
+        end
+        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
+    end)
+    importBtn:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
 end
 
 -- ============================================================

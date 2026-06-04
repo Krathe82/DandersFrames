@@ -8264,6 +8264,10 @@ function DF:ProcessRosterUpdate()
         local function refreshName(frame)
             if frame.unit then
                 DF:UpdateName(frame)
+                -- TD mirrors this legacy safety net: refresh identity text on
+                -- every roster change so TD names don't go stale/duplicate when
+                -- the secure header reshuffles frames (the per-frame path misses some).
+                if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "name") end
             end
         end
         DF:IteratePartyFrames(refreshName)
@@ -8573,6 +8577,7 @@ local headerChildEventFrame = CreateFrame("Frame")
 headerChildEventFrame:RegisterEvent("UNIT_HEALTH")
 headerChildEventFrame:RegisterEvent("UNIT_MAXHEALTH")
 headerChildEventFrame:RegisterEvent("UNIT_NAME_UPDATE")
+headerChildEventFrame:RegisterEvent("UNIT_LEVEL")
 headerChildEventFrame:RegisterEvent("UNIT_POWER_UPDATE")
 headerChildEventFrame:RegisterEvent("UNIT_MAXPOWER")
 headerChildEventFrame:RegisterEvent("UNIT_DISPLAYPOWER")
@@ -8772,6 +8777,17 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
         end
         return
     end
+
+    -- UNIT_LEVEL: refresh TextDesigner identity text (the "level" element).
+    -- TD-only — the legacy frames don't show a live level, so there's no
+    -- existing update function to call here. No-op without the TD module.
+    if event == "UNIT_LEVEL" then
+        local unit = arg1
+        if unit and DF.UpdateTextDesigner then
+            tdRefresh(unitFrameMap[unit], FindPinnedFrameForUnit(unit), "name")
+        end
+        return
+    end
     
     -- UNIT_CONNECTION: Full frame update (handles offline state)
     if event == "UNIT_CONNECTION" then
@@ -8803,6 +8819,11 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                 end
             end
 
+            -- TD: UpdateUnitFrame early-returns on the offline branch before the
+            -- TD "all" hook, so refresh TD directly here. "all" because a
+            -- connection change flips status text + health/power value hiding.
+            tdRefresh(frame, pinnedFrame, "all")
+
             -- Delayed re-check: UnitIsConnected may not return the updated
             -- state immediately, and the map rebuild throttle (1s) can cause
             -- the reconnect event to miss. Schedule a follow-up that bypasses
@@ -8826,6 +8847,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     local stale = (frameThinks == nil) or (isConnected ~= frameThinks)
                     if stale and DF.UpdateUnitFrame then
                         DF:UpdateUnitFrame(recheckFrame)
+                        if DF.UpdateTextDesigner then DF:UpdateTextDesigner(recheckFrame, "all") end
                     end
                 end
                 -- Also re-check pinned frame
@@ -8835,6 +8857,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     local stale = (frameThinks == nil) or (isConnected ~= frameThinks)
                     if stale and DF.UpdateUnitFrame then
                         DF:UpdateUnitFrame(recheckPinned)
+                        if DF.UpdateTextDesigner then DF:UpdateTextDesigner(recheckPinned, "all") end
                     end
                 end
             end)
@@ -9094,6 +9117,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     -- NOTE: If more frame elements get stuck after vehicle swaps
                     -- (role icon, power bar type, etc.), consider a broader refresh here.
                     if DF.UpdateName then DF:UpdateName(frame) end
+                    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(frame, "name") end
                 end
                 local pinnedFrame = FindPinnedFrameForUnit(unit)
                 if pinnedFrame then
@@ -9101,6 +9125,7 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                     if DF.UpdateAuras_Enhanced then DF:UpdateAuras_Enhanced(pinnedFrame) end
                     if DF.UpdateDefensiveBar then DF:UpdateDefensiveBar(pinnedFrame) end
                     if DF.UpdateName then DF:UpdateName(pinnedFrame) end
+                    if DF.UpdateTextDesigner then DF:UpdateTextDesigner(pinnedFrame, "name") end
                 end
             end
         end
