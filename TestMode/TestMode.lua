@@ -1103,9 +1103,10 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
             frame.dfTestOutOfRange = false
         end
     end
-    
-    -- Update test icons (role, leader, raid target)
-    if db.testShowIcons ~= false then
+
+    -- Update test icons (role, leader, raid target). Gated by the unified "Icons"
+    -- toggle (testShowStatusIcons) — same key the status icons use.
+    if db.testShowStatusIcons ~= false then
         DF:UpdateTestIcons(frame, testData)
     else
         -- Hide only role/leader/target icons when disabled (not status icons)
@@ -4802,7 +4803,7 @@ function DF:ApplyTestPreset(preset)
         db.testShowExternalDef = false
         db.testShowTargetedList = false
         db.testShowBossDebuffs = false
-        db.testShowIcons = true
+        db.testShowStatusIcons = true
     elseif preset == "COMBAT" then
         db.testAnimateHealth = true
         db.testShowAuras = true
@@ -4813,7 +4814,7 @@ function DF:ApplyTestPreset(preset)
         db.testShowExternalDef = false
         db.testShowTargetedList = false
         db.testShowBossDebuffs = true
-        db.testShowIcons = true
+        db.testShowStatusIcons = true
     elseif preset == "HEALER" then
         db.testAnimateHealth = true
         db.testShowAuras = true
@@ -4824,7 +4825,7 @@ function DF:ApplyTestPreset(preset)
         db.testShowExternalDef = true
         db.testShowTargetedList = true
         db.testShowBossDebuffs = true
-        db.testShowIcons = true
+        db.testShowStatusIcons = true
     elseif preset == "FULL" then
         db.testAnimateHealth = true
         db.testShowAuras = true
@@ -4834,7 +4835,7 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = true
         db.testShowExternalDef = true
         db.testShowTargetedList = true
-        db.testShowIcons = true
+        db.testShowStatusIcons = true
     end
     
     db.testPreset = preset
@@ -6706,10 +6707,12 @@ function DF:CreateTestPanel()
     panel.animTargetedListCheck = secIndicators:AddCheckbox("Animate Targeted List", "testAnimateTargetedList", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedList() end
     end)
-    panel.showStatusIconsCheck = secIndicators:AddCheckbox("Status / Ready", "testShowStatusIcons", function()
+    -- One unified "Icons" toggle for the whole status/role/leader icon set in test
+    -- mode (was split into "Status / Ready" + "Role / Leader"). Keyed on
+    -- testShowStatusIcons; the role/leader render gate reads the same key.
+    panel.showStatusIconsCheck = secIndicators:AddCheckbox("Icons", "testShowStatusIcons", function()
         if DF.testMode or DF.raidTestMode then DF:RefreshTestFrames() end
     end, "indicators_icons")
-    panel.showIconsCheck = secIndicators:AddCheckbox("Role / Leader", "testShowIcons", nil, "indicators_icons")
 
     -- --- HIGHLIGHTS ---
     local secHighlights = CreateSection(panel, "Highlights", "highlights")
@@ -6861,7 +6864,6 @@ function DF:CreateTestPanel()
         self.showTargetedListCheck:SetChecked(db.testShowTargetedList)
         self.animTargetedListCheck:SetChecked(db.testAnimateTargetedList)
         self.showStatusIconsCheck:SetChecked(db.testShowStatusIcons ~= false)
-        self.showIconsCheck:SetChecked(db.testShowIcons ~= false)
         self.showSelectionCheck:SetChecked(db.testShowSelection)
         self.showAggroCheck:SetChecked(db.testShowAggro)
 
