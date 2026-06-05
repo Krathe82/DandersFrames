@@ -46,15 +46,31 @@ end
 -- UTILITY FUNCTIONS
 -- ============================================================
 
+-- Auto layouts are raid-scoped: while one is being EDITED (live preview is written
+-- into DF._realRaidDB) or is the ACTIVE runtime profile (overlay in DF.raidOverrides),
+-- the pinned config must come from the RAID profile even when we're not physically in
+-- a raid. Otherwise the layout's per-set overrides (players, etc. — see
+-- PINNED_OVERRIDABLE / ApplyRuntimeProfile) silently read the party profile and the
+-- frames look empty during edit/preview. Normal play (no layout edited/active) is
+-- unchanged — it still follows actual group state.
+local function UseRaidPinnedProfile()
+    if IsInRaid() then return true end
+    local apu = DF.AutoProfilesUI
+    if apu and ((apu.IsEditing and apu:IsEditing()) or apu.activeRuntimeProfile) then
+        return true
+    end
+    return false
+end
+
 -- Get pinned frames config for actual current mode
 local function GetPinnedDB()
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = UseRaidPinnedProfile() and DF:GetRaidDB() or DF:GetDB()
     return db and db.pinnedFrames
 end
 
 -- Get the current actual mode (not cached)
 local function GetActualMode()
-    return IsInRaid() and "raid" or "party"
+    return UseRaidPinnedProfile() and "raid" or "party"
 end
 
 -- Get a specific set's config
