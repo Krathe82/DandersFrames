@@ -4497,8 +4497,22 @@ DF._MainEventDispatcher = function(self, event, arg1)
         SLASH_DANDERSFRAMES1 = "/df"
         SLASH_DANDERSFRAMES2 = "/dandersframes"
         SlashCmdList["DANDERSFRAMES"] = function(msg)
+            local rawMsg = msg or ""
             msg = msg and msg:lower() or ""
-            
+
+            -- "/df clearoverride <key|prefix|all>" — remove a stuck auto-layout
+            -- override from the target layout. Parsed from the raw message so the
+            -- key keeps its original case (override keys are mixed-case).
+            local firstWord, restRaw = rawMsg:match("^%s*(%S+)%s*(.-)%s*$")
+            if firstWord and (firstWord:lower() == "clearoverride" or firstWord:lower() == "clearoverrides") then
+                if DF.AutoProfilesUI and DF.AutoProfilesUI.ClearOverrideCommand then
+                    DF.AutoProfilesUI:ClearOverrideCommand(restRaw ~= "" and restRaw or nil)
+                else
+                    print("|cff00ff00DandersFrames:|r Auto profiles module not loaded.")
+                end
+                return
+            end
+
             if msg == "unlock" then
                 if DF.UnlockFrames then DF:UnlockFrames() end
             elseif msg == "lock" then
