@@ -144,6 +144,20 @@ local function FindContentType(key)
     end
 end
 
+-- Public: friendly display name for a TD element, mirroring the element list's
+-- naming (an explicit auto-numbered label wins, else the content-type's label).
+-- Used by the auto-layout override tooltip to label elements by name, not index.
+DF.TextDesigner = DF.TextDesigner or {}
+function DF.TextDesigner.ElementDisplayName(elem)
+    if type(elem) ~= "table" then return nil end
+    if type(elem.label) == "string" and elem.label ~= "" then return elem.label end
+    if elem.contentType then
+        local ct = FindContentType(elem.contentType)
+        return (ct and ct.label) or tostring(elem.contentType)
+    end
+    return nil
+end
+
 -- Auto-number duplicate-type elements: first one stays unlabeled (renders as
 -- just the type name), subsequent ones get "TypeName #2", "Name #3", etc.
 -- N is the next available integer >= 2 in existing labels matching the

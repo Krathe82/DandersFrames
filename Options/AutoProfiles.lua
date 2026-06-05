@@ -233,11 +233,17 @@ local function WalkOverrideDiff(ovr, glob, indent, depth, maxDepth, budget, emit
         if OverrideDeepEqual(ov, gv) then
             -- identical to global — not actually overridden here, skip
         elseif type(ov) == "table" and not (ov.r and ov.g and ov.b) then
+            -- Label TD elements by their friendly name (Name / Current HP / …)
+            -- instead of the array index.
+            local label = tostring(k)
+            if ov.contentType and DF.TextDesigner and DF.TextDesigner.ElementDisplayName then
+                label = DF.TextDesigner.ElementDisplayName(ov) or label
+            end
             if depth >= maxDepth then
-                emit(indent, tostring(k), "{…}")
+                emit(indent, label, "{…}")
                 if budget.n then budget.n = budget.n - 1 end
             else
-                emit(indent, tostring(k) .. ":", nil)
+                emit(indent, label .. ":", nil)
                 if budget.n then budget.n = budget.n - 1 end
                 WalkOverrideDiff(ov, gv, indent .. "  ", depth + 1, maxDepth, budget, emit)
             end
