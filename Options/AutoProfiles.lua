@@ -993,25 +993,61 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
             for tabId in pairs(groups) do tinsert(tabOrder, tabId) end
             table.sort(tabOrder)
 
+            -- Recursively expand table-valued overrides (auraDesigner, textDesigner,
+            -- raidGroupVisible, …) so the tooltip shows the ACTUAL overridden values
+            -- instead of "{table}". Capped by depth + a shared line budget so a large
+            -- config can't overflow the tooltip; /df overrides has the complete dump.
+            local lineBudget = 35
+            local function addTableLines(tbl, indent, depth)
+                local keys = {}
+                for k in pairs(tbl) do keys[#keys + 1] = k end
+                table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+                for _, k in ipairs(keys) do
+                    if lineBudget <= 0 then
+                        GameTooltip:AddLine(indent .. "…", 0.5, 0.5, 0.5)
+                        return
+                    end
+                    local v = tbl[k]
+                    if type(v) == "table" and not (v.r and v.g and v.b) then
+                        if depth >= 4 then
+                            GameTooltip:AddDoubleLine(indent .. tostring(k), "{…}", 0.7, 0.7, 0.7, 0.6, 0.6, 0.6)
+                        else
+                            GameTooltip:AddLine(indent .. tostring(k) .. ":", 0.7, 0.7, 0.7)
+                            lineBudget = lineBudget - 1
+                            addTableLines(v, indent .. "  ", depth + 1)
+                        end
+                    else
+                        local dv
+                        if type(v) == "boolean" then dv = v and "true" or "false"
+                        elseif type(v) == "table" then dv = string.format("(%.1f, %.1f, %.1f)", v.r, v.g, v.b)
+                        else dv = tostring(v) end
+                        GameTooltip:AddDoubleLine(indent .. tostring(k), dv, 0.7, 0.7, 0.7, 1, 1, 1)
+                    end
+                    lineBudget = lineBudget - 1
+                end
+            end
+
             for _, tabId in ipairs(tabOrder) do
                 local group = groups[tabId]
                 GameTooltip:AddLine(group.tabLabel .. " (" .. #group.keys .. ")", 1, 0.67, 0)
                 table.sort(group.keys)
                 for _, key in ipairs(group.keys) do
                     local value = profile.overrides[key]
-                    local displayVal
-                    if type(value) == "boolean" then
-                        displayVal = value and "true" or "false"
-                    elseif type(value) == "table" then
-                        if value.r then
+                    if type(value) == "table" and not (value.r and value.g and value.b) then
+                        -- Expand the overridden table's contents inline.
+                        GameTooltip:AddLine("  " .. key .. ":", 0.8, 0.8, 0.8)
+                        addTableLines(value, "    ", 1)
+                    else
+                        local displayVal
+                        if type(value) == "boolean" then
+                            displayVal = value and "true" or "false"
+                        elseif type(value) == "table" then
                             displayVal = string.format("(%.1f, %.1f, %.1f)", value.r, value.g, value.b)
                         else
-                            displayVal = "{table}"
+                            displayVal = tostring(value)
                         end
-                    else
-                        displayVal = tostring(value)
+                        GameTooltip:AddDoubleLine("  " .. key, displayVal, 0.8, 0.8, 0.8, 1, 1, 1)
                     end
-                    GameTooltip:AddDoubleLine("  " .. key, displayVal, 0.8, 0.8, 0.8, 1, 1, 1)
                 end
             end
 
@@ -3847,25 +3883,52 @@ function AutoProfilesUI:PrintOverrides()
     end
     table.sort(tabOrder)
 
+    -- Recursively print a table-valued override's contents (auraDesigner,
+    -- textDesigner, raidGroupVisible, …) so /df overrides shows the ACTUAL values,
+    -- not "{table}". Chat can scroll, so this is the full dump (depth-capped only).
+    local function printTable(tbl, indent, depth)
+        local keys = {}
+        for k in pairs(tbl) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        for _, k in ipairs(keys) do
+            local v = tbl[k]
+            if type(v) == "table" and not (v.r and v.g and v.b) then
+                if depth >= 6 then
+                    print(indent .. tostring(k) .. " = |cffffffff{…}|r")
+                else
+                    print(indent .. tostring(k) .. ":")
+                    printTable(v, indent .. "  ", depth + 1)
+                end
+            else
+                local dv
+                if type(v) == "table" then dv = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", v.r, v.g, v.b)
+                elseif type(v) == "boolean" then dv = v and "|cff00ff00true|r" or "|cffff4444false|r"
+                else dv = "|cffffffff" .. tostring(v) .. "|r" end
+                print(indent .. tostring(k) .. " = " .. dv)
+            end
+        end
+    end
+
     for _, tabId in ipairs(tabOrder) do
         local group = groups[tabId]
         print("  |cffffaa00" .. group.tabLabel .. "|r (" .. #group.keys .. "):")
         table.sort(group.keys)
         for _, key in ipairs(group.keys) do
             local value = profile.overrides[key]
-            local displayValue
-            if type(value) == "table" then
-                if value.r and value.g and value.b then
-                    displayValue = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", value.r, value.g, value.b)
-                else
-                    displayValue = "|cffffffff{table}|r"
-                end
-            elseif type(value) == "boolean" then
-                displayValue = value and "|cff00ff00true|r" or "|cffff4444false|r"
+            if type(value) == "table" and not (value.r and value.g and value.b) then
+                print("    " .. key .. ":")
+                printTable(value, "      ", 1)
             else
-                displayValue = "|cffffffff" .. tostring(value) .. "|r"
+                local displayValue
+                if type(value) == "table" then
+                    displayValue = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", value.r, value.g, value.b)
+                elseif type(value) == "boolean" then
+                    displayValue = value and "|cff00ff00true|r" or "|cffff4444false|r"
+                else
+                    displayValue = "|cffffffff" .. tostring(value) .. "|r"
+                end
+                print("    " .. key .. " = " .. displayValue)
             end
-            print("    " .. key .. " = " .. displayValue)
         end
     end
 
