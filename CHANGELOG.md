@@ -12,6 +12,7 @@
 * (Role Icon) **Custom role icons** — choose Blizzard, DF, or your own external texture per role (Tank / Healer / DPS). (by Krathe)
 * (AFK Icon) Dedicated **Timer Text** controls for the elapsed-time counter (font, size, outline, colour, offset). The countdown is zero-padded `MM:SS`, left-justified and stays steady as it ticks. (by Krathe)
 * (Fonts) Bundled **Roboto Mono** (SemiBold/Bold) — a monospaced option for perfectly static countdown text. (by Krathe)
+* (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
 
 ### Improvements
 
@@ -22,6 +23,7 @@
 * (Icons) Reorganised **every status-icon's settings into collapsible Settings / Appearance / Position boxes** (matching the Aura Designer layout), so each section is easier to scan. (by Krathe)
 * (Icons) Status-icon font, size, colour and position changes now apply to **live frames instantly** — no `/reload`. (by Krathe)
 * (Icons) Renamed **"Raid Target Icon" → "Target Marker Icon"**, and its header preview now shows the four common markers (square / cross / triangle / circle). (by Krathe)
+* (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
 
 ### Bug Fixes
 
