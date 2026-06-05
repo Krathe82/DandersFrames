@@ -206,6 +206,52 @@ local function GroupOverridesByTab(overrides)
     return groups, unknownKeys
 end
 
+-- Deep value equality (used to skip leaves of a table override that match global).
+local function OverrideDeepEqual(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return a == b end
+    for k, v in pairs(a) do if not OverrideDeepEqual(v, b[k]) then return false end end
+    for k in pairs(b) do if a[k] == nil then return false end end
+    return true
+end
+
+-- Walk a table-valued override against its global counterpart and emit ONLY the
+-- entries that differ from global (a table override stores the WHOLE table, so a
+-- raw dump would show everything, not just what the layout changed). emit is
+--   emit(indent, leftText, valueStr)  -- valueStr == nil means a table header
+-- ovr = override table, glob = the global value (DF._realRaidDB[key]); glob may be
+-- nil/non-table (then everything in ovr counts as differing). budget = {n=number}
+-- (nil n = unlimited); maxDepth caps nesting.
+local function WalkOverrideDiff(ovr, glob, indent, depth, maxDepth, budget, emit)
+    local keys = {}
+    for k in pairs(ovr) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    for _, k in ipairs(keys) do
+        if budget.n and budget.n <= 0 then emit(indent, "…", "") return end
+        local ov = ovr[k]
+        local gv = (type(glob) == "table") and glob[k] or nil
+        if OverrideDeepEqual(ov, gv) then
+            -- identical to global — not actually overridden here, skip
+        elseif type(ov) == "table" and not (ov.r and ov.g and ov.b) then
+            if depth >= maxDepth then
+                emit(indent, tostring(k), "{…}")
+                if budget.n then budget.n = budget.n - 1 end
+            else
+                emit(indent, tostring(k) .. ":", nil)
+                if budget.n then budget.n = budget.n - 1 end
+                WalkOverrideDiff(ov, gv, indent .. "  ", depth + 1, maxDepth, budget, emit)
+            end
+        else
+            local dv
+            if type(ov) == "table" then dv = string.format("(%.2f, %.2f, %.2f)", ov.r, ov.g, ov.b)
+            elseif type(ov) == "boolean" then dv = ov and "true" or "false"
+            else dv = tostring(ov) end
+            emit(indent, tostring(k), dv)
+            if budget.n then budget.n = budget.n - 1 end
+        end
+    end
+end
+
 -- Get a value from the real raid database, handling raid keys, table keys, and pinned keys.
 -- Always reads the real table (DF._realRaidDB) — never the overlay proxy.
 local function GetRaidValue(key)
@@ -964,37 +1010,36 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
             for tabId in pairs(groups) do tinsert(tabOrder, tabId) end
             table.sort(tabOrder)
 
-            -- Recursively expand table-valued overrides (auraDesigner, textDesigner,
-            -- raidGroupVisible, …) so the tooltip shows the ACTUAL overridden values
-            -- instead of "{table}". Capped by depth + a shared line budget so a large
-            -- config can't overflow the tooltip; /df overrides has the complete dump.
-            local lineBudget = 35
-            local function addTableLines(tbl, indent, depth)
-                local keys = {}
-                for k in pairs(tbl) do keys[#keys + 1] = k end
-                table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-                for _, k in ipairs(keys) do
-                    if lineBudget <= 0 then
-                        GameTooltip:AddLine(indent .. "…", 0.5, 0.5, 0.5)
-                        return
-                    end
-                    local v = tbl[k]
-                    if type(v) == "table" and not (v.r and v.g and v.b) then
-                        if depth >= 4 then
-                            GameTooltip:AddDoubleLine(indent .. tostring(k), "{…}", 0.7, 0.7, 0.7, 0.6, 0.6, 0.6)
-                        else
-                            GameTooltip:AddLine(indent .. tostring(k) .. ":", 0.7, 0.7, 0.7)
-                            lineBudget = lineBudget - 1
-                            addTableLines(v, indent .. "  ", depth + 1)
-                        end
+            -- Global (un-overridden) raid values, to diff table overrides against so
+            -- we show ONLY what the layout changed — not the whole stored config.
+            local realRaid = DF._realRaidDB or (DF.db and DF.db.raid)
+            -- Shared line budget across the whole tooltip so a large config can't
+            -- overflow it; /df overrides has the complete dump.
+            local budget = { n = 35 }
+            local function emitTT(indent, left, val)
+                if val == nil then
+                    GameTooltip:AddLine(indent .. left, 0.7, 0.7, 0.7)
+                else
+                    GameTooltip:AddDoubleLine(indent .. left, val, 0.7, 0.7, 0.7, 1, 1, 1)
+                end
+            end
+            -- Render one override key: scalars shown directly; a table-valued override
+            -- is diffed against its global so only the changed leaves appear.
+            local function renderKey(key, lr, lg, lb)
+                local value = profile.overrides[key]
+                if type(value) == "table" and not (value.r and value.g and value.b) then
+                    GameTooltip:AddLine("  " .. key .. ":", lr, lg, lb)
+                    WalkOverrideDiff(value, realRaid and realRaid[key], "    ", 1, 4, budget, emitTT)
+                else
+                    local displayVal
+                    if type(value) == "boolean" then
+                        displayVal = value and "true" or "false"
+                    elseif type(value) == "table" then
+                        displayVal = string.format("(%.1f, %.1f, %.1f)", value.r, value.g, value.b)
                     else
-                        local dv
-                        if type(v) == "boolean" then dv = v and "true" or "false"
-                        elseif type(v) == "table" then dv = string.format("(%.1f, %.1f, %.1f)", v.r, v.g, v.b)
-                        else dv = tostring(v) end
-                        GameTooltip:AddDoubleLine(indent .. tostring(k), dv, 0.7, 0.7, 0.7, 1, 1, 1)
+                        displayVal = tostring(value)
                     end
-                    lineBudget = lineBudget - 1
+                    GameTooltip:AddDoubleLine("  " .. key, displayVal, lr, lg, lb, 1, 1, 1)
                 end
             end
 
@@ -1003,22 +1048,7 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
                 GameTooltip:AddLine(group.tabLabel .. " (" .. #group.keys .. ")", 1, 0.67, 0)
                 table.sort(group.keys)
                 for _, key in ipairs(group.keys) do
-                    local value = profile.overrides[key]
-                    if type(value) == "table" and not (value.r and value.g and value.b) then
-                        -- Expand the overridden table's contents inline.
-                        GameTooltip:AddLine("  " .. key .. ":", 0.8, 0.8, 0.8)
-                        addTableLines(value, "    ", 1)
-                    else
-                        local displayVal
-                        if type(value) == "boolean" then
-                            displayVal = value and "true" or "false"
-                        elseif type(value) == "table" then
-                            displayVal = string.format("(%.1f, %.1f, %.1f)", value.r, value.g, value.b)
-                        else
-                            displayVal = tostring(value)
-                        end
-                        GameTooltip:AddDoubleLine("  " .. key, displayVal, 0.8, 0.8, 0.8, 1, 1, 1)
-                    end
+                    renderKey(key, 0.8, 0.8, 0.8)
                 end
             end
 
@@ -1026,7 +1056,7 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
                 GameTooltip:AddLine(format(L["Other (%d)"], #unknownKeys), 0.5, 0.5, 0.5)
                 table.sort(unknownKeys)
                 for _, key in ipairs(unknownKeys) do
-                    GameTooltip:AddDoubleLine("  " .. key, tostring(profile.overrides[key]), 0.5, 0.5, 0.5, 0.7, 0.7, 0.7)
+                    renderKey(key, 0.5, 0.5, 0.5)
                 end
             end
 
@@ -3854,29 +3884,32 @@ function AutoProfilesUI:PrintOverrides()
     end
     table.sort(tabOrder)
 
-    -- Recursively print a table-valued override's contents (auraDesigner,
-    -- textDesigner, raidGroupVisible, …) so /df overrides shows the ACTUAL values,
-    -- not "{table}". Chat can scroll, so this is the full dump (depth-capped only).
-    local function printTable(tbl, indent, depth)
-        local keys = {}
-        for k in pairs(tbl) do keys[#keys + 1] = k end
-        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-        for _, k in ipairs(keys) do
-            local v = tbl[k]
-            if type(v) == "table" and not (v.r and v.g and v.b) then
-                if depth >= 6 then
-                    print(indent .. tostring(k) .. " = |cffffffff{…}|r")
-                else
-                    print(indent .. tostring(k) .. ":")
-                    printTable(v, indent .. "  ", depth + 1)
-                end
+    -- Global (un-overridden) raid values, to diff table overrides against so only
+    -- the changed leaves print — not the whole stored config.
+    local realRaid = DF._realRaidDB or (DF.db and DF.db.raid)
+    local budget = { n = nil }  -- chat scrolls: no line cap (depth-capped only)
+    local function emitChat(indent, left, val)
+        if val == nil then
+            print(indent .. left)
+        else
+            print(indent .. left .. " = |cffffffff" .. val .. "|r")
+        end
+    end
+    local function printKey(key, indentBase)
+        local value = profile.overrides[key]
+        if type(value) == "table" and not (value.r and value.g and value.b) then
+            print(indentBase .. key .. ":")
+            WalkOverrideDiff(value, realRaid and realRaid[key], indentBase .. "  ", 1, 8, budget, emitChat)
+        else
+            local displayValue
+            if type(value) == "table" then
+                displayValue = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", value.r, value.g, value.b)
+            elseif type(value) == "boolean" then
+                displayValue = value and "|cff00ff00true|r" or "|cffff4444false|r"
             else
-                local dv
-                if type(v) == "table" then dv = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", v.r, v.g, v.b)
-                elseif type(v) == "boolean" then dv = v and "|cff00ff00true|r" or "|cffff4444false|r"
-                else dv = "|cffffffff" .. tostring(v) .. "|r" end
-                print(indent .. tostring(k) .. " = " .. dv)
+                displayValue = "|cffffffff" .. tostring(value) .. "|r"
             end
+            print(indentBase .. key .. " = " .. displayValue)
         end
     end
 
@@ -3885,21 +3918,7 @@ function AutoProfilesUI:PrintOverrides()
         print("  |cffffaa00" .. group.tabLabel .. "|r (" .. #group.keys .. "):")
         table.sort(group.keys)
         for _, key in ipairs(group.keys) do
-            local value = profile.overrides[key]
-            if type(value) == "table" and not (value.r and value.g and value.b) then
-                print("    " .. key .. ":")
-                printTable(value, "      ", 1)
-            else
-                local displayValue
-                if type(value) == "table" then
-                    displayValue = string.format("|cffffffff(%.2f, %.2f, %.2f)|r", value.r, value.g, value.b)
-                elseif type(value) == "boolean" then
-                    displayValue = value and "|cff00ff00true|r" or "|cffff4444false|r"
-                else
-                    displayValue = "|cffffffff" .. tostring(value) .. "|r"
-                end
-                print("    " .. key .. " = " .. displayValue)
-            end
+            printKey(key, "    ")
         end
     end
 
@@ -3907,7 +3926,7 @@ function AutoProfilesUI:PrintOverrides()
         print("  |cff999999" .. L["Other"] .. "|r (" .. #unknownKeys .. "):")
         table.sort(unknownKeys)
         for _, key in ipairs(unknownKeys) do
-            print("    " .. key .. " = " .. tostring(profile.overrides[key]))
+            printKey(key, "    ")
         end
     end
 end
