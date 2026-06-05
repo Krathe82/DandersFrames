@@ -7054,6 +7054,40 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         bgCarrierSection:RegisterChild(bgcPosition)
 
         -- ============================================
+        -- COMBAT ICON (Collapsible)
+        -- ============================================
+        local combatSection = Add(GUI:CreateCollapsibleSection(self.child, L["Combat Icon"], false, 270), 28, 1)
+
+        local combatHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
+        combatSection:RegisterChild(combatHeaderGap)
+
+        -- Settings
+        local combatSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "combatIcon:Settings" })
+        combatSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
+        combatSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Combat Icon"], db, "combatIconEnabled", function() DF:UpdateAllFrames() end), 30)
+        combatSettings:AddWidget(GUI:CreateLabel(self.child, L["Shows crossed swords on a party/raid member who is in combat."], 240), 44)
+        Add(combatSettings, nil, 1)
+        combatSection:RegisterChild(combatSettings)
+
+        -- Appearance
+        local combatAppearance = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "combatIcon:Appearance" })
+        combatAppearance:AddWidget(GUI:CreateHeader(self.child, L["Appearance"]), 25)
+        combatAppearance:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.5, 0.1, db, "combatIconScale", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        combatAppearance:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.1, 1.0, 0.05, db, "combatIconAlpha", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        combatAppearance:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 100, 1, db, "combatIconFrameLevel", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        Add(combatAppearance, nil, 1)
+        combatSection:RegisterChild(combatAppearance)
+
+        -- Position
+        local combatPosition = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "combatIcon:Position" })
+        combatPosition:AddWidget(GUI:CreateHeader(self.child, L["Position"]), 25)
+        combatPosition:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "combatIconAnchor", function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end), 55)
+        combatPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "combatIconX", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        combatPosition:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "combatIconY", nil, function() DF:UpdateAllFramesStatusIcons(); DF:RefreshTestFrames() end, true), 55)
+        Add(combatPosition, nil, 1)
+        combatSection:RegisterChild(combatPosition)
+
+        -- ============================================
         -- RESURRECTION ICON (Collapsible)
         -- ============================================
         local resSection = Add(GUI:CreateCollapsibleSection(self.child, L["Resurrection Icon"], false, 270), 28, 1)

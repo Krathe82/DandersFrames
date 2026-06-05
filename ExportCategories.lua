@@ -720,6 +720,15 @@ DF.ExportCategories = {
         "bgCarrierIconShowText",
         "bgCarrierIconText",
 
+        -- Combat Icon
+        "combatIconEnabled",
+        "combatIconAnchor",
+        "combatIconX",
+        "combatIconY",
+        "combatIconScale",
+        "combatIconAlpha",
+        "combatIconFrameLevel",
+
         -- Defensive Icon
         "defensiveIconEnabled",
         "defensiveIconAnchor",

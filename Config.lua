@@ -2054,6 +2054,14 @@ DF.PartyDefaults = {
     bgCarrierIconTextColor = {r = 1, g = 0.82, b = 0},
     bgCarrierIconX = 0,
     bgCarrierIconY = 0,
+    -- Combat icon (crossed swords shown when a unit is in combat)
+    combatIconAlpha = 1,
+    combatIconAnchor = "CENTER",
+    combatIconEnabled = false,
+    combatIconFrameLevel = 0,
+    combatIconScale = 1,
+    combatIconX = 0,
+    combatIconY = 0,
 
     -- Targeted Spells (on-frame)
     targetedSpellAlpha = 1,
@@ -3631,6 +3639,14 @@ DF.RaidDefaults = {
     bgCarrierIconTextColor = {r = 1, g = 0.82, b = 0},
     bgCarrierIconX = 0,
     bgCarrierIconY = 0,
+    -- Combat icon (crossed swords shown when a unit is in combat)
+    combatIconAlpha = 1,
+    combatIconAnchor = "CENTER",
+    combatIconEnabled = false,
+    combatIconFrameLevel = 0,
+    combatIconScale = 1,
+    combatIconX = 0,
+    combatIconY = 0,
 
     -- Targeted Spells (on-frame)
     targetedSpellAlpha = 1,
