@@ -7057,6 +7057,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- COMBAT ICON (Collapsible)
         -- ============================================
         local combatSection = Add(GUI:CreateCollapsibleSection(self.child, L["Combat Icon"], false, 270), 28, 1)
+        -- Preview the swords quadrant of the UI-StateIcon sheet (texcoord slice); also
+        -- greys the section header when the icon is disabled.
+        WireStatusPreview(combatSection, { enableKey = "combatIconEnabled", icons = { { texture = "Interface\\CharacterFrame\\UI-StateIcon", coords = {0.5, 1.0, 0, 0.49} } } })
 
         local combatHeaderGap = Add(CreateFrame("Frame", nil, self.child), 8, 1)
         combatSection:RegisterChild(combatHeaderGap)
