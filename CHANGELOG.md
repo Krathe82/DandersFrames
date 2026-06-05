@@ -13,6 +13,7 @@
 * (Defaults) Tuned some new-profile defaults — buff icon sizing/spacing, stack-count offsets, Stack/Duration outline shadow, and a flush expiring-border inset. (by Krathe)
 * (Reduced Max Health) The reduced-max-health bar's default colour is now a **translucent grey (50% @ ~80% alpha)** instead of opaque black, so it reads clearly on a dark health bar; profiles still on the old solid black are migrated automatically (a customised colour is left alone). (by Krathe)
 * (Boss Debuffs) **Border Scale** can now go negative to hide the icon border, with a wider range, a step of 1, and an explanatory tip. (by Krathe)
+* (Aura Designer) Expiring health-bar highlights now **pulse in unison** across all frames — and tint and replace modes share one pulse engine — instead of each frame pulsing on its own timing. (by Krathe)
 
 ### Bug Fixes
 
@@ -23,6 +24,7 @@
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **flickers** on phased or out-of-range units. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
+* (Aura Designer) The expiring **"Pulsate"** option now works for the replace-mode health-bar highlight (it previously stayed solid in replace mode). (by Krathe)
 
 ## [4.4.0]
 
