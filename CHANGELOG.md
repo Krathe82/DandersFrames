@@ -38,6 +38,7 @@
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
 * (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
+* (Pinned Frames) A raid auto layout's pinned settings (pinned players, etc.) now **apply while editing/previewing that layout** and when it is active, instead of only inside an actual raid. (by Krathe)
 
 ## [4.3.12]
 
