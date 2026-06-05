@@ -6461,11 +6461,16 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     local parent = page.child
 
     -- ========================================
-    -- REUSE: If mainFrame already exists and db hasn't changed (same mode),
-    -- just re-parent, show, and refresh. Avoids full teardown on resize.
-    -- A mode switch (Party↔Raid) changes db, so we must rebuild in that case.
+    -- REUSE: If mainFrame already exists, db hasn't changed (same mode) AND the
+    -- frame dimensions are unchanged, just re-parent, show, and refresh. A mode
+    -- switch (Party↔Raid) changes db; an auto-layout switch keeps the SAME db
+    -- reference but changes frameWidth/Height — both must force a full rebuild so
+    -- the preview mock resizes to the active layout's frame size.
     -- ========================================
-    if mainFrame and prevDB == dbRef then
+    local _adFDB = (DF.GetDB and DF:GetDB((GUI and GUI.SelectedMode) or "party")) or {}
+    local _adW, _adH = _adFDB.frameWidth or 125, _adFDB.frameHeight or 64
+    if mainFrame and prevDB == dbRef
+       and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH then
         mainFrame:SetParent(parent)
         mainFrame:SetAllPoints()
         mainFrame:Show()
@@ -6496,6 +6501,10 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- ========================================
     mainFrame = CreateFrame("Frame", nil, parent)
     mainFrame:SetAllPoints()
+    -- Record the frame dims this build was made for, so the reuse-guard above can
+    -- detect an auto-layout switch (same db, different frameWidth/Height) and rebuild.
+    mainFrame.dfBuiltFrameW = _adW
+    mainFrame.dfBuiltFrameH = _adH
 
     -- Override RefreshStates: Aura Designer uses its own layout system.
     --

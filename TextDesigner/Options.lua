@@ -2411,12 +2411,15 @@ function DF.BuildTextDesignerPage(GUI, page, db)
         end
     end
 
-    -- Detect mode change: if the page was previously built against a different
-    -- db (party vs raid), tear down every cached widget so the rebuild below
-    -- runs fresh against the new mode's data. Without this, switching modes
-    -- via the existing mode buttons would leave the UI bound to whichever
-    -- mode loaded first.
-    if state.built and state.activeDB ~= db then
+    -- Detect mode change OR auto-layout switch: tear down every cached widget so
+    -- the rebuild below runs fresh. A mode change (party vs raid) changes the db
+    -- reference; an auto-layout switch keeps the SAME raid db but changes
+    -- frameWidth/Height — both must rebuild so the preview mock resizes to the
+    -- active layout's frame size.
+    local _tdMode = (GUI and GUI.SelectedMode) or "party"
+    local _tdFDB = (DF.GetDB and DF:GetDB(_tdMode)) or {}
+    local _tdW, _tdH = _tdFDB.frameWidth or 125, _tdFDB.frameHeight or 64
+    if state.built and (state.activeDB ~= db or state.builtFrameW ~= _tdW or state.builtFrameH ~= _tdH) then
         if state.cardFrames then
             for _, card in pairs(state.cardFrames) do
                 card:Hide()
@@ -2503,6 +2506,8 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     if state.built then return end
     state.built = true
     state.activeDB = db
+    state.builtFrameW = _tdW
+    state.builtFrameH = _tdH
 
     -- ── TOP BANNER (one compact row) ───────────────────────────
     -- Single-row banner: master toggle on the left, Copy / Sync trio on the
