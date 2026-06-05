@@ -54,6 +54,23 @@ function Preview:RefreshAll()
             DF:UpdateTextDesigner(frame, "all")
         end
     end
+    -- Test-mode frames live in a SEPARATE pool (DF.testPartyFrames / testRaidFrames,
+    -- marked dfIsTestFrame) — NOT in unitFrameMap — so the loop above skips them.
+    -- Without this, Text Designer edits never show on the test frames the designer
+    -- is actually looking at. UpdateTextDesigner self-sources mock data via
+    -- DataSource.Test on a test frame, so a light TD-only refresh is enough.
+    if DF.UpdateTextDesigner and (DF.testMode or DF.raidTestMode) then
+        if DF.testMode and DF.testPartyFrames then
+            for _, f in pairs(DF.testPartyFrames) do
+                if f and f:IsShown() then DF:UpdateTextDesigner(f, "all") end
+            end
+        end
+        if DF.raidTestMode and DF.testRaidFrames then
+            for _, f in pairs(DF.testRaidFrames) do
+                if f and f:IsShown() then DF:UpdateTextDesigner(f, "all") end
+            end
+        end
+    end
     if DF.UpdateTextDesigner and DF.PinnedFrames and DF.PinnedFrames.bossFrames then
         for _, frames in pairs(DF.PinnedFrames.bossFrames) do
             if type(frames) == "table" then
