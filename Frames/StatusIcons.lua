@@ -176,6 +176,18 @@ function DF:CreateStatusIcons(frame)
     frame.bgCarrierIcon.text:SetTextColor(1, 0.82, 0, 1)  -- Gold for objective carrier
 
     -- ========================================
+    -- COMBAT ICON (unit is in combat)
+    -- ========================================
+    frame.combatIcon = CreateStatusIcon(overlay, 16)
+    frame.combatIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    -- Classic crossed-swords combat glyph. UI-StateIcon is a sheet (swords +
+    -- resting); crop to the swords quadrant. Set directly (NOT SetUpgradedStatusIcon,
+    -- which would reset the texcoord to the full sheet). ApplyIconSettings leaves
+    -- texcoord alone, so this crop persists.
+    frame.combatIcon.texture:SetTexture("Interface\\CharacterFrame\\UI-StateIcon")
+    frame.combatIcon.texture:SetTexCoord(0.5, 1.0, 0, 0.49)
+
+    -- ========================================
     -- CENTER STATUS ICON (DEPRECATED - backward compat)
     -- ========================================
     frame.centerStatusIcon = CreateStatusIcon(overlay, 16)
@@ -1051,6 +1063,37 @@ function DF:UpdateBGCarrierIcon(frame)
     frame.bgCarrierIcon:Show()
 end
 
+-- Combat icon — shows the crossed-swords glyph while the unit is in combat.
+-- Detection is UnitAffectingCombat(unit); event-driven via UNIT_FLAGS (see
+-- Headers.lua) plus the normal status-icon refresh. Secret-guarded for Midnight.
+function DF:UpdateCombatIcon(frame)
+    if not frame or not frame.unit or not frame.combatIcon then return end
+
+    local db = DF:GetFrameDB(frame)
+    if not db or not db.combatIconEnabled then
+        frame.combatIcon:Hide()
+        return
+    end
+
+    local unit = frame.unit
+    if not UnitExists(unit) or not UnitAffectingCombat then
+        frame.combatIcon:Hide()
+        return
+    end
+
+    local inCombat
+    pcall(function() inCombat = UnitAffectingCombat(unit) end)
+
+    -- Hide unless we can read the value AND it's truthy (secret-safe).
+    if not canaccessvalue(inCombat) or not inCombat then
+        frame.combatIcon:Hide()
+        return
+    end
+
+    ApplyIconSettings(frame.combatIcon, db, "combatIcon")
+    frame.combatIcon:Show()
+end
+
 -- ============================================================
 -- UPDATE ALL STATUS ICONS FOR A FRAME
 -- Convenience function to update all icons at once
@@ -1065,6 +1108,7 @@ function DF:UpdateAllStatusIcons(frame)
     DF:UpdateVehicleIcon(frame)
     DF:UpdateRaidRoleIcon(frame)
     DF:UpdateBGCarrierIcon(frame)
+    DF:UpdateCombatIcon(frame)
 end
 
 -- ============================================================

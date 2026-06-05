@@ -12,7 +12,7 @@ local L = DF.L
 
 DF.TestData = {
     units = {
-        {name = "Tankerino", class = "WARRIOR", role = "TANK", specID = 73, health = 1.0, maxHealth = 100000, absorb = 0.20, healAbsorb = 0, healPrediction = 0.15, status = nil, outOfRange = false, isLeader = true, raidTarget = 8, dispelType = nil, centerStatus = nil, isMainTank = true, isAFK = false, isPhased = false, inVehicle = false, isBGCarrier = true, hasMyBuff = true, reducedMaxPct = 0.20},  -- Skull marker, leader, main tank, has HoT, carrying objective
+        {name = "Tankerino", class = "WARRIOR", role = "TANK", specID = 73, health = 1.0, maxHealth = 100000, absorb = 0.20, healAbsorb = 0, healPrediction = 0.15, status = nil, outOfRange = false, isLeader = true, raidTarget = 8, dispelType = nil, centerStatus = nil, isMainTank = true, isAFK = false, isPhased = false, inVehicle = false, isBGCarrier = true, isInCombat = true, hasMyBuff = true, reducedMaxPct = 0.20},  -- Skull marker, leader, main tank, has HoT, carrying objective
         {name = "Healsworth", class = "PRIEST", role = "HEALER", specID = 257, health = 0.95, maxHealth = 85000, absorb = 0.10, healAbsorb = 0, healPrediction = 0.05, status = nil, outOfRange = false, isAssist = true, raidTarget = nil, dispelType = "Magic", centerStatus = "summon", isMainAssist = true, isAFK = false, isPhased = false, inVehicle = false, hasMyBuff = false, reducedMaxPct = 0},  -- Assistant, main assist, summon pending
         {name = "Мишок", class = "MAGE", role = "DAMAGER", specID = 63, health = 0.60, maxHealth = 75000, absorb = 0, healAbsorb = 0.15, healPrediction = 0.15, status = nil, outOfRange = true, raidTarget = 1, dispelType = "Curse", centerStatus = nil, isAFK = true, isPhased = false, inVehicle = false, hasMyBuff = true, reducedMaxPct = 0},  -- Star marker, AFK, has HoT
         {name = "Alexandrosthegreat", class = "PALADIN", role = "DAMAGER", specID = 70, health = 0, maxHealth = 90000, absorb = 0, healAbsorb = 0, healPrediction = 0, status = "Dead", outOfRange = false, raidTarget = nil, dispelType = nil, centerStatus = "resurrect", isAFK = false, isPhased = false, inVehicle = false, hasMyBuff = false, reducedMaxPct = 0},  -- Dead unit, being resurrected
@@ -258,6 +258,7 @@ function DF:GetTestUnitData(index, isRaid, isBoss)
             isPhased = (i == 4 or i == 20),  -- Frames 4 and 20
             inVehicle = (i == 5 or i == 30),  -- Frames 5 and 30
             isBGCarrier = (i == 2 or i == 10),  -- Frames 2 and 10 carry an objective
+            isInCombat = (i == 1 or i == 7),  -- Frames 1 and 7 in combat
         }
         
         -- Apply animation if enabled
@@ -306,6 +307,7 @@ function DF:GetTestUnitData(index, isRaid, isBoss)
         isPhased = data.isPhased,
         inVehicle = data.inVehicle,
         isBGCarrier = data.isBGCarrier,
+        isInCombat = data.isInCombat,
     }
     
     -- Don't animate dead or offline units
@@ -1582,6 +1584,33 @@ function DF:UpdateTestStatusIcons(frame, testData)
             end
         else
             frame.bgCarrierIcon:Hide()
+        end
+    end
+
+    -- Combat Icon
+    if frame.combatIcon then
+        if not db.combatIconEnabled or db.testShowStatusIcons == false then
+            frame.combatIcon:Hide()
+        elseif testData.isInCombat then
+            frame.combatIcon.texture:SetTexture("Interface\\CharacterFrame\\UI-StateIcon")
+            frame.combatIcon.texture:SetTexCoord(0.5, 1.0, 0, 0.49)
+
+            local scale = db.combatIconScale or 1.0
+            local anchor = db.combatIconAnchor or "CENTER"
+            local x = db.combatIconX or 0
+            local y = db.combatIconY or 0
+            frame.combatIcon:SetScale(scale)
+            frame.combatIcon:ClearAllPoints()
+            frame.combatIcon:SetPoint(anchor, frame, anchor, x, y)
+            frame.combatIcon:SetAlpha(db.combatIconAlpha or 1)
+            frame.combatIcon:Show()
+
+            local frameLevel = db.combatIconFrameLevel or 0
+            if frameLevel > 0 then
+                frame.combatIcon:SetFrameLevel(frame:GetFrameLevel() + frameLevel)
+            end
+        else
+            frame.combatIcon:Hide()
         end
     end
 

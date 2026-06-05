@@ -9082,6 +9082,11 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
     -- UNIT_PHASE / UNIT_FLAGS / UNIT_OTHER_PARTY_CHANGED: Update phased icon (cache-aware)
     if event == "UNIT_PHASE" or event == "UNIT_FLAGS" or event == "UNIT_OTHER_PARTY_CHANGED" then
         local unit = arg1
+        -- Combat flag can flip on UNIT_FLAGS — refresh this unit's combat icon
+        if event == "UNIT_FLAGS" and unit and DF.UpdateCombatIcon then
+            local cFrame = DF.unitFrameMap and DF.unitFrameMap[unit]
+            if cFrame then DF:UpdateCombatIcon(cFrame) end
+        end
         if unit and DF.UpdatePhasedCacheForUnit then
             -- Update cache and main frame (only refreshes icon if cache value changed)
             DF:UpdatePhasedCacheForUnit(unit)
