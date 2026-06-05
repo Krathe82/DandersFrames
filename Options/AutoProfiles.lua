@@ -142,6 +142,7 @@ local OVERRIDE_TAB_MAP = {
     {"healPrediction",      "bars_healpred",        L["Heal Prediction"]},
     -- Text
     {"statusText",          "text_status",          L["Status Text"]},
+    {"textDesigner",        "text_designer",        L["Text Designer"]},
     {"name",                "text_name",            L["Name Text"]},
     -- Auras (specific before generic)
     -- myBuffIndicator removed — feature deprecated and hidden from UI
@@ -190,20 +191,46 @@ end
 
 -- Groups override keys by tab, returns { [tabId] = { tabLabel, keys = {} } }, unknownKeys
 local function GroupOverridesByTab(overrides)
+    -- A table-valued override (e.g. "raidGroupVisible") and its flat indexed
+    -- siblings ("raidGroupVisible_5".."_8") can both be stored — the per-control
+    -- path writes the flat keys, while ExitEditing's diff safety-net writes the
+    -- whole table. They're the same setting, so when the whole-table form exists
+    -- we hide the redundant flat siblings (the grouped form reads cleaner).
+    local wholeTableKeys = {}
+    for key, val in pairs(overrides) do
+        if type(val) == "table" then wholeTableKeys[key] = true end
+    end
     local groups = {}
     local unknownKeys = {}
     for key, _ in pairs(overrides) do
-        local tabId, tabLabel = GetOverrideTabId(key)
-        if tabId then
-            if not groups[tabId] then
-                groups[tabId] = { tabLabel = tabLabel, keys = {} }
-            end
-            tinsert(groups[tabId].keys, key)
+        local base = key:match("^(.+)_%d+$")
+        if base and wholeTableKeys[base] then
+            -- redundant flat sibling of a whole-table override — skip
         else
-            tinsert(unknownKeys, key)
+            local tabId, tabLabel = GetOverrideTabId(key)
+            if tabId then
+                if not groups[tabId] then
+                    groups[tabId] = { tabLabel = tabLabel, keys = {} }
+                end
+                tinsert(groups[tabId].keys, key)
+            else
+                tinsert(unknownKeys, key)
+            end
         end
     end
     return groups, unknownKeys
+end
+
+-- Canonical override count for display: everything that actually gets shown
+-- (mapped groups + "Other"), deduped so redundant flat siblings of a whole-table
+-- override aren't counted. Used by the row badge, the editing status line, and
+-- /df overrides so all three agree.
+local function CountDisplayedOverrides(overrides)
+    if not overrides then return 0 end
+    local groups, unknownKeys = GroupOverridesByTab(overrides)
+    local n = #unknownKeys
+    for _, group in pairs(groups) do n = n + #group.keys end
+    return n
 end
 
 -- Deep value equality (used to skip leaves of a table override that match global).
@@ -216,43 +243,67 @@ local function OverrideDeepEqual(a, b)
 end
 
 -- Walk a table-valued override against its global counterpart and emit ONLY the
--- entries that differ from global (a table override stores the WHOLE table, so a
--- raw dump would show everything, not just what the layout changed). emit is
---   emit(indent, leftText, valueStr)  -- valueStr == nil means a table header
--- ovr = override table, glob = the global value (DF._realRaidDB[key]); glob may be
--- nil/non-table (then everything in ovr counts as differing). budget = {n=number}
--- (nil n = unlimited); maxDepth caps nesting.
-local function WalkOverrideDiff(ovr, glob, indent, depth, maxDepth, budget, emit)
-    local keys = {}
-    for k in pairs(ovr) do keys[#keys + 1] = k end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-    for _, k in ipairs(keys) do
-        if budget.n and budget.n <= 0 then emit(indent, "…", "") return end
+-- entries that differ. To keep a deep config (Aura Designer) readable we COLLAPSE
+-- boring single-child wrapper levels into one breadcrumb header
+-- (auras > HolyPriest > GuardianSpirit) and then list the actual changed leaves
+-- indented beneath it — instead of repeating that long path on every leaf.
+--   emit(indent, label, valueStr)  -- valueStr == nil → a header/breadcrumb line
+-- ovr = override table; glob = the global value (DF._realRaidDB[key]) and may be
+-- nil/non-table (then everything in ovr differs). budget = {n=number}
+-- (nil n = unlimited); maxDepth collapses deeper tables to "{…}".
+local function WalkOverrideDiff(ovr, glob, prefix, indent, depth, maxDepth, budget, emit)
+    -- Friendly display key: TD elements show their name, not the array index.
+    local function disp(k)
+        local ov = ovr[k]
+        if type(ov) == "table" and ov.contentType and DF.TextDesigner and DF.TextDesigner.ElementDisplayName then
+            return DF.TextDesigner.ElementDisplayName(ov) or tostring(k)
+        end
+        return tostring(k)
+    end
+
+    -- Collect only the children that differ from global.
+    local diff = {}
+    for k in pairs(ovr) do
+        local gv = (type(glob) == "table") and glob[k] or nil
+        if not OverrideDeepEqual(ovr[k], gv) then diff[#diff + 1] = k end
+    end
+    table.sort(diff, function(a, b) return tostring(a) < tostring(b) end)
+
+    -- Single differing child that is itself a (non-colour) table → fold this level
+    -- into the breadcrumb and recurse, so wrapper levels don't each cost a line.
+    if #diff == 1 and depth < maxDepth then
+        local k = diff[1]
+        local ov = ovr[k]
+        if type(ov) == "table" and not (ov.r and ov.g and ov.b) then
+            local newPrefix = (prefix == "") and disp(k) or (prefix .. " > " .. disp(k))
+            local gv = (type(glob) == "table") and glob[k] or nil
+            return WalkOverrideDiff(ov, gv, newPrefix, indent, depth + 1, maxDepth, budget, emit)
+        end
+    end
+
+    -- Print the accumulated breadcrumb once as a header, then list children deeper.
+    if prefix ~= "" then
+        emit(indent, prefix, nil)
+        indent = indent .. "  "
+    end
+    for _, k in ipairs(diff) do
+        if budget.n and budget.n <= 0 then emit(indent, "…", nil) return end
         local ov = ovr[k]
         local gv = (type(glob) == "table") and glob[k] or nil
-        if OverrideDeepEqual(ov, gv) then
-            -- identical to global — not actually overridden here, skip
-        elseif type(ov) == "table" and not (ov.r and ov.g and ov.b) then
-            -- Label TD elements by their friendly name (Name / Current HP / …)
-            -- instead of the array index.
-            local label = tostring(k)
-            if ov.contentType and DF.TextDesigner and DF.TextDesigner.ElementDisplayName then
-                label = DF.TextDesigner.ElementDisplayName(ov) or label
-            end
+        if type(ov) == "table" and not (ov.r and ov.g and ov.b) then
             if depth >= maxDepth then
-                emit(indent, label, "{…}")
+                emit(indent, disp(k), "{…}")
                 if budget.n then budget.n = budget.n - 1 end
             else
-                emit(indent, label .. ":", nil)
-                if budget.n then budget.n = budget.n - 1 end
-                WalkOverrideDiff(ov, gv, indent .. "  ", depth + 1, maxDepth, budget, emit)
+                -- This child becomes its own (possibly collapsed) sub-section.
+                WalkOverrideDiff(ov, gv, disp(k), indent, depth + 1, maxDepth, budget, emit)
             end
         else
             local dv
             if type(ov) == "table" then dv = string.format("(%.2f, %.2f, %.2f)", ov.r, ov.g, ov.b)
             elseif type(ov) == "boolean" then dv = ov and "true" or "false"
             else dv = tostring(ov) end
-            emit(indent, tostring(k), dv)
+            emit(indent, disp(k), dv)
             if budget.n then budget.n = budget.n - 1 end
         end
     end
@@ -619,10 +670,7 @@ function AutoProfilesUI:BuildPage(GUI, pageFrame, db, Add, AddSpace)
             elseif profile.min and profile.max then
                 rangeText = profile.min .. "-" .. profile.max
             end
-            local overrideCount = 0
-            if profile.overrides then
-                for _ in pairs(profile.overrides) do overrideCount = overrideCount + 1 end
-            end
+            local overrideCount = CountDisplayedOverrides(profile.overrides)
             statusLine2:SetText("|cff66ff66" .. L["Layout:"] .. "|r |cffffffff\"" .. (profile.name or L["Unnamed"]) .. "\"|r |cff666666— " .. rangeText .. " · " .. format(overrideCount ~= 1 and L["%d overrides"] or L["%d override"], overrideCount) .. "|r")
         else
             statusLine2:SetText("|cff66ff66" .. L["Layout:"] .. "|r |cff999999" .. L["None active (using global settings)"] .. "|r")
@@ -978,15 +1026,9 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
         end)
     end
     
-    -- Override count (only mapped keys — "Other" overrides show in tooltip but don't inflate the badge)
-    local overrideCount = 0
-    if profile.overrides then
-        for key in pairs(profile.overrides) do
-            if GetOverrideTabId(key) then
-                overrideCount = overrideCount + 1
-            end
-        end
-    end
+    -- Override count: everything displayed (mapped groups + "Other"), deduped — same
+    -- helper the editing status line and /df overrides use, so all three agree.
+    local overrideCount = CountDisplayedOverrides(profile.overrides)
     
     local overrideText = row:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     overrideText:SetPoint("LEFT", 190, 0)
@@ -1018,15 +1060,31 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
 
             -- Global (un-overridden) raid values, to diff table overrides against so
             -- we show ONLY what the layout changed — not the whole stored config.
-            local realRaid = DF._realRaidDB or (DF.db and DF.db.raid)
-            -- Shared line budget across the whole tooltip so a large config can't
-            -- overflow it; /df overrides has the complete dump.
-            local budget = { n = 35 }
-            local function emitTT(indent, left, val)
+            -- While editing, live previews are written into DF._realRaidDB, so the
+            -- TRUE global lives in globalSnapshot (diffing against _realRaidDB then
+            -- would hide every change).
+            local realRaid = (AutoProfilesUI:IsEditing() and AutoProfilesUI.globalSnapshot) or DF._realRaidDB or (DF.db and DF.db.raid)
+            -- Hard cap on tooltip body lines so a large layout can't overflow the
+            -- screen. Every emitted line (group headers, scalars, walk leaves, Other)
+            -- counts; once the cap is hit we stop and flag truncation. The footer
+            -- pointing at /df overrides (the complete dump) always shows.
+            local MAX_LINES = 40
+            local shown, truncated = 0, false
+            local function canEmit()
+                if shown >= MAX_LINES then truncated = true return false end
+                shown = shown + 1
+                return true
+            end
+            local budget = { n = nil }  -- the line cap governs length, not this
+            -- Breadcrumb headers (val == nil) print as a grey line; leaves print
+            -- the value INLINE next to the key (not a right-floating column) so a
+            -- wide breadcrumb header doesn't push every value to the screen edge.
+            local function emitTT(indent, label, val)
+                if not canEmit() then return end
                 if val == nil then
-                    GameTooltip:AddLine(indent .. left, 0.7, 0.7, 0.7)
+                    GameTooltip:AddLine(indent .. label, 0.6, 0.6, 0.6)
                 else
-                    GameTooltip:AddDoubleLine(indent .. left, val, 0.7, 0.7, 0.7, 1, 1, 1)
+                    GameTooltip:AddLine(indent .. label .. "  |cffffffff" .. val .. "|r", 0.8, 0.8, 0.8)
                 end
             end
             -- Render one override key: scalars shown directly; a table-valued override
@@ -1034,9 +1092,11 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
             local function renderKey(key, lr, lg, lb)
                 local value = profile.overrides[key]
                 if type(value) == "table" and not (value.r and value.g and value.b) then
+                    if not canEmit() then return end
                     GameTooltip:AddLine("  " .. key .. ":", lr, lg, lb)
-                    WalkOverrideDiff(value, realRaid and realRaid[key], "    ", 1, 4, budget, emitTT)
+                    WalkOverrideDiff(value, realRaid and realRaid[key], "", "    ", 1, 8, budget, emitTT)
                 else
+                    if not canEmit() then return end
                     local displayVal
                     if type(value) == "boolean" then
                         displayVal = value and "true" or "false"
@@ -1050,24 +1110,33 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
             end
 
             for _, tabId in ipairs(tabOrder) do
+                if not canEmit() then break end
                 local group = groups[tabId]
                 GameTooltip:AddLine(group.tabLabel .. " (" .. #group.keys .. ")", 1, 0.67, 0)
                 table.sort(group.keys)
                 for _, key in ipairs(group.keys) do
                     renderKey(key, 0.8, 0.8, 0.8)
+                    if truncated then break end
                 end
+                if truncated then break end
             end
 
-            if #unknownKeys > 0 then
+            if #unknownKeys > 0 and not truncated and canEmit() then
                 GameTooltip:AddLine(format(L["Other (%d)"], #unknownKeys), 0.5, 0.5, 0.5)
                 table.sort(unknownKeys)
                 for _, key in ipairs(unknownKeys) do
                     renderKey(key, 0.5, 0.5, 0.5)
+                    if truncated then break end
                 end
             end
 
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine(L["Use /df overrides for full details in chat"], 0.4, 0.4, 0.4)
+            if truncated then
+                GameTooltip:AddLine(L["Too many to show here."], 1, 0.6, 0.2)
+            end
+            -- /df overrides reports on the active layout (or one being edited), not
+            -- whichever row is hovered — so note that inactive layouts need Edit first.
+            GameTooltip:AddLine(L["Use /df overrides for the full list — active layout, or Edit one to inspect it."], 0.4, 0.4, 0.4)
             GameTooltip:Show()
         end)
 
@@ -2699,7 +2768,27 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
                 local currentVal = GetRaidValue(key)
                 local matches = DeepCompare(snapshotVal, currentVal)
 
-                if not matches then
+                -- If this table-valued setting is already tracked via flat indexed
+                -- sub-overrides ("key_5".."key_8", e.g. raidGroupVisible written by the
+                -- group-visibility checkboxes), don't ALSO store the whole table here —
+                -- that double-stores the same setting and collides in
+                -- ApplyRuntimeProfile. The flat sub-keys are canonical.
+                local hasFlatSiblings = false
+                if type(currentVal) == "table" then
+                    for ok in pairs(overrides) do
+                        if ok:match("^(.+)_%d+$") == key then hasFlatSiblings = true break end
+                    end
+                end
+
+                if hasFlatSiblings then
+                    -- Drop any stale whole-table override (older saves stored it) so
+                    -- existing dirty profiles self-heal on next exit-editing.
+                    if overrides[key] ~= nil then
+                        overrides[key] = nil
+                        autoCleaned = autoCleaned + 1
+                        DF:DebugWarn("LAYOUT", "ExitEditing: removed redundant whole-table override \"%s\" (tracked via flat keys)", key)
+                    end
+                elseif not matches then
                     -- Only deep-copy when override is new or has actually changed
                     if overrides[key] == nil or not DeepCompare(overrides[key], currentVal) then
                         overrides[key] = DeepCopyValue(currentVal)
@@ -3872,16 +3961,15 @@ function AutoProfilesUI:PrintOverrides()
         return
     end
 
-    -- Count total
-    local total = 0
-    for _ in pairs(profile.overrides) do total = total + 1 end
+    -- Group by tab (also drives the total, so it matches the deduped display).
+    local groups, unknownKeys = GroupOverridesByTab(profile.overrides)
+
+    -- Count total: everything shown (mapped groups + "Other"), deduped.
+    local total = CountDisplayedOverrides(profile.overrides)
 
     print("|cffff8020" .. L["DandersFrames Auto-Profile Overrides:"] .. "|r")
     print("  " .. L["Profile:"] .. " |cffffffff\"" .. (profile.name or L["Unnamed"]) .. "\"|r (" .. source .. ")")
     print("  " .. L["Total:"] .. " |cffffffff" .. format(total > 1 and L["%d overrides"] or L["%d override"], total) .. "|r")
-
-    -- Group by tab
-    local groups, unknownKeys = GroupOverridesByTab(profile.overrides)
 
     -- Sort tab IDs for consistent output
     local tabOrder = {}
@@ -3891,21 +3979,24 @@ function AutoProfilesUI:PrintOverrides()
     table.sort(tabOrder)
 
     -- Global (un-overridden) raid values, to diff table overrides against so only
-    -- the changed leaves print — not the whole stored config.
-    local realRaid = DF._realRaidDB or (DF.db and DF.db.raid)
+    -- the changed leaves print — not the whole stored config. While editing, the
+    -- live controls write previews into DF._realRaidDB, so the TRUE global lives in
+    -- globalSnapshot; diffing against _realRaidDB there would show nothing changed.
+    local realRaid = (self:IsEditing() and self.globalSnapshot) or DF._realRaidDB or (DF.db and DF.db.raid)
     local budget = { n = nil }  -- chat scrolls: no line cap (depth-capped only)
-    local function emitChat(indent, left, val)
+    -- Breadcrumb headers (val == nil) print bare; leaves print "key = value".
+    local function emitChat(indent, label, val)
         if val == nil then
-            print(indent .. left)
+            print(indent .. label)
         else
-            print(indent .. left .. " = |cffffffff" .. val .. "|r")
+            print(indent .. label .. " = |cffffffff" .. val .. "|r")
         end
     end
     local function printKey(key, indentBase)
         local value = profile.overrides[key]
         if type(value) == "table" and not (value.r and value.g and value.b) then
             print(indentBase .. key .. ":")
-            WalkOverrideDiff(value, realRaid and realRaid[key], indentBase .. "  ", 1, 8, budget, emitChat)
+            WalkOverrideDiff(value, realRaid and realRaid[key], "", indentBase .. "  ", 1, 8, budget, emitChat)
         else
             local displayValue
             if type(value) == "table" then
@@ -3934,6 +4025,78 @@ function AutoProfilesUI:PrintOverrides()
         for _, key in ipairs(unknownKeys) do
             printKey(key, "    ")
         end
+    end
+end
+
+-- ============================================================
+-- CLEAR OVERRIDE: /df clearoverride <key|prefix|all>
+-- Escape hatch to remove a stuck auto-layout override directly, for cases the
+-- normal settings UI can't reach (e.g. a pinned-players override when not in a
+-- raid). Targets the layout being edited, else the active/matched one — same
+-- resolution as /df overrides.
+-- ============================================================
+function AutoProfilesUI:ClearOverrideCommand(arg)
+    local profile, editing
+    if self:IsEditing() then
+        profile, editing = self.editingProfile, true
+    elseif self.activeRuntimeProfile then
+        profile = self.activeRuntimeProfile
+    else
+        profile = self:GetActiveProfile()
+    end
+
+    if not profile or not profile.overrides or not next(profile.overrides) then
+        print("|cffff8020DandersFrames:|r " .. L["No auto-profile is currently active or being edited."])
+        return
+    end
+
+    if not arg or arg == "" then
+        print("|cffff8020DandersFrames:|r " .. L["Usage: /df clearoverride <key|prefix|all>  (see /df overrides for keys)"])
+        return
+    end
+
+    -- Build the list of keys to clear: "all", an exact key, or a prefix match
+    -- (case-insensitive). Prefix lets you clear e.g. all "pinned.1." overrides at once.
+    local argLower = arg:lower()
+    local toClear = {}
+    if argLower == "all" then
+        for k in pairs(profile.overrides) do toClear[#toClear + 1] = k end
+    else
+        for k in pairs(profile.overrides) do
+            local kl = k:lower()
+            if kl == argLower or kl:sub(1, #argLower) == argLower then
+                toClear[#toClear + 1] = k
+            end
+        end
+    end
+
+    if #toClear == 0 then
+        print("|cffff8020DandersFrames:|r " .. format(L["No override matching \"%s\" on layout \"%s\"."], arg, profile.name or L["Unnamed"]))
+        return
+    end
+
+    table.sort(toClear)
+    for _, k in ipairs(toClear) do
+        if editing then
+            -- Removes the override AND restores the live preview value to global,
+            -- so ExitEditing's diff won't re-store it.
+            self:ResetProfileSetting(k)
+        else
+            profile.overrides[k] = nil
+        end
+    end
+
+    print("|cff00ff00DandersFrames:|r " .. format(L["Cleared %d override(s) from layout \"%s\":"], #toClear, profile.name or L["Unnamed"]))
+    for _, k in ipairs(toClear) do print("    |cffffffff" .. k .. "|r") end
+
+    -- Reflect the change live.
+    if editing then
+        self:RefreshTabOverrideStars()
+        local GUI = DF.GUI
+        if GUI and GUI.InvalidateAllPages then GUI:InvalidateAllPages() end
+        if GUI and GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+    elseif self.EvaluateAndApply then
+        self:EvaluateAndApply()
     end
 end
 
