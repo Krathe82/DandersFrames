@@ -12,6 +12,7 @@
 * (Role Icon) **Custom role icons** — choose Blizzard, DF, or your own external texture per role (Tank / Healer / DPS). (by Krathe)
 * (AFK Icon) Dedicated **Timer Text** controls for the elapsed-time counter (font, size, outline, colour, offset). The countdown is zero-padded `MM:SS`, left-justified and stays steady as it ticks. (by Krathe)
 * (Fonts) Bundled **Roboto Mono** (SemiBold/Bold) — a monospaced option for perfectly static countdown text. (by Krathe)
+* (Icons) New **in-combat indicator** — a small crossed-swords icon lights up when a unit is in combat, so you can spot who's engaged at a glance. Off by default, with its own position and size controls. (by Krathe)
 
 ### Improvements
 
