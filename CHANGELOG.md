@@ -13,6 +13,7 @@
 * (AFK Icon) Dedicated **Timer Text** controls for the elapsed-time counter (font, size, outline, colour, offset). The countdown is zero-padded `MM:SS`, left-justified and stays steady as it ticks. (by Krathe)
 * (Fonts) Bundled **Roboto Mono** (SemiBold/Bold) — a monospaced option for perfectly static countdown text. (by Krathe)
 * (Icons) New **in-combat indicator** — a small crossed-swords icon lights up when a unit is in combat, so you can spot who's engaged at a glance. Off by default, with its own position and size controls. (by Krathe)
+* (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
 
 ### Improvements
 
@@ -24,6 +25,7 @@
 * (Icons) Status-icon font, size, colour and position changes now apply to **live frames instantly** — no `/reload`. (by Krathe)
 * (Icons) Renamed **"Raid Target Icon" → "Target Marker Icon"**, and its header preview now shows the four common markers (square / cross / triangle / circle). (by Krathe)
 * (Test Mode) The separate **Status / Ready** and **Role / Leader** preview toggles are now a single **Icons** toggle, matching the live status-icon grouping. (by Krathe)
+* (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
 
 ### Bug Fixes
 
