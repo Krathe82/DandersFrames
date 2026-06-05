@@ -3568,6 +3568,30 @@ DF._MainEventDispatcher = function(self, event, arg1)
             end
         end
 
+        -- The split test-mode toggles "Status / Ready" (testShowStatusIcons) and
+        -- "Role / Leader" (testShowIcons) merged into one "Icons" toggle keyed on
+        -- testShowStatusIcons (now default on). Flip existing profiles that were on
+        -- the old default (status off) to on once, so role/leader icons don't vanish
+        -- in test mode. One-time per mode (flag); a later deliberate off isn't reverted.
+        local function mergeIconsToggle(modeDb)
+            if modeDb and not modeDb._iconsToggleMergeV1 then
+                if modeDb.testShowStatusIcons == false then
+                    modeDb.testShowStatusIcons = true
+                end
+                modeDb._iconsToggleMergeV1 = true
+            end
+        end
+        for _, mode in ipairs({"party", "raid"}) do
+            mergeIconsToggle(DF.db[mode])
+        end
+        if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+            for _, profile in pairs(DandersFramesDB_v2.profiles) do
+                for _, mode in ipairs({"party", "raid"}) do
+                    mergeIconsToggle(profile[mode])
+                end
+            end
+        end
+
         -- Migrate the legacy `groupLabelShadow` (duplicate-fontstring shadow) into
         -- the new composite outline encoding from PR #115. If the user previously
         -- had the legacy shadow on, prepend "SHADOW;" to groupLabelOutline so they
