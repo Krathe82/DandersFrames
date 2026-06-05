@@ -9199,7 +9199,22 @@ function DF:CreateGUI()
         -- Refresh override indicators
         RefreshAllOverrideIndicators()
     end
-    
+
+    -- Invalidate EVERY page's build cache so the next time each tab is shown it
+    -- rebuilds from scratch (via RefreshCached -> DoBuild). The page cache is
+    -- keyed on mode (party/raid) only, NOT on the active auto-layout/profile, so
+    -- switching between raid auto-layouts leaves cacheValid=true and tabs re-show
+    -- stale geometry — most visibly the Aura Designer / Text Designer frame
+    -- previews, which size their mock frame to the layout's frameWidth/Height at
+    -- build time and so stay stuck at the first-edited layout's size. Call this
+    -- whenever the active layout changes (enter/exit auto-profile editing).
+    GUI.InvalidateAllPages = function()
+        if not GUI.Pages then return end
+        for _, page in pairs(GUI.Pages) do
+            if page.Invalidate then page:Invalidate() end
+        end
+    end
+
     -- Category system
     GUI.Categories = {}
     local categoryY = -8
