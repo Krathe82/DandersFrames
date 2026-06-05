@@ -36,6 +36,8 @@
 * (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
 * (AFK Timer) The elapsed-time countdown no longer **shifts left/right** as it ticks. (by Krathe)
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
+* (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
+* (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
 
 ## [4.4.0]
 
