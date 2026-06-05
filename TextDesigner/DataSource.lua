@@ -157,6 +157,8 @@ end
 
 function LiveSource:GetClassLocalized()
     local localized = UnitClass(self.unit)
+    -- Secret class string: return verbatim; the `~= ""` below would throw on it.
+    if getMS().IsSecret(localized) then return localized end
     if localized and localized ~= "" then return localized end
     -- Match GetClassToken's "WARRIOR" fallback so downstream gets
     -- consistent class info even on missing unit data.

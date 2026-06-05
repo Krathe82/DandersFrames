@@ -115,7 +115,11 @@ local function ensureTdOverlay(frame)
     if frame._tdOverlay then return frame._tdOverlay end
     local overlay = CreateFrame("Frame", nil, frame)
     overlay:SetAllPoints(frame)
-    overlay:SetFrameLevel(frame:GetFrameLevel() + 100)
+    -- Match contentOverlay (where the legacy name text lives): above the
+    -- health/power bars but below the status/defensive/aura icons. The old +100
+    -- overshot and drew TD text on top of the icon layer.
+    overlay:SetFrameLevel((frame.contentOverlay and frame.contentOverlay:GetFrameLevel())
+        or (frame:GetFrameLevel() + 25))
     frame._tdOverlay = overlay
     return overlay
 end
@@ -255,7 +259,8 @@ function Render:Teardown(frame)
         for _, fs in pairs(frame._tdFontStrings) do
             fs:Hide()
             fs:ClearAllPoints()
-            fs:SetScript("OnUpdate", nil)
+            -- NB: FontStrings are not frames — they have no OnUpdate script, so
+            -- never call SetScript/GetScript("OnUpdate") on them (it errors).
         end
         wipe(frame._tdFontStrings)
     end

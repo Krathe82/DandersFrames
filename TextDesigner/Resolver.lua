@@ -102,7 +102,11 @@ local RESOLVERS = {}
 
 RESOLVERS.name = function(elem, source)
     local n = source:GetName()
-    if not n or n == "" then return "" end
+    if n == nil then return "" end
+    -- Secret name: display verbatim (SetText accepts secrets). A `== ""` compare,
+    -- or the #/sub truncation in applyNameTrunc, throws on a secret string.
+    if getMS().IsSecret(n) then return getMS().SafeText(n) end
+    if n == "" then return "" end
     return applyNameTrunc(getMS().SafeText(n), elem)
 end
 
@@ -139,14 +143,22 @@ end
 -- Kept for backward compat with any element saved before level/race/faction
 -- were split into separate content types. No longer offered in the picker.
 RESOLVERS.race_level_faction = function(elem, source)
-    local race = source:GetRace() or ""
-    local lvl = source:GetLevel() or "??"
-    local fac = source:GetFaction() or ""
-    local parts = {}
-    if lvl and lvl ~= "" then parts[#parts+1] = tostring(lvl) end
-    if race and race ~= "" then parts[#parts+1] = race end
-    local s = table.concat(parts, " ")
-    if fac and fac ~= "" then s = s .. " (" .. fac .. ")" end
+    -- Migration-only (not in the picker). Identity strings can be secret, so
+    -- avoid `~= ""` and table.concat (both throw on secrets): build with `..`
+    -- (secret-safe for SetText) and treat a secret value as present.
+    local MS = getMS()
+    local lvl = source:GetLevel()
+    local race = source:GetRace()
+    local fac = source:GetFaction()
+    local function present(v)
+        if v == nil then return false end
+        if MS.IsSecret(v) then return true end
+        return v ~= ""
+    end
+    local s, has = "", false
+    if present(lvl) then s = s .. MS.SafeText(lvl); has = true end
+    if present(race) then s = s .. (has and " " or "") .. MS.SafeText(race); has = true end
+    if present(fac) then s = s .. (has and " " or "") .. "(" .. MS.SafeText(fac) .. ")" end
     return s
 end
 
