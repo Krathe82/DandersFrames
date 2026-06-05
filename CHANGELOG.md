@@ -23,6 +23,7 @@
 * (Icons) Reorganised **every status-icon's settings into collapsible Settings / Appearance / Position boxes** (matching the Aura Designer layout), so each section is easier to scan. (by Krathe)
 * (Icons) Status-icon font, size, colour and position changes now apply to **live frames instantly** — no `/reload`. (by Krathe)
 * (Icons) Renamed **"Raid Target Icon" → "Target Marker Icon"**, and its header preview now shows the four common markers (square / cross / triangle / circle). (by Krathe)
+* (Test Mode) The separate **Status / Ready** and **Role / Leader** preview toggles are now a single **Icons** toggle, matching the live status-icon grouping. (by Krathe)
 
 ### Bug Fixes
 
