@@ -2566,6 +2566,11 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     -- Suppress sidebar hint dismissal for this initial SelectTab call
     self.suppressHintDismiss = true
     local GUI = DF.GUI
+    -- The page build cache is keyed on mode only, not the active layout, so other
+    -- tabs (Aura Designer / Text Designer frame previews especially) would re-show
+    -- the previous layout's geometry. Invalidate every page so each rebuilds for
+    -- this layout's frame size on next view.
+    if GUI and GUI.InvalidateAllPages then GUI:InvalidateAllPages() end
     if GUI and GUI.SelectTab then
         GUI.SelectTab("general_frame")
     end
@@ -2738,6 +2743,9 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
     
     -- Switch back to Auto Profiles tab
     local GUI = DF.GUI
+    -- Active layout reverted to global — invalidate page caches so tabs (and their
+    -- frame previews) rebuild at the global frame size on next view.
+    if GUI and GUI.InvalidateAllPages then GUI:InvalidateAllPages() end
     if GUI and GUI.SelectTab then
         GUI.SelectTab("profiles_auto")
     end
