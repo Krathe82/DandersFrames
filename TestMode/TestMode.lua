@@ -1596,9 +1596,9 @@ function DF:UpdateTestStatusIcons(frame, testData)
             frame.combatIcon.texture:SetTexCoord(0.5, 1.0, 0, 0.49)
 
             local scale = db.combatIconScale or 1.0
-            local anchor = db.combatIconAnchor or "CENTER"
-            local x = db.combatIconX or 0
-            local y = db.combatIconY or 0
+            local anchor = db.combatIconAnchor or "TOPLEFT"
+            local x = db.combatIconX or 2
+            local y = db.combatIconY or -2
             frame.combatIcon:SetScale(scale)
             frame.combatIcon:ClearAllPoints()
             frame.combatIcon:SetPoint(anchor, frame, anchor, x, y)

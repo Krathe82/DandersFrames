@@ -179,7 +179,7 @@ function DF:CreateStatusIcons(frame)
     -- COMBAT ICON (unit is in combat)
     -- ========================================
     frame.combatIcon = CreateStatusIcon(overlay, 16)
-    frame.combatIcon:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    frame.combatIcon:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)  -- free corner (avoids the CENTER cluster + BG-carrier)
     -- Classic crossed-swords combat glyph. UI-StateIcon is a sheet (swords +
     -- resting); crop to the swords quadrant. Set directly (NOT SetUpgradedStatusIcon,
     -- which would reset the texcoord to the full sheet). ApplyIconSettings leaves
