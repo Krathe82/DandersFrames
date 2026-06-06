@@ -28,6 +28,7 @@
 * (Test Mode) The separate **Status / Ready** and **Role / Leader** preview toggles are now a single **Icons** toggle, matching the live status-icon grouping. (by Krathe)
 * (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
 * (Aura Designer) Expiring health-bar highlights now **pulse in unison** across all frames — and tint and replace modes share one pulse engine — instead of each frame pulsing on its own timing. (by Krathe)
+* (Aura Designer) The health-bar indicator's **Tint** mode has a new **Tint Entire Bar** option — tint the whole bar including the missing-health portion, instead of only the filled part. (by Krathe)
 
 ### Bug Fixes
 

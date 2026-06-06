@@ -1823,6 +1823,7 @@ L["Texture & Colors"] = true
 L["Threshold Mode"] = true
 L["Timing"] = true
 L["Tint"] = true
+L["Tint Entire Bar"] = true
 L["Track Highest Duration"] = true
 L["Track Lowest Duration"] = true
 L["Trigger Mode"] = true
