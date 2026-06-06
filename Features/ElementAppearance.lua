@@ -253,7 +253,13 @@ function DF:UpdateHealthBarAppearance(frame)
         -- path to avoid double-fading.
         local ad = frame.dfAD
         local adAlpha = ad.healthbarEffectiveBlend or ad.healthbarBlend or alpha
-        tex:SetAlpha(adAlpha)
+        -- While the expiring pulse is running, the shared pulse ticker owns the
+        -- texture's frame alpha (base × factor). Re-asserting adAlpha here on every
+        -- UNIT_HEALTH would stamp the full-cycle value for one frame and stutter the
+        -- pulse under sustained damage — so defer to the ticker while it's active.
+        if not ad.healthbarPulseOn then
+            tex:SetAlpha(adAlpha)
+        end
     elseif db.oorEnabled then
         -- Element-specific OOR mode
         local oorAlpha = db.oorHealthBarAlpha or 0.2
@@ -1173,14 +1179,15 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 end
             end
         end
-        -- Tint overlay (health bar "show when missing" indicator)
-        -- Control opacity via SetStatusBarColor rather than SetAlpha.
-        -- SetAlpha compounds with the blend baked into SetStatusBarColor:
-        -- blend × oorAlpha = e.g. 0.5 × 0.2 = 0.1 (nearly invisible OOR).
-        -- Setting SetStatusBarColor directly gives the exact target opacity.
-        local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
-        if tintOverlay and tintOverlay:IsShown() then
-            local adState = frame.dfAD
+        -- AD health bar OOR fade. Compute the OOR-aware effective blend once, then
+        -- apply it to whichever layer the active mode uses:
+        --   replace → the real health bar texture's FRAME alpha (single layer)
+        --   tint    → the colour overlay's SetStatusBarColor alpha
+        -- (SetStatusBarColor, not the overlay's SetAlpha, so it doesn't compound
+        -- with the blend baked into the colour: blend × oorAlpha = e.g. 0.5 × 0.2 =
+        -- 0.1 would be nearly invisible OOR.)
+        local adState = frame.dfAD
+        if adState and adState.healthbar then
             -- Use the current displayed color (healthbarCurrent*), which the expiring
             -- ticker updates to the expiring color when past the threshold. Falling back
             -- to healthbarR/G/B (the configured active color) covers the non-expiring
@@ -1204,11 +1211,26 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 effectiveBlend = oorAlpha
                 adState.healthbarOOR = true
             end
-            tintOverlay:SetStatusBarColor(r, g, b, effectiveBlend)
-            tintOverlay:SetAlpha(1.0)
-            -- Record the alpha used so expiring callbacks (ticker) can match it
-            -- rather than resetting to full blend when the unit is OOR.
+            -- Record the alpha used so expiring callbacks (ticker) and
+            -- UpdateHealthBarAppearance can match it rather than resetting to full
+            -- blend when the unit is OOR.
             adState.healthbarEffectiveBlend = effectiveBlend
+
+            -- While pulsing, the shared ticker owns the pulsing layer's frame alpha
+            -- (replace → bar texture; tint → overlay). Skip the steady-alpha write so
+            -- the OOR re-assert can't stutter the pulse; the ticker reads the blend we
+            -- just stored. The tint COLOUR (SetStatusBarColor) still updates — the
+            -- pulse rides the overlay's frame alpha on a separate channel.
+            if adState.healthbarMode == "replace" then
+                local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+                if hbTex and not adState.healthbarPulseOn then hbTex:SetAlpha(effectiveBlend) end
+            else
+                local tintOverlay = adState.tintOverlay
+                if tintOverlay and tintOverlay:IsShown() then
+                    tintOverlay:SetStatusBarColor(r, g, b, effectiveBlend)
+                    if not adState.healthbarPulseOn then tintOverlay:SetAlpha(1.0) end
+                end
+            end
         end
     else
         -- Frame-level mode: restore each indicator's base alpha
@@ -1227,24 +1249,31 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 if bar then bar:SetAlpha(bar.dfBaseAlpha or 1.0) end
             end
         end
-        -- Tint overlay (health bar "show when missing" indicator)
-        -- Frame-level mode: the frame cascade handles OOR alpha. Restore the overlay's
-        -- own alpha and SetStatusBarColor to their configured values.
-        local tintOverlay = frame.dfAD and frame.dfAD.tintOverlay
-        if tintOverlay and tintOverlay:IsShown() then
-            local adState = frame.dfAD
+        -- AD health bar: frame-level mode — the frame cascade handles OOR alpha, so
+        -- the effective blend is always the configured blend. Apply to whichever
+        -- layer the active mode uses (replace → real bar texture; tint → overlay).
+        local adState = frame.dfAD
+        if adState and adState.healthbar then
             -- Use the current displayed color (healthbarCurrent*) so the expiring
             -- color is preserved rather than reset to the active configured color.
             local r = adState.healthbarCurrentR or adState.healthbarR or 1
             local g = adState.healthbarCurrentG or adState.healthbarG or 1
             local b = adState.healthbarCurrentB or adState.healthbarB or 1
             local blend = adState.healthbarCurrentBlend or adState.healthbarBlend or 0.5
-            tintOverlay:SetStatusBarColor(r, g, b, blend)
-            tintOverlay:SetAlpha(1.0)
-            -- In frame-level mode the frame cascade handles OOR alpha, so the
-            -- effective blend for this overlay is always the configured blend.
             adState.healthbarOOR = false
             adState.healthbarEffectiveBlend = blend
+            -- Defer the steady-alpha write while pulsing (ticker owns it); see the
+            -- element-specific branch above.
+            if adState.healthbarMode == "replace" then
+                local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+                if hbTex and not adState.healthbarPulseOn then hbTex:SetAlpha(blend) end
+            else
+                local tintOverlay = adState.tintOverlay
+                if tintOverlay and tintOverlay:IsShown() then
+                    tintOverlay:SetStatusBarColor(r, g, b, blend)
+                    if not adState.healthbarPulseOn then tintOverlay:SetAlpha(1.0) end
+                end
+            end
         end
     end
 end

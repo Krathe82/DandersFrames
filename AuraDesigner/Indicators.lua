@@ -1,5 +1,8 @@
 local addonName, DF = ...
 
+-- Hot-path math cached at file scope (the pulse ticker below runs every frame).
+local cos = math.cos
+
 -- ============================================================
 -- AURA DESIGNER - INDICATORS
 -- Visual rendering for all 8 indicator types. Creates, shows,
@@ -189,8 +192,88 @@ end
 -- Build a Step color curve for hiding duration text above a seconds threshold.
 -- Returns alpha=1 (visible) when remaining <= threshold, alpha=0 (hidden) above.
 -- Only uses EvaluateRemainingDuration (always seconds-based).
--- Create (or return cached) pulse AnimationGroup on a frame.
--- Matches the buff tab's expiring border pulse: 1→0.3→1, 0.5s each, IN_OUT, REPEAT.
+-- ============================================================
+-- EXPIRING PULSE — one shared ticker for all AD health bars
+-- ============================================================
+-- A single OnUpdate drives every pulsing AD health bar from a SHARED phase
+-- (GetTime), so they all breathe in unison regardless of when each aura crossed
+-- the expiring threshold. WoW AnimationGroups can't share a phase — every
+-- :Play() restarts the cycle at 0 — so the pulse is hand-driven here. One ticker
+-- for the whole addon (same pattern as DF.Expiring), shown only while something
+-- is actually pulsing.
+--
+-- The pulse multiplies the bar's steady opacity by a 1 ↔ 0.3 factor:
+--   replace → fade the fill texture's FRAME alpha (base = the OOR-aware blend;
+--             vertex alpha is unusable — StatusBar:SetValue resets it each tick).
+--   tint    → fade the overlay's FRAME alpha (factor alone — the blend rides the
+--             overlay's COLOUR alpha on a separate channel, so the two multiply).
+local pulseRegistry = {}  -- [frame] = true while its AD health bar is pulsing
+local pulseTicker = CreateFrame("Frame")
+pulseTicker:Hide()  -- OnUpdate only fires while shown; shown only when non-empty
+
+local function RestorePulseAlpha(frame, st)
+    -- Return the pulsing layer to its steady (non-pulsing) opacity.
+    if st.healthbarMode == "replace" then
+        local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+        if hbTex then hbTex:SetAlpha((st.healthbarEffectiveBlend or st.healthbarCurrentBlend) or 1) end
+    elseif st.tintOverlay then
+        st.tintOverlay:SetAlpha(1)
+    end
+end
+
+pulseTicker:SetScript("OnUpdate", function()
+    local factor = 0.65 + 0.35 * cos((GetTime() % 1.0) * 6.2831853)
+    local any = false
+    for frame in pairs(pulseRegistry) do
+        local st = frame.dfAD
+        if not (st and st.healthbar and st.healthbarPulseOn) then
+            pulseRegistry[frame] = nil  -- reverted / stale
+        elseif st.healthbarMode == "replace" then
+            local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+            if hbTex then
+                local base = st.healthbarEffectiveBlend or st.healthbarCurrentBlend or 1
+                hbTex:SetAlpha(base * factor)
+            end
+            any = true
+        else
+            if st.tintOverlay then st.tintOverlay:SetAlpha(factor) end
+            any = true
+        end
+    end
+    if not any then pulseTicker:Hide() end
+end)
+
+-- Toggle a frame's AD health-bar pulse: register/unregister with the shared
+-- ticker and restore the steady alpha when stopping.
+local function SetHealthBarPulse(frame, on)
+    local st = frame.dfAD
+    if not st then return end
+    if on then
+        -- Idempotent + self-healing: always re-assert registry membership. The
+        -- ticker can drop a frame on a transient state.healthbar=false (BeginFrame)
+        -- while pulseOn stays true; re-adding here keeps the two in lockstep so the
+        -- bar can never freeze mid-pulse out of the registry.
+        st.healthbarPulseOn = true
+        pulseRegistry[frame] = true
+        pulseTicker:Show()
+    elseif st.healthbarPulseOn or pulseRegistry[frame] then
+        st.healthbarPulseOn = false
+        pulseRegistry[frame] = nil
+        RestorePulseAlpha(frame, st)
+    end
+end
+
+-- Drive the HEALTH BAR pulse from the expiring state (called by its expiring
+-- callbacks). The health bar uses the shared global ticker above; icons, squares
+-- and custom borders use the per-element AnimationGroup pulse below.
+local function UpdateHealthBarPulse(frame, isExpiring)
+    local st = frame.dfAD
+    SetHealthBarPulse(frame, (isExpiring and st and st.healthbarExpiringPulsate) or false)
+end
+
+-- Create (or return cached) pulse AnimationGroup on a frame. Used by AD icon
+-- borders, square fills and custom borders (NOT the health bar). Matches the buff
+-- tab's expiring border pulse: 1→0.3→1, 0.5s each, IN_OUT, REPEAT.
 local function GetOrCreatePulseAnim(frame)
     if not frame.dfAD_pulse then
         frame.dfAD_pulse = frame:CreateAnimationGroup()
@@ -211,7 +294,8 @@ local function GetOrCreatePulseAnim(frame)
     return frame.dfAD_pulse
 end
 
--- Play or stop a pulse animation based on expiring state.
+-- Play or stop a per-element AnimationGroup pulse based on expiring state.
+-- Used by icons / squares / custom borders (el is the pulse frame).
 local function UpdatePulseState(el, isExpiring)
     if el.dfAD_expiringPulsate and el.dfAD_pulse then
         if isExpiring and not el.dfAD_pulse:IsPlaying() then
@@ -270,7 +354,7 @@ local function GetOrCreateBounceAnim(frame)
             local b = frame.dfAD_basePos
             if not b then return end
             -- Smooth 0→AMP→0 each cycle (zero-slope endpoints, no seam on loop).
-            local off = (1 - math.cos(self.elapsed * (2 * math.pi / BOUNCE_PERIOD))) * 0.5 * BOUNCE_AMP
+            local off = (1 - cos(self.elapsed * (2 * math.pi / BOUNCE_PERIOD))) * 0.5 * BOUNCE_AMP
             frame:ClearAllPoints()
             frame:SetPoint(b.point, b.rel, b.relPoint, b.x, b.y + off)
         end)
@@ -1226,80 +1310,100 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     -- OOR state is preserved across UNIT_AURA events; nil on first use falls
     -- back to entry.blend in the callbacks.
 
-    local overlay = GetOrCreateTintOverlay(frame)
-    if overlay then
-        -- Keep the AD overlay off the frame border. With framePadding 0 the health
-        -- bar fills the whole frame and the border is drawn inward over its edge, so
-        -- a full-bar overlay sits *under* the border. Out of range the border fades
-        -- to its OOR alpha and the AD colour beneath shows through it, tinting the
-        -- border (e.g. green over a class-coloured border). Inset the overlay by the
-        -- border thickness so it never reaches under the border.
-        local _fdb = DF:GetFrameDB(frame)
-        local _bInset = (frame.border and frame.border:IsShown() and _fdb and _fdb.frameBorderSize) or 0
-        overlay:ClearAllPoints()
-        if _bInset > 0 then
-            overlay:SetPoint("TOPLEFT", healthBar, "TOPLEFT", _bInset, -_bInset)
-            overlay:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -_bInset, _bInset)
-        else
-            overlay:SetAllPoints(healthBar)
+    -- The element the expiring ticker + pulse drive, and the layer that carries
+    -- the AD colour. Set per mode below.
+    local expiringEl
+
+    if mode == "replace" then
+        -- ============================================================
+        -- REPLACE MODE — SINGLE LAYER
+        -- AD owns the real health bar directly. No overlay: the bar IS the
+        -- indicator. Colour goes through the fill texture's vertex RGB; opacity
+        -- through its FRAME alpha (SetAlpha), NOT vertex alpha — StatusBar:SetValue
+        -- resets the fill texture's vertex alpha to full on every health update
+        -- (smooth or not), which was the "alpha flickers to 100%" bug. Frame alpha
+        -- survives SetValue, and UpdateHealthBarAppearance re-asserts colour+alpha
+        -- on every health event (see ElementAppearance.lua). DF's colour system
+        -- yields to AD while state.healthbar is set (Core.lua
+        -- LightweightUpdateHealthColor early-returns when the frame is in AD replace
+        -- mode; UpdateHealthBarAppearance gates on healthbarMode == "replace").
+        -- ============================================================
+        -- Drop any overlay left over from a previous tint apply on this frame.
+        if state.tintOverlay then
+            UnregisterExpiring(state.tintOverlay)
+            if state.tintOverlay.dfAD_pulse and state.tintOverlay.dfAD_pulse:IsPlaying() then
+                state.tintOverlay.dfAD_pulse:Stop()
+            end
+            state.tintOverlay:SetAlpha(1)
+            state.tintOverlay:Hide()
         end
 
-        -- Re-sync texture in case the health bar's texture changed since the overlay
-        -- was first created (frame recycled to a different unit can swap textures).
-        local currentTex = healthBar:GetStatusBarTexture()
-        overlay:SetStatusBarTexture(currentTex and currentTex:GetTexture() or "Interface\\Buttons\\WHITE8x8")
-        -- Use OOR-aware blend if already established (preserves OOR fade on UNIT_AURA).
-        local initialBlend = state.healthbarEffectiveBlend or blend
-        overlay:SetStatusBarColor(r, g, b, initialBlend)
-        -- In replace mode, also colour the underlying health bar texture to match the overlay.
-        -- This prevents class-colour bleedthrough when the overlay fades OOR. In tint mode the
-        -- underlying bar colour is intentionally visible through the semi-transparent overlay,
-        -- so we restore it to the normal class/custom colour instead.
-        if mode == "replace" then
-            local hbTex = healthBar:GetStatusBarTexture()
-            if hbTex then
-                -- Colour the underlying bar to match, and fade it with the same alpha
-                -- so the bar itself becomes transparent at low alpha (without this the
-                -- solid texture shows through and the overlay's alpha has no effect).
-                --
-                -- IMPORTANT: transparency goes through the texture's FRAME alpha
-                -- (SetAlpha), NOT the vertex alpha. StatusBar:SetValue (the health
-                -- fill, smooth or not) resets the fill texture's vertex alpha to full
-                -- on every health update while leaving RGB intact — that was the
-                -- "alpha flickers to 100% then back" bug. Vertex alpha is left at 1
-                -- here so SetValue's reset is a no-op; the frame alpha channel it
-                -- doesn't touch carries the real opacity, and UpdateHealthBarAppearance
-                -- re-asserts it on every health event (see ElementAppearance.lua).
-                --
-                -- Use the OOR-aware effective blend (the alpha UpdateAuraDesignerAppearance
-                -- last wrote for the current range state), falling back to the configured
-                -- alpha on first apply / in range. Without this, every re-apply (UNIT_AURA)
-                -- snapped the underlying bar back to full opacity while the OOR path held
-                -- it faded — on a phased/out-of-range unit, whose auras the client re-syncs
-                -- constantly, the two fought and the bar flickered (element-specific OOR mode).
-                hbTex:SetVertexColor(r, g, b)
-                hbTex:SetAlpha(state.healthbarEffectiveBlend or a)
+        local hbTex = healthBar:GetStatusBarTexture()
+        if hbTex then
+            -- OOR-aware effective blend if already established (preserves the OOR
+            -- fade across UNIT_AURA re-applies), else the configured alpha. While the
+            -- pulse is running the ticker owns the frame alpha, so only set the colour.
+            hbTex:SetVertexColor(r, g, b)
+            if not state.healthbarPulseOn then hbTex:SetAlpha(state.healthbarEffectiveBlend or a) end
+        end
+        expiringEl = healthBar
+    else
+        -- ============================================================
+        -- TINT MODE — translucent colour overlay over the class-coloured bar.
+        -- The overlay's fill tracks current health (UpdateADTintHealth); its
+        -- alpha = blend × colour alpha so the class colour shows through.
+        -- ============================================================
+        local overlay = GetOrCreateTintOverlay(frame)
+        if overlay then
+            -- Keep the AD overlay off the frame border. With framePadding 0 the health
+            -- bar fills the whole frame and the border is drawn inward over its edge, so
+            -- a full-bar overlay sits *under* the border. Out of range the border fades
+            -- to its OOR alpha and the AD tint beneath shows through it, tinting the
+            -- border. Inset the overlay by the border thickness so it never reaches
+            -- under the border. (Replace mode doesn't need this — the real bar already
+            -- sits under the inward border exactly like a normal class-coloured bar.)
+            local _fdb = DF:GetFrameDB(frame)
+            local _bInset = (frame.border and frame.border:IsShown() and _fdb and _fdb.frameBorderSize) or 0
+            overlay:ClearAllPoints()
+            if _bInset > 0 then
+                overlay:SetPoint("TOPLEFT", healthBar, "TOPLEFT", _bInset, -_bInset)
+                overlay:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -_bInset, _bInset)
+            else
+                overlay:SetAllPoints(healthBar)
             end
-        else
-            -- Tint mode: the underlying bar must show its normal colour through the overlay.
-            -- A previous replace-mode apply may have left a stale AD vertex colour on hbTex.
-            -- Briefly release the AD lock so UpdateHealthBarAppearance restores the normal
-            -- class/custom colour before we re-claim the bar.
+
+            -- Re-sync texture in case the health bar's texture changed since the overlay
+            -- was first created (frame recycled to a different unit can swap textures).
+            local currentTex = healthBar:GetStatusBarTexture()
+            overlay:SetStatusBarTexture(currentTex and currentTex:GetTexture() or "Interface\\Buttons\\WHITE8x8")
+            -- Use OOR-aware blend if already established (preserves OOR fade on UNIT_AURA).
+            local initialBlend = state.healthbarEffectiveBlend or blend
+            overlay:SetStatusBarColor(r, g, b, initialBlend)
+
+            -- The underlying bar must show its normal colour through the overlay.
+            -- A previous replace-mode apply may have left a stale AD vertex colour /
+            -- frame alpha on hbTex. Briefly release the AD lock so
+            -- UpdateHealthBarAppearance restores the normal class/custom colour and
+            -- the configured alpha before we re-claim the bar.
             state.healthbar = false
             if DF.UpdateHealthBarAppearance then
                 DF:UpdateHealthBarAppearance(frame)
             end
             state.healthbar = true
+
+            -- Snap fill to current health before showing so the bar doesn't animate
+            -- from near-empty to the correct position (ExponentialEaseOut + the
+            -- min/max changing from the creation default of 0-1 to 0-maxHealth
+            -- makes the stored value of 1 render as ~0% until the smooth completes).
+            if DF.UpdateADTintHealth then
+                DF:UpdateADTintHealth(frame, true)  -- true = skip smooth interpolation
+            end
+            overlay:Show()
         end
-        -- Snap fill to current health before showing so the bar doesn't animate
-        -- from near-empty to the correct position (ExponentialEaseOut + the
-        -- min/max changing from the creation default of 0-1 to 0-maxHealth
-        -- makes the stored value of 1 render as ~0% until the smooth completes).
-        if DF.UpdateADTintHealth then
-            DF:UpdateADTintHealth(frame, true)  -- true = skip smooth interpolation
-        end
-        overlay:Show()
+        expiringEl = state.tintOverlay
     end
+
+    if not expiringEl then return end
 
     -- ========================================
     -- EXPIRING: register overlay with ticker
@@ -1308,8 +1412,13 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     if expiringEnabled == nil then expiringEnabled = false end
 
     local expiringPulsate = config.expiringPulsate or false
-    if expiringPulsate then GetOrCreatePulseAnim(overlay) end
-    overlay.dfAD_expiringPulsate = expiringPulsate
+    -- The pulse is driven by the shared global ticker (SetHealthBarPulse) for BOTH
+    -- modes, so every expiring bar breathes in unison. Just record whether it's
+    -- enabled; the expiring callbacks toggle it on/off via UpdateHealthBarPulse.
+    state.healthbarExpiringPulsate = expiringPulsate
+    if not expiringPulsate then
+        SetHealthBarPulse(frame, false)
+    end
 
     if expiringEnabled then
         local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
@@ -1318,7 +1427,7 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
         -- base blend (replace = alpha; tint = blend slider × alpha).
         local ea = ec.a or ec[4] or 1
         local expiringBlend = (mode == "replace") and ea or ((config.blend or 0.5) * ea)
-        RegisterExpiring(overlay, {
+        RegisterExpiring(expiringEl, {
             unit = frame.unit,
             auraInstanceID = auraData and auraData.auraInstanceID,
             threshold = config.expiringThreshold or 30,
@@ -1339,7 +1448,6 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                 -- Out of range, keep the OOR fade; in range use the colour's blend.
                 local effectiveBlend = (adState and adState.healthbarOOR
                     and (adState.healthbarEffectiveBlend or curBlend)) or curBlend
-                el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
                 -- Keep current-color/blend in sync so UpdateAuraDesignerAppearance
                 -- (OOR handler) uses the expiring color/alpha rather than the active one.
                 if adState then
@@ -1347,15 +1455,20 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                     adState.healthbarCurrentG = result.g
                     adState.healthbarCurrentB = result.b
                     adState.healthbarCurrentBlend = curBlend
-                    -- Replace mode: fade the underlying bar texture to match so the
-                    -- expiring colour's alpha shows on the bar itself, not just the overlay.
-                    if adState.healthbarMode == "replace" then
-                        local hb = frame.healthBar
-                        local hbTex = hb and hb:GetStatusBarTexture()
-                        if hbTex then hbTex:SetVertexColor(result.r, result.g, result.b, curBlend) end
-                    end
                 end
-                UpdatePulseState(el, isExp)
+                if adState and adState.healthbarMode == "replace" then
+                    -- Single layer: paint the real bar texture. Colour via vertex RGB,
+                    -- opacity via FRAME alpha (SetValue-proof — see ApplyHealthBar).
+                    local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+                    if hbTex then
+                        hbTex:SetVertexColor(result.r, result.g, result.b)
+                        -- While pulsing, the ticker owns the frame alpha; just update colour.
+                        if not adState.healthbarPulseOn then hbTex:SetAlpha(effectiveBlend) end
+                    end
+                else
+                    el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
+                end
+                UpdateHealthBarPulse(frame, isExp)
             end,
             applyManual = function(el, isExp, entry)
                 local c = isExp and entry.color or entry.originalColor
@@ -1367,7 +1480,6 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                 -- Out of range, keep the OOR fade; in range use the colour's blend.
                 local effectiveBlend = (adState and adState.healthbarOOR
                     and (adState.healthbarEffectiveBlend or curBlend)) or curBlend
-                el:SetStatusBarColor(cr, cg, cb, effectiveBlend)
                 -- Keep current-color/blend in sync so UpdateAuraDesignerAppearance
                 -- (OOR handler) uses the expiring color/alpha rather than the active one.
                 if adState then
@@ -1375,22 +1487,23 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
                     adState.healthbarCurrentG = cg
                     adState.healthbarCurrentB = cb
                     adState.healthbarCurrentBlend = curBlend
-                    -- Replace mode: fade the underlying bar texture to match.
-                    if adState.healthbarMode == "replace" then
-                        local hb = frame.healthBar
-                        local hbTex = hb and hb:GetStatusBarTexture()
-                        if hbTex then hbTex:SetVertexColor(cr, cg, cb, curBlend) end
-                    end
                 end
-                UpdatePulseState(el, isExp)
+                if adState and adState.healthbarMode == "replace" then
+                    local hbTex = frame.healthBar and frame.healthBar:GetStatusBarTexture()
+                    if hbTex then
+                        hbTex:SetVertexColor(cr, cg, cb)
+                        -- While pulsing, the ticker owns the frame alpha; just update colour.
+                        if not adState.healthbarPulseOn then hbTex:SetAlpha(effectiveBlend) end
+                    end
+                else
+                    el:SetStatusBarColor(cr, cg, cb, effectiveBlend)
+                end
+                UpdateHealthBarPulse(frame, isExp)
             end,
         })
-    elseif overlay then
-        UnregisterExpiring(overlay)
-        if overlay.dfAD_pulse and overlay.dfAD_pulse:IsPlaying() then
-            overlay.dfAD_pulse:Stop()
-            overlay:SetAlpha(1)
-        end
+    elseif expiringEl then
+        UnregisterExpiring(expiringEl)
+        SetHealthBarPulse(frame, false)
     end
 end
 
@@ -1398,19 +1511,29 @@ function Indicators:RevertHealthBar(frame)
     local state = frame and frame.dfAD
     if not state then return end
 
-    -- Hide overlay and unregister its expiring ticker
+    -- Stop the shared pulse first (it reads healthbarMode / blend, cleared below)
+    -- and restore the steady alpha.
+    SetHealthBarPulse(frame, false)
+
+    -- TINT mode: hide the overlay and unregister its expiring ticker.
     if state.tintOverlay then
         UnregisterExpiring(state.tintOverlay)
-        if state.tintOverlay.dfAD_pulse and state.tintOverlay.dfAD_pulse:IsPlaying() then
-            state.tintOverlay.dfAD_pulse:Stop()
-            state.tintOverlay:SetAlpha(1)
-        end
+        state.tintOverlay:SetAlpha(1)
         state.tintOverlay:Hide()
         state.tintOverlay:SetStatusBarColor(1, 1, 1, 1)
     end
 
+    -- REPLACE mode (single layer): the expiring ticker runs on the real health bar.
+    -- Unregister it. The bar's colour and frame alpha are restored below by
+    -- UpdateHealthBarAppearance (state.healthbar is now false, so it repaints the
+    -- normal class/custom colour and configured alpha).
+    if frame.healthBar then
+        UnregisterExpiring(frame.healthBar)
+    end
+
     -- Clear tracked color and blend so stale values don't affect the next
     -- aura that claims this frame's health bar indicator.
+    state.healthbarMode          = nil
     state.healthbarCurrentR      = nil
     state.healthbarCurrentG      = nil
     state.healthbarCurrentB      = nil

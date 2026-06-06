@@ -1973,7 +1973,10 @@ function DF:LightweightUpdateHealthColor()
     
     local function UpdateFrame(frame, index)
         if not frame or not frame.healthBar then return end
-        
+        -- Aura Designer replace mode owns the bar colour exclusively (single layer).
+        -- Don't stomp it with the normal health colour while its indicator is active.
+        if frame.dfAD and frame.dfAD.healthbar and frame.dfAD.healthbarMode == "replace" then return end
+
         if db.healthColorMode == "CUSTOM" and db.healthColor then
             local c = db.healthColor
             frame.healthBar:SetStatusBarColor(c.r, c.g, c.b, c.a or 1)

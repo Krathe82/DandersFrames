@@ -26,6 +26,7 @@
 * (Icons) Renamed **"Raid Target Icon" → "Target Marker Icon"**, and its header preview now shows the four common markers (square / cross / triangle / circle). (by Krathe)
 * (Test Mode) The separate **Status / Ready** and **Role / Leader** preview toggles are now a single **Icons** toggle, matching the live status-icon grouping. (by Krathe)
 * (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
+* (Aura Designer) Expiring health-bar highlights now **pulse in unison** across all frames — and tint and replace modes share one pulse engine — instead of each frame pulsing on its own timing. (by Krathe)
 
 ### Bug Fixes
 
@@ -42,6 +43,7 @@
 * (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
 * (Designers) Text Designer edits (and Aura Designer changes) no longer **stop updating on test-mode frames after switching between auto layouts** — applying a layout's overrides kept the designer's table/preview bindings valid instead of orphaning them. (by Krathe)
 * (Frames) Missing textures now fall back to a bundled default instead of rendering black. If a profile you import references a custom or shared-media texture you don't have installed (or the addon that provided it was removed), the affected health bar, background or other bar now uses DandersFrames' default texture and shows a one-time notice — rather than a black/blank bar. (Requires WoW 12.0.7; on earlier versions there is no change.) (by Krathe)
+* (Aura Designer) The expiring **"Pulsate"** option now works for the replace-mode health-bar highlight (it previously stayed solid in replace mode). (by Krathe)
 
 ## [4.4.0]
 
