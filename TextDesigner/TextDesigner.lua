@@ -2,14 +2,9 @@ local addonName, DF = ...
 
 -- ============================================================
 -- TEXT DESIGNER - MODULE ENTRY
--- Alpha-only feature for designing arbitrary text elements on
--- unit frames. Phase 1: UI scaffold only (no rendering).
+-- Feature for designing arbitrary text elements on unit frames.
 -- See docs/superpowers/specs/2026-05-22-text-designer-phase1-design.md
 -- ============================================================
-
--- Release-channel gate: don't even register globals on release builds.
--- DF.RELEASE_CHANNEL is set in Changelog.lua by CI.
-if DF.RELEASE_CHANNEL == "release" then return end
 
 local pairs, ipairs = pairs, ipairs
 

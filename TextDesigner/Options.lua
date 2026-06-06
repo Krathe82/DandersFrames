@@ -1,7 +1,5 @@
 local addonName, DF = ...
 
-if DF.RELEASE_CHANNEL == "release" then return end
-
 local L = DF.L
 
 -- ============================================================

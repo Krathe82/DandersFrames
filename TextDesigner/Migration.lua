@@ -8,10 +8,6 @@ local addonName, DF = ...
 -- from the Global tab's "Import Current Text Settings" button.
 -- ============================================================
 
--- Release-channel gate: TD is alpha-only, mirror the other TD files so we
--- don't register the migration function on release builds.
-if DF.RELEASE_CHANNEL == "release" then return end
-
 local ipairs, pairs, type = ipairs, pairs, type
 
 -- Deep-copy a color table so migrated elements don't share refs with the

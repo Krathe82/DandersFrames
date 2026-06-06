@@ -4,6 +4,7 @@
 
 ### New Features
 
+* **Text Designer** is now available in all versions (previously alpha-only) — add any number of custom text elements to your unit frames, each with its own font, size, colour (or class colour), anchor and position. Elements can show live data including: **Identity** — Name, Class, Level, Race, Faction, Group Number, Custom Static Text; **Health** — Current HP, Max HP, HP Percent, HP Deficit, Max HP Reduction %; **Power** — Current Power, Power %, Power Deficit, Power Type; **Shields & Heals** — Absorb Amount, Heal Absorb Amount, Incoming Heal; **Status** — Dead / Offline / Ghost; **Threat & Range** — Aggro Flag, Threat on Current Target, In-Range / Out-of-Range text. Find it under the **Text** tab.
 * (Frames) **Unified border system** — every border (frame, buff/debuff icons, aura bars, defensive icons, missing-buff, resource bar, pet frames, targeted spells) now runs through one engine with consistent **Style / Colour / Alpha / Gradient** controls. (by Krathe)
 * (Borders) Added optional **border animations** — 10 effects (pulse, wipe, ripple, segment reveal, sides/corners-only, proc glow, dash, and more), available wherever a border is drawn. (by Krathe)
 * (Icons) Status icons now use crisp **modern Blizzard atlas art** (ready check, summon, resurrect, phased, vehicle, main tank/assist, AFK), with automatic fallback to the legacy texture. (by Krathe)
