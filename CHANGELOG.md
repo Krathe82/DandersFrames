@@ -38,6 +38,7 @@
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
 * (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
+* (Designers) Text Designer edits (and Aura Designer changes) no longer **stop updating on test-mode frames after switching between auto layouts** — applying a layout's overrides kept the designer's table/preview bindings valid instead of orphaning them. (by Krathe)
 
 ## [4.4.0]
 
