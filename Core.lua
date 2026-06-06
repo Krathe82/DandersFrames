@@ -432,6 +432,73 @@ function DF:LightweightUpdateBackgroundAlpha()
     IterateFramesInMode(mode, UpdateBG)
 end
 
+-- ============================================================
+-- SAFE TEXTURE SETTERS — graceful missing-texture fallback
+-- A configured texture can be missing when a profile imported from another user
+-- references a 3rd-party/SharedMedia texture this client doesn't have (or the
+-- providing addon was removed) — leaving a black/blank bar. C_UIFileAsset
+-- (NEW in WoW 12.0.7) — IsKnownFile(asset) reports whether a path is known to
+-- the client (shipped OR a known loose addon file); when it says the asset is
+-- unknown we substitute a guaranteed-present stock texture. (Note: the API
+-- doesn't verify a known loose file still exists on disk, but an uninstalled
+-- addon's path is simply not "known", which is exactly the import case we want.)
+--   The SetTexture/SetStatusBarTexture `success` bool does NOT work for this —
+--   it returns true for any well-formed path even when the file is absent.
+--   Feature-detected: on clients without C_UIFileAsset this is INERT (behaves
+--   exactly as before), so it's safe to ship now and self-activates on 12.0.7.
+-- ============================================================
+-- DF's own bundled default bar texture — ships with the addon, so it's always
+-- present when our code runs. This is the "fall back to our default" target.
+DF.STOCK_BAR_TEXTURE = "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist"
+local _df_warnedMissingTexture = {}
+
+-- false -> asset (texture path or fileID) is definitively NOT known to the client
+-- true  -> known/present
+-- nil   -> validation API unavailable (caller leaves the texture as-is)
+local function textureKnown(asset)
+    if asset == nil then return nil end
+    local api = C_UIFileAsset
+    if not (api and api.IsKnownFile) then return nil end
+    local ok, known = pcall(api.IsKnownFile, asset)
+    if not ok then return nil end
+    return known and true or false
+end
+
+local function warnMissingTexture(path)
+    if not path or _df_warnedMissingTexture[path] then return end
+    _df_warnedMissingTexture[path] = true
+    if DF.Debug then DF:Debug("TEXTURE", "Missing texture '%s' — using stock fallback", tostring(path)) end
+    if not DF._warnedAnyMissingTexture then
+        DF._warnedAnyMissingTexture = true
+        print("|cff66ccffDandersFrames|r: a configured texture couldn't be loaded and was replaced with a stock texture. Check your texture settings (an imported profile may reference a texture you don't have).")
+    end
+end
+
+-- StatusBar texture with stock fallback. Returns true if the requested texture
+-- loaded, false if the stock fallback was substituted, nil if bar was missing.
+function DF:SafeSetStatusBarTexture(bar, path, stock)
+    if not bar then return end
+    if textureKnown(path) == false then
+        bar:SetStatusBarTexture(stock or DF.STOCK_BAR_TEXTURE)
+        warnMissingTexture(path)
+        return false
+    end
+    bar:SetStatusBarTexture(path)
+    return true
+end
+
+-- Plain Texture region with stock fallback (same semantics).
+function DF:SafeSetTexture(region, path, stock)
+    if not region then return end
+    if textureKnown(path) == false then
+        region:SetTexture(stock or DF.STOCK_BAR_TEXTURE)
+        warnMissingTexture(path)
+        return false
+    end
+    region:SetTexture(path)
+    return true
+end
+
 -- Update only health bar texture
 function DF:LightweightUpdateHealthTexture()
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
@@ -442,7 +509,7 @@ function DF:LightweightUpdateHealthTexture()
     
     local function UpdateTex(frame)
         if frame and frame.healthBar then
-            frame.healthBar:SetStatusBarTexture(tex)
+            DF:SafeSetStatusBarTexture(frame.healthBar, tex)
         end
     end
     

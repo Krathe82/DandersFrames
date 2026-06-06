@@ -630,7 +630,7 @@ function DF:UpdateAbsorb(frame, testIndex)
                 barTex:SetDrawLayer("ARTWORK", 2)
             end
         else
-            customBar:SetStatusBarTexture(tex)
+            DF:SafeSetStatusBarTexture(customBar, tex)
             local barTex = customBar:GetStatusBarTexture()
             if barTex then
                 barTex:SetHorizTile(false)
@@ -1105,7 +1105,7 @@ function DF:UpdateAbsorb(frame, testIndex)
         if type(texture) == "table" then
             texture = texture.path or "Interface\\TargetingFrame\\UI-StatusBar"
         end
-        overflowBar:SetStatusBarTexture(texture)
+        DF:SafeSetStatusBarTexture(overflowBar, texture)
         
         local color = db.absorbBarColor or {r = 1, g = 1, b = 1, a = 0.7}
         overflowBar:SetStatusBarColor(color.r, color.g, color.b, color.a or 0.7)
@@ -1394,7 +1394,7 @@ function DF:UpdateHealAbsorb(frame, testIndex)
     -- Apply texture only if changed to prevent flickering
     if bar.currentTexture ~= tex then
         bar.currentTexture = tex
-        bar:SetStatusBarTexture(tex)
+        DF:SafeSetStatusBarTexture(bar, tex)
         local barTex = bar:GetStatusBarTexture()
         if barTex then
             barTex:SetHorizTile(false)
@@ -1673,7 +1673,7 @@ end
 local function StyleHealPredSegment(seg, tex, blendMode, color)
     if seg.currentTexture ~= tex then
         seg.currentTexture = tex
-        seg:SetStatusBarTexture(tex)
+        DF:SafeSetStatusBarTexture(seg, tex)
         local t = seg:GetStatusBarTexture()
         if t then
             t:SetHorizTile(false); t:SetVertTile(false)
@@ -1886,7 +1886,7 @@ function DF:UpdateHealPrediction(frame, testIndex)
     -- Apply texture
     if bar.currentTexture ~= tex then
         bar.currentTexture = tex
-        bar:SetStatusBarTexture(tex)
+        DF:SafeSetStatusBarTexture(bar, tex)
         local barTex = bar:GetStatusBarTexture()
         if barTex then
             barTex:SetHorizTile(false)

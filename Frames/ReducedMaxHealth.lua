@@ -87,7 +87,7 @@ function DF:UpdateReducedMaxHealth(frame)
         texturePath = DF:ResolveMediaTexture(texturePath) or texturePath
     end
     if texturePath then
-        bar:SetStatusBarTexture(texturePath)
+        DF:SafeSetStatusBarTexture(bar, texturePath)
     end
 
     local c = db.reducedMaxHealthColor or DEFAULT_BAR_COLOR

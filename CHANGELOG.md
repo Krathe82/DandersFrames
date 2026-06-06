@@ -41,6 +41,7 @@
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
 * (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
 * (Designers) Text Designer edits (and Aura Designer changes) no longer **stop updating on test-mode frames after switching between auto layouts** — applying a layout's overrides kept the designer's table/preview bindings valid instead of orphaning them. (by Krathe)
+* (Frames) Missing textures now fall back to a bundled default instead of rendering black. If a profile you import references a custom or shared-media texture you don't have installed (or the addon that provided it was removed), the affected health bar, background or other bar now uses DandersFrames' default texture and shows a one-time notice — rather than a black/blank bar. (Requires WoW 12.0.7; on earlier versions there is no change.) (by Krathe)
 
 ## [4.4.0]
 

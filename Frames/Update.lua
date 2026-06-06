@@ -402,7 +402,7 @@ function DF:ApplyFrameLayout(frame)
         else
             -- Textured background - only call SetTexture if texture path changed
             if frame.dfCurrentBgTexture ~= bgTexture then
-                frame.background:SetTexture(bgTexture)
+                DF:SafeSetTexture(frame.background, bgTexture)
                 frame.background:SetHorizTile(false)
                 frame.background:SetVertTile(false)
                 frame.dfCurrentBgTexture = bgTexture
@@ -456,7 +456,7 @@ function DF:ApplyFrameLayout(frame)
         else
             -- Textured background - only call SetTexture if texture path changed
             if frame.dfCurrentBgTexture ~= bgTexture then
-                frame.background:SetTexture(bgTexture)
+                DF:SafeSetTexture(frame.background, bgTexture)
                 frame.background:SetHorizTile(false)
                 frame.background:SetVertTile(false)
                 frame.dfCurrentBgTexture = bgTexture
@@ -760,7 +760,7 @@ function DF:UpdateUnitFrame(frame, source)
             -- Textured background - only call SetTexture if texture path changed
             -- This prevents flickering on every health update
             if frame.dfCurrentBgTexture ~= bgTexture then
-                frame.background:SetTexture(bgTexture)
+                DF:SafeSetTexture(frame.background, bgTexture)
                 frame.background:SetHorizTile(false)
                 frame.background:SetVertTile(false)
                 frame.dfCurrentBgTexture = bgTexture
