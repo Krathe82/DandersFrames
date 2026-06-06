@@ -237,6 +237,27 @@ local function GetRaidValue(key)
     return realRaid[key]
 end
 
+-- Make `dst` deeply equal `src` while PRESERVING the identity of dst and of every
+-- nested table whose key/index aligns. Applying/restoring a whole-table override this
+-- way keeps references captured elsewhere valid — the Text Designer page binds cards
+-- and offset sliders straight to element objects (CreateSlider(..., elem, "offsetX")),
+-- and the Preview binds to db.textDesigner. A plain `realRaid.textDesigner = newTable`
+-- swaps that table (and its .elements array) out from under those bindings, so edits
+-- land in the orphaned old table while the test frames read the new one — the TD
+-- "test mode stops updating after a layout switch" freeze.
+local function DeepReplaceInPlace(dst, src)
+    for k, v in pairs(src) do
+        if type(v) == "table" and type(dst[k]) == "table" then
+            DeepReplaceInPlace(dst[k], v)
+        else
+            dst[k] = v
+        end
+    end
+    for k in pairs(dst) do
+        if src[k] == nil then dst[k] = nil end
+    end
+end
+
 -- Set a value in the real raid database, handling raid keys, table keys, and pinned keys.
 -- Always writes to the real table (DF._realRaidDB) — never the overlay proxy.
 local function SetRaidValue(key, value)
@@ -262,7 +283,15 @@ local function SetRaidValue(key, value)
             tbl[index] = value
         end
     else
-        realRaid[key] = value
+        -- Whole-table override (textDesigner, auraDesigner, …): update CONTENTS in
+        -- place (deep) so the table object's identity is preserved and designer
+        -- bindings to it / its elements survive a layout switch.
+        local existing = realRaid[key]
+        if type(existing) == "table" and type(value) == "table" then
+            DeepReplaceInPlace(existing, value)
+        else
+            realRaid[key] = value
+        end
     end
 end
 
