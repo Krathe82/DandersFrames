@@ -1,5 +1,8 @@
 local addonName, DF = ...
 
+-- Hot-path math cached at file scope (the pulse ticker below runs every frame).
+local cos = math.cos
+
 -- ============================================================
 -- AURA DESIGNER - INDICATORS
 -- Visual rendering for all 8 indicator types. Creates, shows,
@@ -219,7 +222,7 @@ local function RestorePulseAlpha(frame, st)
 end
 
 pulseTicker:SetScript("OnUpdate", function()
-    local factor = 0.65 + 0.35 * math.cos((GetTime() % 1.0) * 6.2831853)
+    local factor = 0.65 + 0.35 * cos((GetTime() % 1.0) * 6.2831853)
     local any = false
     for frame in pairs(pulseRegistry) do
         local st = frame.dfAD
@@ -351,7 +354,7 @@ local function GetOrCreateBounceAnim(frame)
             local b = frame.dfAD_basePos
             if not b then return end
             -- Smooth 0→AMP→0 each cycle (zero-slope endpoints, no seam on loop).
-            local off = (1 - math.cos(self.elapsed * (2 * math.pi / BOUNCE_PERIOD))) * 0.5 * BOUNCE_AMP
+            local off = (1 - cos(self.elapsed * (2 * math.pi / BOUNCE_PERIOD))) * 0.5 * BOUNCE_AMP
             frame:ClearAllPoints()
             frame:SetPoint(b.point, b.rel, b.relPoint, b.x, b.y + off)
         end)
@@ -1321,8 +1324,9 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
         -- (smooth or not), which was the "alpha flickers to 100%" bug. Frame alpha
         -- survives SetValue, and UpdateHealthBarAppearance re-asserts colour+alpha
         -- on every health event (see ElementAppearance.lua). DF's colour system
-        -- yields to AD while state.healthbar is set (Colors.lua early-return;
-        -- UpdateHealthBarAppearance gates on healthbarMode == "replace").
+        -- yields to AD while state.healthbar is set (Core.lua
+        -- LightweightUpdateHealthColor early-returns when the frame is in AD replace
+        -- mode; UpdateHealthBarAppearance gates on healthbarMode == "replace").
         -- ============================================================
         -- Drop any overlay left over from a previous tint apply on this frame.
         if state.tintOverlay then
