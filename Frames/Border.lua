@@ -1105,7 +1105,12 @@ function Border:StartAnimation(border, spec)
             border._dfPulsatePhase = ph
             local wave = (1 - math.cos(ph * 2 * math.pi)) * 0.5
             -- Fade between 0.05 (dim trough) and 1.0 (full) — a gentle pulse.
-            border:SetAlpha(0.05 + 0.95 * wave)
+            -- DF_PULSATE is the one effect that drives the widget's OWN alpha each
+            -- frame, so it would clobber the range system's out-of-range fade
+            -- (which dims the widget via SetAlpha). Multiply by dfRangeAlpha (set
+            -- by the OOR appearance pass; defaults to 1 when in range / unset) so
+            -- the pulse rides on top of the OOR dim instead of overwriting it.
+            border:SetAlpha((0.05 + 0.95 * wave) * (border.dfRangeAlpha or 1))
         end)
         border.activeAnimation = anim.type
         return

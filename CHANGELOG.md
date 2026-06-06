@@ -38,6 +38,7 @@
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **flickers** on phased or out-of-range units. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
+* (Aura Designer) The border-effect indicator (colour **and** animation) now **fades out of range** like the other indicators, instead of staying at full brightness. (by Krathe)
 * (AFK Timer) The elapsed-time countdown no longer **shifts left/right** as it ticks. (by Krathe)
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)

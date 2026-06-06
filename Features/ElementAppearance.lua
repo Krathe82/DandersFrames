@@ -111,6 +111,28 @@ local function ApplyOORAlpha(element, inRange, inAlpha, oorAlpha)
     end
 end
 
+-- Out-of-range fade for an AD border-type widget (the whole-frame border
+-- indicator + per-aura custom borders). These hang off the FRAME, not a faded
+-- element, so element-specific OOR mode has to dim them explicitly. Fading the
+-- widget cascades to its edges, overlay effects and LCG glows (all children).
+-- dfRangeAlpha is the numeric factor DF_PULSATE's per-frame tick multiplies into
+-- its own SetAlpha; a secret inRange can't yield a numeric factor, so it's left
+-- at 1 (SetAlphaFromBoolean still fades every non-DF_PULSATE effect).
+local function FadeADBorderWidget(b, inRange, oorAlpha, secretRange)
+    if not b then return end
+    b.dfRangeAlpha = secretRange and 1 or (inRange and 1.0 or oorAlpha)
+    ApplyOORAlpha(b, inRange, 1.0, oorAlpha)
+end
+
+-- Frame-level mode: the frame cascade does the fade, so the widget stays at full
+-- alpha and dfRangeAlpha resets to 1 (so a DF_PULSATE pulse isn't double-dimmed
+-- after toggling out of element-specific OOR mode).
+local function ResetADBorderWidget(b)
+    if not b then return end
+    b.dfRangeAlpha = 1
+    b:SetAlpha(1.0)
+end
+
 -- Check if unit is dead or offline
 local function IsDeadOrOffline(frame)
     local unit = frame.unit
@@ -1179,6 +1201,16 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 end
             end
         end
+        -- Border-type indicator(s) — the whole-frame AD border and any per-aura
+        -- custom borders hang off the FRAME, not a faded element, so they need
+        -- explicit dimming here (see FadeADBorderWidget).
+        local secretRange = issecretvalue and issecretvalue(inRange)
+        FadeADBorderWidget(frame.dfAD_border, inRange, oorAlpha, secretRange)
+        if frame.dfAD_customBorders then
+            for _, b in pairs(frame.dfAD_customBorders) do
+                FadeADBorderWidget(b, inRange, oorAlpha, secretRange)
+            end
+        end
         -- AD health bar OOR fade. Compute the OOR-aware effective blend once, then
         -- apply it to whichever layer the active mode uses:
         --   replace → the real health bar texture's FRAME alpha (single layer)
@@ -1248,6 +1280,12 @@ function DF:UpdateAuraDesignerAppearance(frame)
             for _, bar in pairs(frame.dfAD_bars) do
                 if bar then bar:SetAlpha(bar.dfBaseAlpha or 1.0) end
             end
+        end
+        -- Border-type indicator(s): frame-level mode fades via the frame cascade,
+        -- so reset the widget to full alpha (see ResetADBorderWidget).
+        ResetADBorderWidget(frame.dfAD_border)
+        if frame.dfAD_customBorders then
+            for _, b in pairs(frame.dfAD_customBorders) do ResetADBorderWidget(b) end
         end
         -- AD health bar: frame-level mode — the frame cascade handles OOR alpha, so
         -- the effective blend is always the configured blend. Apply to whichever
