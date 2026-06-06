@@ -6469,8 +6469,13 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- ========================================
     local _adFDB = (DF.GetDB and DF:GetDB((GUI and GUI.SelectedMode) or "party")) or {}
     local _adW, _adH = _adFDB.frameWidth or 125, _adFDB.frameHeight or 64
+    -- Auto-layout identity: two raid layouts share the SAME db proxy and may share
+    -- frame dimensions, so neither check below distinguishes them — without this,
+    -- switching between same-size raid layouts reuses the stale page.
+    local _adLayout = (DF.AutoProfilesUI and (DF.AutoProfilesUI.editingProfile or DF.AutoProfilesUI.activeRuntimeProfile)) or nil
     if mainFrame and prevDB == dbRef
-       and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH then
+       and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH
+       and mainFrame.dfBuiltLayout == _adLayout then
         mainFrame:SetParent(parent)
         mainFrame:SetAllPoints()
         mainFrame:Show()
@@ -6505,6 +6510,7 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- detect an auto-layout switch (same db, different frameWidth/Height) and rebuild.
     mainFrame.dfBuiltFrameW = _adW
     mainFrame.dfBuiltFrameH = _adH
+    mainFrame.dfBuiltLayout = _adLayout
 
     -- Override RefreshStates: Aura Designer uses its own layout system.
     --

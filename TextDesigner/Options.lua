@@ -2594,7 +2594,13 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     local _tdMode = (GUI and GUI.SelectedMode) or "party"
     local _tdFDB = (DF.GetDB and DF:GetDB(_tdMode)) or {}
     local _tdW, _tdH = _tdFDB.frameWidth or 125, _tdFDB.frameHeight or 64
-    if state.built and (state.activeDB ~= db or state.builtFrameW ~= _tdW or state.builtFrameH ~= _tdH) then
+    -- Auto-layout identity: two raid layouts share the SAME db proxy (DF.db.raid)
+    -- and may share frame dimensions, so neither check above distinguishes them.
+    -- Without this, switching between same-size raid layouts reuses the stale page
+    -- (cards bound to the previous layout's elements; Preview never re-Init'd), so
+    -- TD edits stop showing on the preview/test frames until /reload.
+    local _tdLayout = (DF.AutoProfilesUI and (DF.AutoProfilesUI.editingProfile or DF.AutoProfilesUI.activeRuntimeProfile)) or nil
+    if state.built and (state.activeDB ~= db or state.builtFrameW ~= _tdW or state.builtFrameH ~= _tdH or state.builtLayout ~= _tdLayout) then
         if state.cardFrames then
             for _, card in pairs(state.cardFrames) do
                 card:Hide()
@@ -2683,6 +2689,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.activeDB = db
     state.builtFrameW = _tdW
     state.builtFrameH = _tdH
+    state.builtLayout = _tdLayout
 
     -- ── TOP BANNER (one compact row) ───────────────────────────
     -- Single-row banner: master toggle on the left, Copy / Sync trio on the
