@@ -667,6 +667,7 @@ function Indicators:BeginFrame(frame)
     local state = EnsureFrameState(frame)
     state.border = false
     state.healthbar = false
+    state.background = false
     state.nametext = false
     state.healthtext = false
     state.framealpha = false
@@ -743,6 +744,8 @@ function Indicators:Apply(frame, typeKey, config, auraData, defaults, auraName, 
         self:ApplyBorder(frame, config, auraData, auraName)
     elseif typeKey == "healthbar" then
         self:ApplyHealthBar(frame, config, auraData)
+    elseif typeKey == "background" then
+        self:ApplyBackground(frame, config, auraData)
     elseif typeKey == "nametext" then
         self:ApplyNameText(frame, config, auraData)
     elseif typeKey == "healthtext" then
@@ -801,6 +804,8 @@ function Indicators:ApplyTest(frame, typeKey, config, auraData, defaults, auraNa
         self:ApplyBorder(frame, config, auraData, auraName)
     elseif typeKey == "healthbar" then
         self:ApplyHealthBar(frame, config, auraData)
+    elseif typeKey == "background" then
+        self:ApplyBackground(frame, config, auraData)
     elseif typeKey == "nametext" then
         self:ApplyNameText(frame, config, auraData)
     elseif typeKey == "healthtext" then
@@ -849,6 +854,11 @@ function Indicators:EndFrame(frame)
         self:RevertHealthBar(frame)
     end
 
+    -- Revert background colour
+    if not state.background then
+        self:RevertBackground(frame)
+    end
+
     -- Revert name text color
     if not state.nametext then
         self:RevertNameText(frame)
@@ -883,6 +893,7 @@ function Indicators:HideAll(frame)
     self:RevertBorder(frame)
     self:RevertCustomBorders(frame)
     self:RevertHealthBar(frame)
+    self:RevertBackground(frame)
     self:RevertNameText(frame)
     self:RevertHealthText(frame)
     self:RevertFrameAlpha(frame)
@@ -1548,6 +1559,152 @@ function Indicators:RevertHealthBar(frame)
     if DF.UpdateHealthBarAppearance then
         DF:UpdateHealthBarAppearance(frame)
     end
+end
+
+-- ============================================================
+-- BACKGROUND COLOUR INDICATOR
+-- A solid colour overlay laid over the frame background, BELOW the health/
+-- missing bars, so the colour shows through wherever the background shows
+-- (the missing-health area + padding) and the health fill naturally covers it.
+-- Mirrors the health-bar TINT overlay: colour + blend ride SetStatusBarColor's
+-- alpha; OOR fade rides the same channel; the per-element AnimationGroup pulse
+-- (shared with icons/squares) rides the overlay's frame alpha — a separate
+-- channel, so the two multiply cleanly. No UpdateBackgroundAppearance yield is
+-- needed (this is an independent layer above the real background).
+-- ============================================================
+
+local function GetOrCreateADBgOverlay(frame)
+    local state = frame.dfAD
+    if state and state.bgOverlay then return state.bgOverlay end
+    if not frame.background then return nil end
+
+    -- Frame level == frame's own level: above the BACKGROUND-layer background
+    -- texture, below the +1 health/missing bars. SetValue(1) keeps it full.
+    local overlay = CreateFrame("StatusBar", nil, frame)
+    overlay:SetAllPoints(frame.background)
+    overlay:SetFrameLevel(frame:GetFrameLevel())
+    overlay:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    overlay:SetMinMaxValues(0, 1)
+    overlay:SetValue(1)
+    overlay:Hide()
+
+    if state then state.bgOverlay = overlay end
+    return overlay
+end
+
+function Indicators:ApplyBackground(frame, config, auraData)
+    local state = EnsureFrameState(frame)
+    if state.background then return end
+    state.background = true
+
+    if not frame.background then return end
+    local color = config.color
+    if not color then return end
+
+    local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
+    local a = color[4] or color.a or 1
+    local mode = string.lower(config.mode or "tint")
+    -- Replace: the colour-picker alpha IS the overlay opacity (covers the bg).
+    -- Tint:    overlay opacity = blend slider × colour alpha (bg shows through).
+    local blend = (mode == "replace") and a or ((config.blend or 0.5) * a)
+
+    state.bgMode         = mode
+    state.bgR, state.bgG, state.bgB = r, g, b
+    state.bgBlend        = blend
+    state.bgCurrentR, state.bgCurrentG, state.bgCurrentB = r, g, b
+    state.bgCurrentBlend = blend
+    state.bgOOR          = false
+    -- bgEffectiveBlend is NOT reset here so the OOR fade survives UNIT_AURA re-applies.
+
+    local overlay = GetOrCreateADBgOverlay(frame)
+    if not overlay then return end
+
+    -- Use OOR-aware blend if already established (preserves OOR fade on re-apply).
+    local initialBlend = state.bgEffectiveBlend or blend
+    overlay:SetStatusBarColor(r, g, b, initialBlend)
+    overlay:SetAlpha(1)
+    overlay:Show()
+
+    -- ===== Expiring + pulse =====
+    local expiringEnabled = config.expiringEnabled
+    if expiringEnabled == nil then expiringEnabled = false end
+    local expiringPulsate = config.expiringPulsate or false
+    overlay.dfAD_expiringPulsate = expiringPulsate
+    if expiringPulsate then
+        GetOrCreatePulseAnim(overlay)
+    elseif overlay.dfAD_pulse and overlay.dfAD_pulse:IsPlaying() then
+        overlay.dfAD_pulse:Stop()
+        overlay:SetAlpha(1)
+    end
+
+    if expiringEnabled then
+        local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
+        local oc = {r = r, g = g, b = b}
+        local ea = ec.a or ec[4] or 1
+        local expiringBlend = (mode == "replace") and ea or ((config.blend or 0.5) * ea)
+        RegisterExpiring(overlay, {
+            unit = frame.unit,
+            auraInstanceID = auraData and auraData.auraInstanceID,
+            threshold = config.expiringThreshold or 30,
+            duration = auraData and auraData.duration,
+            expirationTime = auraData and auraData.expirationTime,
+            blend = blend,
+            expiringBlend = expiringBlend,
+            colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
+            thresholdMode = config.expiringThresholdMode,
+            color = ec, originalColor = oc,
+            applyResult = function(el, result, entry)
+                local adState = frame.dfAD
+                local isExp = IsColorExpiring(result, entry.originalColor)
+                local curBlend = (isExp and entry.expiringBlend) or entry.blend
+                local effectiveBlend = (adState and adState.bgOOR
+                    and (adState.bgEffectiveBlend or curBlend)) or curBlend
+                if adState then
+                    adState.bgCurrentR, adState.bgCurrentG, adState.bgCurrentB = result.r, result.g, result.b
+                    adState.bgCurrentBlend = curBlend
+                end
+                el:SetStatusBarColor(result.r, result.g, result.b, effectiveBlend)
+                UpdatePulseState(el, isExp)
+            end,
+            applyManual = function(el, isExp, entry)
+                local c = isExp and entry.color or entry.originalColor
+                local cr, cg, cb = c.r or 1, c.g or 1, c.b or 1
+                local adState = frame.dfAD
+                local curBlend = (isExp and entry.expiringBlend) or entry.blend
+                local effectiveBlend = (adState and adState.bgOOR
+                    and (adState.bgEffectiveBlend or curBlend)) or curBlend
+                if adState then
+                    adState.bgCurrentR, adState.bgCurrentG, adState.bgCurrentB = cr, cg, cb
+                    adState.bgCurrentBlend = curBlend
+                end
+                el:SetStatusBarColor(cr, cg, cb, effectiveBlend)
+                UpdatePulseState(el, isExp)
+            end,
+        })
+    else
+        UnregisterExpiring(overlay)
+    end
+end
+
+function Indicators:RevertBackground(frame)
+    local state = frame and frame.dfAD
+    if not state then return end
+    if state.bgOverlay then
+        UnregisterExpiring(state.bgOverlay)
+        if state.bgOverlay.dfAD_pulse and state.bgOverlay.dfAD_pulse:IsPlaying() then
+            state.bgOverlay.dfAD_pulse:Stop()
+        end
+        state.bgOverlay:SetAlpha(1)
+        state.bgOverlay:Hide()
+        state.bgOverlay:SetStatusBarColor(1, 1, 1, 1)
+    end
+    state.bgMode          = nil
+    state.bgCurrentR      = nil
+    state.bgCurrentG      = nil
+    state.bgCurrentB      = nil
+    state.bgCurrentBlend  = nil
+    state.bgOOR           = nil
+    state.bgEffectiveBlend = nil
 end
 
 -- Update tint overlay fill to match current health.

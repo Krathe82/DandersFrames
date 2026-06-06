@@ -112,6 +112,7 @@ local INDICATOR_TYPES = {
     { key = "bar",        placed = true  },
     { key = "border",     placed = false },
     { key = "healthbar",  placed = false },
+    { key = "background",  placed = false },
     { key = "nametext",   placed = false },
     { key = "healthtext", placed = false },
     { key = "framealpha", placed = false },
