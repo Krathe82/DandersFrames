@@ -26,12 +26,19 @@ end
 -- Truncate / ellipsize a name string per the per-element name settings.
 local function applyNameTrunc(name, elem)
     local maxLen = elem.nameLength or 30
-    if #name <= maxLen then return name end
+    -- 0 (or less) means "off" — matches legacy name text, whose slider is
+    -- labeled "Max Length (0=off)". `or 30` does NOT rescue a stored 0 here
+    -- (0 is truthy in Lua), so the explicit guard is required.
+    if maxLen <= 0 then return name end
+    -- UTF-8 aware so multibyte names (Korean/Chinese/accented) count by
+    -- character and never get cut mid-character. Safe here: the secret-name
+    -- case returns before this is ever called.
+    if DF:UTF8Len(name) <= maxLen then return name end
     local mode = elem.truncateMode or "ELLIPSIS"
     if mode == "ELLIPSIS" then
-        return name:sub(1, maxLen - 1) .. "…"
+        return DF:UTF8Sub(name, 1, maxLen) .. "..."
     else
-        return name:sub(1, maxLen)
+        return DF:UTF8Sub(name, 1, maxLen)
     end
 end
 

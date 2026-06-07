@@ -276,6 +276,16 @@ function DF:SetProfile(name)
     DF.db = DandersFramesDB_v2.profiles[name]
     DF:WrapDB()
 
+    -- Run the one-time legacy → Text Designer migration for this profile.
+    -- Login only migrates the login-active profile, so any other profile must
+    -- be migrated when it's first activated — otherwise its TD elements stay
+    -- empty and enabling TD renders nothing. Per-profile guard makes this a
+    -- no-op for already-migrated / user-built profiles. Runs before the refresh
+    -- so the migrated elements render immediately.
+    if DF.MigrateTextDesignerFromLegacy then
+        DF:MigrateTextDesignerFromLegacy()
+    end
+
     -- Apply the profile — runtime state is already clear so the proxy reads
     -- the new profile directly with no stale overlay
     DF:FullProfileRefresh()

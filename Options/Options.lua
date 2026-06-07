@@ -905,7 +905,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         AddSpace(20, "both")
         Add(GUI:CreateSeeAlso(self.child, {
             {pageId = "display_visibility", label = L["Visibility"]},
-            {pageId = "text_status", label = L["Status Text"]},
+            -- LEGACY-TEXT-CLEANUP: legacy text page hidden; link removed
+            -- {pageId = "text_status", label = L["Status Text"]},
         }), 30, "both")
     end)
     
@@ -1820,7 +1821,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(GUI:CreateSeeAlso(self.child, {
             {pageId = "general_sorting", label = L["Sorting"]},
             {pageId = "bars_health", label = L["Health Bar"]},
-            {pageId = "text_name", label = L["Name Text"]},
+            -- LEGACY-TEXT-CLEANUP: legacy text page hidden; link removed
+            -- {pageId = "text_name", label = L["Name Text"]},
         }), 30, "both")
     end)
     
@@ -3644,7 +3646,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         AddSpace(20, "both")
         Add(GUI:CreateSeeAlso(self.child, {
             {pageId = "general_frame", label = L["Frame"]},
-            {pageId = "text_health", label = L["Health Text"]},
+            -- LEGACY-TEXT-CLEANUP: legacy text page hidden; link removed
+            -- {pageId = "text_health", label = L["Health Text"]},
             {pageId = "bars_absorbs", label = L["Absorbs"]},
         }), 30, "both")
     end)
@@ -4275,6 +4278,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     -- ========================================
     CreateCategory("text", L["Text"])
     
+    -- LEGACY-TEXT-CLEANUP (v4.4.x): Name/Health/Status built-in text settings are
+    -- replaced by the Text Designer. These three pages are hidden via `if false`
+    -- (not deleted, so they can be restored). Remove this block, the legacy text
+    -- render path (see DF:IsLegacyTextHidden in Frames/Core.lua), and the legacy
+    -- *Text* defaults in Config.lua in a future release once the Text Designer
+    -- fully supersedes them.
+    if false then
     -- Text > Health Text
     local pageHealthText = CreateSubTab("text", "text_health", L["Health Text"])
     BuildPage(pageHealthText, function(self, db, Add, AddSpace, AddSyncPoint)
@@ -4437,6 +4447,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         truncDropdown.disableOn = function(d) return (d.nameTextLength or 0) == 0 end
         Add(truncGroup, nil, 2)
     end)
+    end -- LEGACY-TEXT-CLEANUP: end hidden legacy Name/Health/Status text pages
 
     -- Text > Text Designer
     -- See spec at docs/superpowers/specs/2026-05-22-text-designer-phase1-design.md

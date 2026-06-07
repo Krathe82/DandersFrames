@@ -429,8 +429,16 @@ end
 -- statusText / pet equivalents) to early-return-with-Hide so Phase C
 -- live TD rendering can be tested without visual overlap.
 function DF:IsLegacyTextHidden(frame)
-    local db = DF:GetFrameDB(frame)
-    return db and db.textDesigner and db.textDesigner.hideLegacyText or false
+    -- LEGACY-TEXT-CLEANUP (v4.4.x): Legacy name/health/status text is retired in
+    -- favour of the Text Designer. Every legacy text render path funnels through
+    -- this single gate (Frames/Bars.lua, Frames/Update.lua, Frames/Pets.lua,
+    -- TestMode/TestMode.lua), so returning true force-hides legacy text addon-wide
+    -- without touching each call site. The per-profile "Hide Legacy Text" toggle
+    -- and the legacy text settings pages are hidden from the UI. To temporarily
+    -- restore the old per-profile behaviour, return the commented expression below.
+    return true
+    -- local db = DF:GetFrameDB(frame)
+    -- return db and db.textDesigner and db.textDesigner.hideLegacyText or false
 end
 
 -- Note: FormatNumber should only be used with known-accessible values

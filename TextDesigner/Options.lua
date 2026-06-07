@@ -2516,6 +2516,10 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     classColorCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
 
+    -- LEGACY-TEXT-CLEANUP (v4.4.x): The "Hide Legacy Text" toggle is hidden via
+    -- `if false` — legacy text is now force-hidden everywhere (see
+    -- DF:IsLegacyTextHidden in Frames/Core.lua). Restore by removing the wrap.
+    if false then
     -- ── LIVE TESTING SECTION ──────────────────────────────────
     -- Hides the built-in name / health / status text widgets on every unit
     -- frame so Phase C live TD rendering can be evaluated without overlap.
@@ -2547,6 +2551,7 @@ local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     end)
     hideLegacyCheck:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - 44
+    end -- LEGACY-TEXT-CLEANUP: end hidden "Hide Legacy Text" toggle
 
     -- ── IMPORT CURRENT TEXT SETTINGS ──────────────────────────
     -- Rebuilds the element list from the addon's built-in name / health /
