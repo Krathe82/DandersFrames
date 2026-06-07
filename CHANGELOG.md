@@ -34,6 +34,7 @@
 ### Bug Fixes
 
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
+* (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
 * (Aura Designer) Indicators are torn down when the Aura Designer is disabled, and re-applied on **profile swap**. (by Krathe)

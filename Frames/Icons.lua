@@ -809,7 +809,19 @@ function DF:UpdateMissingBuffIcon(frame, forceUpdate)
         missingBuffCache[frame] = nil
         return
     end
-    
+
+    -- Hide when we can't actually cast a beneficial spell on them — e.g. a
+    -- cross-faction group member in the open world, where a "buff missing"
+    -- icon is just noise because the buff is uncastable. UnitCanAssist flips
+    -- to true inside instances where buffing them IS possible, so the icon
+    -- only shows when it's actionable (mirrors Range.lua's cross-faction
+    -- handling; the reaction funcs return clean, non-secret booleans).
+    if not UnitCanAssist("player", unit) then
+        frame.missingBuffFrame:Hide()
+        missingBuffCache[frame] = nil
+        return
+    end
+
     -- Check for missing buffs
     local missingSpellID = nil
     local missingIcon = nil
