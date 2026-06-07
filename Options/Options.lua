@@ -3185,6 +3185,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }), 30, "both")
     end)
     
+    -- General > Nicknames (account-wide list; custom builder, no party/raid switch)
+    local pageNicknames = CreateSubTab("general", "general_nicknames", L["Nicknames"])
+    BuildPage(pageNicknames, function(self, db, Add, AddSpace, AddSyncPoint)
+        if DF.BuildNicknamesPage then
+            DF.BuildNicknamesPage(GUI, self, db)
+        end
+    end)
+
     -- General > Integrations
     local pageIntegrations = CreateSubTab("general", "general_integrations", L["Integrations"])
     BuildPage(pageIntegrations, function(self, db, Add, AddSpace, AddSyncPoint)

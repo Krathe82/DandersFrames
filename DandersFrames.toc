@@ -78,6 +78,8 @@ GUI\ColorPickerTest.lua
 Features\Search.lua
 Options\Options.lua
 Options\AutoProfiles.lua
+Options\NicknamesPage.lua
+Options\NicknamesPicker.lua
 
 # Popup System (generic wizard & alert popups)
 Popup.lua
@@ -149,6 +151,8 @@ AuraBlacklist\Options.lua
 
 Features\TargetedSpells.lua
 Features\VersionCheck.lua
+Features\Nicknames.lua
+Features\NicknamesComm.lua
 Features\PinnedFrames.lua
 Features\FlatRaidFrames.lua
 
