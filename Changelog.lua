@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-07T17:12:50Z"
+DF.BUILD_DATE = "2026-06-07T22:29:25Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -20,6 +20,8 @@ DF.CHANGELOG_TEXT = [===[
 * (Icons) New **in-combat indicator** — a small crossed-swords icon lights up when a unit is in combat, so you can spot who's engaged at a glance. Off by default, with its own position and size controls. (by Krathe)
 * (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
 * (Nicknames) New **Nicknames** feature — show custom names on your party and raid frames. Build a prioritised list from your friends, guild and group, or type names in by hand, and choose how matches are made. Optionally mark nicknamed players with brackets (or other styles) and share your own nickname with the group. Find it under **General → Nicknames**. (by Maelareth)
+* (Resource Bar) Added a **Color Mode** (Power Type / Class / **Custom**) with a custom-colour picker, and a **Texture** dropdown so the resource bar can use any statusbar texture. (by Krathe)
+* (Aura Designer) New **Background Color** effect — colour a frame's background when an aura is active (Replace or Tint), with the same Expiring colour override, Pulsate and out-of-range handling as the other effects. (by Krathe)
 
 ### Improvements
 
@@ -33,17 +35,22 @@ DF.CHANGELOG_TEXT = [===[
 * (Test Mode) The separate **Status / Ready** and **Role / Leader** preview toggles are now a single **Icons** toggle, matching the live status-icon grouping. (by Krathe)
 * (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
 * (Aura Designer) Expiring health-bar highlights now **pulse in unison** across all frames — and tint and replace modes share one pulse engine — instead of each frame pulsing on its own timing. (by Krathe)
+* (Aura Designer) The health-bar indicator's **Tint** mode has a new **Tint Entire Bar** option — tint the whole bar including the missing-health portion, instead of only the filled part. (by Krathe)
+* (Aura Designer) Added breathing room between an effect's **trigger list and its Priority slider** so the frame-level effect panels no longer look cramped. (by Krathe)
 * (Text) The built-in Name, Health, and Status text settings are now handled entirely by the **Text Designer** — the older text pages are hidden and your existing text is converted to Text Designer elements automatically. Customise all frame text under the **Text** tab.
+* (Resource Bar) Added **Maelstrom** and **Pain** to the per-power resource colour options, so Shaman and Vengeance Demon Hunter resource bars can be recoloured. (by Krathe)
 
 ### Bug Fixes
 
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
+* (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
 * (Aura Designer) Indicators are torn down when the Aura Designer is disabled, and re-applied on **profile swap**. (by Krathe)
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **flickers** on phased or out-of-range units. (by Krathe)
 * (Aura Designer) The replace-mode health-bar highlight no longer **bleeds over the frame border** when a unit is out of range. (by Krathe)
+* (Aura Designer) The border-effect indicator (colour **and** animation) now **fades out of range** like the other indicators, instead of staying at full brightness. (by Krathe)
 * (AFK Timer) The elapsed-time countdown no longer **shifts left/right** as it ticks. (by Krathe)
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
