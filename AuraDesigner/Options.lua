@@ -42,6 +42,7 @@ local INDICATOR_TYPES = {
     { key = "bar",        label = L["Bar"],              placed = true  },
     { key = "border",     label = L["Border"],           placed = false },
     { key = "healthbar",  label = L["Health Bar Color"], placed = false },
+    { key = "background", label = L["Background Color"],  placed = false },
     { key = "nametext",   label = L["Name Text Color"],  placed = false },
     { key = "healthtext", label = L["Health Text Color"], placed = false },
     { key = "framealpha", label = L["Frame Alpha"],      placed = false },
@@ -684,6 +685,14 @@ local function EnsureTypeConfig(auraName, typeKey)
                 expiringPulsate = false,
                 showWhenMissing = false,
             }
+        elseif typeKey == "background" then
+            auraCfg[typeKey] = {
+                mode = "Tint", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
+                expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+                expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+                expiringPulsate = false,
+                showWhenMissing = false,
+            }
         elseif typeKey == "nametext" then
             auraCfg[typeKey] = {
                 color = {r = 1, g = 1, b = 1, a = 1},
@@ -1025,6 +1034,13 @@ local TYPE_DEFAULTS = {
     healthbar = {
         mode = "Replace", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
         tintWholeBar = false,
+        expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
+        expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
+        expiringPulsate = false,
+        showWhenMissing = false,
+    },
+    background = {
+        mode = "Tint", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
         expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
         expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
         expiringPulsate = false,
@@ -1751,11 +1767,12 @@ local effectCardPool = {}   -- Reusable card frames
 -- the new Effects tab. Replaces the old per-aura view.
 -- ============================================================
 
-local FRAME_LEVEL_TYPE_KEYS = { "border", "healthbar", "nametext", "healthtext", "framealpha", "sound" }
+local FRAME_LEVEL_TYPE_KEYS = { "border", "healthbar", "background", "nametext", "healthtext", "framealpha", "sound" }
 
 local FRAME_LEVEL_LABELS = {
     border     = L["Border"],
     healthbar  = L["Health Bar"],
+    background  = L["Background"],
     nametext   = L["Name Text"],
     healthtext = L["Health Text"],
     framealpha = L["Frame Alpha"],
@@ -1774,6 +1791,7 @@ local BADGE_COLORS = {
     bar        = { r = 0.94, g = 0.71, b = 0.24 },  -- Orange
     border     = { r = 0.80, g = 0.50, b = 0.80 },  -- Purple
     healthbar  = { r = 0.94, g = 0.31, b = 0.31 },  -- Red
+    background = { r = 0.40, g = 0.55, b = 0.65 },  -- Slate
     nametext   = { r = 0.72, g = 0.72, b = 0.94 },  -- Light blue
     healthtext = { r = 0.72, g = 0.72, b = 0.94 },  -- Light blue
     framealpha = { r = 0.60, g = 0.60, b = 0.60 },  -- Grey
@@ -2498,6 +2516,22 @@ local function RefreshPreviewEffects()
                 framePreview.missingHealth:SetColorTexture(clr.r * effBlend, clr.g * effBlend, clr.b * effBlend, 0.4 + 0.25 * effBlend)
             end
         end
+    end
+
+    -- Background color (recolours the frame background — shows through the
+    -- missing-health area, like the runtime overlay that sits behind the bars).
+    if auraCfg.background and framePreview.healthBg then
+        local clr = auraCfg.background.color or {r = 1, g = 1, b = 1, a = 1}
+        if auraCfg.background.mode == "Replace" then
+            local a = clr.a or 1
+            framePreview.healthBg:SetColorTexture(clr.r, clr.g, clr.b, 0.4 + 0.6 * a)
+        else
+            local blend = (auraCfg.background.blend or 0.5) * (clr.a or 1)
+            -- Blend the configured colour over the dark default background.
+            framePreview.healthBg:SetColorTexture(clr.r * blend, clr.g * blend, clr.b * blend, 0.4 + 0.4 * blend)
+        end
+    elseif framePreview.healthBg then
+        framePreview.healthBg:SetColorTexture(0, 0, 0, 0.4)
     end
 
     -- Name text color
@@ -3509,6 +3543,32 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateCheckbox(parent, L["Pulsate"], proxy, "expiringPulsate"), 24)
         end)
 
+    elseif typeKey == "background" then
+        -- Appearance — mirrors Health Bar Color. A colour overlay over the frame
+        -- background (visible in the missing-health area). Replace = opaque cover;
+        -- Tint = blend × colour alpha so the normal background shows through.
+        AddGroup(L["Appearance"], function(g)
+            g:AddWidget(GUI:CreateDropdown(parent, L["Mode"], HEALTHBAR_MODE_OPTIONS, proxy, "mode", function()
+                DF:AuraDesigner_RefreshPage()
+            end), 54)
+            g:AddWidget(GUI:CreateColorPicker(parent, L["Color"], proxy, "color", true, RPL, RPL, true), 28)
+            local blendSlider = GUI:CreateSlider(parent, L["Blend %"], 0, 1, 0.05, proxy, "blend")
+            blendSlider.hideOn = function() return (proxy.mode or "Tint") == "Replace" end
+            g:AddWidget(blendSlider, 54)
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Show When Missing"], proxy, "showWhenMissing", function()
+                DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+            end), 28)
+        end)
+        -- Expiring
+        AddGroup(L["Expiring"], function(g)
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Expiring Color Override"], proxy, "expiringEnabled"), 28)
+            g:AddWidget(CreateExpiringThresholdRow(parent, proxy, contentWidth - 10), 54)
+            do local dpRow, dpH = CreateExpiringDurationPriorityRow(parent, auraName, typeKey, contentWidth - 10)
+            if dpRow then g:AddWidget(dpRow, dpH) end end
+            g:AddWidget(GUI:CreateColorPicker(parent, L["Expiring Color"], proxy, "expiringColor", true, RPL, RPL, true), 28)
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Pulsate"], proxy, "expiringPulsate"), 24)
+        end)
+
     elseif typeKey == "nametext" then
         -- Appearance
         AddGroup(L["Appearance"], function(g)
@@ -4311,6 +4371,9 @@ local function CreateFramePreview(parent, yOffset, rightPanelRef)
         healthBg:SetPoint("BOTTOMRIGHT", mockFrame, "BOTTOMRIGHT", -1, 1)
     end
     healthBg:SetColorTexture(0, 0, 0, 0.4)
+    -- Exposed so the preview can tint the background when an AD Background Color
+    -- effect is configured.
+    container.healthBg = healthBg
 
     -- Health bar fill (72% health)
     local healthFill = mockFrame:CreateTexture(nil, "ARTWORK")
@@ -5466,9 +5529,12 @@ CreateEffectCard = function(parent, yPos, effect)
             -- multiple auras set the same frame effect, e.g. two health bar colors)
             local auraProxy = CreateAuraProxy(effect.auraName)
             local priSlider = GUI:CreateSlider(body, L["Priority"], 1, 10, 1, auraProxy, "priority")
-            priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 5, -(triggersH + 4))
+            -- Extra gap above (was +4) so the slider isn't squished against the
+            -- triggers / Add Trigger row, plus a little breathing room below before
+            -- the effect's Appearance group (increment 54 → 68).
+            priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 5, -(triggersH + 14))
             priSlider:SetWidth(bodyWidth - 10)
-            triggersH = triggersH + 54
+            triggersH = triggersH + 68
         end
 
         local _, bodyH = BuildTypeContent(body, effect.typeKey, effect.auraName, bodyWidth, proxy, triggersH, indicatorGroup, effect.indicatorID)
@@ -5565,6 +5631,7 @@ BuildEffectsTab = function()
     local FRAME_ITEMS = {
         { label = L["Border"],            type = "border"     },
         { label = L["Health Bar Color"],  type = "healthbar"  },
+        { label = L["Background Color"],  type = "background" },
         { label = L["Name Text Color"],   type = "nametext"   },
         { label = L["Health Text Color"], type = "healthtext" },
         { label = L["Frame Alpha"],       type = "framealpha" },

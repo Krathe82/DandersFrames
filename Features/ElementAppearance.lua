@@ -1264,6 +1264,28 @@ function DF:UpdateAuraDesignerAppearance(frame)
                 end
             end
         end
+
+        -- AD background colour overlay OOR fade. Mirrors the tint overlay: OOR
+        -- rides the colour alpha (SetStatusBarColor); the per-element pulse owns
+        -- the overlay's frame alpha on a separate channel, so the two multiply.
+        if adState and adState.background and adState.bgOverlay then
+            local br = adState.bgCurrentR or adState.bgR or 1
+            local bgc = adState.bgCurrentG or adState.bgG or 1
+            local bb = adState.bgCurrentB or adState.bgB or 1
+            local bBlend = adState.bgCurrentBlend or adState.bgBlend or 0.5
+            local bEff
+            if issecretvalue and issecretvalue(inRange) then
+                bEff = bBlend
+            elseif inRange then
+                bEff = bBlend
+                adState.bgOOR = false
+            else
+                bEff = oorAlpha
+                adState.bgOOR = true
+            end
+            adState.bgEffectiveBlend = bEff
+            adState.bgOverlay:SetStatusBarColor(br, bgc, bb, bEff)
+        end
     else
         -- Frame-level mode: restore each indicator's base alpha
         if frame.dfAD_icons then
@@ -1312,6 +1334,19 @@ function DF:UpdateAuraDesignerAppearance(frame)
                     if not adState.healthbarPulseOn then tintOverlay:SetAlpha(1.0) end
                 end
             end
+        end
+
+        -- AD background overlay: frame-level mode fades via the frame cascade
+        -- (the overlay is a child of the frame), so just keep the colour alpha at
+        -- the base blend rather than a stale OOR value.
+        if adState and adState.background and adState.bgOverlay then
+            local br = adState.bgCurrentR or adState.bgR or 1
+            local bgc = adState.bgCurrentG or adState.bgG or 1
+            local bb = adState.bgCurrentB or adState.bgB or 1
+            local bBlend = adState.bgCurrentBlend or adState.bgBlend or 0.5
+            adState.bgOOR = false
+            adState.bgEffectiveBlend = bBlend
+            adState.bgOverlay:SetStatusBarColor(br, bgc, bb, bBlend)
         end
     end
 end

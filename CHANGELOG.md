@@ -17,6 +17,7 @@
 * (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
 * (Nicknames) New **Nicknames** feature — show custom names on your party and raid frames. Build a prioritised list from your friends, guild and group, or type names in by hand, and choose how matches are made. Optionally mark nicknamed players with brackets (or other styles) and share your own nickname with the group. Find it under **General → Nicknames**. (by Maelareth)
 * (Resource Bar) Added a **Color Mode** (Power Type / Class / **Custom**) with a custom-colour picker, and a **Texture** dropdown so the resource bar can use any statusbar texture. (by Krathe)
+* (Aura Designer) New **Background Color** effect — colour a frame's background when an aura is active (Replace or Tint), with the same Expiring colour override, Pulsate and out-of-range handling as the other effects. (by Krathe)
 
 ### Improvements
 
@@ -31,6 +32,7 @@
 * (Auto Layouts) The **override tooltip and `/df overrides` now read clearly** — each changed setting shows as a breadcrumb path with its value, only values that differ from global are listed, Text Designer elements show their names, and the override counts agree across the badge, status line and chat. (by Krathe)
 * (Aura Designer) Expiring health-bar highlights now **pulse in unison** across all frames — and tint and replace modes share one pulse engine — instead of each frame pulsing on its own timing. (by Krathe)
 * (Aura Designer) The health-bar indicator's **Tint** mode has a new **Tint Entire Bar** option — tint the whole bar including the missing-health portion, instead of only the filled part. (by Krathe)
+* (Aura Designer) Added breathing room between an effect's **trigger list and its Priority slider** so the frame-level effect panels no longer look cramped. (by Krathe)
 * (Text) The built-in Name, Health, and Status text settings are now handled entirely by the **Text Designer** — the older text pages are hidden and your existing text is converted to Text Designer elements automatically. Customise all frame text under the **Text** tab.
 * (Resource Bar) Added **Maelstrom** and **Pain** to the per-power resource colour options, so Shaman and Vengeance Demon Hunter resource bars can be recoloured. (by Krathe)
 
