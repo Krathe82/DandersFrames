@@ -3782,8 +3782,24 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local colorGroup = GUI:CreateSettingsGroup(self.child, 280)
         colorGroup:AddWidget(GUI:CreateHeader(self.child, L["Resource Colors"]), 40)
         colorGroup:AddWidget(GUI:CreateLabel(self.child, L["Customize resource bar colors per power type. Shared across party and raid frames."], 260), 40)
-        colorGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use Class Color"], db, "resourceBarClassColor", function() DF:RefreshAllVisibleFrames() end), 30)
-        
+        -- Fill texture (configurable; defaults to the DF house texture).
+        colorGroup:AddWidget(GUI:CreateTextureDropdown(self.child, L["Texture"], db, "resourceBarTexture", function() DF:UpdateAllFrames() end), 55)
+
+        -- Colour mode: Power Type (per-power colours below) / Class / Custom.
+        local RESOURCE_COLOR_MODES = {
+            POWER_TYPE = L["Power Type"], CLASS = L["Class"], CUSTOM = L["Custom"],
+            _order = { "POWER_TYPE", "CLASS", "CUSTOM" },
+        }
+        colorGroup:AddWidget(GUI:CreateDropdown(self.child, L["Color Mode"], RESOURCE_COLOR_MODES, db, "resourceBarColorMode", function()
+            DF:RefreshAllVisibleFrames()
+            self:RefreshStates()  -- re-evaluate the custom colour picker's hideOn
+        end), 54)
+
+        -- Custom colour — only shown in Custom mode.
+        local resourceCustomColor = GUI:CreateColorPicker(self.child, L["Custom Color"], db, "resourceBarCustomColor", false, function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true)
+        resourceCustomColor.hideOn = function() return (db.resourceBarColorMode or "POWER_TYPE") ~= "CUSTOM" end
+        colorGroup:AddWidget(resourceCustomColor, 30)
+
         local powerColorsDB = DF.db.powerColors
         if not powerColorsDB then
             DF.db.powerColors = {}
@@ -3798,7 +3814,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             { token = "RUNIC_POWER",  name = L["Runic Power"] },
             { token = "INSANITY",     name = L["Insanity"] },
             { token = "FURY",         name = L["Fury"] },
+            { token = "PAIN",         name = L["Pain"] },
             { token = "LUNAR_POWER",  name = L["Lunar Power"] },
+            { token = "MAELSTROM",    name = L["Maelstrom"] },
         }
         
         for _, info in ipairs(POWER_LIST) do

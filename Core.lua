@@ -1777,6 +1777,49 @@ function DF:GetPowerColor(powerToken, powerType)
     return DEFAULT_CLASS_COLOR
 end
 
+-- Resolve the resource bar's fill colour for a unit per the configured colour
+-- mode. Returns r, g, b (0-1).
+--   POWER_TYPE → the power-type colour (user override or Blizzard default)
+--   CLASS      → the unit's class colour
+--   CUSTOM     → the user's resourceBarCustomColor
+-- Honours the legacy resourceBarClassColor boolean when resourceBarColorMode
+-- isn't set yet (pre-migration profiles). Uses the same UnitClass/UnitPowerType
+-- calls the old inline logic did, so it carries no new secret-value risk.
+function DF:GetResourceBarColor(unit, db)
+    local mode = db.resourceBarColorMode
+    if not mode then
+        mode = db.resourceBarClassColor and "CLASS" or "POWER_TYPE"
+    end
+
+    if mode == "CUSTOM" then
+        local c = db.resourceBarCustomColor or {r = 0, g = 0.5, b = 1, a = 1}
+        return c.r or 0, c.g or 0.5, c.b or 1
+    elseif mode == "CLASS" then
+        local _, classToken = UnitClass(unit)
+        local cc = classToken and DF:GetClassColor(classToken)
+        if cc then return cc.r, cc.g, cc.b end
+        -- No class colour available — fall through to the power-type colour.
+    end
+
+    -- POWER_TYPE (and the CLASS fallback above)
+    local pType, pToken, altR, altG, altB = UnitPowerType(unit)
+    local info = DF:GetPowerColor(pToken, pType)
+    if info then return info.r, info.g, info.b end
+    if altR then return altR, altG, altB end
+    return 0, 0, 1
+end
+
+-- Migrate the legacy resourceBarClassColor boolean to the new
+-- resourceBarColorMode tri-state. Idempotent; leaves the legacy key in place
+-- (the render helper still honours it as a fallback) — same pattern as the
+-- border-key migrations.
+function DF:MigrateResourceBarColorMode(modeDb)
+    if not modeDb then return end
+    if modeDb.resourceBarColorMode == nil and modeDb.resourceBarClassColor ~= nil then
+        modeDb.resourceBarColorMode = modeDb.resourceBarClassColor and "CLASS" or "POWER_TYPE"
+    end
+end
+
 -- ============================================================
 -- STATE DRIVERS FOR TEST MODE COMBAT SAFETY
 -- When test mode is active, state drivers are registered on all
@@ -3415,6 +3458,11 @@ DF._MainEventDispatcher = function(self, event, arg1)
         if DF.MigrateResourceBarBorderKeys then
             DF:MigrateResourceBarBorderKeys(DF.db.party)
             DF:MigrateResourceBarBorderKeys(DF.db.raid)
+        end
+        -- Resource Bar: resourceBarClassColor (bool) → resourceBarColorMode (tri-state).
+        if DF.MigrateResourceBarColorMode then
+            DF:MigrateResourceBarColorMode(DF.db.party)
+            DF:MigrateResourceBarColorMode(DF.db.raid)
         end
         -- Aura icons: buff/debuffBorderEnabled → ShowBorder, BorderThickness →
         -- BorderSize (Stage 5.5 Phase 2 — full toolkit for buff/debuff borders).

@@ -151,6 +151,9 @@ DF.ExportCategories = {
         
         -- Resource/Power Bar
         "resourceBarClassColor",
+        "resourceBarColorMode",
+        "resourceBarCustomColor",
+        "resourceBarTexture",
         "resourceBarEnabled",
         "resourceBarAnchor",
         "resourceBarX",
