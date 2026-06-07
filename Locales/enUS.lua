@@ -1903,6 +1903,7 @@ L["Marker style"] = true
 L["Match"] = true
 L["My added"] = true
 L["Nickname"] = true
+L["Nicknames"] = true
 L["No B.net friends found."] = true
 L["No characters found."] = true
 L["No group members found."] = true

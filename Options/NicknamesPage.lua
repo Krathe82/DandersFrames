@@ -770,7 +770,7 @@ function DF.BuildNicknamesPage(guiRef, pageRef, dbRef)
         recvContent:SetHeight(mmax(1, n * ROW_HEIGHT))
     end
 
-    -- Keep this panel in sync with changes made anywhere (e.g. /dfnick).
+    -- Keep this panel in sync with changes made anywhere (e.g. incoming shares).
     NK.onChange = Refresh
     Refresh()
 end
