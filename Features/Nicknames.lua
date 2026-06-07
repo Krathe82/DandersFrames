@@ -12,7 +12,6 @@ local addonName, DF = ...
 -- diacritic-normalised); the display hook; conflict/overlap analysis;
 -- source pickers (group/guild/friends/B.net); an optional nickname marker;
 -- and sharing (broadcast/accept, in Features/NicknamesComm.lua).
--- NOTE: the /dfnick slash command is dev-only scaffolding to retire before release.
 -- ============================================================
 
 local pairs, ipairs, type = pairs, ipairs, type
@@ -64,6 +63,9 @@ local DIACRITICS = {
 function NK:Normalize(str)
     if not str or str == "" then return "" end
     str = strlower(str)
+    -- Fast path: plain-ASCII names (the common case) have no accents to strip,
+    -- so skip the diacritic table entirely. Accented UTF-8 bytes are >= 0x80.
+    if not strfind(str, "[\128-\255]") then return str end
     -- Replace each known accented UTF-8 sequence with its base letter.
     for accented, base in pairs(DIACRITICS) do
         str = gsub(str, accented, base)
@@ -363,8 +365,21 @@ function NK:RefreshAllFrames()
         end)
     end
     -- Notify any UI listener (e.g. the options panel) so it stays in sync no
-    -- matter where the change came from (GUI, /dfnick, future sharing, ...).
+    -- matter where the change came from (GUI, sharing, ...).
     if NK.onChange then NK.onChange() end
+end
+
+-- Coalesce a burst of refreshes (e.g. many incoming nicknames when a group
+-- forms) into a single frame redraw shortly after the activity settles.
+function NK:ScheduleRefresh()
+    NK._refreshToken = (NK._refreshToken or 0) + 1
+    local token = NK._refreshToken
+    C_Timer.After(0.2, function()
+        -- Only the last call in a burst matches the token, so the redraw runs once.
+        if NK._refreshToken == token then
+            NK:RefreshAllFrames()
+        end
+    end)
 end
 
 -- ============================================================
@@ -690,8 +705,7 @@ end
 -- RECEIVED NICKNAMES (Phase 4 — shared to us by other users)
 -- Kept SEPARATE from the curated list (NK.received, session-only) and used
 -- only as a LOWEST-priority fallback in Resolve, so your own rules always
--- win. The comm layer (next slice) fills this from broadcasts; for now a
--- dev command (/dfnick recv) can simulate an incoming nickname.
+-- win. The comm layer (Features/NicknamesComm.lua) fills this from broadcasts.
 -- ============================================================
 
 NK.received = NK.received or {}  -- [normFull | normName] = { nick=, sender= }
@@ -764,7 +778,8 @@ function NK:AddReceived(fullName, nick, sender)
     local name = strsplit("-", fullName)
     NK.received[NK:Normalize(fullName)] = entry
     if name and name ~= "" then NK.received[NK:Normalize(name)] = entry end
-    NK:RefreshAllFrames()
+    -- Debounced: a group forming can deliver many of these at once.
+    NK:ScheduleRefresh()
 end
 
 -- User block / unblock for a sender (persisted in `rejected`). Filter-blocked
