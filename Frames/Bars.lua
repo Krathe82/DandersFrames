@@ -101,6 +101,9 @@ function DF:ApplyResourceBarLayout(frame)
         bar:Show()
         bar:ClearAllPoints()
 
+        -- Fill texture (configurable; defaults to the DF house texture)
+        DF:SafeSetStatusBarTexture(bar, db.resourceBarTexture or "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist")
+
         -- Orientation & Fill Direction
         bar:SetOrientation(db.resourceBarOrientation or "HORIZONTAL")
         bar:SetReverseFill(db.resourceBarReverseFill)
@@ -206,19 +209,8 @@ function DF:ApplyResourceBarLayout(frame)
             local maxPower = UnitPowerMax(unit)
             bar:SetMinMaxValues(0, maxPower)
             bar:SetValue(power)
-            local pType, pToken, altR, altG, altB = UnitPowerType(unit)
-            local info = DF:GetPowerColor(pToken, pType)
-            local _, classToken = UnitClass(unit)
-            local classColor = db.resourceBarClassColor and classToken and DF:GetClassColor(classToken)
-            if classColor then
-                bar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
-            elseif info then
-                bar:SetStatusBarColor(info.r, info.g, info.b, 1)
-            elseif altR then
-                bar:SetStatusBarColor(altR, altG, altB, 1)
-            else
-                bar:SetStatusBarColor(0, 0, 1, 1)
-            end
+            local cr, cg, cb = DF:GetResourceBarColor(unit, db)
+            bar:SetStatusBarColor(cr, cg, cb, 1)
         end
     end
 end
@@ -254,23 +246,9 @@ function DF:UpdateResourceBar(frame)
         bar:SetMinMaxValues(0, maxPower)
         DF.SetBarValue(bar, power, frame)
         
-        -- Get power type for coloring
-        local pType, pToken, altR, altG, altB = UnitPowerType(unit)
-        
-        -- Get color from custom overrides or Blizzard defaults
-        local info = DF:GetPowerColor(pToken, pType)
-
-        local _, classToken = UnitClass(unit)
-        local classColor = db.resourceBarClassColor and classToken and DF:GetClassColor(classToken)
-        if classColor then
-            bar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
-        elseif info then
-            bar:SetStatusBarColor(info.r, info.g, info.b, 1)
-        elseif altR then
-            bar:SetStatusBarColor(altR, altG, altB, 1)
-        else
-            bar:SetStatusBarColor(0, 0, 1, 1)  -- Default to blue (mana)
-        end
+        -- Resolve fill colour per the configured colour mode (power / class / custom).
+        local cr, cg, cb = DF:GetResourceBarColor(unit, db)
+        bar:SetStatusBarColor(cr, cg, cb, 1)
     else
         bar:Hide()
     end

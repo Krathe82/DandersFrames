@@ -3678,7 +3678,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["DPS"], db, "resourceBarShowDPS", function() DF:UpdateAllFrames() end), 30)
         local showInSolo = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show in Solo Mode"], db, "resourceBarShowInSoloMode", function() DF:UpdateAllFrames() end), 30)
         showInSolo.hideOn = function() return GUI.SelectedMode == "raid" end
-        settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Smooth Bar Animation"], db, "resourceBarSmooth", function() DF:UpdateAllFrames() end), 30)
         Add(settingsGroup, nil, 1)
 
         -- ===== CLASS FILTER GROUP (Column 1) =====
@@ -3730,13 +3729,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         positionGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "resourceBarY", nil, function() DF:LightweightUpdatePowerBarPosition() end, true), 55)
         Add(positionGroup, nil, 2)
         
-        -- ===== ORIENTATION GROUP (Column 1) =====
-        local orientGroup = GUI:CreateSettingsGroup(self.child, 280)
-        orientGroup:AddWidget(GUI:CreateHeader(self.child, L["Orientation"]), 40)
-        local orientOptions = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
-        orientGroup:AddWidget(GUI:CreateDropdown(self.child, L["Orientation"], orientOptions, db, "resourceBarOrientation", function() DF:UpdateAllFrames() end), 55)
-        orientGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Reverse Fill Direction"], db, "resourceBarReverseFill", function() DF:UpdateAllFrames() end), 30)
-        Add(orientGroup, nil, 1)
+        -- ===== TEXTURE GROUP (Column 1) — mirrors the Health Bar's Texture group:
+        -- Texture, Orientation / Reverse Fill, and Smooth Bar Animation in one place. =====
+        local textureGroup = GUI:CreateSettingsGroup(self.child, 280)
+        textureGroup:AddWidget(GUI:CreateHeader(self.child, L["Texture"]), 40)
+        textureGroup:AddWidget(GUI:CreateTextureDropdown(self.child, L["Texture"], db, "resourceBarTexture", function() DF:UpdateAllFrames() end), 55)
+
+        -- Keep Orientation (Horizontal/Vertical) and Reverse Fill as two explicit
+        -- controls — clearer than a combined "Fill Direction" dropdown, where an
+        -- option like "Bottom to Top" silently changes the orientation too.
+        local orientOptions = { HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"] }
+        textureGroup:AddWidget(GUI:CreateDropdown(self.child, L["Orientation"], orientOptions, db, "resourceBarOrientation", function() DF:UpdateAllFrames() end), 55)
+        textureGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Reverse Fill Direction"], db, "resourceBarReverseFill", function() DF:UpdateAllFrames() end), 30)
+
+        textureGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Smooth Bar Animation"], db, "resourceBarSmooth", function() DF:UpdateAllFrames() end), 30)
+        Add(textureGroup, nil, 1)
         
         -- ===== BACKGROUND GROUP (Column 2) =====
         local bgGroup = GUI:CreateSettingsGroup(self.child, 280)
@@ -3793,8 +3800,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local colorGroup = GUI:CreateSettingsGroup(self.child, 280)
         colorGroup:AddWidget(GUI:CreateHeader(self.child, L["Resource Colors"]), 40)
         colorGroup:AddWidget(GUI:CreateLabel(self.child, L["Customize resource bar colors per power type. Shared across party and raid frames."], 260), 40)
-        colorGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Use Class Color"], db, "resourceBarClassColor", function() DF:RefreshAllVisibleFrames() end), 30)
-        
+        -- Colour mode: Power Type (per-power colours below) / Class / Custom.
+        local RESOURCE_COLOR_MODES = {
+            POWER_TYPE = L["Power Type"], CLASS = L["Class"], CUSTOM = L["Custom"],
+            _order = { "POWER_TYPE", "CLASS", "CUSTOM" },
+        }
+        colorGroup:AddWidget(GUI:CreateDropdown(self.child, L["Color Mode"], RESOURCE_COLOR_MODES, db, "resourceBarColorMode", function()
+            DF:RefreshAllVisibleFrames()
+            self:RefreshStates()  -- re-evaluate the custom colour picker's hideOn
+        end), 54)
+
+        -- Custom colour — only shown in Custom mode.
+        local resourceCustomColor = GUI:CreateColorPicker(self.child, L["Custom Color"], db, "resourceBarCustomColor", false, function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true)
+        resourceCustomColor.hideOn = function() return (db.resourceBarColorMode or "POWER_TYPE") ~= "CUSTOM" end
+        colorGroup:AddWidget(resourceCustomColor, 30)
+
         local powerColorsDB = DF.db.powerColors
         if not powerColorsDB then
             DF.db.powerColors = {}
@@ -3809,7 +3829,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             { token = "RUNIC_POWER",  name = L["Runic Power"] },
             { token = "INSANITY",     name = L["Insanity"] },
             { token = "FURY",         name = L["Fury"] },
+            { token = "PAIN",         name = L["Pain"] },
             { token = "LUNAR_POWER",  name = L["Lunar Power"] },
+            { token = "MAELSTROM",    name = L["Maelstrom"] },
         }
         
         for _, info in ipairs(POWER_LIST) do
