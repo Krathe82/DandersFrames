@@ -4937,6 +4937,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
         end
 
         if DF.VersionCheck then DF.VersionCheck:Init() end
+        if DF.Nicknames then DF.Nicknames:Init() end
 
         -- Post-initialization updates (frames already created at ADDON_LOADED)
         -- These need a delay to let Blizzard addons settle and world to be ready
