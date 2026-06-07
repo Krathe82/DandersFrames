@@ -15,6 +15,7 @@
 * (Fonts) Bundled **Roboto Mono** (SemiBold/Bold) — a monospaced option for perfectly static countdown text. (by Krathe)
 * (Icons) New **in-combat indicator** — a small crossed-swords icon lights up when a unit is in combat, so you can spot who's engaged at a glance. Off by default, with its own position and size controls. (by Krathe)
 * (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
+* (Nicknames) New **Nicknames** feature — show custom names on your party and raid frames. Build a prioritised list from your friends, guild and group, or type names in by hand, and choose how matches are made. Optionally mark nicknamed players with brackets (or other styles) and share your own nickname with the group. Find it under **General → Nicknames**. (by Maelareth)
 
 ### Improvements
 
