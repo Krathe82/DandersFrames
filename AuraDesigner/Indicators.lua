@@ -1287,6 +1287,11 @@ function Indicators:ApplyHealthBar(frame, config, auraData)
     -- Store on state so UpdateAuraDesignerAppearance / UpdateHealthBarAppearance
     -- can access these for OOR handling and the replace/tint mode gate.
     state.healthbarMode     = mode
+    -- Tint mode only: when set, the tint overlay covers the WHOLE bar (including
+    -- the missing-health portion) instead of tracking current health. Read by
+    -- UpdateADTintHealth. Meaningless in replace mode (the real bar IS the
+    -- indicator, so tinting "missing health" would just hide health loss).
+    state.healthbarTintWholeBar = (mode == "tint") and (config.tintWholeBar and true or false) or false
     state.healthbarR        = r
     state.healthbarG        = g
     state.healthbarB        = b
@@ -1534,6 +1539,7 @@ function Indicators:RevertHealthBar(frame)
     -- Clear tracked color and blend so stale values don't affect the next
     -- aura that claims this frame's health bar indicator.
     state.healthbarMode          = nil
+    state.healthbarTintWholeBar  = nil
     state.healthbarCurrentR      = nil
     state.healthbarCurrentG      = nil
     state.healthbarCurrentB      = nil
@@ -1560,6 +1566,15 @@ function DF:UpdateADTintHealth(frame, skipSmooth)
     -- Allow being called before Show() (skipSmooth path from ApplyHealthBar)
     if not overlay then return end
     if not skipSmooth and not overlay:IsShown() then return end
+
+    -- Whole-bar tint: fill the overlay completely so the tint covers the missing-
+    -- health portion too, rather than tracking current health. Orientation is
+    -- irrelevant at 100% fill, and we don't need the unit's health, so return early.
+    if frame.dfAD.healthbarTintWholeBar then
+        overlay:SetMinMaxValues(0, 1)
+        overlay:SetValue(1)
+        return
+    end
 
     local unit = frame.unit
     if not unit or not UnitExists(unit) then return end

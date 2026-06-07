@@ -678,6 +678,7 @@ local function EnsureTypeConfig(auraName, typeKey)
         elseif typeKey == "healthbar" then
             auraCfg[typeKey] = {
                 mode = "Replace", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
+                tintWholeBar = false,
                 expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
                 expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
                 expiringPulsate = false,
@@ -1023,6 +1024,7 @@ local TYPE_DEFAULTS = {
     },
     healthbar = {
         mode = "Replace", color = {r = 1, g = 1, b = 1, a = 1}, blend = 0.5,
+        tintWholeBar = false,
         expiringEnabled = false, expiringThreshold = 30, expiringThresholdMode = "PERCENT",
         expiringColor = {r = 1, g = 0.2, b = 0.2, a = 1},
         expiringPulsate = false,
@@ -2474,6 +2476,11 @@ local function RefreshPreviewEffects()
     if auraCfg.healthbar and framePreview.healthFill then
         local clr = auraCfg.healthbar.color or {r = 1, g = 1, b = 1, a = 1}
         local blend = auraCfg.healthbar.blend or 0.5
+        -- Default the missing-health region back to plain dark; the tint branch
+        -- below overrides it when "Tint Entire Bar" is on.
+        if framePreview.missingHealth then
+            framePreview.missingHealth:SetColorTexture(0, 0, 0, 0.4)
+        end
         if auraCfg.healthbar.mode == "Replace" then
             framePreview.healthFill:SetVertexColor(clr.r, clr.g, clr.b, clr.a or 1)
         else
@@ -2485,6 +2492,11 @@ local function RefreshPreviewEffects()
             local g = 0.80 * (1 - effBlend) + clr.g * effBlend
             local b = 0.44 * (1 - effBlend) + clr.b * effBlend
             framePreview.healthFill:SetVertexColor(r, g, b, 1)
+            -- Tint Entire Bar: paint the same tint hue over the (dark) missing-
+            -- health region so the preview shows the colour spanning the full bar.
+            if auraCfg.healthbar.tintWholeBar and framePreview.missingHealth then
+                framePreview.missingHealth:SetColorTexture(clr.r * effBlend, clr.g * effBlend, clr.b * effBlend, 0.4 + 0.25 * effBlend)
+            end
         end
     end
 
@@ -3477,6 +3489,12 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             -- :Hide() would be clobbered by LayoutChildren's unconditional :Show().
             blendSlider.hideOn = function() return (proxy.mode or "Replace") == "Replace" end
             g:AddWidget(blendSlider, 54)
+            -- Tint-mode only: tint the WHOLE bar (incl. missing health) instead of
+            -- just the current-health portion. Hidden in Replace mode (there the bar
+            -- IS the indicator, so this would hide health loss). Same hideOn as Blend.
+            local wholeBarCheck = GUI:CreateCheckbox(parent, L["Tint Entire Bar"], proxy, "tintWholeBar", RPL)
+            wholeBarCheck.hideOn = function() return (proxy.mode or "Replace") == "Replace" end
+            g:AddWidget(wholeBarCheck, 28)
             g:AddWidget(GUI:CreateCheckbox(parent, L["Show When Missing"], proxy, "showWhenMissing", function()
                 DF.AuraDesigner.Engine:ForceRefreshAllFrames()
             end), 28)
@@ -4317,6 +4335,9 @@ local function CreateFramePreview(parent, yOffset, rightPanelRef)
     end
     missingHealth:SetWidth(FRAME_W * 0.28)
     missingHealth:SetColorTexture(0, 0, 0, 0.4)
+    -- Exposed so the preview can tint the missing-health region when the
+    -- health-bar indicator is in Tint mode with "Tint Entire Bar" enabled.
+    container.missingHealth = missingHealth
 
     -- Power bar (only if enabled in settings)
     if showPower then
