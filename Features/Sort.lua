@@ -16,6 +16,15 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitClass = UnitClass
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 
+-- A unit's GUID can be a SECRET value in 12.0 (e.g. M+ encounters) and a secret
+-- cannot be used as a table key — doing so throws "cannot be indexed with secret
+-- keys". Fall back to the unit token (always a plain string) when the GUID isn't
+-- accessible so cache lookups never crash.
+local issecretvalue = issecretvalue or function() return false end
+local function canaccessvalue(v)
+    return v ~= nil and not issecretvalue(v)
+end
+
 -- NOTE: Previously used reusable tables here, but that caused bugs when
 -- SortFrameList was called while iterating over a previous result.
 -- Now we return fresh tables each time. The garbage is minimal.
@@ -58,10 +67,12 @@ Sort.UnitCache = {}
 function Sort:GetUnitRole(unit)
     if not unit or not UnitExists(unit) then return "DAMAGER" end
     
-    -- Check cache first
+    -- Check cache first. The GUID can be a secret value that can't be used as a
+    -- table key, so fall back to the unit token when it isn't accessible.
     local guid = UnitGUID(unit)
-    if guid and self.UnitCache[guid] then
-        return self.UnitCache[guid].role
+    local cacheKey = (canaccessvalue(guid) and guid) or unit
+    if self.UnitCache[cacheKey] then
+        return self.UnitCache[cacheKey].role
     end
     
     -- Get assigned role
@@ -111,9 +122,9 @@ function Sort:GetUnitRole(unit)
     end
     
     -- Cache the result
-    if guid then
-        self.UnitCache[guid] = self.UnitCache[guid] or {}
-        self.UnitCache[guid].role = role
+    if cacheKey then
+        self.UnitCache[cacheKey] = self.UnitCache[cacheKey] or {}
+        self.UnitCache[cacheKey].role = role
     end
     
     return role

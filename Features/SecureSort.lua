@@ -121,6 +121,16 @@ SecureSort.specCache = {}
 SecureSort.inspectQueue = {}
 SecureSort.inspectInProgress = false
 
+-- A unit's GUID can be a SECRET value in 12.0 (e.g. M+ encounters) and a secret
+-- cannot be used as a table key — doing so throws "cannot be indexed with secret
+-- keys". The inspect queue is keyed by GUID and matched back against the GUID
+-- delivered by INSPECT_READY, so a unit-token fallback would never match; instead
+-- we skip queuing/handling units whose GUID isn't accessible.
+local issecretvalue = issecretvalue or function() return false end
+local function canaccessvalue(v)
+    return v ~= nil and not issecretvalue(v)
+end
+
 -- ============================================================
 -- DEBUG UTILITIES
 -- ============================================================
@@ -2303,13 +2313,14 @@ function SecureSort:QueueInspect(unit)
     if not UnitIsPlayer(unit) then return end
     if UnitIsUnit(unit, "player") then return end  -- Don't inspect self
     
+    -- canaccessvalue also covers the nil case (a secret GUID can't be a table key)
     local guid = UnitGUID(unit)
-    if not guid then return end
-    
+    if not canaccessvalue(guid) then return end
+
     -- Don't queue if already cached
     local name = GetCacheableName(unit)
     if name and self.specCache[name] then return end
-    
+
     -- Add to queue
     self.inspectQueue[guid] = unit
     
@@ -2373,6 +2384,9 @@ end
 
 -- Handle INSPECT_READY event
 function SecureSort:OnInspectReady(guid)
+    -- A secret GUID can't be a table key (and could never have been queued), so
+    -- it can't be one of ours — skip before indexing the queue with it.
+    if not canaccessvalue(guid) then return end
     -- Only process if this was an inspect WE initiated (guid is in our queue)
     local unit = self.inspectQueue[guid]
     if not unit then
