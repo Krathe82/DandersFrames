@@ -189,6 +189,75 @@ local function GetOverrideTabId(key)
     return nil, "Unknown"
 end
 
+-- ============================================================
+-- Cleanup: orphaned legacy built-in text overrides in auto-layouts
+-- The Text Designer migration took over the built-in Name / Health / Status
+-- text. A raid auto-layout edited BEFORE that migration can still carry those
+-- legacy text keys (nameFontSize, healthFontSize, statusText*, …) as overrides —
+-- now inert (IsLegacyTextHidden hides the legacy FontStrings), so they only
+-- clutter the override list beside the layout's textDesignerPreset. Strip them.
+--
+-- SAFETY: only runs once the raid TD has ACTUALLY migrated the legacy settings
+-- (migratedFromLegacy) — the values are preserved in Text Designer first, and we
+-- never strip while the legacy text is still live. Stripping is visually inert
+-- (TD ignores these keys); it only declutters. Auto-layouts are raid-only, so we
+-- gate on the raid text config. Per-profile guard, idempotent.
+-- ============================================================
+local LEGACY_TEXT_TABS = { text_name = true, text_health = true, text_status = true }
+
+local function RaidTextMigrated()
+    -- The TD legacy migration flags migratedFromLegacy on whatever owns raid text.
+    -- Preset build: the current raid preset, OR the canonical "Raid" preset the
+    -- migration always materialises (covers a raid mode repointed elsewhere).
+    -- Pre-preset build (alpha.6): inline db.raid.textDesigner.
+    if DF.GetTextDesignerPresets then
+        if DF.GetModeTextDesigner then
+            local td = DF:GetModeTextDesigner("raid")
+            if type(td) == "table" and td.migratedFromLegacy == true then return true end
+        end
+        local lib = DF:GetTextDesignerPresets()
+        local raidPreset = lib and lib["Raid"]
+        return type(raidPreset) == "table" and raidPreset.migratedFromLegacy == true
+    end
+    local rdb = DF.GetRaidDB and DF:GetRaidDB()
+    local td = rdb and rdb.textDesigner
+    return type(td) == "table" and td.migratedFromLegacy == true
+end
+
+function DF:CleanupLegacyTextLayoutOverrides()
+    local prof = DF._realProfile or DF.db
+    if not prof or prof._legacyTextOverrideCleanupV1 then return end
+    local autoDb = prof.raidAutoProfiles
+    if type(autoDb) ~= "table" then return end
+    -- Don't strip — or set the guard — until the legacy text is safely in TD; an
+    -- unmigrated profile is retried on its next login / profile switch.
+    if not RaidTextMigrated() then return end
+
+    local function stripLayout(layout)
+        local ov = layout and layout.overrides
+        if type(ov) ~= "table" then return end
+        local toStrip
+        for key in pairs(ov) do
+            local tabId = GetOverrideTabId(key)
+            if tabId and LEGACY_TEXT_TABS[tabId] then
+                toStrip = toStrip or {}
+                toStrip[#toStrip + 1] = key
+            end
+        end
+        if toStrip then for _, key in ipairs(toStrip) do ov[key] = nil end end
+    end
+
+    for _, ctKey in ipairs({ "instanced", "openWorld" }) do
+        local ct = autoDb[ctKey]
+        if type(ct) == "table" and type(ct.profiles) == "table" then
+            for _, layout in pairs(ct.profiles) do stripLayout(layout) end
+        end
+    end
+    if type(autoDb.mythic) == "table" then stripLayout(autoDb.mythic.profile) end
+
+    prof._legacyTextOverrideCleanupV1 = true
+end
+
 -- Groups override keys by tab, returns { [tabId] = { tabLabel, keys = {} } }, unknownKeys
 local function GroupOverridesByTab(overrides)
     -- A table-valued override (e.g. "raidGroupVisible") and its flat indexed

@@ -286,6 +286,12 @@ function DF:SetProfile(name)
         DF:MigrateTextDesignerFromLegacy()
     end
 
+    -- Strip orphaned legacy text overrides from raid auto-layouts now that TD
+    -- owns the built-in text (gated on migratedFromLegacy inside).
+    if DF.CleanupLegacyTextLayoutOverrides then
+        DF:CleanupLegacyTextLayoutOverrides()
+    end
+
     -- Apply the profile — runtime state is already clear so the proxy reads
     -- the new profile directly with no stale overlay
     DF:FullProfileRefresh()

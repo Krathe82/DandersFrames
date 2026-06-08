@@ -4999,6 +4999,12 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 DF:MigrateTextDesignerFromLegacy()
             end
 
+            -- Strip orphaned legacy text overrides from raid auto-layouts now that
+            -- TD owns the built-in text (gated on migratedFromLegacy inside).
+            if DF.CleanupLegacyTextLayoutOverrides then
+                DF:CleanupLegacyTextLayoutOverrides()
+            end
+
             -- CRITICAL: Update power bars now that unit data is available
             -- At ADDON_LOADED, UnitPower() etc may return 0 before player is loaded
             -- Power bar updates don't require combat protection
