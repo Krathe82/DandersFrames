@@ -585,7 +585,7 @@ local function EnsureTypeConfig(auraName, typeKey)
                 -- aura's icon sub-config; everything else (style, colour,
                 -- gradient, shadow, offset, blend) reads from TYPE_DEFAULTS
                 -- via proxy fall-through until the user overrides it.
-                ShowBorder = true, BorderSize = 1, BorderInset = 1,
+                ShowBorder = true, BorderSize = 1, BorderInset = 0,
                 hideSwipe = false,
                 -- Duration text
                 showDuration = gd.showDuration ~= false,
@@ -614,7 +614,7 @@ local function EnsureTypeConfig(auraName, typeKey)
                 size = gd.iconSize or 24, scale = gd.iconScale or 1.0, alpha = 1.0,
                 color = {r = 1, g = 1, b = 1, a = 1},
                 -- Border (canonical keys, Stage 5.2; legacy migrated on load)
-                ShowBorder = true, BorderSize = 1, BorderInset = 1,
+                ShowBorder = true, BorderSize = 1, BorderInset = 0,
                 hideSwipe = false,
                 -- Duration text
                 showDuration = gd.showDuration ~= false,
@@ -748,7 +748,7 @@ local TYPE_DEFAULTS = {
         -- see no visual change.  Style / Gradient* / Shadow* defaults seed
         -- CreateBorderControls' dropdowns and pickers so they read sensible
         -- values on first open.
-        ShowBorder = true, BorderSize = 1, BorderInset = 1,
+        ShowBorder = true, BorderSize = 1, BorderInset = 0,
         BorderColor             = {r = 0, g = 0, b = 0, a = 0.8},
         BorderStyle             = "SOLID",
         BorderBlendMode         = "BLEND",
@@ -853,7 +853,7 @@ local TYPE_DEFAULTS = {
         -- defaults to opaque black, matching the square's pre-migration
         -- hardcoded border so existing users see no change.  The rest seed
         -- CreateBorderControls' dropdowns / pickers on first open.
-        ShowBorder = true, BorderSize = 1, BorderInset = 1,
+        ShowBorder = true, BorderSize = 1, BorderInset = 0,
         BorderColor             = {r = 0, g = 0, b = 0, a = 1},
         BorderStyle             = "SOLID",
         BorderBlendMode         = "BLEND",
