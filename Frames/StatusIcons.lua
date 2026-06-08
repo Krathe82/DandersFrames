@@ -745,7 +745,14 @@ local afkStartTimes = {}
 local afkStateCache = {}
 
 local function GetAFKKey(unit)
-    return UnitGUID(unit) or unit
+    -- A unit's GUID can be a SECRET value in 12.0, and a secret cannot be used as a
+    -- table key — doing so throws "cannot be indexed with secret keys" (this was
+    -- crashing UpdateAFKIcon / ClearAFKCache on live). Check accessibility BEFORE
+    -- any truthiness test on the GUID, and fall back to the unit token (a plain
+    -- string, never secret) for those units.
+    local guid = UnitGUID(unit)
+    if canaccessvalue(guid) and guid then return guid end
+    return unit
 end
 
 -- Format seconds as M:SS or H:MM:SS
