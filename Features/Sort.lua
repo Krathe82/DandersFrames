@@ -194,7 +194,13 @@ function Sort:CompareUnits(unitA, unitB, db)
             return nameA < nameB
         end
     end
-    
+
+    -- Deterministic final tiebreak: equal-key units need a stable order, or the
+    -- unstable Lua table.sort reshuffles them on each re-sort (group-frame shuffle
+    -- during M+ pulls). Mirrors Headers.lua SortMembers.
+    local tieA = UnitName(unitA) or ""
+    local tieB = UnitName(unitB) or ""
+    if tieA ~= tieB then return tieA < tieB end
     return false
 end
 
@@ -267,7 +273,12 @@ function Sort:CompareTestData(dataA, dataB, db)
             return nameA < nameB
         end
     end
-    
+
+    -- Deterministic final tiebreak (see CompareUnits) so test-mode sorting is
+    -- stable across re-sorts too.
+    local tieA = dataA.name or ""
+    local tieB = dataB.name or ""
+    if tieA ~= tieB then return tieA < tieB end
     return false
 end
 

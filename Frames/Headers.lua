@@ -4878,9 +4878,19 @@ function DF:BuildSortedNameList(members, db, selfPosition, includesPlayer)
                 return a.name < b.name
             end
         end
+        -- Deterministic final tiebreak. Without one, members with equal sort keys
+        -- (same role, Alphabetical off) have no defined order, and Lua's table.sort
+        -- is NOT stable — so a roster-driven re-sort mid-encounter reshuffles
+        -- same-role players, making the group frames rearrange during M+ pulls.
+        -- Break ties by name (invariant for the session, and realm-qualified in the
+        -- nameList so cross-realm names don't collide) so every re-sort of the same
+        -- roster produces an identical order and the secure header never reorders.
+        if a.name ~= b.name then
+            return a.name < b.name
+        end
         return false
     end
-    
+
     -- Sort non-player members
     table.sort(sortedMembers, SortMembers)
     
