@@ -5019,7 +5019,8 @@ function DF:UpdateTestMissingBuff(frame)
         -- after the DF.Border migration (Create.lua builds frame.missingBuffBorder).
         local showBorder = db.missingBuffIconShowBorder ~= false
         if frame.missingBuffBorder then
-            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+            -- frame lets BuildSpec resolve Class/Role colour from test-unit data.
+            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { unit = frame.unit, frame = frame, iconMode = true })
             spec.enabled = showBorder
             spec.size    = borderSize
             DF.Border:Apply(frame.missingBuffBorder, spec)

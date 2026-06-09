@@ -1407,7 +1407,8 @@ function DF:LightweightUpdateMissingBuff()
             -- the locally pixel-perfected value. Icon insets by visible
             -- border thickness so artwork doesn't overlap edges.
             if frame.missingBuffBorder then
-                local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+                -- unit/frame let BuildSpec resolve Class/Role colour.
+                local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { unit = frame.unit, frame = frame, iconMode = true })
                 spec.enabled = showBorder
                 spec.size    = borderSize
                 DF.Border:Apply(frame.missingBuffBorder, spec)
@@ -2377,7 +2378,7 @@ function DF:LightweightUpdateMissingBuffBorderColor()
             -- live drag-update consistent so dragging the picker on a
             -- gradient or class-coloured border updates correctly.
             DF.Border:Apply(frame.missingBuffBorder,
-                DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true }))
+                DF.Border:BuildSpec(db, "missingBuffIcon", { unit = frame.unit, frame = frame, iconMode = true }))
         end
     end
 

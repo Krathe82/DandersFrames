@@ -890,7 +890,9 @@ function DF:UpdateMissingBuffIcon(frame, forceUpdate)
         end
 
         if frame.missingBuffBorder then
-            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { iconMode = true })
+            -- unit/frame let BuildSpec resolve Class/Role colour (the missing-buff
+            -- icon sits on a unit frame, so its border can show whose buff it is).
+            local spec = DF.Border:BuildSpec(db, "missingBuffIcon", { unit = frame.unit, frame = frame, iconMode = true })
             spec.enabled = showBorder
             spec.size    = borderSize
             DF.Border:Apply(frame.missingBuffBorder, spec)
