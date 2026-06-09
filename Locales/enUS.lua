@@ -1220,6 +1220,7 @@ L["Reload Later"] = true
 L["Reload Now"] = true
 L["Reload Required"] = true
 L["Reload UI"] = true
+L["Rendering"] = true
 L["Remove Offline"] = true
 L["Removes all Aura Designer overrides from this auto layout, restoring it to match your global profile."] = true
 L["Removes your player frame from the DandersFrames party display."] = true
