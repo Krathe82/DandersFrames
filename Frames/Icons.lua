@@ -1048,9 +1048,23 @@ function DF:UpdateDefensiveBar(frame)
         local growth = db.defensiveBarGrowth or "RIGHT_DOWN"
         local wrap = db.defensiveBarWrap or 5
 
+        local userScale = scale  -- pre-pixel-perfect scale; drives the LAYOUT space
         if db.pixelPerfect then
             iconSize, scale, borderSize = DF:PixelPerfectSizeAndScaleForBorder(iconSize, scale, borderSize)
         end
+
+        -- Pixel-perfect folds the user's scale INTO the icon size and resets scale to
+        -- 1.0 (so the border lands on whole pixels). That changes the coordinate space
+        -- SetPoint offsets live in: the anchor offset + inter-icon spacing would then be
+        -- applied UNSCALED instead of at the user's scale, shifting the whole block —
+        -- e.g. a scale-0.6 bar with Offset Y -28 dropped a row lower than test mode,
+        -- which keeps SetScale(userScale). Re-scale the layout coords by the original
+        -- user scale so the block lands identically with or without pixel-perfect, and
+        -- matches test mode. (bug 951)
+        local layoutScale = (db.pixelPerfect and userScale) or 1.0
+        local layoutBaseX = baseX * layoutScale
+        local layoutBaseY = baseY * layoutScale
+        local layoutSpacing = spacing * layoutScale
 
         -- Parse compound growth direction (PRIMARY_SECONDARY)
         local primary, secondary = strsplit("_", growth)
@@ -1059,8 +1073,8 @@ function DF:UpdateDefensiveBar(frame)
 
         -- Calculate growth offsets using scaled size (same pattern as buff/debuff icons)
         local scaledSize = iconSize * scale
-        local primaryX, primaryY = GetDefensiveGrowthOffset(primary, iconSize, spacing)
-        local secondaryX, secondaryY = GetDefensiveGrowthOffset(secondary, iconSize, spacing)
+        local primaryX, primaryY = GetDefensiveGrowthOffset(primary, iconSize, layoutSpacing)
+        local secondaryX, secondaryY = GetDefensiveGrowthOffset(secondary, iconSize, layoutSpacing)
 
         local count = 0
         local adIDs = frame.dfAD_activeInstanceIDs  -- Aura Designer dedup
@@ -1091,7 +1105,7 @@ function DF:UpdateDefensiveBar(frame)
 
                     icon:SetScale(scale)
                     icon:ClearAllPoints()
-                    icon:SetPoint(anchor, frame, anchor, baseX + offsetX, baseY + offsetY)
+                    icon:SetPoint(anchor, frame, anchor, layoutBaseX + offsetX, layoutBaseY + offsetY)
 
                     -- Frame level
                     local frameLevel = db.defensiveIconFrameLevel or 0
@@ -1118,9 +1132,9 @@ function DF:UpdateDefensiveBar(frame)
                     local col = floor(idx / wrap)
                     local row = idx % wrap
                     local iconsInCol = math.min(wrap, count - (col * wrap))
-                    local centerOffset = (iconsInCol - 1) * (iconSize + spacing) / 2
-                    local x = baseX + (col * secX)
-                    local y = baseY - (row * (iconSize + spacing)) + centerOffset
+                    local centerOffset = (iconsInCol - 1) * (iconSize + layoutSpacing) / 2
+                    local x = layoutBaseX + (col * secX)
+                    local y = layoutBaseY - (row * (iconSize + layoutSpacing)) + centerOffset
                     icon:ClearAllPoints()
                     icon:SetPoint(anchor, frame, anchor, x, y)
                 end
@@ -1133,9 +1147,9 @@ function DF:UpdateDefensiveBar(frame)
                     local row = floor(idx / wrap)
                     local col = idx % wrap
                     local iconsInRow = math.min(wrap, count - (row * wrap))
-                    local centerOffset = (iconsInRow - 1) * (iconSize + spacing) / 2
-                    local x = baseX + (col * (iconSize + spacing)) - centerOffset
-                    local y = baseY + (row * secY)
+                    local centerOffset = (iconsInRow - 1) * (iconSize + layoutSpacing) / 2
+                    local x = layoutBaseX + (col * (iconSize + layoutSpacing)) - centerOffset
+                    local y = layoutBaseY + (row * secY)
                     icon:ClearAllPoints()
                     icon:SetPoint(anchor, frame, anchor, x, y)
                 end
