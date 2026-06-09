@@ -1233,15 +1233,34 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
         AutoProfilesUI:EnterEditing(contentType.key, index)
     end)
 
-    -- Grey out edit button if a different runtime profile is active
-    if self.activeRuntimeProfile and self.activeRuntimeProfile ~= profile then
+    -- Grey out the edit button when editing this layout would disturb the live
+    -- raid frames. Entering edit writes the layout's settings into the live raid
+    -- db for preview, so the real raid frames only stay correct when the layout
+    -- being edited is the one actually driving them. Block when:
+    --   * a DIFFERENT layout is running — only the active layout is editable; OR
+    --   * you're in a real raid group with NO layout running — any layout you
+    --     edit wouldn't match what's on screen and would shove the live frames to
+    --     its geometry, so nothing is editable here (use Test Mode, or leave the
+    --     raid, to edit other layouts).
+    -- Outside a live raid (or in Test Mode) there are no real raid frames to
+    -- disturb, so editing any layout is fine.
+    local liveRaid = IsInRaid() and not DF.raidTestMode and not DF.testMode
+    local blockEdit = (self.activeRuntimeProfile ~= profile)
+        and (self.activeRuntimeProfile ~= nil or liveRaid)
+    if blockEdit then
+        local tipLine
+        if self.activeRuntimeProfile then
+            tipLine = L["Only the active layout can be edited\nwhile auto layouts are running."]
+        else
+            tipLine = L["While in a raid group you can only edit the active\nlayout. Enable Test Mode, or leave the raid, to edit\nother layouts."]
+        end
         editText:SetTextColor(0.3, 0.3, 0.3)
         editBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.5)
         editBtn:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.5)
         editBtn:SetScript("OnEnter", function(btn)
             GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
             GameTooltip:SetText(L["Cannot Edit"], 1, 0.3, 0.3)
-            GameTooltip:AddLine(L["Only the active layout can be edited\nwhile auto layouts are running."], 0.7, 0.7, 0.7, true)
+            GameTooltip:AddLine(tipLine, 0.7, 0.7, 0.7, true)
             GameTooltip:Show()
         end)
         editBtn:SetScript("OnLeave", function()
@@ -2585,6 +2604,32 @@ end
 
 function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     DF:Debug("LAYOUT", "EnterEditing: contentType=%s profileIndex=%s", contentType, tostring(profileIndex))
+
+    -- Enforcement guard (mirror of the row's blockEdit greying in CreateProfileRow).
+    -- Editing writes the layout's settings into the live raid db for preview, so
+    -- the real raid frames only stay correct when the layout being edited is the
+    -- one actually driving them. Refuse when editing would disturb live frames:
+    -- a different layout is running, OR you're in a real raid group with no layout
+    -- running. Done here (not just on the button) because the button's disabled
+    -- state is computed at page-draw time and can be stale if raid / Test Mode
+    -- state changed since. Resolved BEFORE the overlay clear below nils
+    -- activeRuntimeProfile.
+    do
+        local apDb = DF.db.raidAutoProfiles
+        local requested
+        if contentType == "mythic" then
+            requested = apDb.mythic and apDb.mythic.profile
+        else
+            local profiles = apDb[contentType] and apDb[contentType].profiles
+            requested = profiles and profiles[profileIndex]
+        end
+        local liveRaid = IsInRaid() and not DF.raidTestMode and not DF.testMode
+        if requested and self.activeRuntimeProfile ~= requested
+            and (self.activeRuntimeProfile ~= nil or liveRaid) then
+            DF:DebugWarn("LAYOUT", "EnterEditing: refused — only the active layout is editable in a live raid")
+            return false, "Blocked: live raid frames"
+        end
+    end
 
     -- Clear overlay so snapshot captures true globals (no RemoveRuntimeProfile
     -- needed — real table was never mutated)
