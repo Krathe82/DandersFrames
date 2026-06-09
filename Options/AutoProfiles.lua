@@ -1250,7 +1250,7 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
         if self.activeRuntimeProfile then
             tipLine = L["Only the active layout can be edited\nwhile auto layouts are running."]
         else
-            tipLine = L["While in a raid group you can only edit the active\nlayout. Leave the raid group to edit other layouts."]
+            tipLine = L["While in a raid group you can only edit the active layout. Leave the raid group to edit other layouts."]
         end
         editText:SetTextColor(0.3, 0.3, 0.3)
         editBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.5)
