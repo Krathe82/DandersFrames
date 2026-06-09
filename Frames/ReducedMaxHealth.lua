@@ -93,6 +93,19 @@ function DF:UpdateReducedMaxHealth(frame)
     local c = db.reducedMaxHealthColor or DEFAULT_BAR_COLOR
     bar:SetStatusBarColor(c.r, c.g, c.b, c.a or 1)
 
+    -- Match the health bar's orientation so the reduced-max overlay occupies the
+    -- END of the fill direction (where full health reaches), lining up with the
+    -- reduced maximum:
+    --   HORIZONTAL      fill L->R, full end RIGHT  -> filled right  (horizontal, reverse)
+    --   HORIZONTAL_INV  fill R->L, full end LEFT   -> filled left   (horizontal, normal)
+    --   VERTICAL        fill B->T, full end TOP    -> filled top    (vertical, reverse)
+    --   VERTICAL_INV    fill T->B, full end BOTTOM -> filled bottom (vertical, normal)
+    local orientation = db.healthOrientation or "HORIZONTAL"
+    local isVertical = (orientation == "VERTICAL" or orientation == "VERTICAL_INV")
+    bar:SetOrientation(isVertical and "VERTICAL" or "HORIZONTAL")
+    bar:SetReverseFill(orientation == "HORIZONTAL" or orientation == "VERTICAL")
+    bar:SetRotatesTexture(isVertical)
+
     local tex = bar:GetStatusBarTexture()
     if tex then
         tex:SetBlendMode(db.reducedMaxHealthBlendMode or "BLEND")
@@ -113,11 +126,31 @@ function DF:UpdateReducedMaxHealth(frame)
     bar:Show()
 
     if db.reducedMaxHealthClipHealthBar and frame.healthBar and tex then
+        -- Clip the health bar to the portion NOT covered by the reduced-max
+        -- overlay: pin the three frame-side edges and anchor the full-health
+        -- edge to the reduced texture's inner edge. Mirrors the orientation above.
         frame.healthBar:ClearAllPoints()
-        frame.healthBar:SetPoint("TOPLEFT", padding, -padding)
-        frame.healthBar:SetPoint("BOTTOMLEFT", padding, padding)
-        frame.healthBar:SetPoint("TOPRIGHT", tex, "TOPLEFT")
-        frame.healthBar:SetPoint("BOTTOMRIGHT", tex, "BOTTOMLEFT")
+        if orientation == "HORIZONTAL_INV" then          -- reduced on left
+            frame.healthBar:SetPoint("TOPRIGHT", -padding, -padding)
+            frame.healthBar:SetPoint("BOTTOMRIGHT", -padding, padding)
+            frame.healthBar:SetPoint("TOPLEFT", tex, "TOPRIGHT")
+            frame.healthBar:SetPoint("BOTTOMLEFT", tex, "BOTTOMRIGHT")
+        elseif orientation == "VERTICAL" then            -- reduced on top
+            frame.healthBar:SetPoint("BOTTOMLEFT", padding, padding)
+            frame.healthBar:SetPoint("BOTTOMRIGHT", -padding, padding)
+            frame.healthBar:SetPoint("TOPLEFT", tex, "BOTTOMLEFT")
+            frame.healthBar:SetPoint("TOPRIGHT", tex, "BOTTOMRIGHT")
+        elseif orientation == "VERTICAL_INV" then        -- reduced on bottom
+            frame.healthBar:SetPoint("TOPLEFT", padding, -padding)
+            frame.healthBar:SetPoint("TOPRIGHT", -padding, -padding)
+            frame.healthBar:SetPoint("BOTTOMLEFT", tex, "TOPLEFT")
+            frame.healthBar:SetPoint("BOTTOMRIGHT", tex, "TOPRIGHT")
+        else                                             -- HORIZONTAL: reduced on right
+            frame.healthBar:SetPoint("TOPLEFT", padding, -padding)
+            frame.healthBar:SetPoint("BOTTOMLEFT", padding, padding)
+            frame.healthBar:SetPoint("TOPRIGHT", tex, "TOPLEFT")
+            frame.healthBar:SetPoint("BOTTOMRIGHT", tex, "BOTTOMLEFT")
+        end
         frame.dfReducedMaxHealthClipping = true
     else
         DF:RestoreHealthBarFromReducedMax(frame)
