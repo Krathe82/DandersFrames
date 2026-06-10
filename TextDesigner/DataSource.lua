@@ -146,7 +146,7 @@ LiveSource.__index = LiveSource
 function LiveSource:_isMock() return false end
 
 function LiveSource:GetName()
-    if DF.GetUnitName then return DF:GetUnitName(self.unit) end
+    if DF.GetFrameName then return DF:GetFrameName(self.unit) end
     return UnitName(self.unit) or ""
 end
 

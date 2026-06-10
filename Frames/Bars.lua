@@ -2119,7 +2119,7 @@ function DF:UpdateName(frame)
 
     -- Use raid DB for raid frames, party DB for party frames
     local db = DF:GetFrameDB(frame)
-    local name = DF:GetUnitName(frame.unit)
+    local name = DF:GetFrameName(frame.unit)
     
     -- Truncate name if needed (UTF-8 aware)
     if name then
