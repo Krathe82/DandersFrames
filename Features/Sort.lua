@@ -67,11 +67,14 @@ Sort.UnitCache = {}
 function Sort:GetUnitRole(unit)
     if not unit or not UnitExists(unit) then return "DAMAGER" end
     
-    -- Check cache first. The GUID can be a secret value that can't be used as a
-    -- table key, so fall back to the unit token when it isn't accessible.
+    -- Check cache first. The GUID can be a secret value that can't be used as
+    -- a table key — in that case SKIP the cache entirely (recompute fresh).
+    -- Don't fall back to the unit token as a key: token-keyed entries go stale
+    -- the moment the roster shifts (raid5 becomes a different player and would
+    -- briefly show the previous player's role until the next cache clear).
     local guid = UnitGUID(unit)
-    local cacheKey = (canaccessvalue(guid) and guid) or unit
-    if self.UnitCache[cacheKey] then
+    local cacheKey = canaccessvalue(guid) and guid or nil
+    if cacheKey and self.UnitCache[cacheKey] then
         return self.UnitCache[cacheKey].role
     end
     
