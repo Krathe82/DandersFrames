@@ -315,7 +315,37 @@ function PinnedFrames:ProcessAllSets()
     if inPvP then
         local disableInPvP = hlDB.disableInPvP
         if disableInPvP == nil then disableInPvP = true end
-        if disableInPvP then return false end
+        if disableInPvP then
+            -- HIDE the pinned frames while dormant, don't just stop processing:
+            -- a premade's arena/BG teammates ARE the group, so the frozen
+            -- pre-PvP nameList still matches them and the frames kept showing.
+            -- Zone-in fires the roster events that reach here before the first
+            -- pull, so the out-of-combat guard normally passes; a mid-combat
+            -- arrival is picked up by the next out-of-combat call.
+            if not self.pvpHidden and not InCombatLockdown() then
+                for i = 1, 2 do
+                    local c = self.containers[i]
+                    if c then
+                        c:Hide()
+                        if c.mover then c.mover:Hide() end
+                    end
+                    if self.headers[i] then self.headers[i]:Hide() end
+                    if self.labels[i] then self.labels[i]:Hide() end
+                end
+                self.pvpHidden = true
+            end
+            return false
+        end
+    end
+
+    -- Back out of instanced PvP (or the user opted back in): restore each
+    -- set's visibility from its real enabled state.
+    if self.pvpHidden and not InCombatLockdown() then
+        self.pvpHidden = nil
+        for i = 1, 2 do
+            local set = hlDB.sets and hlDB.sets[i]
+            if set then self:SetEnabled(i, set.enabled) end
+        end
     end
 
     -- Skip processing if no sets are enabled (avoids unnecessary work)
