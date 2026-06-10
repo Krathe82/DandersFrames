@@ -870,6 +870,9 @@ end
 -- present; the driver Hide is a no-op when no driver exists.
 function Border:StopAnimation(border)
     if not border then return end
+    -- Cancel any pending deferred LCG glow start (see StartAnimation) so a glow
+    -- scheduled but not yet shown never fires after a stop.
+    border._lcgStartToken = nil
     local LCG = getLCG()
     if LCG then
         local key = "DFBorder"
@@ -1005,7 +1008,7 @@ function Border:StartAnimation(border, spec)
     -- behind the particle ring that users didn't want.
     local LCG = getLCG()
     if LCG and (anim.type == "PULSATE" or anim.type == "CHASE" or anim.type == "FLASH" or anim.type == "PROC") then
-        local target = ensureAnimRect(border, anim.inset, anim.offsetX, anim.offsetY)
+        ensureAnimRect(border, anim.inset, anim.offsetX, anim.offsetY)
         local key = "DFBorder"
         local color
         if anim.color then
@@ -1016,29 +1019,51 @@ function Border:StartAnimation(border, spec)
         -- static).  LCG glows treat 0 as invalid, so pass nil → LCG uses its
         -- own default rate for these effects.
         local freq = (anim.frequency and anim.frequency > 0) and anim.frequency or nil
-        if anim.type == "PULSATE" then
-            -- PixelGlow `border` arg: false → no outer mask. anim.mask = true
-            -- restores the backing card for users who want that look.
-            local mask = anim.mask and true or false
-            LCG.PixelGlow_Start(target, color, anim.particles, freq,
-                anim.length, anim.thickness, 0, 0, mask, key)
-        elseif anim.type == "CHASE" then
-            LCG.AutoCastGlow_Start(target, color, anim.particles, freq,
-                anim.scale, 0, 0, key)
-        elseif anim.type == "FLASH" then
-            LCG.ButtonGlow_Start(target, color, freq)
-        elseif anim.type == "PROC" then
-            -- ProcGlow takes an options table; map frequency → duration
-            -- (1/freq = seconds-per-cycle) so its slider behaves like the
-            -- other effects' Frequency control (cycles per second).
-            local duration = (anim.frequency and anim.frequency > 0)
-                and (1 / anim.frequency) or 1
-            LCG.ProcGlow_Start(target, {
-                color     = color,
-                duration  = duration,
-                startAnim = true,
-                key       = key,
-            })
+
+        -- The LCG glow reads its target's width/height at Start. On the very
+        -- first attach the animRect was only just created, so the layout engine
+        -- hasn't sized it yet (GetWidth() == 0) — the glow then renders huge /
+        -- detached for one frame (the "full-screen flash"). Start it only once
+        -- the target has a real size; if it isn't laid out yet, defer to the next
+        -- frame (after the layout pass). A per-start token — replaced by a newer
+        -- Start and cleared by StopAnimation — guarantees a deferred start that
+        -- was superseded or stopped in the meantime never fires.
+        local token = {}
+        border._lcgStartToken = token
+        local function startGlow()
+            if border._lcgStartToken ~= token then return end
+            local target = border.animRect
+            if not target then return end
+            if anim.type == "PULSATE" then
+                -- PixelGlow `border` arg: false → no outer mask. anim.mask = true
+                -- restores the backing card for users who want that look.
+                local mask = anim.mask and true or false
+                LCG.PixelGlow_Start(target, color, anim.particles, freq,
+                    anim.length, anim.thickness, 0, 0, mask, key)
+            elseif anim.type == "CHASE" then
+                LCG.AutoCastGlow_Start(target, color, anim.particles, freq,
+                    anim.scale, 0, 0, key)
+            elseif anim.type == "FLASH" then
+                LCG.ButtonGlow_Start(target, color, freq)
+            elseif anim.type == "PROC" then
+                -- ProcGlow takes an options table; map frequency → duration
+                -- (1/freq = seconds-per-cycle) so its slider behaves like the
+                -- other effects' Frequency control (cycles per second).
+                local duration = (anim.frequency and anim.frequency > 0)
+                    and (1 / anim.frequency) or 1
+                LCG.ProcGlow_Start(target, {
+                    color     = color,
+                    duration  = duration,
+                    startAnim = true,
+                    key       = key,
+                })
+            end
+        end
+
+        if (border.animRect:GetWidth() or 0) > 0 then
+            startGlow()
+        else
+            C_Timer.After(0, startGlow)
         end
         border.activeAnimation = anim.type
         return
