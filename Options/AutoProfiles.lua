@@ -130,7 +130,11 @@ local OVERRIDE_TAB_MAP = {
     {"debuffDisableMouse",  "general_integrations", L["Integrations"]},
     {"defensiveIconDisableMouse", "general_integrations", L["Integrations"]},
     {"targetedSpellDisableMouse", "general_integrations", L["Integrations"]},
-    -- Bars (specific text keys before generic "health" prefix)
+    -- Bars (specific text keys before generic "health" prefix).
+    -- healthTexture MUST precede healthText: it's the health BAR texture, but
+    -- a bare prefix match classifies it as health TEXT (and the legacy-text
+    -- cleanup would then delete a live override).
+    {"healthTexture",       "bars_health",          L["Health Bar"]},
     {"healthText",          "text_health",          L["Health Text"]},
     {"healthFont",          "text_health",          L["Health Text"]},
     {"health",              "bars_health",          L["Health Bar"]},
@@ -187,6 +191,105 @@ local function GetOverrideTabId(key)
         end
     end
     return nil, "Unknown"
+end
+
+-- ============================================================
+-- Cleanup: orphaned legacy built-in text overrides in auto-layouts
+-- The Text Designer migration took over the built-in Name / Health / Status
+-- text. A raid auto-layout edited BEFORE that migration can still carry those
+-- legacy text keys (nameFontSize, healthFontSize, statusText*, …) as overrides —
+-- now inert (IsLegacyTextHidden hides the legacy FontStrings), so they only
+-- clutter the override list beside the layout's textDesignerPreset. Strip them.
+--
+-- SAFETY: only runs once the raid TD has ACTUALLY migrated the legacy settings
+-- (migratedFromLegacy) — the values are preserved in Text Designer first, and we
+-- never strip while the legacy text is still live. Stripping is visually inert
+-- (TD ignores these keys); it only declutters. Auto-layouts are raid-only, so we
+-- gate on the raid text config. Per-profile guard, idempotent.
+-- ============================================================
+-- The DESTRUCTIVE strip decision uses its own boundary-checked matcher, NOT
+-- the display-oriented GetOverrideTabId prefix map: a bare prefix grab
+-- classifies healthTexture (the health BAR texture) as healthText — deleting a
+-- real, live override. A prefix only counts as a legacy text key when the key
+-- continues with an uppercase letter or digit (camelCase boundary) or ends
+-- exactly there; two legacy oddballs that don't share the prefixes are listed
+-- explicitly.
+local LEGACY_TEXT_KEY_PREFIXES = {
+    "nameText", "nameFont",
+    "healthText", "healthFont",
+    "statusText",
+}
+local LEGACY_TEXT_EXACT_KEYS = {
+    showHealthText = true,
+    nameColorClass = true,
+}
+local function IsLegacyTextOverrideKey(key)
+    if type(key) ~= "string" then return false end
+    -- Strip table-based suffix ("foo_3" → "foo"), mirroring GetOverrideTabId.
+    local baseKey = key:match("^(.+)_%d+$") or key
+    if LEGACY_TEXT_EXACT_KEYS[baseKey] then return true end
+    for _, prefix in ipairs(LEGACY_TEXT_KEY_PREFIXES) do
+        local n = #prefix
+        if baseKey:sub(1, n) == prefix then
+            local nextChar = baseKey:sub(n + 1, n + 1)
+            if nextChar == "" or nextChar:match("^[%u%d]") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function RaidTextMigrated()
+    -- The TD legacy migration flags migratedFromLegacy on whatever owns raid text.
+    -- Preset build: the current raid preset, OR the canonical "Raid" preset the
+    -- migration always materialises (covers a raid mode repointed elsewhere).
+    -- Pre-preset build (alpha.6): inline db.raid.textDesigner.
+    if DF.GetTextDesignerPresets then
+        if DF.GetModeTextDesigner then
+            local td = DF:GetModeTextDesigner("raid")
+            if type(td) == "table" and td.migratedFromLegacy == true then return true end
+        end
+        local lib = DF:GetTextDesignerPresets()
+        local raidPreset = lib and lib["Raid"]
+        return type(raidPreset) == "table" and raidPreset.migratedFromLegacy == true
+    end
+    local rdb = DF.GetRaidDB and DF:GetRaidDB()
+    local td = rdb and rdb.textDesigner
+    return type(td) == "table" and td.migratedFromLegacy == true
+end
+
+function DF:CleanupLegacyTextLayoutOverrides()
+    local prof = DF._realProfile or DF.db
+    if not prof or prof._legacyTextOverrideCleanupV1 then return end
+    local autoDb = prof.raidAutoProfiles
+    if type(autoDb) ~= "table" then return end
+    -- Don't strip — or set the guard — until the legacy text is safely in TD; an
+    -- unmigrated profile is retried on its next login / profile switch.
+    if not RaidTextMigrated() then return end
+
+    local function stripLayout(layout)
+        local ov = layout and layout.overrides
+        if type(ov) ~= "table" then return end
+        local toStrip
+        for key in pairs(ov) do
+            if IsLegacyTextOverrideKey(key) then
+                toStrip = toStrip or {}
+                toStrip[#toStrip + 1] = key
+            end
+        end
+        if toStrip then for _, key in ipairs(toStrip) do ov[key] = nil end end
+    end
+
+    for _, ctKey in ipairs({ "instanced", "openWorld" }) do
+        local ct = autoDb[ctKey]
+        if type(ct) == "table" and type(ct.profiles) == "table" then
+            for _, layout in pairs(ct.profiles) do stripLayout(layout) end
+        end
+    end
+    if type(autoDb.mythic) == "table" then stripLayout(autoDb.mythic.profile) end
+
+    prof._legacyTextOverrideCleanupV1 = true
 end
 
 -- Groups override keys by tab, returns { [tabId] = { tabLabel, keys = {} } }, unknownKeys
