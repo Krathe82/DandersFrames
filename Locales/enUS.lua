@@ -1090,7 +1090,6 @@ L["Only Show When Tanking"] = true
 L["Only the aura on the caster can be blacklisted. The aura on the target cannot be blacklisted due to Blizzard limitations."] = true
 L["Open Settings"] = true
 L["Only the active layout can be edited\nwhile auto layouts are running."] = true
-L["While in a raid group you can only edit the active layout. Leave the raid group to edit other layouts."] = true
 L["Out of Combat"] = true
 L["Open Aura Blacklist"] = true
 L["Open Aura Designer"] = true
@@ -1864,6 +1863,7 @@ L["The new profile changes which frame modes are enabled. A UI reload is require
 L["Use recommended defaults"] = true
 L["Which aura data source would you like to use?"] = true
 L["Which incoming heals the bar shows: all sources, only yours, or only from others."] = true
+L["While in a raid group you can only edit the active layout. Leave the raid group to edit other layouts."] = true
 L["Would you like to set up your aura filters?"] = true
 L["Yes, set it up"] = true
 L["• Having trouble seeing certain buffs or debuffs?\n• This wizard helps you pick the right aura settings"] = true

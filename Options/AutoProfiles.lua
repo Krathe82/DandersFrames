@@ -2623,6 +2623,20 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
         if requested and self.activeRuntimeProfile ~= requested
             and (self.activeRuntimeProfile ~= nil or IsInRaid()) then
             DF:DebugWarn("LAYOUT", "EnterEditing: refused — only the active layout is editable in a raid group")
+            -- The row's Edit button greys out with a tooltip, but its disabled
+            -- state is drawn at page-build time and can be STALE (e.g. you
+            -- joined a raid with the window open). A silent refusal on a
+            -- clickable-looking button reads as "broken" — say why in chat and
+            -- redraw the page so the button greys correctly.
+            local msg
+            if self.activeRuntimeProfile then
+                msg = (L["Only the active layout can be edited\nwhile auto layouts are running."] or ""):gsub("\n", " ")
+            else
+                msg = L["While in a raid group you can only edit the active layout. Leave the raid group to edit other layouts."]
+            end
+            print("|cffff9900DandersFrames:|r " .. (msg or ""))
+            local GUI = DF.GUI
+            if GUI and GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
             return false, "Blocked: live raid frames"
         end
     end
