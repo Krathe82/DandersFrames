@@ -1863,6 +1863,7 @@ L["The new profile changes which frame modes are enabled. A UI reload is require
 L["Use recommended defaults"] = true
 L["Which aura data source would you like to use?"] = true
 L["Which incoming heals the bar shows: all sources, only yours, or only from others."] = true
+L["While in a raid group you can only edit the active layout. Leave the raid group to edit other layouts."] = true
 L["Would you like to set up your aura filters?"] = true
 L["Disable in Arena/Battlegrounds"] = true
 L["Keep pinned frames hidden and inactive inside arenas and battlegrounds. Recommended: PvP roster churn is heavy, and pinned sets are built for organised party/raid play."] = true
