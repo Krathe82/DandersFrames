@@ -2742,6 +2742,34 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             RefreshTestModeIfActive()
         end), 28)
 
+        -- Disable in Arena/Battlegrounds: surfaces the per-mode disableInPvP
+        -- gate (nil = disabled in PvP, the safe default — instanced PvP fires
+        -- roster events on nearly every action and overran the script
+        -- watchdog). Custom get/set: the key lives on the mode's pinnedFrames
+        -- table, not on a set, so the per-set refreshable helper doesn't fit.
+        local pvpCheck = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Disable in Arena/Battlegrounds"],
+            nil, nil,
+            function()
+                -- Re-evaluate immediately: turning it ON while in PvP hides the
+                -- frames; turning it OFF resumes processing.
+                if DF.PinnedFrames and DF.PinnedFrames.ProcessAllSets then
+                    DF.PinnedFrames:ProcessAllSets()
+                end
+            end,
+            function()
+                local pf = db.pinnedFrames
+                local v = pf and pf.disableInPvP
+                if v == nil then v = true end
+                return v
+            end,
+            function(val)
+                if db.pinnedFrames then
+                    db.pinnedFrames.disableInPvP = val and true or false
+                end
+            end,
+            "disableInPvP"), 28)
+        pvpCheck.tooltip = L["Keep pinned frames hidden and inactive inside arenas and battlegrounds. Recommended: PvP roster churn is heavy, and pinned sets are built for organised party/raid play."]
+
         -- Reset Position button
         local resetPosBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
         resetPosBtn:SetSize(130, 22)
