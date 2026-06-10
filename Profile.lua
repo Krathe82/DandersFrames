@@ -650,6 +650,36 @@ function DF:GetImportInfo(importData)
     return info
 end
 
+-- Old / pre-fix exports carry the LEGACY name/health/status text keys but no
+-- textDesigner table (the Text category exported only the legacy keys until
+-- the category list gained "textDesigner"). The legacy keys merge in fine,
+-- but nothing ever converts them: the TD migration only runs at login /
+-- profile switch and skips any mode already migrated — which every live
+-- profile is. With the legacy text widgets retired, the imported text would
+-- never render (blank frame text). For each mode whose imported payload was
+-- legacy-only, reset that mode's TD so an unforced
+-- MigrateTextDesignerFromLegacy rebuilds it from the just-imported legacy
+-- settings; modes whose payload carried a textDesigner table (or no text at
+-- all) keep their existing TD untouched. Returns true if any mode was reset.
+local function ResetTDForLegacyImport(payloads)
+    if not (DF.TextDesigner and DF.TextDesigner.EnsureDB) then return false end
+    local any = false
+    for mode, payload in pairs(payloads) do
+        if type(payload) == "table" and payload.textDesigner == nil
+            and (payload.nameFont ~= nil or payload.nameFontSize ~= nil
+                or payload.healthTextEnabled ~= nil or payload.statusTextEnabled ~= nil) then
+            local db = DF:GetDB(mode)
+            local tdDB = db and DF.TextDesigner:EnsureDB(db)
+            if tdDB then
+                tdDB.elements = {}
+                tdDB.migratedFromLegacy = nil
+                any = true
+            end
+        end
+    end
+    return any
+end
+
 -- Apply imported data with optional category/frame type filtering
 -- selectedCategories: table of category names to import, or nil for all in the data
 -- selectedFrameTypes: table like {party = true, raid = true}, or nil for all in the data
@@ -761,7 +791,29 @@ function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTy
             DF.db.auraBlacklist = importData.auraBlacklist
         end
     end
-    
+
+    -- Legacy-text payloads → Text Designer (see ResetTDForLegacyImport).
+    -- Only when the text category was actually imported, and only for the
+    -- imported frame types — rebuilding from legacy keys that didn't merge
+    -- would convert the RECEIVER's stale legacy values instead.
+    local textImported = importInfo.isFullExport and not selectedCategories
+    if not textImported then
+        for _, cat in ipairs(selectedCategories or importInfo.detectedCategories or {}) do
+            if cat == "text" then
+                textImported = true
+                break
+            end
+        end
+    end
+    if textImported and DF.MigrateTextDesignerFromLegacy then
+        local payloads = {}
+        if selectedFrameTypes.party then payloads.party = importData.party end
+        if selectedFrameTypes.raid then payloads.raid = importData.raid end
+        if ResetTDForLegacyImport(payloads) then
+            DF:MigrateTextDesignerFromLegacy()
+        end
+    end
+
     -- Force DIRECT aura source mode — imported profiles may have BLIZZARD
     -- which is no longer supported.
     if DF.db.party then DF.db.party.auraSourceMode = "DIRECT" end
@@ -794,6 +846,14 @@ function DF:ImportProfile(str)
     end
     if newProfile.raid then
         DF.db.raid = newProfile.raid
+    end
+
+    -- Legacy-text payloads → Text Designer (see ResetTDForLegacyImport).
+    -- Wholesale replacement, so every imported mode is a candidate.
+    if DF.MigrateTextDesignerFromLegacy then
+        if ResetTDForLegacyImport({ party = newProfile.party, raid = newProfile.raid }) then
+            DF:MigrateTextDesignerFromLegacy()
+        end
     end
 
     -- Force DIRECT aura source mode — imported profiles may have BLIZZARD
