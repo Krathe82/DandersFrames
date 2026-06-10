@@ -130,7 +130,11 @@ local OVERRIDE_TAB_MAP = {
     {"debuffDisableMouse",  "general_integrations", L["Integrations"]},
     {"defensiveIconDisableMouse", "general_integrations", L["Integrations"]},
     {"targetedSpellDisableMouse", "general_integrations", L["Integrations"]},
-    -- Bars (specific text keys before generic "health" prefix)
+    -- Bars (specific text keys before generic "health" prefix).
+    -- healthTexture MUST precede healthText: it's the health BAR texture, but
+    -- a bare prefix match classifies it as health TEXT (and the legacy-text
+    -- cleanup would then delete a live override).
+    {"healthTexture",       "bars_health",          L["Health Bar"]},
     {"healthText",          "text_health",          L["Health Text"]},
     {"healthFont",          "text_health",          L["Health Text"]},
     {"health",              "bars_health",          L["Health Bar"]},
@@ -203,7 +207,38 @@ end
 -- (TD ignores these keys); it only declutters. Auto-layouts are raid-only, so we
 -- gate on the raid text config. Per-profile guard, idempotent.
 -- ============================================================
-local LEGACY_TEXT_TABS = { text_name = true, text_health = true, text_status = true }
+-- The DESTRUCTIVE strip decision uses its own boundary-checked matcher, NOT
+-- the display-oriented GetOverrideTabId prefix map: a bare prefix grab
+-- classifies healthTexture (the health BAR texture) as healthText — deleting a
+-- real, live override. A prefix only counts as a legacy text key when the key
+-- continues with an uppercase letter or digit (camelCase boundary) or ends
+-- exactly there; two legacy oddballs that don't share the prefixes are listed
+-- explicitly.
+local LEGACY_TEXT_KEY_PREFIXES = {
+    "nameText", "nameFont",
+    "healthText", "healthFont",
+    "statusText",
+}
+local LEGACY_TEXT_EXACT_KEYS = {
+    showHealthText = true,
+    nameColorClass = true,
+}
+local function IsLegacyTextOverrideKey(key)
+    if type(key) ~= "string" then return false end
+    -- Strip table-based suffix ("foo_3" → "foo"), mirroring GetOverrideTabId.
+    local baseKey = key:match("^(.+)_%d+$") or key
+    if LEGACY_TEXT_EXACT_KEYS[baseKey] then return true end
+    for _, prefix in ipairs(LEGACY_TEXT_KEY_PREFIXES) do
+        local n = #prefix
+        if baseKey:sub(1, n) == prefix then
+            local nextChar = baseKey:sub(n + 1, n + 1)
+            if nextChar == "" or nextChar:match("^[%u%d]") then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 local function RaidTextMigrated()
     -- The TD legacy migration flags migratedFromLegacy on whatever owns raid text.
@@ -238,8 +273,7 @@ function DF:CleanupLegacyTextLayoutOverrides()
         if type(ov) ~= "table" then return end
         local toStrip
         for key in pairs(ov) do
-            local tabId = GetOverrideTabId(key)
-            if tabId and LEGACY_TEXT_TABS[tabId] then
+            if IsLegacyTextOverrideKey(key) then
                 toStrip = toStrip or {}
                 toStrip[#toStrip + 1] = key
             end
