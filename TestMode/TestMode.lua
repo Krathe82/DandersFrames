@@ -3535,8 +3535,16 @@ function DF:UpdateTestPowerBar(frame, testData)
         powerToken = "ENERGY"
     end
 
-    local classColor = db.resourceBarClassColor and testData.class and DF:GetClassColor(testData.class)
-    if classColor then
+    -- Mirror DF:GetResourceBarColor's mode resolution (Power / Class / Custom),
+    -- but using the mock unit's testData since there's no real unit to query.
+    -- Reads resourceBarColorMode (not just the legacy resourceBarClassColor
+    -- boolean) so the preview reflects a "Class" pick from the Color Mode dropdown.
+    local mode = db.resourceBarColorMode or (db.resourceBarClassColor and "CLASS" or "POWER_TYPE")
+    local classColor = mode == "CLASS" and testData.class and DF:GetClassColor(testData.class)
+    if mode == "CUSTOM" then
+        local c = db.resourceBarCustomColor or {r = 0, g = 0.5, b = 1}
+        bar:SetStatusBarColor(c.r or 0, c.g or 0.5, c.b or 1, 1)
+    elseif classColor then
         bar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
     else
         local powerColor = DF:GetPowerColor(powerToken)

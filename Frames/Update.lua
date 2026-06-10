@@ -872,15 +872,13 @@ function DF:UpdateUnitFrame(frame, source)
                 frame.dfPowerBar:SetMinMaxValues(0, maxPower)
                 frame.dfPowerBar:SetValue(power)
 
-                local _, classToken = UnitClass(unit)
-                local classColor = db.resourceBarClassColor and classToken and DF:GetClassColor(classToken)
-                if classColor then
-                    frame.dfPowerBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
-                else
-                    local powerType, powerToken = UnitPowerType(unit)
-                    local powerColor = DF:GetPowerColor(powerToken, powerType)
-                    frame.dfPowerBar:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b, 1)
-                end
+                -- Colour via the shared resolver (resourceBarColorMode: Power /
+                -- Class / Custom), so this matches DF:UpdateResourceBar and the
+                -- UNIT_DISPLAYPOWER path. The old inline check read only the legacy
+                -- resourceBarClassColor boolean, which ignored a "Class" pick made
+                -- via the new Color Mode dropdown.
+                local cr, cg, cb = DF:GetResourceBarColor(unit, db)
+                frame.dfPowerBar:SetStatusBarColor(cr, cg, cb, 1)
                 frame.dfPowerBar:Show()
                 -- Let the appearance system handle alpha (OOR, dead, element-specific)
                 if DF.UpdatePowerBarAppearance then
@@ -1250,16 +1248,13 @@ function DF:UpdatePower(frame)
     frame.dfPowerBar:SetMinMaxValues(0, maxPower)
     frame.dfPowerBar:SetValue(power)
 
-    -- Update color
-    local _, classToken = UnitClass(unit)
-    local classColor = db.resourceBarClassColor and classToken and DF:GetClassColor(classToken)
-    if classColor then
-        frame.dfPowerBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
-    else
-        local powerType, powerToken = UnitPowerType(unit)
-        local powerColor = DF:GetPowerColor(powerToken, powerType)
-        frame.dfPowerBar:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b, 1)
-    end
+    -- Update colour via the shared resolver so the UNIT_DISPLAYPOWER / shapeshift
+    -- path honours resourceBarColorMode (Power / Class / Custom), not just the
+    -- legacy resourceBarClassColor boolean. Previously a shapeshift fired this
+    -- handler and reverted a "Class" bar back to power colour, because the inline
+    -- legacy check didn't see a "Class" pick made via the new Color Mode dropdown.
+    local cr, cg, cb = DF:GetResourceBarColor(unit, db)
+    frame.dfPowerBar:SetStatusBarColor(cr, cg, cb, 1)
     frame.dfPowerBar:Show()
 end
 
