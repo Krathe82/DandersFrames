@@ -2464,41 +2464,60 @@ local function RefreshPreviewEffects()
         framePreview.hpText:SetTextColor(0.87, 0.87, 0.87, 1)
     end
     mockFrame:SetAlpha(1)
+    -- Reset the shared single-target elements to their defaults ONCE, before any
+    -- aura's effects are applied. Previously the background's reset lived in an
+    -- in-loop `elseif`, so a background-less aura could wipe an earlier aura's
+    -- background depending on pairs() iteration order — the intermittent
+    -- "doesn't show on preview" report for Background / Health Bar Color.
+    if framePreview.healthBg then
+        framePreview.healthBg:SetColorTexture(0, 0, 0, 0.4)
+    end
+    if framePreview.missingHealth then
+        framePreview.missingHealth:SetColorTexture(0, 0, 0, 0.4)
+    end
 
-    -- Show frame-level effects from all configured auras
-    -- (new UI has no single selectedAura — preview shows all effects)
-    local sharedBorderClaimed = false
-
+    -- Frame-level effects all draw onto the SAME single preview elements (one
+    -- healthFill / healthBg / nameText / etc.), so when more than one aura
+    -- configures the same type they conflict. The runtime resolves this by
+    -- priority (lower number wins; first claim per type — see prioritySort and
+    -- Indicators:Apply's `if state.X then return end`). Mirror that here so the
+    -- preview is deterministic instead of pairs()-order-dependent: iterate auras
+    -- in ascending-priority order (tiebreak by name) and apply first-wins per type.
+    local sortedAuras = {}
     for auraName, auraCfg in pairs(GetSpecAuras()) do
-    if type(auraCfg) ~= "table" then -- skip corrupted entries
-    else
+        if type(auraCfg) == "table" then  -- skip corrupted entries
+            sortedAuras[#sortedAuras + 1] = { name = auraName, cfg = auraCfg, priority = auraCfg.priority or 5 }
+        end
+    end
+    sort(sortedAuras, function(a, b)
+        if a.priority ~= b.priority then return a.priority < b.priority end
+        return a.name < b.name
+    end)
+
+    local claimed = {}
+    for _, entry in ipairs(sortedAuras) do
+    local auraName, auraCfg = entry.name, entry.cfg
 
     -- Border effect (Stage 5.4: rendered via DF.Border, mirroring the runtime).
-    -- Config is canonical (migrated on load); BuildSpec resolves Style /
-    -- animation / gradient / etc.  Shared borders use a single overlay (first
-    -- claim wins); custom borders get independent per-aura overlays so multiple
-    -- can stack.
+    -- Shared borders use a single overlay (first/highest-priority claim wins);
+    -- custom borders get independent per-aura overlays so multiple can stack.
     if auraCfg.border and auraCfg.border.ShowBorder ~= false then
         local spec = DF.Border:BuildSpec(auraCfg.border, "")
         if not spec.color then spec.color = { r = 1, g = 1, b = 1, a = 1 } end
         spec.enabled = true
         if auraCfg.border.borderMode == "custom" then
             DF.Border:Apply(GetOrCreatePreviewCustomBorder(mockFrame, auraName), spec)
-        elseif not sharedBorderClaimed and framePreview.borderOverlay then
-            sharedBorderClaimed = true
+        elseif not claimed.border and framePreview.borderOverlay then
+            claimed.border = true
             DF.Border:Apply(framePreview.borderOverlay, spec)
         end
     end
 
-    -- Health bar color
-    if auraCfg.healthbar and framePreview.healthFill then
+    -- Health bar color (first claim wins)
+    if not claimed.healthbar and auraCfg.healthbar and framePreview.healthFill then
+        claimed.healthbar = true
         local clr = auraCfg.healthbar.color or {r = 1, g = 1, b = 1, a = 1}
         local blend = auraCfg.healthbar.blend or 0.5
-        -- Default the missing-health region back to plain dark; the tint branch
-        -- below overrides it when "Tint Entire Bar" is on.
-        if framePreview.missingHealth then
-            framePreview.missingHealth:SetColorTexture(0, 0, 0, 0.4)
-        end
         if auraCfg.healthbar.mode == "Replace" then
             framePreview.healthFill:SetVertexColor(clr.r, clr.g, clr.b, clr.a or 1)
         else
@@ -2518,9 +2537,10 @@ local function RefreshPreviewEffects()
         end
     end
 
-    -- Background color (recolours the frame background — shows through the
-    -- missing-health area, like the runtime overlay that sits behind the bars).
-    if auraCfg.background and framePreview.healthBg then
+    -- Background color (first claim wins). Recolours the frame background — shows
+    -- through the missing-health area, like the runtime overlay behind the bars.
+    if not claimed.background and auraCfg.background and framePreview.healthBg then
+        claimed.background = true
         local clr = auraCfg.background.color or {r = 1, g = 1, b = 1, a = 1}
         if auraCfg.background.mode == "Replace" then
             local a = clr.a or 1
@@ -2530,29 +2550,29 @@ local function RefreshPreviewEffects()
             -- Blend the configured colour over the dark default background.
             framePreview.healthBg:SetColorTexture(clr.r * blend, clr.g * blend, clr.b * blend, 0.4 + 0.4 * blend)
         end
-    elseif framePreview.healthBg then
-        framePreview.healthBg:SetColorTexture(0, 0, 0, 0.4)
     end
 
-    -- Name text color
-    if auraCfg.nametext and framePreview.nameText then
+    -- Name text color (first claim wins)
+    if not claimed.nametext and auraCfg.nametext and framePreview.nameText then
+        claimed.nametext = true
         local clr = auraCfg.nametext.color or {r = 1, g = 1, b = 1, a = 1}
         framePreview.nameText:SetTextColor(clr.r, clr.g, clr.b, clr.a or 1)
     end
 
-    -- Health text color
-    if auraCfg.healthtext and framePreview.hpText then
+    -- Health text color (first claim wins)
+    if not claimed.healthtext and auraCfg.healthtext and framePreview.hpText then
+        claimed.healthtext = true
         local clr = auraCfg.healthtext.color or {r = 1, g = 1, b = 1, a = 1}
         framePreview.hpText:SetTextColor(clr.r, clr.g, clr.b, clr.a or 1)
     end
 
-    -- Frame alpha
-    if auraCfg.framealpha then
+    -- Frame alpha (first claim wins)
+    if not claimed.framealpha and auraCfg.framealpha then
+        claimed.framealpha = true
         mockFrame:SetAlpha(auraCfg.framealpha.alpha or 0.5)
     end
 
-    end  -- else (type guard)
-    end  -- for _, auraCfg
+    end  -- for _, entry in sortedAuras
 end
 
 -- ============================================================
