@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-07T22:29:25Z"
+DF.BUILD_DATE = "2026-06-10T19:53:02Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -20,8 +20,10 @@ DF.CHANGELOG_TEXT = [===[
 * (Icons) New **in-combat indicator** — a small crossed-swords icon lights up when a unit is in combat, so you can spot who's engaged at a glance. Off by default, with its own position and size controls. (by Krathe)
 * (Auto Layouts) Added `/df clearoverride <key|prefix|all>` to **remove a stuck per-layout override** directly — for overrides the settings UI can't reach (e.g. a pinned-players override while not in a raid). (by Krathe)
 * (Nicknames) New **Nicknames** feature — show custom names on your party and raid frames. Build a prioritised list from your friends, guild and group, or type names in by hand, and choose how matches are made. Optionally mark nicknamed players with brackets (or other styles) and share your own nickname with the group. Find it under **General → Nicknames**. (by Maelareth)
+* (Nicknames) The **Add from** lists (friends, guild, group, Battle.net) now put **online members first**, and you can **favourite** people with the star to pin them to the very top — so the people you nickname most are always right there. (by Maelareth)
 * (Resource Bar) Added a **Color Mode** (Power Type / Class / **Custom**) with a custom-colour picker, and a **Texture** dropdown so the resource bar can use any statusbar texture. (by Krathe)
 * (Aura Designer) New **Background Color** effect — colour a frame's background when an aura is active (Replace or Tint), with the same Expiring colour override, Pulsate and out-of-range handling as the other effects. (by Krathe)
+* (Missing Buff) The missing-buff border can now use **Class or Role colour** instead of a single fixed colour. (by Krathe)
 
 ### Improvements
 
@@ -39,9 +41,24 @@ DF.CHANGELOG_TEXT = [===[
 * (Aura Designer) Added breathing room between an effect's **trigger list and its Priority slider** so the frame-level effect panels no longer look cramped. (by Krathe)
 * (Text) The built-in Name, Health, and Status text settings are now handled entirely by the **Text Designer** — the older text pages are hidden and your existing text is converted to Text Designer elements automatically. Customise all frame text under the **Text** tab.
 * (Resource Bar) Added **Maelstrom** and **Pain** to the per-power resource colour options, so Shaman and Vengeance Demon Hunter resource bars can be recoloured. (by Krathe)
+* Moved **Pixel-Perfect Scaling** to **General → Settings**, since it applies globally to both party and raid. (by Krathe)
+* (Aura Designer) New icon and square indicators now default their **border inset to 0**, flush with the icon edge, matching the other indicator types. (by Krathe)
+* (Auto Layouts) Saved layouts are tidied of leftover built-in text overrides after the Text Designer migration, so the override list no longer lists dead entries. (by Krathe)
 
 ### Bug Fixes
 
+* (Pinned Frames) Fixed a freeze ("script ran too long") when entering an arena or battleground; pinned frames now stay dormant in instanced PvP, with an option to re-enable them. (by Krathe)
+* (Sorting) Group frames no longer **reshuffle mid-fight** when members share the same sort position. (by Krathe)
+* (Sorting) Fixed an error caused by hidden unit information during **Mythic+ encounters**. (by Krathe)
+* (Status Icons) Fixed an error from **AFK tracking** during Mythic+ encounters. (by Krathe)
+* (Resource Bar) The colour now updates correctly when your **power type changes** (for example, on shapeshift). (by Krathe)
+* (Auto Layouts) While in a raid you can now only edit the **active layout**, so editing no longer disturbs your live raid frames. (by Krathe)
+* (Aura Designer) Fixed frame-level effects sometimes **missing from the live preview**. (by Krathe)
+* (Borders) Fixed a brief **full-screen flash** the first time a border animation attached to a frame. (by Krathe)
+* (Defensive Icons) Fixed icon positions **drifting** from where test mode shows them at non-default icon scales. (by Krathe)
+* (Reduced Max Health) The reduced-max-health overlay now follows the **health bar's orientation**, including vertical bars. (by Krathe)
+* (Profiles) Imported profiles now carry their **Text Designer text** correctly, fixing blank frame text from shared profile strings. (by Krathe)
+* (Nicknames) **Battle.net nickname rules now stick across sessions** — they could previously stop applying after a full relog. Existing rules are upgraded automatically; any that can't be matched are flagged so you can quickly re-add them. (by Maelareth)
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
 * (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
