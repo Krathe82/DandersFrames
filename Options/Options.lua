@@ -1331,6 +1331,30 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, makeBlizGet("showMinimapButton"), makeBlizSet("showMinimapButton"), "showMinimapButton"), 30)
         Add(minimapGroup, nil, 1)
 
+        -- ===== RENDERING GROUP (Column 1) =====
+        -- Pixel-Perfect Scaling is a render-quality flag read by every frame and
+        -- element in BOTH modes (Frames/Core.lua GetPixelScale + 60-odd db.pixelPerfect
+        -- reads), so it's global — read party-canonical, write both mode dbs (same
+        -- pattern as the Blizzard/Minimap toggles above) — and lives here rather than
+        -- on the per-mode Frame page.
+        local function refreshPixelPerfect()
+            -- Re-apply header sizing + refresh the live frames (UpdateAllFrames auto-
+            -- routes party vs raid by the real in-world context) plus any test frames.
+            if DF.headersInitialized and DF.ApplyHeaderSettings then DF:ApplyHeaderSettings() end
+            if DF.UpdateAllFrames then DF:UpdateAllFrames() end
+            if (DF.testMode or DF.raidTestMode) and DF.RefreshTestFramesWithLayout then
+                DF:RefreshTestFramesWithLayout()
+            end
+        end
+        local renderingGroup = GUI:CreateSettingsGroup(self.child, 280)
+        renderingGroup:AddWidget(GUI:CreateHeader(self.child, L["Rendering"]), 40)
+        renderingGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pixel-Perfect Scaling"],
+            nil, nil, refreshPixelPerfect,
+            makeBlizGet("pixelPerfect"), makeBlizSet("pixelPerfect"), "pixelPerfect"), 30)
+        renderingGroup:AddWidget(GUI:CreateLabel(self.child,
+            L["Snaps sizes and borders to exact pixels for crisp rendering."], 250), 30)
+        Add(renderingGroup, nil, 1)
+
         -- ===== SETTINGS PANEL APPEARANCE GROUP (Column 2, Top) =====
         -- Controls the look of this settings panel itself — does NOT affect
         -- in-game frame text (use Health Text / Name Text pages for those).
@@ -1499,8 +1523,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Canonical border controls via the unified helper. Replaces the
         -- previous hand-rolled Show / Color / Style / Texture / Size block.
         -- classColor + roleColor are now first-class helper include flags (no
-        -- bespoke "Use Class Color" extra needed). Pixel-Perfect is a frame-
-        -- level setting and stays here.
+        -- bespoke "Use Class Color" extra needed). (Pixel-Perfect Scaling moved
+        -- to General > Settings > Rendering — it's a global, mode-agnostic flag.)
         GUI:CreateBorderControls(appearanceGroup, db, "frame", {
             parent       = self.child,
             include      = {
@@ -1519,8 +1543,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             refreshStates = function() if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end end,
             sizeMin = 1, sizeMax = 16, sizeStep = 1,
         })
-        appearanceGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Pixel-Perfect Scaling"], db, "pixelPerfect", UpdateFrames), 30)
-        appearanceGroup:AddWidget(GUI:CreateLabel(self.child, L["Snaps sizes and borders to exact pixels for crisp rendering."], 250), 30)
         Add(appearanceGroup, nil, 2)
 
         -- ===== LAYOUT DIRECTION GROUP (Column 1) =====
