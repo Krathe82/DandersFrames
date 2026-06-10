@@ -15,6 +15,7 @@ local UnitGUID = UnitGUID
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitClass = UnitClass
 local GetSpecializationInfoByID = GetSpecializationInfoByID
+local issecretvalue = issecretvalue or function() return false end
 
 -- NOTE: Previously used reusable tables here, but that caused bugs when
 -- SortFrameList was called while iterating over a previous result.
@@ -182,12 +183,20 @@ function Sort:CompareUnits(unitA, unitB, db)
         end
     end
     
+    -- Name key for the alphabetical sort + tiebreak below. A unit's name can
+    -- be SECRET in combat (Midnight), and even ~= on a secret string throws —
+    -- a secret (or missing) name falls back to the unit token, which is plain
+    -- and unique. Pure per-unit substitution, so the comparator stays a
+    -- consistent total order for table.sort.
+    local nameA = UnitName(unitA)
+    local nameB = UnitName(unitB)
+    if nameA == nil or issecretvalue(nameA) then nameA = unitA end
+    if nameB == nil or issecretvalue(nameB) then nameB = unitB end
+
     -- Then sort alphabetically if enabled
     -- Supports "AZ", "ZA", or legacy true (treated as "AZ")
     local alpha = db.sortAlphabetical
     if alpha and alpha ~= false then
-        local nameA = UnitName(unitA) or ""
-        local nameB = UnitName(unitB) or ""
         if alpha == "ZA" then
             return nameA > nameB
         else
@@ -198,9 +207,7 @@ function Sort:CompareUnits(unitA, unitB, db)
     -- Deterministic final tiebreak: equal-key units need a stable order, or the
     -- unstable Lua table.sort reshuffles them on each re-sort (group-frame shuffle
     -- during M+ pulls). Mirrors Headers.lua SortMembers.
-    local tieA = UnitName(unitA) or ""
-    local tieB = UnitName(unitB) or ""
-    if tieA ~= tieB then return tieA < tieB end
+    if nameA ~= nameB then return nameA < nameB end
     return false
 end
 
