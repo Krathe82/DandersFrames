@@ -121,6 +121,16 @@ SecureSort.specCache = {}
 SecureSort.inspectQueue = {}
 SecureSort.inspectInProgress = false
 
+-- A unit's GUID can be a SECRET value in 12.0 (e.g. M+ encounters) and a secret
+-- cannot be used as a table key — doing so throws "cannot be indexed with secret
+-- keys". The inspect queue is keyed by GUID and matched back against the GUID
+-- delivered by INSPECT_READY, so a unit-token fallback would never match; instead
+-- we skip queuing/handling units whose GUID isn't accessible.
+local issecretvalue = issecretvalue or function() return false end
+local function canaccessvalue(v)
+    return v ~= nil and not issecretvalue(v)
+end
+
 -- ============================================================
 -- DEBUG UTILITIES
 -- ============================================================
@@ -2303,13 +2313,14 @@ function SecureSort:QueueInspect(unit)
     if not UnitIsPlayer(unit) then return end
     if UnitIsUnit(unit, "player") then return end  -- Don't inspect self
     
+    -- canaccessvalue also covers the nil case (a secret GUID can't be a table key)
     local guid = UnitGUID(unit)
-    if not guid then return end
-    
+    if not canaccessvalue(guid) then return end
+
     -- Don't queue if already cached
     local name = GetCacheableName(unit)
     if name and self.specCache[name] then return end
-    
+
     -- Add to queue
     self.inspectQueue[guid] = unit
     
@@ -2333,8 +2344,12 @@ function SecureSort:ProcessInspectQueue()
         return
     end
     
-    -- Verify unit still exists and matches GUID
-    if not UnitExists(unit) or UnitGUID(unit) ~= guid then
+    -- Verify unit still exists and matches GUID. The unit's LIVE GUID can have
+    -- become secret since queuing (combat) — comparing a secret value throws,
+    -- so an inaccessible live GUID counts as a mismatch (identity can't be
+    -- verified; drop the entry and move on).
+    local liveGuid = UnitGUID(unit)
+    if not UnitExists(unit) or not canaccessvalue(liveGuid) or liveGuid ~= guid then
         self.inspectQueue[guid] = nil
         C_Timer.After(0.1, function() self:ProcessInspectQueue() end)
         return
@@ -2373,6 +2388,9 @@ end
 
 -- Handle INSPECT_READY event
 function SecureSort:OnInspectReady(guid)
+    -- A secret GUID can't be a table key (and could never have been queued), so
+    -- it can't be one of ours — skip before indexing the queue with it.
+    if not canaccessvalue(guid) then return end
     -- Only process if this was an inspect WE initiated (guid is in our queue)
     local unit = self.inspectQueue[guid]
     if not unit then
@@ -2380,8 +2398,10 @@ function SecureSort:OnInspectReady(guid)
         return
     end
     
-    -- Process our queued inspect
-    if UnitExists(unit) and UnitGUID(unit) == guid then
+    -- Process our queued inspect. Same live-GUID secrecy guard as
+    -- ProcessInspectQueue: comparing a secret value throws.
+    local liveGuid = UnitGUID(unit)
+    if UnitExists(unit) and canaccessvalue(liveGuid) and liveGuid == guid then
         local specID = GetInspectSpecialization(unit)
         if specID and specID > 0 then
             self:CacheUnitSpec(unit, specID)
