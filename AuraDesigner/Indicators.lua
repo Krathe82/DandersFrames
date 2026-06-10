@@ -2101,7 +2101,7 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     if borderEnabled == nil then borderEnabled = config.borderEnabled end
     if borderEnabled == nil then borderEnabled = true end
     local borderThickness = config.BorderSize  or config.borderThickness or 1
-    local borderInset     = config.BorderInset or config.borderInset     or 1
+    local borderInset     = config.BorderInset or config.borderInset     or 0
 
     local adBorder = GetOrCreateADIconBorder(icon)
     -- Border geometry: BorderSize is the band THICKNESS on its own — Inset no
@@ -2914,7 +2914,7 @@ function Indicators:ConfigureSquare(frame, config, defaults, auraName, priority)
     if borderEnabled == nil then borderEnabled = config.showBorder end
     if borderEnabled == nil then borderEnabled = true end
     local borderThickness = config.BorderSize  or config.borderThickness or 1
-    local borderInset     = config.BorderInset or config.borderInset     or 1
+    local borderInset     = config.BorderInset or config.borderInset     or 0
 
     local adBorder = GetOrCreateADSquareBorder(sq)
     adBorder.dfADIconSize  = borderThickness
