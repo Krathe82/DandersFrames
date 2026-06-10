@@ -5624,14 +5624,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- include set tailored for a "needs attention" alert: alpha / inset /
         -- offset / blendMode / gradient / shadow / animate (matches the
         -- Defensive Icon — Border Offset nudges the band relative to the icon).
-        -- Skipped: class / role / colour-by-time / colour-by-type (alert colour,
-        -- not the unit's identity, and no aura-state context here).
+        -- Class/Role colour offered too: the missing-buff icon sits on a unit
+        -- frame, so its border can communicate WHOSE buff is missing at a glance.
+        -- Skipped: colour-by-time / colour-by-type (no aura-state context here).
         local borderGroup = GUI:CreateSettingsGroup(self.child, 280)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
         GUI:CreateBorderControls(borderGroup, db, "missingBuffIcon", {
             parent       = self.child,
             include      = { alpha = true, inset = true, offset = true, blendMode = true,
-                             gradient = true, shadow = true, animate = true },
+                             gradient = true, shadow = true, animate = true,
+                             classColor = true, roleColor = true },
             fullUpdate   = function() if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end end,
             lightUpdate  = function() DF:LightweightUpdateMissingBuff() end,
             lightColors  = function() DF:LightweightUpdateMissingBuffBorderColor() end,
