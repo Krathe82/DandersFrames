@@ -333,29 +333,50 @@ function FlatRaidFrames:BuildSortedNameList()
         end
     end
     
+    -- Per-element key for name comparisons: a unit's name can be SECRET in
+    -- combat (Midnight), and even ~= on a secret string throws. A secret (or
+    -- missing) name falls back to the unit token — plain and unique. Pure
+    -- per-element substitution keeps the comparator a consistent total order.
+    local issecretvalue = issecretvalue or function() return false end
+    local function NameKey(m)
+        local n = m.name
+        if n == nil or issecretvalue(n) then return tostring(m.unit) end
+        return n
+    end
+
     -- Sort function
     local function sortFunc(a, b)
         -- Sort by role priority first
         if a.rolePriority ~= b.rolePriority then
             return a.rolePriority < b.rolePriority
         end
-        
+
         -- Then by class if enabled
         if sortByClass then
             if a.classPriority ~= b.classPriority then
                 return a.classPriority < b.classPriority
             end
         end
-        
+
+        local nameA, nameB = NameKey(a), NameKey(b)
+
         -- Then alphabetically if enabled
         if sortAlphabetical then
             if sortAlphabetical == "ZA" then
-                return a.name > b.name
+                return nameA > nameB
             else
-                return a.name < b.name
+                return nameA < nameB
             end
         end
-        
+
+        -- Deterministic final tiebreak: equal-key members (same role,
+        -- Alphabetical off) have no defined order, and Lua's table.sort is NOT
+        -- stable — roster-driven re-sorts reshuffled same-role players
+        -- mid-encounter. Same fix as Headers.lua SortMembers; flat mode had
+        -- the identical bug.
+        if nameA ~= nameB then
+            return nameA < nameB
+        end
         return false
     end
     

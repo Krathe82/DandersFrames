@@ -4863,6 +4863,17 @@ function DF:BuildSortedNameList(members, db, selfPosition, includesPlayer)
         end
     end
     
+    -- Per-element key for name comparisons: a unit's name can be SECRET in
+    -- combat (Midnight), and even ~= on a secret string throws. A secret (or
+    -- missing) name falls back to the unit token — plain and unique. The
+    -- substitution is a pure per-element function, so the comparator stays a
+    -- consistent total order for table.sort.
+    local function NameKey(m)
+        local n = m.name
+        if n == nil or issecretvalue(n) then return tostring(m.unit) end
+        return n
+    end
+
     -- Sort function: Role -> Class -> Alphabetical
     local function SortMembers(a, b)
         if a.rolePriority ~= b.rolePriority then
@@ -4871,16 +4882,27 @@ function DF:BuildSortedNameList(members, db, selfPosition, includesPlayer)
         if sortByClass and a.classPriority ~= b.classPriority then
             return a.classPriority < b.classPriority
         end
-        if sortAlphabetical and a.name ~= b.name then
+        local nameA, nameB = NameKey(a), NameKey(b)
+        if sortAlphabetical and nameA ~= nameB then
             if sortAlphabetical == "ZA" then
-                return a.name > b.name
+                return nameA > nameB
             else
-                return a.name < b.name
+                return nameA < nameB
             end
+        end
+        -- Deterministic final tiebreak. Without one, members with equal sort keys
+        -- (same role, Alphabetical off) have no defined order, and Lua's table.sort
+        -- is NOT stable — so a roster-driven re-sort mid-encounter reshuffles
+        -- same-role players, making the group frames rearrange during M+ pulls.
+        -- Break ties by name (invariant for the session, and realm-qualified in the
+        -- nameList so cross-realm names don't collide) so every re-sort of the same
+        -- roster produces an identical order and the secure header never reorders.
+        if nameA ~= nameB then
+            return nameA < nameB
         end
         return false
     end
-    
+
     -- Sort non-player members
     table.sort(sortedMembers, SortMembers)
     
