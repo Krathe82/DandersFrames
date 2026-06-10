@@ -490,6 +490,11 @@ DF.ExportCategories = {
     -- TEXT - Name, status, health text & fonts
     -- ===========================================
     text = {
+        -- Text Designer (whole-table, like the auraDesigner category below --
+        -- legacy name/health/status text is retired, so an export without
+        -- this table imports as completely blank frame text)
+        "textDesigner",
+
         -- Global Font Shadow Settings
         "fontShadowOffsetX",
         "fontShadowOffsetY",
