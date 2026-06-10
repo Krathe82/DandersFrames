@@ -667,7 +667,7 @@ local function ResetTDForLegacyImport(payloads)
     for mode, payload in pairs(payloads) do
         if type(payload) == "table" and payload.textDesigner == nil
             and (payload.nameFont ~= nil or payload.nameFontSize ~= nil
-                or payload.healthTextEnabled ~= nil or payload.statusTextEnabled ~= nil) then
+                or payload.showHealthText ~= nil or payload.statusTextEnabled ~= nil) then
             local db = DF:GetDB(mode)
             local tdDB = db and DF.TextDesigner:EnsureDB(db)
             if tdDB then
