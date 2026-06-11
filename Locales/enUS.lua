@@ -612,6 +612,7 @@ L["Sound Effects"] = true
 L["Music"] = true
 L["Ambience"] = true
 L["Sound Channel"] = true
+L["Channel:"] = true
 L["Which audio channel alert sounds play on. Master keeps alerts audible even with Sound Effects or Music muted."] = true
 L["Direct API"] = true
 L["Direction"] = true

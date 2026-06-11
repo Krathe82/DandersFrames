@@ -4292,7 +4292,8 @@ local function CreateEnableBanner(parent)
 
     -- Sound output channel dropdown (Master default: alerts should stay
     -- audible when the player mutes Sound Effects/Music to cut combat noise).
-    -- Compact spec-menu-style dropdown, sitting right of the mute label.
+    -- Mirrors the Spec dropdown's construction (label + 22px backdrop button +
+    -- expand_more arrow + 20px-row menu) so it reads like every other dropdown.
     local SOUND_CHANNELS = {
         { "Master",   L["Master"] },
         { "SFX",      L["Sound Effects"] },
@@ -4307,16 +4308,29 @@ local function CreateEnableBanner(parent)
         return L["Master"]
     end
 
+    local channelLabel = banner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    channelLabel:SetPoint("LEFT", muteLabel, "RIGHT", 12, 0)
+    channelLabel:SetText(L["Channel:"])
+    channelLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
     local channelBtn = CreateFrame("Button", nil, banner, "BackdropTemplate")
-    channelBtn:SetSize(96, 18)
-    channelBtn:SetPoint("LEFT", muteLabel, "RIGHT", 10, 0)
-    ApplyBackdrop(channelBtn, C_ELEMENT, {r = C_BORDER.r, g = C_BORDER.g, b = C_BORDER.b, a = 0.5})
+    channelBtn:SetSize(110, 22)
+    channelBtn:SetPoint("LEFT", channelLabel, "RIGHT", 4, 0)
+    ApplyBackdrop(channelBtn, C_ELEMENT, C_BORDER)
+
     channelBtn.text = channelBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    channelBtn.text:SetPoint("LEFT", 5, 0)
-    channelBtn.text:SetPoint("RIGHT", -5, 0)
+    channelBtn.text:SetPoint("LEFT", 6, 0)
+    channelBtn.text:SetPoint("RIGHT", -16, 0)
     channelBtn.text:SetJustifyH("LEFT")
     channelBtn.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     channelBtn.text:SetText(ChannelLabel((adDB and adDB.soundChannel) or "Master"))
+
+    local channelArrow = channelBtn:CreateTexture(nil, "OVERLAY")
+    channelArrow:SetPoint("RIGHT", -4, 0)
+    channelArrow:SetSize(10, 10)
+    channelArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+    channelArrow:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
     channelBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText(L["Sound Channel"], 1, 1, 1)
@@ -4328,7 +4342,7 @@ local function CreateEnableBanner(parent)
     local channelMenu = CreateFrame("Frame", nil, channelBtn, "BackdropTemplate")
     channelMenu:SetFrameStrata("FULLSCREEN_DIALOG")
     channelMenu:SetPoint("TOPLEFT", channelBtn, "BOTTOMLEFT", 0, -1)
-    channelMenu:SetWidth(96)
+    channelMenu:SetWidth(110)
     ApplyBackdrop(channelMenu, C_PANEL, {r = 0.35, g = 0.35, b = 0.35, a = 1})
     channelMenu:Hide()
     do
@@ -4336,7 +4350,7 @@ local function CreateEnableBanner(parent)
         for _, opt in ipairs(SOUND_CHANNELS) do
             local key, text = opt[1], opt[2]
             local btn = CreateFrame("Button", nil, channelMenu)
-            btn:SetHeight(18)
+            btn:SetHeight(20)
             btn:SetPoint("TOPLEFT", 4, yOffset)
             btn:SetPoint("TOPRIGHT", -4, yOffset)
             local lbl = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -4350,7 +4364,7 @@ local function CreateEnableBanner(parent)
                 channelBtn.text:SetText(text)
                 channelMenu:Hide()
             end)
-            yOffset = yOffset - 18
+            yOffset = yOffset - 20
         end
         channelMenu:SetHeight(-yOffset + 4)
     end
@@ -4364,12 +4378,14 @@ local function CreateEnableBanner(parent)
             muteCb:SetEnabled(true)
             muteCb:SetAlpha(1)
             muteLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+            channelLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
             channelBtn:SetEnabled(true)
             channelBtn:SetAlpha(1)
         else
             muteCb:SetEnabled(false)
             muteCb:SetAlpha(0.35)
             muteLabel:SetTextColor(C_TEXT_DIM.r * 0.4, C_TEXT_DIM.g * 0.4, C_TEXT_DIM.b * 0.4)
+            channelLabel:SetTextColor(C_TEXT_DIM.r * 0.4, C_TEXT_DIM.g * 0.4, C_TEXT_DIM.b * 0.4)
             channelBtn:SetEnabled(false)
             channelBtn:SetAlpha(0.35)
             channelMenu:Hide()
