@@ -40,6 +40,7 @@
 * Moved **Pixel-Perfect Scaling** to **General → Settings**, since it applies globally to both party and raid. (by Krathe)
 * (Aura Designer) New icon and square indicators now default their **border inset to 0**, flush with the icon edge, matching the other indicator types. (by Krathe)
 * (Auto Layouts) Saved layouts are tidied of leftover built-in text overrides after the Text Designer migration, so the override list no longer lists dead entries. (by Krathe)
+* (Nicknames) **Northern Sky Raid Tools compatibility** — when NSRT is also set to put nicknames on DandersFrames frames, a one-time prompt lets you choose which addon decides the names shown on your frames (changeable later under **General → Nicknames → Name precedence**), so the two no longer silently fight. (by Maelareth)
 
 ### Bug Fixes
 

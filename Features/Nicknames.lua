@@ -1042,8 +1042,7 @@ end
 -- so the two would fight. We detect that, prompt the user once which should
 -- win, and store the choice (framePrecedence) which DF:GetFrameName honours.
 -- Entirely DF-side: we never modify NSRT, only READ its toggle.
--- NOTE: strings here are hard-coded for the prototype — localise (L[...] +
--- enUS) before merge.
+-- The same choice can be changed later in the Nicknames options page.
 -- ============================================================
 
 -- True if NSRT is loaded AND configured to manage names on DandersFrames frames.
@@ -1086,6 +1085,7 @@ end
 function NK:ShowConflictPopup()
     if NK._conflictPopup then NK._conflictPopup:Show(); return end
 
+    local L = DF.L
     local theme = (DF.GUI and DF.GUI.GetThemeColor and DF.GUI.GetThemeColor())
         or { r = 0.9, g = 0.55, b = 0.15 }
 
@@ -1106,7 +1106,7 @@ function NK:ShowConflictPopup()
 
     local title = popup:CreateFontString(nil, "OVERLAY", "DFFontNormalLarge")
     title:SetPoint("TOP", 0, -16)
-    title:SetText("Addon nicknames conflict")
+    title:SetText(L["Addon nicknames conflict"])
     title:SetTextColor(1, 0.3, 0.3)
 
     local warnTex = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\warning"
@@ -1118,12 +1118,13 @@ function NK:ShowConflictPopup()
     local msg = popup:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
     msg:SetPoint("TOP", title, "BOTTOM", 0, -16)
     msg:SetPoint("LEFT", 28, 0); msg:SetPoint("RIGHT", -28, 0); msg:SetJustifyH("CENTER")
-    msg:SetText("Both |cffe68c26DandersFrames|r and |cff6fb1e0Northern Sky Raid Tools|r are set to show nicknames on your frames.\n\nWhich one should decide the names shown here?")
+    msg:SetText(L["Both %s and %s are set to show nicknames on your frames.\n\nWhich one should decide the names shown here?"]
+        :format("|cffe68c26DandersFrames|r", "|cff6fb1e0Northern Sky Raid Tools|r"))
 
     local sub = popup:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     sub:SetPoint("TOP", msg, "BOTTOM", 0, -12)
     sub:SetPoint("LEFT", 28, 0); sub:SetPoint("RIGHT", -28, 0); sub:SetJustifyH("CENTER")
-    sub:SetText("This only changes who controls names on DandersFrames frames - you can change it later in Nicknames settings.")
+    sub:SetText(L["This only changes who controls names on DandersFrames frames - you can change it later in Nicknames settings."])
     sub:SetTextColor(0.7, 0.7, 0.7)
 
     local function choose(pref)
@@ -1155,9 +1156,9 @@ function NK:ShowConflictPopup()
         return b
     end
 
-    local dfBtn = makeButton("Use DandersFrames nicknames", true, function() choose("self") end)
+    local dfBtn = makeButton(L["Use %s nicknames"]:format("DandersFrames"), true, function() choose("self") end)
     dfBtn:SetPoint("BOTTOM", -118, 16)
-    local nsBtn = makeButton("Use Northern Sky Raid Tools nicknames", false, function() choose("nsrt") end)
+    local nsBtn = makeButton(L["Use %s nicknames"]:format("Northern Sky Raid Tools"), false, function() choose("nsrt") end)
     nsBtn:SetPoint("BOTTOM", 118, 16)
 
     NK._conflictPopup = popup
@@ -1169,6 +1170,14 @@ function NK:CheckConflictPrompt()
     local data = NK:GetDB()
     if not data or not data.enabled then return end
     if data.framePrecedence ~= nil then return end   -- already decided
+    -- Only prompt users who actually USE DF nicknames (enabled defaults true,
+    -- so without this every NSRT user would get the popup with nothing to
+    -- choose between). Once they add a first nickname, the conflict is real
+    -- and the popup appears at next login (framePrecedence is still nil).
+    local hasAny = (data.entries and #data.entries > 0)
+        or (NK.received and next(NK.received) ~= nil)
+        or (data.selfNick and data.selfNick ~= "")
+    if not hasAny then return end
     if not NK:NSRTManagingNames() then return end     -- no conflict
     if InCombatLockdown and InCombatLockdown() then
         if not NK._conflictCombatWatch then
