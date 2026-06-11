@@ -309,7 +309,16 @@ local PERM_MOVER_ACTIONS = {
     end },
     RELOAD_UI         = { label = L["Reload UI"],                  combatSafe = true,  fn = function() ReloadUI() end },
     RESET_POSITION    = { label = L["Reset Position"],             combatSafe = false, fn = function() DF:ResetPosition() end },
-    READY_CHECK       = { label = L["Ready Check"],                combatSafe = true,  fn = function() DoReadyCheck() end },
+    READY_CHECK       = { label = L["Ready Check"],                combatSafe = true,  fn = function()
+        -- 12.0.7 moves DoReadyCheck into C_PartyInfo and Blizzard migrated
+        -- their own callers with NO compat shim for the old global — prefer
+        -- the namespaced version, fall back to the global on 12.0.5.
+        if C_PartyInfo and C_PartyInfo.DoReadyCheck then
+            C_PartyInfo.DoReadyCheck()
+        else
+            DoReadyCheck()
+        end
+    end },
     PULL_TIMER        = { label = L["Pull Timer"],                 combatSafe = true,  fn = function()
         local db = DF:GetDB()
         C_PartyInfo.DoCountdown(db.permanentMoverPullTimerDuration or 10)
