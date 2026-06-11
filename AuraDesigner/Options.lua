@@ -4286,7 +4286,9 @@ local function CreateEnableBanner(parent)
     end)
 
     local muteLabel = banner:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    muteLabel:SetPoint("LEFT", muteCb, "RIGHT", 4, 0)
+    -- 8px gap = same as cbLabel after the Enable checkbox, so "Sound Alerts"
+    -- lines up with "Enable Aura Designer" above it.
+    muteLabel:SetPoint("LEFT", muteCb, "RIGHT", 8, 0)
     muteLabel:SetText(L["Sound Alerts"])
     muteLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
 
