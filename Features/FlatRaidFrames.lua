@@ -270,30 +270,35 @@ function FlatRaidFrames:BuildSortedNameList()
     
     -- Gather all raid members with their info
     local members = {}
-    local playerName = UnitName("player")
-    local playerRealm = GetRealmName()
     local playerEntry = nil
-    
+
+    -- Secret-safe predicate (issecretvalue may not exist on older clients).
+    -- Hoisted above the member loop: roster names are checked here too.
+    local issecretvalue = issecretvalue or function() return false end
+
     for i = 1, numMembers do
         local unit = "raid" .. i
-        local name, realm = UnitName(unit)
-        
-        if name then
+        -- Name comes from GetRaidRosterInfo, NOT UnitName: for raid-kind
+        -- units, SecureGroupHeaderTemplate matches nameList tokens against
+        -- GetRaidRosterInfo names (already realm-qualified for cross-realm),
+        -- and the roster usually knows a member's name BEFORE their player
+        -- object loads (UnitName returns UNKNOWNOBJECT while they're loading
+        -- in — e.g. a BG backfill joining mid-match). Building from UnitName
+        -- inserted a literal "Unknown" token that never matches anything,
+        -- hiding that frame until the next out-of-combat rebuild. A member
+        -- the roster can't name yet is skipped instead: the secure header
+        -- hides a nil-roster-name unit in EVERY mode anyway, and the roster
+        -- filling in fires GROUP_ROSTER_UPDATE, which rebuilds this list.
+        -- (issecretvalue first: comparing/testing a secret value crashes.)
+        local fullName, _, subgroup = GetRaidRosterInfo(i)
+
+        if not issecretvalue(fullName) and fullName and fullName ~= UNKNOWNOBJECT then
             -- Filter by group visibility
-            local _, _, subgroup = GetRaidRosterInfo(i)
             if subgroup and db.raidGroupVisible and db.raidGroupVisible[subgroup] == false then
                 -- Skip members in hidden groups
             else
-            -- Build full name with realm for nameList
-            -- Only append realm for cross-realm players (when realm is returned)
-            -- Same-server players should use just the name (matches SecureGroupHeaderTemplate behavior)
-            local fullName
-            if realm and realm ~= "" then
-                fullName = name .. "-" .. realm
-            else
-                fullName = name
-            end
-            
+            local name = fullName:match("([^%-]+)") or fullName
+
             local role = UnitGroupRolesAssigned(unit)
             if role == "NONE" then role = "DAMAGER" end
             
@@ -314,7 +319,6 @@ function FlatRaidFrames:BuildSortedNameList()
             local entry = {
                 name = name,
                 fullName = fullName,
-                realm = realm or playerRealm,
                 role = role,
                 sortRole = sortRole,
                 class = class,
@@ -337,7 +341,6 @@ function FlatRaidFrames:BuildSortedNameList()
     -- combat (Midnight), and even ~= on a secret string throws. A secret (or
     -- missing) name falls back to the unit token — plain and unique. Pure
     -- per-element substitution keeps the comparator a consistent total order.
-    local issecretvalue = issecretvalue or function() return false end
     local function NameKey(m)
         local n = m.name
         if n == nil or issecretvalue(n) then return tostring(m.unit) end

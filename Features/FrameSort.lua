@@ -56,11 +56,29 @@ end
 local function UnitsToNameList(units)
     wipe(namesBuf)
     for i = 1, #units do
-        local name = GetUnitName(units[i], true)
+        local unit = units[i]
+        local name
+        local raidIndex = unit:match("^raid(%d+)$")
+        if raidIndex then
+            -- Raid-kind headers match nameList tokens against GetRaidRosterInfo
+            -- names (realm-qualified), and the roster usually knows a member's
+            -- name BEFORE their player object loads (GetUnitName returns
+            -- "Unknown" while they're loading — e.g. a BG backfill). A literal
+            -- "Unknown" token never matches, hiding that frame; a member the
+            -- roster can't name yet is dropped instead — the secure header
+            -- hides a nil-roster-name unit in every mode anyway, and the
+            -- roster filling in fires a roster event that re-sorts.
+            name = GetRaidRosterInfo(tonumber(raidIndex))
+            if not issecretvalue(name) and name == UNKNOWNOBJECT then
+                name = nil
+            end
+        else
+            name = GetUnitName(unit, true)
+        end
         -- Skip nil and secret values (Midnight 12.0 returns opaque secret strings
         -- for some unit names in instanced content; type() == "string" is not
         -- sufficient — secret values pass that check but crash table.concat).
-        if name and not issecretvalue(name) then
+        if not issecretvalue(name) and name then
             namesBuf[#namesBuf + 1] = name
         end
     end
