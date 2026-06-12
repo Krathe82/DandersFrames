@@ -777,6 +777,36 @@ function DF.BuildNicknamesPage(guiRef, pageRef, dbRef)
         recvContent:SetHeight(mmax(1, n * ROW_HEIGHT))
     end
 
+    -- ===== Name precedence (only shown when NSRT can also manage our names) =====
+    -- Northern Sky Raid Tools can also be set to put nicknames on DandersFrames
+    -- frames; when both are active they fight. This mirrors the one-time conflict
+    -- popup (Features/Nicknames.lua) so the choice can be changed here later.
+    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("NorthernSkyRaidTools") then
+        local precHeader = parent:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+        precHeader:SetPoint("TOPLEFT", recvBg, "BOTTOMLEFT", 0, -18)
+        precHeader:SetText(L["Name precedence"])
+        do local pc = themeColor(); precHeader:SetTextColor(pc.r, pc.g, pc.b) end
+
+        local precDesc = parent:CreateFontString(nil, "OVERLAY", "DFFontDisableSmall")
+        precDesc:SetPoint("TOPLEFT", precHeader, "BOTTOMLEFT", 0, -6)
+        precDesc:SetWidth(LIST_WIDTH)
+        precDesc:SetJustifyH("LEFT")
+        precDesc:SetText(L["Northern Sky Raid Tools can also show nicknames on DandersFrames frames. Choose which one decides the names shown here."])
+
+        local precOpts = {
+            self = "DandersFrames", nsrt = "Northern Sky Raid Tools",
+            _order = { "self", "nsrt" },
+        }
+        local precDD = GUI:CreateDropdown(parent, L["Names on frames decided by"], precOpts, nil, nil, nil,
+            function() local d = NK:GetDB(); return (d and d.framePrecedence == "nsrt") and "nsrt" or "self" end,
+            function(v)
+                local d = NK:GetDB(); if d then d.framePrecedence = v end
+                NK:RefreshAllFrames()
+            end)
+        precDD:SetSize(220, 50)
+        precDD:SetPoint("TOPLEFT", precDesc, "BOTTOMLEFT", -4, -8)
+    end
+
     -- Keep this panel in sync with changes made anywhere (e.g. incoming shares).
     NK.onChange = Refresh
     Refresh()

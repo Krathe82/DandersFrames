@@ -511,6 +511,20 @@ function DF:GetUnitName(unit)
     return UnitName(unit) or unit
 end
 
+-- Display name used by our own frame rendering. DandersFrames' native nicknames
+-- resolve FIRST here, so they stay authoritative on our frames even when another
+-- nickname addon (e.g. NSRT) overwrites DF:GetUnitName. NK:HasPrecedence() gates
+-- this: it returns false only when the user has explicitly chosen to let the
+-- other addon win, in which case we fall through to DF:GetUnitName (which that
+-- addon may own) and finally the raw name.
+function DF:GetFrameName(unit)
+    local NK = DF.Nicknames
+    if NK and NK.GetDisplayName then
+        return NK:GetDisplayName(unit)
+    end
+    return DF:GetUnitName(unit)
+end
+
 -- Iterator for all compact unit frames (player, party, raid)
 -- Accepts a callback function OR returns an iterator if no callback provided
 -- Usage with callback: DF:IterateCompactFrames(function(frame) ... end)

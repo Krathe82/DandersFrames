@@ -1035,6 +1035,166 @@ end
 -- INIT  (called from Core.lua after PLAYER_LOGIN)
 -- ============================================================
 
+-- ============================================================
+-- NSRT PRECEDENCE / CONFLICT PROMPT
+-- Northern Sky Raid Tools can also be set to put nicknames on DandersFrames
+-- frames; when its "DandersFrames" toggle is on it OVERWRITES DF:GetUnitName,
+-- so the two would fight. We detect that, prompt the user once which should
+-- win, and store the choice (framePrecedence) which DF:GetFrameName honours.
+-- Entirely DF-side: we never modify NSRT, only READ its toggle.
+-- The same choice can be changed later in the Nicknames options page.
+-- ============================================================
+
+-- True if NSRT is loaded AND configured to manage names on DandersFrames frames.
+function NK:NSRTManagingNames()
+    return (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("NorthernSkyRaidTools"))
+        and NSRT and NSRT.Settings
+        and NSRT.Settings["GlobalNickNames"]
+        and NSRT.Settings["DandersFrames"]
+        and true or false
+end
+
+-- Should DandersFrames' own nicknames win on our frames? Yes — unless the user
+-- explicitly chose NSRT AND NSRT is actually managing names right now.
+function NK:HasPrecedence()
+    local data = NK:GetDB()
+    if data and data.framePrecedence == "nsrt" and NK:NSRTManagingNames() then
+        return false
+    end
+    return true
+end
+
+-- The name to display on our own frames, honouring precedence. When DF wins we
+-- resolve our own nickname first; when the user has chosen NSRT we ask NSRT's
+-- own resolver DIRECTLY (NSAPI:GetName) so its name shows, bypassing our hook
+-- (which would otherwise keep returning the DF nickname).
+function NK:GetDisplayName(unit)
+    if NK:HasPrecedence() then
+        local nick = NK:Resolve(unit)
+        if nick then return nick end
+        return DF:GetUnitName(unit)
+    end
+    local raw = UnitName(unit)
+    if NSAPI and NSAPI.GetName and raw then
+        return NSAPI:GetName(raw, "DandersFrames") or raw
+    end
+    return raw or unit
+end
+
+-- Build + show the one-time conflict popup (DandersFrames' own alert style).
+function NK:ShowConflictPopup()
+    if NK._conflictPopup then NK._conflictPopup:Show(); return end
+
+    local L = DF.L
+    local theme = (DF.GUI and DF.GUI.GetThemeColor and DF.GUI.GetThemeColor())
+        or { r = 0.9, g = 0.55, b = 0.15 }
+
+    local popup = CreateFrame("Frame", "DFNicknameConflictPopup", UIParent, "BackdropTemplate")
+    popup:SetSize(490, 250)
+    popup:SetPoint("CENTER")
+    popup:SetFrameStrata("FULLSCREEN_DIALOG")
+    popup:SetFrameLevel(200)
+    popup:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
+    popup:SetBackdropColor(0.1, 0.1, 0.1, 0.98)
+    popup:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+    popup:EnableMouse(true)
+    popup:SetMovable(true)
+    popup:RegisterForDrag("LeftButton")
+    popup:SetScript("OnDragStart", popup.StartMoving)
+    popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
+    tinsert(UISpecialFrames, "DFNicknameConflictPopup")  -- Esc closes (re-prompts next login)
+
+    local title = popup:CreateFontString(nil, "OVERLAY", "DFFontNormalLarge")
+    title:SetPoint("TOP", 0, -16)
+    title:SetText(L["Addon nicknames conflict"])
+    title:SetTextColor(1, 0.3, 0.3)
+
+    local warnTex = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\warning"
+    local lw = popup:CreateTexture(nil, "OVERLAY"); lw:SetSize(18, 18)
+    lw:SetPoint("RIGHT", title, "LEFT", -8, 0); lw:SetTexture(warnTex); lw:SetVertexColor(1, 0.3, 0.3)
+    local rw = popup:CreateTexture(nil, "OVERLAY"); rw:SetSize(18, 18)
+    rw:SetPoint("LEFT", title, "RIGHT", 8, 0); rw:SetTexture(warnTex); rw:SetVertexColor(1, 0.3, 0.3)
+
+    local msg = popup:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
+    msg:SetPoint("TOP", title, "BOTTOM", 0, -16)
+    msg:SetPoint("LEFT", 28, 0); msg:SetPoint("RIGHT", -28, 0); msg:SetJustifyH("CENTER")
+    msg:SetText(L["Both %s and %s are set to show nicknames on your frames.\n\nWhich one should decide the names shown here?"]
+        :format("|cffe68c26DandersFrames|r", "|cff6fb1e0Northern Sky Raid Tools|r"))
+
+    local sub = popup:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    sub:SetPoint("TOP", msg, "BOTTOM", 0, -12)
+    sub:SetPoint("LEFT", 28, 0); sub:SetPoint("RIGHT", -28, 0); sub:SetJustifyH("CENTER")
+    sub:SetText(L["This only changes who controls names on DandersFrames frames - you can change it later in Nicknames settings."])
+    sub:SetTextColor(0.7, 0.7, 0.7)
+
+    local function choose(pref)
+        local d = NK:GetDB(); if d then d.framePrecedence = pref end
+        popup:Hide()
+        NK:RefreshAllFrames()
+    end
+
+    local function makeButton(text, primary, onClick)
+        local b = CreateFrame("Button", nil, popup, "BackdropTemplate")
+        b:SetSize(225, 42)
+        b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        if primary then
+            b:SetBackdropColor(theme.r * 0.3, theme.g * 0.3, theme.b * 0.3, 1)
+            b:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+        else
+            b:SetBackdropColor(0.15, 0.15, 0.15, 1)
+            b:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        end
+        local t = b:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        t:SetPoint("LEFT", 6, 0); t:SetPoint("RIGHT", -6, 0); t:SetJustifyH("CENTER")
+        t:SetWordWrap(true); t:SetText(text); t:SetTextColor(1, 1, 1)
+        b:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1) end)
+        b:SetScript("OnLeave", function(self)
+            if primary then self:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+            else self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1) end
+        end)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+
+    local dfBtn = makeButton(L["Use %s nicknames"]:format("DandersFrames"), true, function() choose("self") end)
+    dfBtn:SetPoint("BOTTOM", -118, 16)
+    local nsBtn = makeButton(L["Use %s nicknames"]:format("Northern Sky Raid Tools"), false, function() choose("nsrt") end)
+    nsBtn:SetPoint("BOTTOM", 118, 16)
+
+    NK._conflictPopup = popup
+    popup:Show()
+end
+
+-- Prompt once if there's an unresolved DF/NSRT name conflict. Defers out of combat.
+function NK:CheckConflictPrompt()
+    local data = NK:GetDB()
+    if not data or not data.enabled then return end
+    if data.framePrecedence ~= nil then return end   -- already decided
+    -- Only prompt users who actually USE DF nicknames (enabled defaults true,
+    -- so without this every NSRT user would get the popup with nothing to
+    -- choose between). Once they add a first nickname, the conflict is real
+    -- and the popup appears at next login (framePrecedence is still nil).
+    local hasAny = (data.entries and #data.entries > 0)
+        or (NK.received and next(NK.received) ~= nil)
+        or (data.selfNick and data.selfNick ~= "")
+    if not hasAny then return end
+    if not NK:NSRTManagingNames() then return end     -- no conflict
+    if InCombatLockdown and InCombatLockdown() then
+        if not NK._conflictCombatWatch then
+            local f = CreateFrame("Frame")
+            f:RegisterEvent("PLAYER_REGEN_ENABLED")
+            f:SetScript("OnEvent", function(self)
+                self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+                NK._conflictCombatWatch = nil
+                NK:CheckConflictPrompt()
+            end)
+            NK._conflictCombatWatch = f
+        end
+        return
+    end
+    NK:ShowConflictPopup()
+end
+
 function NK:Init()
     if self.initialized then return end
     self.initialized = true
@@ -1059,4 +1219,8 @@ function NK:Init()
 
     -- Make sure any names already on screen pick up existing rules.
     NK:RefreshAllFrames()
+
+    -- If NSRT is also set to manage our frame names, prompt once which wins.
+    -- Delayed so NSRT's saved vars / settings are loaded first.
+    if C_Timer then C_Timer.After(3, function() NK:CheckConflictPrompt() end) end
 end

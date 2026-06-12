@@ -535,7 +535,7 @@ function DF:UpdateUnitFrame(frame, source)
             if hideLegacyText then
                 frame.nameText:Hide()
             else
-                local name = DF:GetUnitName(unit) or unit
+                local name = DF:GetFrameName(unit) or unit
                 -- Truncate name if needed (UTF-8 aware)
                 local nameLength = db.nameTextLength or 0
                 if nameLength > 0 and DF:UTF8Len(name) > nameLength then
@@ -598,7 +598,7 @@ function DF:UpdateUnitFrame(frame, source)
             if hideLegacyText then
                 frame.nameText:Hide()
             else
-                local name = DF:GetUnitName(unit) or unit
+                local name = DF:GetFrameName(unit) or unit
                 -- Truncate name if needed (UTF-8 aware)
                 local nameLength = db.nameTextLength or 0
                 if nameLength > 0 and DF:UTF8Len(name) > nameLength then
