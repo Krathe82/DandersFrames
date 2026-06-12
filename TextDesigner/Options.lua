@@ -330,7 +330,7 @@ local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, y
         local function lenCB()
             if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
         end
-        local lenSlider = GUI:CreateSlider(parent, L["Length"], 1, 30, 1, elem, "nameLength", lenCB, lenCB)
+        local lenSlider = GUI:CreateSlider(parent, L["Max Length (0=off)"], 0, 30, 1, elem, "nameLength", lenCB, lenCB)
         lenSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
         y = y - FIELD_ROW_HEIGHT
 
@@ -877,8 +877,6 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
     elem.anchor = elem.anchor or "CENTER"
     elem.offsetX = elem.offsetX or 0
     elem.offsetY = elem.offsetY or 0
-    elem.frameLevel = elem.frameLevel or 25
-    elem.frameStrata = elem.frameStrata or "INHERIT"
     elem.anchorTo = elem.anchorTo or "FRAME"
 
     -- Shared callback: every position-related widget needs to refresh the
@@ -910,26 +908,6 @@ local function BuildPositionSection(GUI, parent, elem, tdDB, card, yStart)
 
     local ySlider = GUI:CreateSlider(parent, L["Offset Y"], -200, 200, 1, elem, "offsetY", metaCB, metaCB)
     ySlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
-    y = y - FIELD_ROW_HEIGHT
-
-    local function lvlCB()
-        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-    end
-    local lvlSlider = GUI:CreateSlider(parent, L["Frame Level"], 1, 200, 1, elem, "frameLevel", lvlCB, lvlCB)
-    lvlSlider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
-    y = y - FIELD_ROW_HEIGHT
-
-    local strataOpts = {
-        INHERIT = L["Inherit"],
-        LOW = "LOW",
-        MEDIUM = "MEDIUM",
-        HIGH = "HIGH",
-        DIALOG = "DIALOG",
-    }
-    local strataDrop = GUI:CreateDropdown(parent, L["Frame Strata"], strataOpts, elem, "frameStrata", function()
-        if DF.TextDesigner.Preview then DF.TextDesigner.Preview:RefreshAll() end
-    end)
-    strataDrop:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
     y = y - FIELD_ROW_HEIGHT
 
     -- Anchor To: target element (or the unit frame). Options are computed

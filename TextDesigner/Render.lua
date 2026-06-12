@@ -14,6 +14,12 @@ DF.TextDesigner.Render = Render
 local function getResolver() return DF.TextDesigner.Resolver end
 local function getMS() return DF.TextDesigner.MidnightSafe end
 
+local wipe = wipe
+
+-- Enabled-element id set, rebuilt by UpdateFrame. Module-local and reused
+-- (wipe, not {}) because UpdateFrame runs in the unit-event hot path.
+local enabledScratch = {}
+
 -- ============================================================
 -- HINT CATEGORIES — which content types refresh on which hints
 -- ============================================================
@@ -60,12 +66,21 @@ local CONTENT_HINTS = {
 local function resolveAppearance(elem, globalDefaults)
     globalDefaults = globalDefaults or {}
     local overrides = elem.overrides or {}
+    -- useClassColor is the one boolean field, so the `(override and value) or
+    -- global` pattern the others use would swallow an override of FALSE (it
+    -- falls through to the global default). Branch on the override flag instead.
+    local useClassColor
+    if overrides.useClassColor then
+        useClassColor = elem.useClassColor or false
+    else
+        useClassColor = globalDefaults.useClassColor or false
+    end
     return {
         font          = (overrides.font          and elem.font)          or globalDefaults.font          or "DF Roboto SemiBold",
         fontSize      = (overrides.fontSize      and elem.fontSize)      or globalDefaults.fontSize      or 10,
         color         = (overrides.color         and elem.color)         or globalDefaults.color         or {r=1, g=1, b=1, a=1},
         outline       = (overrides.outline       and elem.outline)       or globalDefaults.outline       or "SHADOW;NONE",
-        useClassColor = (overrides.useClassColor and elem.useClassColor) or globalDefaults.useClassColor or false,
+        useClassColor = useClassColor,
     }
 end
 
@@ -91,11 +106,14 @@ end
 
 -- Returns the frame to anchor to. anchorTo == "FRAME" → parent frame.
 -- anchorTo == <element id string> → that element's FontString on the same frame.
-local function resolveAnchorTarget(elem, frame, fontStringsById)
+-- A disabled target counts as absent: its FontString is hidden with stale
+-- geometry, so dependents re-anchor to the frame instead of hanging off it.
+local function resolveAnchorTarget(elem, frame, fontStringsById, enabledById)
     local target = elem.anchorTo or "FRAME"
     if target == "FRAME" then return frame end
     local targetId = tonumber(target)
-    if targetId and fontStringsById and fontStringsById[targetId] then
+    if targetId and fontStringsById and fontStringsById[targetId]
+        and (not enabledById or enabledById[targetId]) then
         return fontStringsById[targetId]
     end
     return frame  -- fallback
@@ -152,19 +170,14 @@ local function applyAppearance(fs, frame, elem, globalDefaults)
         fs._useClassColor = false
         fs:SetTextColor(app.color.r, app.color.g, app.color.b, app.color.a or 1)
     end
-    -- Frame strata / level
-    if elem.frameStrata and elem.frameStrata ~= "INHERIT" then
-        fs:SetDrawLayer("OVERLAY", 7)  -- WoW FontStrings honor draw layer
-    end
 end
 
 -- Applies position to the FontString (separate from appearance so we can
 -- update position when anchorTo's target moves).
-local function applyPosition(fs, frame, elem, fontStringsById)
+local function applyPosition(fs, frame, elem, fontStringsById, enabledById)
     fs:ClearAllPoints()
-    local target = resolveAnchorTarget(elem, frame, fontStringsById)
-    fs:SetPoint(elem.anchor or "CENTER", target,
-        (elem.anchorTo and elem.anchorTo ~= "FRAME") and (elem.anchor or "CENTER") or (elem.anchor or "CENTER"),
+    local target = resolveAnchorTarget(elem, frame, fontStringsById, enabledById)
+    fs:SetPoint(elem.anchor or "CENTER", target, elem.anchor or "CENTER",
         elem.offsetX or 0, elem.offsetY or 0)
 end
 
@@ -174,7 +187,7 @@ end
 
 -- Renders a single elem on a frame. Called per-element from UpdateFrame.
 -- source is a DataSource (Live or Mock).
-local function updateOne(frame, elem, source, globalDefaults)
+local function updateOne(frame, elem, source, globalDefaults, enabledById)
     DF:Debug("TD", "updateOne: id=%s type=%s enabled=%s",
         tostring(elem.id), tostring(elem.contentType), tostring(elem.enabled))
     if not elem.enabled then
@@ -184,7 +197,7 @@ local function updateOne(frame, elem, source, globalDefaults)
     end
     local fs = acquireFontString(frame, elem)
     applyAppearance(fs, frame, elem, globalDefaults)
-    applyPosition(fs, frame, elem, frame._tdFontStrings)
+    applyPosition(fs, frame, elem, frame._tdFontStrings, enabledById)
     -- Apply class color if requested
     if fs._useClassColor then
         local token = source:GetClassToken()
@@ -228,10 +241,22 @@ function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
     end
     hint = hint or "all"
     local globalDefaults = tdDB.globalDefaults
+    -- Pre-create the FontString for every enabled element before any element is
+    -- positioned, so one anchored to a later-listed element finds its target on
+    -- the very first pass (it previously fell back to frame-anchoring for one
+    -- update, making anchored layouts jump just after a reload). The same sweep
+    -- records which ids are enabled for resolveAnchorTarget's disabled check.
+    wipe(enabledScratch)
+    for _, elem in ipairs(tdDB.elements or {}) do
+        if elem.enabled then
+            enabledScratch[elem.id] = true
+            acquireFontString(frame, elem)
+        end
+    end
     for _, elem in ipairs(tdDB.elements or {}) do
         local elemHint = CONTENT_HINTS[elem.contentType]
         if hint == "all" or elemHint == "all" or elemHint == hint then
-            updateOne(frame, elem, source, globalDefaults)
+            updateOne(frame, elem, source, globalDefaults, enabledScratch)
         end
     end
 

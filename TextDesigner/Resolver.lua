@@ -206,13 +206,17 @@ end
 
 RESOLVERS.hp_max_reduction = function(elem, source)
     if deadHidden(elem, source) then return "" end
-    local pct = source:GetHPMaxReductionPct() or 0
+    local pct = source:GetHPMaxReductionPct()
+    if pct == nil then return "" end
+    -- Can be secret in combat (ReducedMaxHealth.lua guards the same API call);
+    -- comparison and arithmetic on a secret throw, so hide like the bar does.
+    if getMS().IsSecret(pct) then return "" end
     if pct == 0 then return "" end
-    -- API returns 0..1 in some patches and 0..100 in others.
-    -- Defensive: if value is <= 1, multiply by 100 for display.
-    local v = pct
-    if pct <= 1 then v = pct * 100 end
-    return string.format(elem.hidePercent and "-%.0f" or "-%.0f%%", v)
+    -- GetUnitTotalModifiedMaxHealthPercent returns a 0..1 fraction — the
+    -- Reduced Max Health bar feeds it straight into SetValue on a 0..1 bar.
+    -- Scale unconditionally; the old `pct <= 1` heuristic displayed small
+    -- reductions as wildly wrong percentages.
+    return string.format(elem.hidePercent and "-%.0f" or "-%.0f%%", pct * 100)
 end
 
 -- ───── Power ─────

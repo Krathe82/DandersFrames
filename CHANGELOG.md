@@ -43,6 +43,7 @@
 * (Nicknames) **Northern Sky Raid Tools compatibility** — when NSRT is also set to put nicknames on DandersFrames frames, a one-time prompt lets you choose which addon decides the names shown on your frames (changeable later under **General → Nicknames → Name precedence**), so the two no longer silently fight. (by Maelareth)
 * (Aura Designer) Alert sounds now play on the **Master** channel by default, so they stay audible even with Sound Effects or Music muted. A new **Channel** dropdown next to the Sound Alerts toggle lets you pick a different channel, and the per-alert volume slider now works on whichever channel is selected. (by Krathe)
 * Ready for **patch 12.0.7** — the addon-compartment tooltip and the frame mover's Ready Check action keep working when the new patch ships, with no change on the current version. (by Krathe)
+* (Text Designer) Removed the per-element **Frame Level** and **Frame Strata** controls — they had no real effect. Text layering above bars and below icons is handled automatically.
 
 ### Bug Fixes
 
@@ -72,6 +73,10 @@
 * (Text Designer) Text element edits now update **test-mode frames** live, not just real units. (by Krathe)
 * (Designers) The Aura/Text Designer **preview now rebuilds to the frame size of the auto layout being edited**, instead of staying stuck at a previous layout's dimensions. (by Krathe)
 * (Designers) Text Designer edits (and Aura Designer changes) no longer **stop updating on test-mode frames after switching between auto layouts** — applying a layout's overrides kept the designer's table/preview bindings valid instead of orphaning them. (by Krathe)
+* (Text Designer) **Use Class Color** can now be turned off on a single element when your global text default has it on.
+* (Text Designer) Text anchored to another element no longer **jumps position right after a reload**, and re-anchors to the frame while the element it's anchored to is disabled.
+* (Text Designer) The name **Max Length** slider can now be set to **0 to turn truncation off**, matching the old name text setting it replaced.
+* (Text Designer) Fixed the **Max HP Reduction** text showing the wrong percentage for small reductions.
 * (Frames) Missing textures now fall back to a bundled default instead of rendering black. If a profile you import references a custom or shared-media texture you don't have installed (or the addon that provided it was removed), the affected health bar, background or other bar now uses DandersFrames' default texture and shows a one-time notice — rather than a black/blank bar. (Requires WoW 12.0.7; on earlier versions there is no change.) (by Krathe)
 * (Aura Designer) The expiring **"Pulsate"** option now works for the replace-mode health-bar highlight (it previously stayed solid in replace mode). (by Krathe)
 * (Text Designer) Fix blank text on profiles that weren't active at login — switching to an older profile now converts its built-in text correctly.
