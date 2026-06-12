@@ -5961,14 +5961,27 @@ function DF:CreateAddonCompartment()
             end
         end,
         funcOnEnter = function(button)
-            MenuUtil.ShowTooltip(button, function(tooltip)
+            -- 12.0.7 deprecates MenuUtil.ShowTooltip/HideTooltip in favour of
+            -- the *Ex variants taking an explicit tooltip (the old ones only
+            -- survive behind the loadDeprecationFallbacks CVar). Feature-detect
+            -- so both 12.0.5 and 12.0.7 work.
+            local fill = function(tooltip)
                 tooltip:AddLine("DandersFrames")
                 tooltip:AddLine("|cffffffffLeft-Click:|r Open settings", 0.8, 0.8, 0.8)
                 tooltip:AddLine("|cffffffffRight-Click:|r Toggle solo mode", 0.8, 0.8, 0.8)
-            end)
+            end
+            if MenuUtil.ShowTooltipEx then
+                MenuUtil.ShowTooltipEx(button, GetAppropriateTooltip(), fill)
+            else
+                MenuUtil.ShowTooltip(button, fill)
+            end
         end,
         funcOnLeave = function(button)
-            MenuUtil.HideTooltip(button)
+            if MenuUtil.HideTooltipEx then
+                MenuUtil.HideTooltipEx(button, GetAppropriateTooltip())
+            else
+                MenuUtil.HideTooltip(button)
+            end
         end,
     })
 
