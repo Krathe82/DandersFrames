@@ -48,16 +48,40 @@ local presenceData = {}  -- auraName → { present = N, total = N, soundCfg = cf
 -- SOUND PLAYBACK (CVar-swap for per-indicator volume)
 -- ============================================================
 
+-- Output channel for alert sounds. Default MASTER: alerts must be audible
+-- even when the player mutes Sound Effects/Music to cut combat noise —
+-- which is exactly when they rely on audio cues. The per-indicator volume
+-- CVar-swap must target the SAME channel's volume CVar or it has no effect.
+local SOUND_CHANNEL_CVARS = {
+    Master   = "Sound_MasterVolume",
+    SFX      = "Sound_SFXVolume",
+    Music    = "Sound_MusicVolume",
+    Ambience = "Sound_AmbienceVolume",
+    Dialog   = "Sound_DialogVolume",
+}
+
+local function GetSoundChannel()
+    local mode = DF.GetCurrentMode and DF:GetCurrentMode() or "party"
+    local adCfg = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(mode))
+        or (DF.GetDB and DF:GetDB(mode) and DF:GetDB(mode).auraDesigner)
+    local channel = adCfg and adCfg.soundChannel
+    if not channel or not SOUND_CHANNEL_CVARS[channel] then
+        channel = "Master"
+    end
+    return channel, SOUND_CHANNEL_CVARS[channel]
+end
+
 function SoundEngine:PlayWithVolume(soundFile, volume)
     if not soundFile or volume <= 0 then return nil, nil end
 
-    local originalVol = tonumber(GetCVar("Sound_SFXVolume")) or 1.0
+    local channel, volCVar = GetSoundChannel()
+    local originalVol = tonumber(GetCVar(volCVar)) or 1.0
     local targetVol = originalVol * volume
     if targetVol > 1.0 then targetVol = 1.0 end
 
-    SetCVar("Sound_SFXVolume", targetVol)
-    local willPlay, handle = PlaySoundFile(soundFile, "SFX")
-    SetCVar("Sound_SFXVolume", originalVol)
+    SetCVar(volCVar, targetVol)
+    local willPlay, handle = PlaySoundFile(soundFile, channel)
+    SetCVar(volCVar, originalVol)
 
     if not willPlay then
         DF:DebugWarn("SoundEngine", "PlaySoundFile failed for: %s", tostring(soundFile))
