@@ -92,10 +92,28 @@ local function ScheduleArenaSortRetry()
         if InCombatLockdown() then
             -- Replays via the existing combat-end queue.
             DF.pendingSortingUpdate = true
+        elseif DF.IsFrameSortActive and DF:IsFrameSortActive() then
+            -- FrameSort owns sorting: re-request its order. Calling
+            -- ApplyArenaHeaderSorting here would just yield and clear the
+            -- header to INDEX, never resolving the incomplete state.
+            if DF.FrameSort and DF.FrameSort.RequestSort then
+                DF.FrameSort:RequestSort()
+            end
         elseif DF.ApplyArenaHeaderSorting then
             DF:ApplyArenaHeaderSorting()
         end
     end)
+end
+
+-- FrameSort integration (Features/FrameSort.lua) writes the arena header's
+-- nameList through its own path; this exposes the incomplete-state machinery
+-- so that path gets the same INDEX-fallback + retry + UNIT_NAME_UPDATE-nudge
+-- coverage as the native ApplyArenaHeaderSorting path.
+function DF:SetArenaSortIncomplete(incomplete)
+    SetArenaNameListIncomplete(incomplete)
+    if incomplete then
+        ScheduleArenaSortRetry()
+    end
 end
 
 -- Same pattern for role updates
@@ -6309,12 +6327,18 @@ end
 
 -- Build a sorted nameList for arena frames
 -- Same approach as BuildPartyNameList but iterates raid1-5 (arena uses raid units)
+-- Names come from GetRaidRosterInfo, NOT UnitName: for raid-kind units,
+-- SecureGroupHeaderTemplate matches nameList tokens against GetRaidRosterInfo
+-- names (already realm-qualified for cross-realm), and the roster usually
+-- knows a late-joiner's name BEFORE their player object loads (UnitName
+-- returns UNKNOWNOBJECT while they're still loading in — typical for
+-- non-rated arenas where players trickle into the prep room). Sourcing from
+-- the roster therefore yields a complete, matchable list immediately in the
+-- common late-join case, where UnitName would have forced the INDEX fallback.
 -- Returns nameList, complete. `complete` is false when a member EXISTS but
--- their name hasn't resolved yet (UnitName = nil / UNKNOWNOBJECT while they're
--- still loading in — typical for non-rated arenas where players trickle into
--- the prep room). An unresolved member is OMITTED rather than added as
--- "Unknown": a literal "Unknown" entry never matches their real name, so the
--- header would hide them for the whole round.
+-- the roster hasn't served their name yet. An unresolved member is OMITTED
+-- rather than added as "Unknown": a literal "Unknown" entry never matches
+-- their real name, so the header would hide them for the whole round.
 function DF:BuildArenaNameList(selfPosition)
     local members = {}
     local complete = true
@@ -6322,17 +6346,16 @@ function DF:BuildArenaNameList(selfPosition)
     for i = 1, 5 do
         local unit = "raid" .. i
         if UnitExists(unit) then
-            local name, realm = UnitName(unit)
-            if not name or name == UNKNOWNOBJECT then
+            -- In arena, raid roster index i corresponds to unit "raid"..i
+            -- (same mapping SecureGroupHeaders.lua uses for RAID-kind units).
+            local name = GetRaidRosterInfo(i)
+            -- issecretvalue first: comparing/testing a secret value crashes.
+            if issecretvalue(name) or not name or name == UNKNOWNOBJECT then
                 complete = false
             else
-                local fullName = name
-                if realm and realm ~= "" then
-                    fullName = name .. "-" .. realm
-                end
                 table.insert(members, {
                     unit = unit,
-                    name = fullName,
+                    name = name,
                     isPlayer = UnitIsUnit(unit, "player")
                 })
             end
@@ -8876,6 +8899,10 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
             -- churn on routine name updates.
             if arenaNameListIncomplete and unit:match("^raid%d")
                 and DF.GetContentType and DF:GetContentType() == "arena" then
+                -- A real name-resolution signal: re-arm the safety cap so a
+                -- player who loads in slower than the retry window (~12s)
+                -- still gets re-sorted instead of staying in INDEX order.
+                arenaSortRetryCount = 0
                 ScheduleArenaSortRetry()
             end
         end
