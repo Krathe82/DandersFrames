@@ -41,6 +41,8 @@
 * (Aura Designer) New icon and square indicators now default their **border inset to 0**, flush with the icon edge, matching the other indicator types. (by Krathe)
 * (Auto Layouts) Saved layouts are tidied of leftover built-in text overrides after the Text Designer migration, so the override list no longer lists dead entries. (by Krathe)
 * (Nicknames) **Northern Sky Raid Tools compatibility** — when NSRT is also set to put nicknames on DandersFrames frames, a one-time prompt lets you choose which addon decides the names shown on your frames (changeable later under **General → Nicknames → Name precedence**), so the two no longer silently fight. (by Maelareth)
+* (Aura Designer) Alert sounds now play on the **Master** channel by default, so they stay audible even with Sound Effects or Music muted. A new **Channel** dropdown next to the Sound Alerts toggle lets you pick a different channel, and the per-alert volume slider now works on whichever channel is selected. (by Krathe)
+* Ready for **patch 12.0.7** — the addon-compartment tooltip and the frame mover's Ready Check action keep working when the new patch ships, with no change on the current version. (by Krathe)
 
 ### Bug Fixes
 
