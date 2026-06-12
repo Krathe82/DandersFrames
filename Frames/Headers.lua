@@ -57,6 +57,47 @@ local function QueueRosterUpdate()
     rosterThrottleFrame:Show()  -- Showing already-shown frame = no-op
 end
 
+-- ============================================================
+-- ARENA SORT RETRY
+-- A friendly arena member can EXIST before their name has resolved
+-- (UnitName returns nil / UNKNOWNOBJECT while they're still loading in —
+-- common in non-rated arenas where players trickle in during prep). A
+-- nameList built in that window FILTERS the unresolved player out of the
+-- secure header, and nothing ever fixes it: name resolution fires no
+-- GROUP_ROSTER_UPDATE, and once the gates open combat blocks attribute
+-- writes for the rest of the round. When a build comes back incomplete,
+-- ApplyArenaHeaderSorting shows everyone in INDEX order instead and this
+-- retry loop re-sorts once the names resolve (UNIT_NAME_UPDATE nudges it
+-- too, but per the codebase's own experience that event is unreliable).
+-- ============================================================
+local arenaSortRetryPending = false
+local arenaSortRetryCount = 0
+local arenaNameListIncomplete = false
+
+local function SetArenaNameListIncomplete(v)
+    arenaNameListIncomplete = v
+    if not v then
+        arenaSortRetryCount = 0  -- complete build: re-arm the safety cap
+    end
+end
+
+local function ScheduleArenaSortRetry()
+    if arenaSortRetryPending then return end
+    if arenaSortRetryCount >= 24 then return end  -- ~12s safety cap
+    arenaSortRetryPending = true
+    arenaSortRetryCount = arenaSortRetryCount + 1
+    C_Timer.After(0.5, function()
+        arenaSortRetryPending = false
+        if not (DF.GetContentType and DF:GetContentType() == "arena") then return end
+        if InCombatLockdown() then
+            -- Replays via the existing combat-end queue.
+            DF.pendingSortingUpdate = true
+        elseif DF.ApplyArenaHeaderSorting then
+            DF:ApplyArenaHeaderSorting()
+        end
+    end)
+end
+
 -- Same pattern for role updates
 local roleThrottleFrame = CreateFrame("Frame")
 roleThrottleFrame:Hide()
@@ -6268,14 +6309,23 @@ end
 
 -- Build a sorted nameList for arena frames
 -- Same approach as BuildPartyNameList but iterates raid1-5 (arena uses raid units)
+-- Returns nameList, complete. `complete` is false when a member EXISTS but
+-- their name hasn't resolved yet (UnitName = nil / UNKNOWNOBJECT while they're
+-- still loading in — typical for non-rated arenas where players trickle into
+-- the prep room). An unresolved member is OMITTED rather than added as
+-- "Unknown": a literal "Unknown" entry never matches their real name, so the
+-- header would hide them for the whole round.
 function DF:BuildArenaNameList(selfPosition)
     local members = {}
-    
+    local complete = true
+
     for i = 1, 5 do
         local unit = "raid" .. i
         if UnitExists(unit) then
             local name, realm = UnitName(unit)
-            if name then
+            if not name or name == UNKNOWNOBJECT then
+                complete = false
+            else
                 local fullName = name
                 if realm and realm ~= "" then
                     fullName = name .. "-" .. realm
@@ -6288,15 +6338,20 @@ function DF:BuildArenaNameList(selfPosition)
             end
         end
     end
-    
+
     -- Use the unified sorting function (handles role, class, alphabetical,
     -- melee/ranged separation, realm stripping, and self-positioning)
-    return DF:BuildSortedNameList(members, DF:GetDB(), selfPosition, true)
+    return DF:BuildSortedNameList(members, DF:GetDB(), selfPosition, true), complete
 end
 
 -- Apply sorting to arena header (uses party settings)
 function DF:ApplyArenaHeaderSorting()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then
+        -- Don't drop the request (a round's combat lasts minutes — e.g. a
+        -- post-reload apply mid-round): replay on the combat-end queue.
+        DF.pendingSortingUpdate = true
+        return
+    end
     if not DF.arenaHeader then return end
 
     -- FrameSort integration: yield sorting entirely to FrameSort when active.
@@ -6358,7 +6413,8 @@ function DF:ApplyArenaHeaderSorting()
         DF.arenaHeader:SetAttribute("groupingOrder", roleOrderString)
         DF.arenaHeader:SetAttribute("groupBy", "ASSIGNEDROLE")
         DF.arenaHeader:SetAttribute("sortMethod", "NAME")
-        
+        SetArenaNameListIncomplete(false)  -- not a filtering mode
+
         if DF.debugHeaders then
             print("|cFF00FF00[DF Headers]|r   Arena using native role sorting")
         end
@@ -6372,36 +6428,52 @@ function DF:ApplyArenaHeaderSorting()
         DF.arenaHeader:SetAttribute("roleFilter", nil)
         DF.arenaHeader:SetAttribute("strictFiltering", nil)
         DF.arenaHeader:SetAttribute("sortMethod", "INDEX")
-        
+        SetArenaNameListIncomplete(false)  -- not a filtering mode
+
         -- Force header to re-evaluate by hiding and showing
         DF.arenaHeader:Hide()
         DF.arenaHeader:Show()
-        
+
         if DF.debugHeaders then
             print("|cFF00FF00[DF Headers]|r   Arena sorting disabled, using INDEX (cleared all attributes)")
         end
     else
         -- Use nameList for FIRST/LAST or any advanced sorting options
-        local nameList = DF:BuildArenaNameList(selfPosition)
-        
+        local nameList, complete = DF:BuildArenaNameList(selfPosition)
+
         -- Clear all filtering/grouping attributes
         DF.arenaHeader:SetAttribute("groupBy", nil)
         DF.arenaHeader:SetAttribute("groupingOrder", nil)
         DF.arenaHeader:SetAttribute("groupFilter", nil)
         DF.arenaHeader:SetAttribute("roleFilter", nil)
         DF.arenaHeader:SetAttribute("strictFiltering", nil)
-        
-        -- Set nameList and sortMethod
-        DF.arenaHeader:SetAttribute("nameList", nameList)
-        DF.arenaHeader:SetAttribute("sortMethod", "NAMELIST")
-        
+
+        if not complete then
+            -- Someone exists whose name hasn't resolved yet. A filtering
+            -- nameList would HIDE them — and nothing would fix it for the
+            -- whole round (name resolution fires no roster event, and combat
+            -- blocks attribute writes once the gates open). Show EVERYONE in
+            -- INDEX order for now and re-sort once the names resolve.
+            DF.arenaHeader:SetAttribute("nameList", nil)
+            DF.arenaHeader:SetAttribute("sortMethod", "INDEX")
+            SetArenaNameListIncomplete(true)
+            ScheduleArenaSortRetry()
+            if DF.debugHeaders then
+                print("|cFF00FF00[DF Headers]|r   Arena nameList INCOMPLETE (unresolved name) — using INDEX + retry")
+            end
+        else
+            -- Set nameList and sortMethod
+            DF.arenaHeader:SetAttribute("nameList", nameList)
+            DF.arenaHeader:SetAttribute("sortMethod", "NAMELIST")
+            SetArenaNameListIncomplete(false)
+            if DF.debugHeaders then
+                print("|cFF00FF00[DF Headers]|r   Arena using nameList mode:", nameList)
+            end
+        end
+
         -- Force header to re-evaluate
         DF.arenaHeader:Hide()
         DF.arenaHeader:Show()
-        
-        if DF.debugHeaders then
-            print("|cFF00FF00[DF Headers]|r   Arena using nameList mode:", nameList)
-        end
     end
 
     -- Schedule private aura reanchor after all attribute changes settle
@@ -8796,6 +8868,16 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
                 end
             end
             tdRefresh(frame, pinnedFrame, "name")
+
+            -- Arena: the resolving name may be the one that made the last
+            -- arena nameList build incomplete (the member was shown unsorted
+            -- via INDEX instead of being filtered out) — nudge the re-sort.
+            -- Gated on the incomplete flag so a fully-sorted header doesn't
+            -- churn on routine name updates.
+            if arenaNameListIncomplete and unit:match("^raid%d")
+                and DF.GetContentType and DF:GetContentType() == "arena" then
+                ScheduleArenaSortRetry()
+            end
         end
         return
     end
