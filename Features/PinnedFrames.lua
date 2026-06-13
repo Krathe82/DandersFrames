@@ -319,8 +319,10 @@ function PinnedFrames:AutoPopulateSet(set, roster)
     local changed = false
     roster = roster or GetGroupRoster()
 
-    -- Ensure manualPlayers table exists (migration for existing profiles)
+    -- Ensure player tables exist (defensive against malformed/partial profiles;
+    -- the loops below and the auto-add path index set.players directly).
     if not set.manualPlayers then set.manualPlayers = {} end
+    if not set.players then set.players = {} end
 
     local hasAnyAutoFilter = set.autoAddTanks or set.autoAddHealers or set.autoAddDPS
 
@@ -456,18 +458,34 @@ end
 -- Clean up offline players from a set
 function PinnedFrames:CleanOfflinePlayers(set, roster)
     if not set or set.keepOfflinePlayers then return false end
-    
+
+    -- Fix A — don't prune against a roster that isn't populated yet. On login /
+    -- zone-in (raidlogging) the group roster loads asynchronously, so for a brief
+    -- window GetNumGroupMembers() is 0 and GetGroupRoster() returns only the player.
+    -- Pruning here would wipe every other pinned member before the roster arrives
+    -- (the intermittent "I have to re-add them" report). 0 also means genuinely solo
+    -- / just-left-the-group — keep the pins for next time rather than wiping them the
+    -- instant the group disbands. Real leavers are pruned on the next update once the
+    -- roster is non-empty.
+    if GetNumGroupMembers() == 0 then return false end
+
     roster = roster or GetGroupRoster()
+    local manual = set.manualPlayers
     local changed = false
-    
+
     for i = #set.players, 1, -1 do
         local fullName = set.players[i]
-        if not IsPlayerInGroup(fullName, roster) then
+        -- Fix B — never prune a manually-added pin. Drag, the +role buttons and
+        -- "Add Offline Player" all mark the name in manualPlayers; those are
+        -- deliberate picks and must persist. keepOfflinePlayers governs only the
+        -- transient AUTO-added members (mirrors the manualPlayers guard the
+        -- auto-remove pass in AutoPopulateSet already uses).
+        if (not manual or not manual[fullName]) and not IsPlayerInGroup(fullName, roster) then
             table.remove(set.players, i)
             changed = true
         end
     end
-    
+
     return changed
 end
 
@@ -1423,7 +1441,7 @@ end
 -- show in the main frames. Resolves stored names → actual roster names exactly like
 -- UpdateHeaderNameList, so the keys match the main members' names directly. Returns
 -- nil when nothing is hidden (cheap no-op for the common case).
-function DF:GetPinnedHiddenNames()
+local function ComputeHiddenNames()
     if PinnedFrames.testModeActive then return nil end  -- never hide real units in test
     local hlDB = GetPinnedDB()
     if not hlDB or not hlDB.sets then return nil end
@@ -1452,6 +1470,26 @@ function DF:GetPinnedHiddenNames()
         if selfRoster and result[selfRoster] then
             result.__hidePlayer = true
         end
+    end
+    return result
+end
+
+-- Per-frame memo. A single raid sort asks for this once per group (1 + up to 8
+-- calls via BuildSortedNameList) and the party/flat paths ask twice; each compute
+-- rebuilds the whole roster (GetGroupRoster) + an IsPlayerInGroup pass. The result
+-- is stable within a frame (roster + pinned config don't change mid-frame, and
+-- pinned-set mutations run debounced in a later frame), so cache it and clear on
+-- the next tick — collapsing the per-group rescans into one without threading the
+-- result through the sort signatures.
+local hiddenNamesCache
+local hiddenNamesValid = false
+function DF:GetPinnedHiddenNames()
+    if hiddenNamesValid then return hiddenNamesCache end
+    local result = ComputeHiddenNames()
+    hiddenNamesCache = result
+    hiddenNamesValid = true
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, function() hiddenNamesValid = false; hiddenNamesCache = nil end)
     end
     return result
 end

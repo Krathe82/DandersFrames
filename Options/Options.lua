@@ -2104,7 +2104,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         position = { point = "CENTER", x = 0, y = 200 },
                         locked = false, showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
-                        keepOfflinePlayers = true,
+                        keepOfflinePlayers = false,
                     },
                     [2] = {
                         enabled = false, name = "Pinned 2", players = {},
@@ -2113,7 +2113,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         position = { point = "CENTER", x = 0, y = -200 },
                         locked = false, showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
-                        keepOfflinePlayers = true,
+                        keepOfflinePlayers = false,
                     },
                 },
             }
@@ -2130,7 +2130,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 if set.autoAddTanks == nil then set.autoAddTanks = false end
                 if set.autoAddHealers == nil then set.autoAddHealers = false end
                 if set.autoAddDPS == nil then set.autoAddDPS = false end
-                if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = true end
+                -- Match Config's default (false). Post-fix, manual pins always
+                -- persist (CleanOfflinePlayers spares manualPlayers); this toggle
+                -- only keeps AUTO-added members after they go offline / leave.
+                if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = false end
                 if set.columnAnchor == nil then set.columnAnchor = "START" end
                 if set.frameAnchor == nil then set.frameAnchor = "START" end
                 if set.locked == nil then set.locked = false end
@@ -2147,6 +2150,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- doesn't snap back to tab 1)
         pagePinnedFrames.persistedTab = pagePinnedFrames.persistedTab or 1
         local activeHighlightTab = pagePinnedFrames.persistedTab
+        -- Sub-tab within a set's editor:
+        --   "setup"      = Settings + Frame Type   (always present)
+        --   "appearance" = Frame Style + Layout    (always present)
+        --   "members"    = Unit Selection + Auto-Populate (player sets only)
+        -- Persisted across page rebuilds; defaults to Setup. Clamped below so a
+        -- persisted "members" never sticks on a boss set (which has no Members tab).
+        pagePinnedFrames.persistedSubTab = pagePinnedFrames.persistedSubTab or "setup"
+        local activeSubTab = pagePinnedFrames.persistedSubTab
         local tabButtons = {}
         local controlsToRefresh = {}
         
@@ -2179,8 +2190,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                     tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
                     tab.text:SetTextColor(0.5, 0.5, 0.5)
                 end
+                -- On/off pip, independent of the selected-tab highlight above.
+                if tab.statusDot then
+                    if set.enabled then
+                        tab.statusDot:SetVertexColor(0.30, 0.82, 0.38)  -- green = enabled
+                    else
+                        tab.statusDot:SetVertexColor(0.32, 0.32, 0.32)  -- grey = disabled
+                    end
+                end
                 local displayName = set.name
-                if displayName == L["Highlight"] .. " " .. i or displayName == "" then displayName = L["Highlight"] .. " " .. i end
+                if displayName == L["Pinned"] .. " " .. i or displayName == "" then displayName = L["Pinned"] .. " " .. i end
+                -- Show the pinned member count on the tab (player sets only — boss
+                -- sets auto-track boss1-8 and have no member list).
+                if set.frameType ~= "friendlyBoss" then
+                    displayName = displayName .. "  (" .. #(set.players or {}) .. ")"
+                end
                 tab.text:SetText(displayName)
             end
         end
@@ -2188,7 +2212,56 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== HEADER GROUP (full width) =====
         local headerGroup = GUI:CreateSettingsGroup(self.child, 560)
         headerGroup:AddWidget(GUI:CreateHeader(self.child, L["Pinned Frames"]), 40)
-        headerGroup:AddWidget(GUI:CreateLabel(self.child, L["Create separate frame groups to pin specific players like tanks, healers, or key raid members. Drag players from your group roster to add them."], 530), 40)
+        -- Auto-size the description's slot to the actual wrapped text height so the
+        -- box hugs the text at every width (no fixed bottom padding, no truncation).
+        -- GetStringHeight returns a stale single-line value right after a width
+        -- change, so we measure on a DEFERRED frame (OnSizeChanged -> C_Timer) once
+        -- the FontString has re-wrapped, then update the group's slot height and
+        -- bubble a relayout up to the page. Mirrors GUI:CreateInfoBanner.
+        local pinnedDescLabel = GUI:CreateLabel(self.child, L["Create separate frame groups to pin specific players like tanks, healers, or key raid members. Drag players from your group roster to add them."], 530)
+        do
+            local descFS
+            for _, r in ipairs({ pinnedDescLabel:GetRegions() }) do
+                if r.GetStringHeight then descFS = r break end
+            end
+            local applying, lastW = false, nil
+            local function ApplyDescHeight()
+                if applying or not descFS or not pinnedDescLabel:IsVisible() then return end
+                local g = pinnedDescLabel.settingsGroup
+                if not g then return end
+                local desired = math.ceil(descFS:GetStringHeight() or 18) + 6
+                for _, entry in ipairs(g.groupChildren) do
+                    if entry.widget == pinnedDescLabel then
+                        if entry.height ~= desired then
+                            applying = true
+                            entry.height = desired
+                            g:LayoutChildren()
+                            local p = g:GetParent()  -- bubble so the page's column layout sees the new height
+                            while p do
+                                if type(p.RefreshStates) == "function" and p.children then p:RefreshStates() break end
+                                p = p:GetParent()
+                            end
+                            applying = false
+                        end
+                        break
+                    end
+                end
+            end
+            local function ScheduleApply()
+                if C_Timer and C_Timer.After then C_Timer.After(0, ApplyDescHeight) else ApplyDescHeight() end
+            end
+            pinnedDescLabel:SetScript("OnSizeChanged", function(_, w)
+                if w == lastW then return end  -- only width changes affect wrap height
+                lastW = w
+                ScheduleApply()
+            end)
+            -- Re-measure when the page surfaces (GetStringHeight is unreliable while
+            -- hidden) and once on build in case the width never changes.
+            pinnedDescLabel:SetScript("OnShow", function() lastW = nil ScheduleApply() end)
+            ScheduleApply()
+        end
+        -- Initial slot fits 2 lines; the deferred measure grows/shrinks it to fit.
+        headerGroup:AddWidget(pinnedDescLabel, 34)
         Add(headerGroup, nil, "both")
         
         -- Tab container
@@ -2203,7 +2276,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tab:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
             tab.text = tab:CreateFontString(nil, "OVERLAY", "DFFontNormal")
             tab.text:SetPoint("CENTER")
-            tab.text:SetText(L["Highlight"] .. " " .. i)
+            tab.text:SetText(L["Pinned"] .. " " .. i)
+            -- Status pip on the left: green = set enabled, dim grey = disabled.
+            -- Independent of the active-tab highlight (border + text colour), so a
+            -- set's on/off state is visible whether or not it's the selected tab.
+            tab.statusDot = tab:CreateTexture(nil, "OVERLAY")
+            tab.statusDot:SetTexture("Interface\\Buttons\\WHITE8x8")
+            tab.statusDot:SetSize(7, 7)
+            tab.statusDot:SetPoint("LEFT", tab, "LEFT", 8, 0)
             tab:SetScript("OnClick", function()
                 local oldSet = GetCurrentSet()
                 local oldType = oldSet and oldSet.frameType
@@ -2227,9 +2307,59 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tabButtons[i] = tab
         end
         RefreshTabs()
-        
+
+        -- ===== SUB-TABS (Setup / Appearance / Members) =====
+        -- Splits the set editor so each concern has its own tab and no single page
+        -- is a long scroll. Switching just toggles group visibility via hideOn + a
+        -- RefreshStates() reflow (no page rebuild). The Members tab only exists for
+        -- player sets (boss sets auto-track boss1-8 and have no roster); the page
+        -- rebuilds on a frame-type change, so this list is rebuilt with it.
+        if activeSubTab == "members" and IsCurrentBossMode() then activeSubTab = "setup" end
+        local subTabDefs = { { key = "setup", label = L["Setup"] }, { key = "appearance", label = L["Appearance"] } }
+        if not IsCurrentBossMode() then
+            table.insert(subTabDefs, { key = "members", label = L["Members"] })
+        end
+        local subTabButtons = {}
+        local function RefreshSubTabs()
+            local themeColor = GUI.GetThemeColor()
+            for _, b in ipairs(subTabButtons) do
+                if b.key == activeSubTab then
+                    b:SetBackdropColor(0.18, 0.18, 0.18, 1)
+                    b:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
+                    b.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+                else
+                    b:SetBackdropColor(0.1, 0.1, 0.1, 1)
+                    b:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+                    b.text:SetTextColor(0.6, 0.6, 0.6)
+                end
+            end
+        end
+        local subTabContainer = CreateFrame("Frame", nil, self.child)
+        subTabContainer:SetSize(460, 26)
+        for i, def in ipairs(subTabDefs) do
+            local b = CreateFrame("Button", nil, subTabContainer, "BackdropTemplate")
+            b.key = def.key
+            b:SetSize(110, 24)
+            b:SetPoint("LEFT", subTabContainer, "LEFT", (i - 1) * 116, 0)
+            b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            b.text = b:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            b.text:SetPoint("CENTER")
+            b.text:SetText(def.label)
+            b:SetScript("OnClick", function()
+                activeSubTab = def.key
+                pagePinnedFrames.persistedSubTab = def.key
+                RefreshSubTabs()
+                self:RefreshStates()  -- reflow: hideOn predicates re-evaluate against activeSubTab
+            end)
+            b:SetScript("OnEnter", function(s) if activeSubTab ~= def.key then s:SetBackdropBorderColor(0.4, 0.4, 0.4, 1); s.text:SetTextColor(0.75, 0.75, 0.75) end end)
+            b:SetScript("OnLeave", function() RefreshSubTabs() end)
+            subTabButtons[i] = b
+        end
+        RefreshSubTabs()
+        Add(subTabContainer, 30, "both")
+
         AddSpace(10, "both")
-        
+
         -- Helper to get the pinned override key for the current active tab
         local function GetPinnedKey(dbKey)
             return "pinned." .. activeHighlightTab .. "." .. dbKey
@@ -3067,6 +3197,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
+            RefreshTabs()  -- update the on/off pip on this set's tab
         end), 28)
         -- Forward ref so Lock Position can re-grey Show Label when toggled.
         local showLabelCheck
@@ -3299,9 +3430,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         nameInputContainer.Refresh = function() nameInput:SetText(GetCurrentSet().name or "") end
         table.insert(controlsToRefresh, nameInputContainer)
         settingsGroup:AddWidget(nameInputContainer, 48)
-        
+
         Add(settingsGroup, nil, 1)
-        
+        settingsGroup.hideOn = function() return activeSubTab ~= "setup" end  -- Setup tab
+
         -- ===== FRAME TYPE GROUP (Column 2) =====
         local frameTypeGroup = GUI:CreateSettingsGroup(self.child, 280)
         local frameTypeHeader = GUI:CreateHeader(self.child, L["Frame Type"])
@@ -3346,6 +3478,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         )
 
         Add(frameTypeGroup, nil, 2)
+        frameTypeGroup.hideOn = function() return activeSubTab ~= "setup" end  -- Setup tab
         AddSpace(10, "both")
 
         -- ===== FRAME STYLE GROUP (Column 1) — inherited from your frames, overridable =====
@@ -3489,6 +3622,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         })
 
         Add(layoutGroup, nil, 1)
+        layoutGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
 
         -- ===== LAYOUT GROUP (Column 2) — pinned-only arrangement (no main-frame
         -- equivalent, so these are independent settings, not Match overrides) =====
@@ -3510,63 +3644,33 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
         Add(arrangeGroup, nil, 2)
-        
-        if not IsCurrentBossMode() then
-        -- ===== AUTO-POPULATE GROUP (Column 2) =====
-        local autoPopGroup = GUI:CreateSettingsGroup(self.child, 280)
-        autoPopGroup:AddWidget(GUI:CreateHeader(self.child, L["Auto-Populate"]), 40)
-        autoPopGroup:AddWidget(GUI:CreateLabel(self.child, L["Automatically add players by role when they join your group."], 250), 30)
+        arrangeGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
 
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Tanks"], "autoAddTanks", function()
-            if GetCurrentSet().autoAddTanks and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Healers"], "autoAddHealers", function()
-            if GetCurrentSet().autoAddHealers and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add DPS"], "autoAddDPS", function()
-            if GetCurrentSet().autoAddDPS and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        -- Exclude Self: keep the player out of this set's auto-add (e.g. Aug Evoker
-        -- who buffs others). Re-runs auto-populate so self is added/removed live.
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Exclude Self"], "excludeSelf", function()
-            if DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Keep when offline/left"], "keepOfflinePlayers", function() end), 28)
-
-        Add(autoPopGroup, nil, 2)
-        end -- not IsCurrentBossMode
-        
         if not IsCurrentBossMode() then
-        -- ===== UNIT SELECTION (full width) =====
-        AddSpace(10, "both")
+        -- ===== MEMBERS SUB-TAB: Unit Selection (roster) first, then Auto-Populate.
+        -- Both are "who's in this group", so they lead the Members view; Settings /
+        -- Frame Type / Frame Style / Layout live on the Appearance sub-tab. =====
+        local membersHideOn = function() return activeSubTab ~= "members" end
 
         -- Unit Selection header with override indicator
         unitSelHeader = CreateFrame("Frame", nil, self.child)
         unitSelHeader:SetSize(500, 40)
+        unitSelHeader.hideOn = membersHideOn
         local unitSelTitle = unitSelHeader:CreateFontString(nil, "OVERLAY", "DFFontNormal")
         unitSelTitle:SetPoint("LEFT", 0, 0)
         unitSelTitle:SetText(L["Unit Selection"])
         unitSelTitle:SetTextColor(1, 1, 1)
+
+        -- "N pinned" count beside the title, themed. Updated on any roster change.
+        local unitSelCount = unitSelHeader:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        unitSelCount:SetPoint("LEFT", unitSelTitle, "RIGHT", 8, 0)
+        local function UpdateUnitSelCount()
+            local n = #((GetCurrentSet() and GetCurrentSet().players) or {})
+            unitSelCount:SetText(n .. " " .. L["pinned"])
+            local tc = GUI.GetThemeColor()
+            unitSelCount:SetTextColor(tc.r, tc.g, tc.b)
+        end
+        UpdateUnitSelCount()
 
         -- Override indicator for players list (header-level)
         AddPinnedOverrideIndicators(unitSelHeader, unitSelTitle, "players", function()
@@ -3580,6 +3684,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end)
         unitSelHeader.Refresh = function(self)
             if self.UpdateOverrideIndicators then self:UpdateOverrideIndicators() end
+            UpdateUnitSelCount()
         end
 
         Add(unitSelHeader, 40, "both")
@@ -3616,10 +3721,61 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         rosterWidget.Refresh = function(s)
             if originalRefresh then originalRefresh(s) end
             if unitSelHeader.UpdateOverrideIndicators then unitSelHeader:UpdateOverrideIndicators() end
+            UpdateUnitSelCount()
+            RefreshTabs()  -- keep the tab member count in sync with the roster
         end
         table.insert(controlsToRefresh, rosterWidget)
         table.insert(controlsToRefresh, unitSelHeader)
-        Add(rosterWidget, 340, "both")
+        -- The roster widget's content runs to ~364px (panes 240 + role buttons +
+        -- the "Add Offline Player" input), taller than its 340 frame. Reserve the
+        -- real height (plus a gap) so the following Auto-Populate group doesn't ride
+        -- up into the manual-entry row.
+        Add(rosterWidget, 378, "both")
+        rosterWidget.hideOn = membersHideOn
+
+        -- ===== AUTO-POPULATE GROUP (full width, under the roster) =====
+        local autoPopGroup = GUI:CreateSettingsGroup(self.child, 280)
+        autoPopGroup:AddWidget(GUI:CreateHeader(self.child, L["Auto-Populate"]), 40)
+        autoPopGroup:AddWidget(GUI:CreateLabel(self.child, L["Automatically add players by role when they join your group."], 510), 20)
+
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Tanks"], "autoAddTanks", function()
+            if GetCurrentSet().autoAddTanks and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Healers"], "autoAddHealers", function()
+            if GetCurrentSet().autoAddHealers and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add DPS"], "autoAddDPS", function()
+            if GetCurrentSet().autoAddDPS and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        -- Exclude Self: keep the player out of this set's auto-add (e.g. Aug Evoker
+        -- who buffs others). Re-runs auto-populate so self is added/removed live.
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Exclude Self"], "excludeSelf", function()
+            if DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Keep when offline/left"], "keepOfflinePlayers", function() end, L["Keep when offline/left Tooltip"]), 28)
+
+        Add(autoPopGroup, nil, "both")
+        autoPopGroup.hideOn = membersHideOn
         end -- not IsCurrentBossMode
 
         RefreshControls()

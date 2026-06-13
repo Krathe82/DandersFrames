@@ -752,9 +752,15 @@ function GUI:CreateLabel(parent, text, width, color)
     frame:SetSize(width or 380, 40)
     
     local lbl = frame:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    -- Anchor both top corners so the wrap width tracks the frame's width. The
+    -- layout engine (settings-group LayoutChildren / page column sizing) resizes
+    -- the frame to the available width, so the text now uses the full width and
+    -- wraps when the window is narrow instead of overflowing/clipping at a fixed
+    -- width. Standalone (un-laid-out) labels keep the frame's initial `width`.
     lbl:SetPoint("TOPLEFT", 0, -5)
-    lbl:SetWidth(width or 380)
+    lbl:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -5)
     lbl:SetJustifyH("LEFT")
+    lbl:SetWordWrap(true)
     lbl:SetText(text)
     
     if color then
@@ -6525,10 +6531,10 @@ function GUI:CreateHighlightRosterWidget(parent, getPlayersFunc, setPlayersFunc,
     leftScroll:SetScrollChild(leftContent)
     StyleScrollBar(leftScroll)
 
-    -- ========== RIGHT COLUMN: Highlighted Units ==========
+    -- ========== RIGHT COLUMN: Pinned Units ==========
     local rightHeader = container:CreateFontString(nil, "OVERLAY", "DFFontNormal")
     rightHeader:SetPoint("TOPLEFT", leftBg, "TOPRIGHT", COL_GAP, 18)
-    rightHeader:SetText(L["Highlighted Units"])
+    rightHeader:SetText(L["Pinned Units"])
     rightHeader:SetTextColor(0.7, 0.7, 0.7)
     
     local rightCount = container:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
