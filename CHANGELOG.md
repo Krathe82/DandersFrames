@@ -1,5 +1,12 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+* (Arena) Fixed teammates who load in late sometimes staying missing from your frames for the whole round, and the frame order breaking after a reload mid-match. (by Krathe)
+* (Arena) Fixed your frames staying hidden after a reload during a match. (by Krathe)
+
 ## [4.4.1]
 
 ### Bug Fixes
