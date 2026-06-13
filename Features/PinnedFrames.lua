@@ -60,6 +60,22 @@ local function GetPinnedDB()
     return db and db.pinnedFrames
 end
 
+-- Maximum pinned sets a profile may hold. Each ACTIVE (enabled) set is a live
+-- SecureGroupHeaderTemplate that re-evaluates on every roster event, so this
+-- ceiling is perf-bounded, not arbitrary; defined-but-disabled sets are dormant
+-- and cheap. Exposed on the module so the editor can gate the "Add set" button.
+-- 4 keeps the editor tab strip on one row and the active-header count sane.
+PinnedFrames.MAX_SETS = 4
+
+-- Count of sets defined in this mode's pinned config, clamped to MAX_SETS.
+local function NumSets(hlDB)
+    hlDB = hlDB or GetPinnedDB()
+    if not hlDB or not hlDB.sets then return 0 end
+    local n = #hlDB.sets
+    if n > PinnedFrames.MAX_SETS then n = PinnedFrames.MAX_SETS end
+    return n
+end
+
 -- Get the current actual mode (not cached)
 local function GetActualMode()
     return IsInRaid() and "raid" or "party"
@@ -569,7 +585,7 @@ function PinnedFrames:ProcessAllSets()
         -- pull, so the out-of-combat guard normally passes; a mid-combat
         -- arrival is picked up by the next out-of-combat call.
         if not self.pvpHidden and not InCombatLockdown() then
-            for i = 1, 2 do
+            for i = 1, PinnedFrames.MAX_SETS do
                 local c = self.containers[i]
                 if c then
                     c:Hide()
@@ -588,7 +604,7 @@ function PinnedFrames:ProcessAllSets()
     -- the solo gate).
     if self.pvpHidden and not InCombatLockdown() then
         self.pvpHidden = nil
-        for i = 1, 2 do
+        for i = 1, PinnedFrames.MAX_SETS do
             local set = hlDB.sets and hlDB.sets[i]
             if set then self:SetEnabled(i, set.enabled) end
         end
@@ -596,7 +612,7 @@ function PinnedFrames:ProcessAllSets()
 
     -- Skip processing if no sets are enabled (avoids unnecessary work)
     local anyEnabled = false
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         if hlDB.sets[i] and hlDB.sets[i].enabled then
             anyEnabled = true
             break
@@ -607,7 +623,7 @@ function PinnedFrames:ProcessAllSets()
     local roster = GetGroupRoster()
     local changed = false
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = hlDB.sets[i]
         if set then
             if self:AutoPopulateSet(set, roster) then
@@ -657,7 +673,7 @@ end
 function PinnedFrames:OnBossFramesChanged()
     if not self.initialized then return end
 
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             -- unitFrameMap and frame refresh are safe during combat (purely visual/data)
@@ -1501,7 +1517,7 @@ local function ComputeHiddenNames()
     -- members must not keep filtering the main frames there.
     if PinnedPvPDormant(hlDB) then return nil end
     local result, roster
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = hlDB.sets[i]
         -- PinnedSoloAllowed: a set whose container is hidden by the solo gate
         -- must not filter either — otherwise a solo player pinned into a hiding
@@ -1890,7 +1906,7 @@ end
 
 -- Update all headers
 function PinnedFrames:UpdateAllHeaders()
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         self:UpdateHeaderNameList(i)
     end
 end
@@ -2022,7 +2038,7 @@ end
 -- profile lingers on screen when the new profile has that set disabled.
 function PinnedFrames:RefreshEnabledState()
     if not self.initialized then return end
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(i)
         if set then self:SetEnabled(i, set.enabled) end
     end
@@ -2067,7 +2083,7 @@ function PinnedFrames:LockAllForCombat()
     local hlDB = GetPinnedDB()
     if not hlDB or not hlDB.sets then return end
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = hlDB.sets[i]
         local container = self.containers[i]
         if set and container and not set.locked then
@@ -2183,8 +2199,10 @@ function PinnedFrames:Initialize()
 
     DF:Debug("PINNED", "Initializing pinned frames (mode=%s)", tostring(self.currentMode))
     
-    -- Create frames for both sets
-    for i = 1, 2 do
+    -- Create frames for every defined set (CreateSetFrames no-ops past the last
+    -- defined set, so iterating the cap is safe and also rebuilds correctly when
+    -- the set count changed).
+    for i = 1, PinnedFrames.MAX_SETS do
         self:CreateSetFrames(i)
     end
     
@@ -2193,7 +2211,7 @@ function PinnedFrames:Initialize()
     -- Apply layout settings immediately (no delays for combat safety)
     -- Note: ApplyLayoutSettings is also called in CreateSetFrames, but we do it
     -- again here to ensure all settings are applied after headers are fully set up
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local header = self.headers[i]
         local set = GetSetDB(i)
         if set and set.enabled and (header or IsBossSet(set)) then
@@ -2205,7 +2223,7 @@ function PinnedFrames:Initialize()
     -- raw enabled, so re-run SetEnabled to hide solo sets that haven't opted in.
     -- Record the initial group state for solo<->group transition detection.
     self.wasInGroup = IsInGroup()
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(i)
         if set then self:SetEnabled(i, set.enabled) end
     end
@@ -2223,7 +2241,7 @@ function PinnedFrames:Reinitialize()
     end
     
     -- Clean up old frames
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         if self.bossHandlers[i] then
             self.bossHandlers[i]:Hide()
             self.bossHandlers[i] = nil
@@ -2285,9 +2303,103 @@ function PinnedFrames:Reinitialize()
     end
 end
 
+-- ============================================================
+-- DYNAMIC SETS — add / remove beyond the default two
+-- ============================================================
+
+-- A fresh set, mirroring Config's per-set defaults. Disabled by default so a
+-- newly-added set is dormant (no secure-header churn) until the user enables it.
+-- Position is staggered by index so new sets don't all land on the same spot.
+local function MakeDefaultSet(index)
+    return {
+        enabled = false,
+        frameType = "player",
+        testCount = 3,
+        name = "Pinned " .. index,
+        players = {},
+        growDirection = "HORIZONTAL",
+        unitsPerRow = 5,
+        horizontalSpacing = 2,
+        verticalSpacing = 2,
+        position = { point = "CENTER", x = 0, y = 250 - (index - 1) * 130 },
+        locked = false,
+        showLabel = false,
+        columnAnchor = "START",
+        frameAnchor = "START",
+        autoAddTanks = false,
+        autoAddHealers = false,
+        autoAddDPS = false,
+        keepOfflinePlayers = false,
+        manualPlayers = {},
+    }
+end
+
+-- Resolve a mode's pinnedFrames DB via the same accessor the editor and runtime
+-- use, so writes land on the table they read from (works for the inactive mode).
+local function ModePinnedDB(mode)
+    local md = DF.GetDB and DF:GetDB(mode)
+    return md and md.pinnedFrames
+end
+
+-- Add a new pinned set to ONE mode. Party and raid are INDEPENDENT — you can run,
+-- say, 4 raid sets and 1 party set. `mode` defaults to the active mode; the editor
+-- passes its selected mode, so adding to the inactive mode is a pure DB change that
+-- materialises on the next mode switch (Reinitialize). Returns the new index, or
+-- nil at the cap. Secure frames build out of combat (deferred otherwise).
+function PinnedFrames:AddSet(mode)
+    mode = mode or GetActualMode()
+    local pf = ModePinnedDB(mode)
+    if not pf or not pf.sets then return nil end
+    if #pf.sets >= self.MAX_SETS then return nil end
+    local newIndex = #pf.sets + 1
+    pf.sets[newIndex] = MakeDefaultSet(newIndex)
+    -- Only (re)build live frames when editing the ACTIVE mode; the inactive mode's
+    -- frames are rebuilt by Reinitialize the next time you enter that mode.
+    if mode ~= GetActualMode() then return newIndex end
+    if InCombatLockdown() then
+        self.pendingReinitialize = true
+        return newIndex
+    end
+    self:CreateSetFrames(newIndex)
+    self:ApplyLayoutSettings(newIndex)
+    local set = GetSetDB(newIndex)
+    self:SetEnabled(newIndex, set and set.enabled)
+    return newIndex
+end
+
+-- Remove a pinned set from ONE mode. Refuses the last set. `table.remove` compacts
+-- the array (nested config + designer-preset refs travel with it). For the active
+-- mode, Reinitialize rebuilds runtime frames from the compacted DB; for the
+-- inactive mode it's a pure DB change. Combat-safe (hide now, rebuild after).
+function PinnedFrames:RemoveSet(setIndex, mode)
+    mode = mode or GetActualMode()
+    local pf = ModePinnedDB(mode)
+    if not pf or not pf.sets then return false end
+    if #pf.sets <= 1 then return false end
+    if setIndex < 1 or setIndex > #pf.sets then return false end
+
+    table.remove(pf.sets, setIndex)
+
+    if mode ~= GetActualMode() then return true end  -- inactive mode: DB only
+    if InCombatLockdown() then
+        local c = self.containers[setIndex]
+        if c then
+            if c.mover then c.mover:Hide() end
+            c:Hide()
+        end
+        if self.headers[setIndex] then self.headers[setIndex]:Hide() end
+        if self.labels[setIndex] then self.labels[setIndex]:Hide() end
+        self.pendingReinitialize = true
+        return true
+    end
+
+    self:Reinitialize()
+    return true
+end
+
 -- Refresh all child frames (calls FullFrameRefresh on each)
 function PinnedFrames:RefreshAllChildFrames()
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set then
             if IsBossSet(set) then
@@ -2414,7 +2526,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
         -- Fresh pull starts with all slots free; any frames still visible
         -- (rare — e.g. we left combat mid-add) re-enter via onBossShow.
         if PinnedFrames.initialized then
-            for setIndex = 1, 2 do
+            for setIndex = 1, PinnedFrames.MAX_SETS do
                 local set = GetSetDB(setIndex)
                 if set and set.enabled and IsBossSet(set) then
                     local handler = PinnedFrames.bossHandlers[setIndex]
@@ -2486,7 +2598,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
         if PinnedFrames.wasInGroup == nil then PinnedFrames.wasInGroup = inGroup end
         if inGroup ~= PinnedFrames.wasInGroup then
             PinnedFrames.wasInGroup = inGroup
-            for i = 1, 2 do
+            for i = 1, PinnedFrames.MAX_SETS do
                 local set = GetSetDB(i)
                 if set then PinnedFrames:SetEnabled(i, set.enabled) end
             end
@@ -2521,7 +2633,7 @@ function PinnedFrames:DebugPrint()
         print("    -", name)
     end
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(i)
         print(" ")
         print("  === Set " .. i .. " ===")
@@ -3037,7 +3149,7 @@ function PinnedFrames:EnterTestMode()
     -- through. Without this an enabled party set's real frame shows during raid
     -- test mode (its set index isn't in the raid test loop below, so the per-set
     -- hide never reaches it). ExitTestMode restores them per live enabled state.
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         if self.headers[setIndex] then self.headers[setIndex]:Hide() end
         local rc = self.containers[setIndex]
         if rc then
@@ -3048,7 +3160,7 @@ function PinnedFrames:EnterTestMode()
         if self.labels[setIndex] then self.labels[setIndex]:Hide() end
     end
 
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDBForMode(setIndex, isRaidMode)
         if set and set.enabled then
             local isBossSet = IsBossSet(set)
@@ -3124,13 +3236,13 @@ function PinnedFrames:ExitTestMode()
     self.testModeActive = false
 
     -- Hide all test frames + test containers (both mode profiles)
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         self:HidePlayerTestFrames(setIndex)
     end
 
     -- Restore real headers for player-mode sets in the current mode (we may
     -- have hidden them when entering test mode in the same mode).
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         -- Effective visibility includes the party solo gate (mirror SetEnabled):
         -- the mover/label are parented to UIParent, so restoring them for a
@@ -3166,7 +3278,7 @@ function PinnedFrames:ExitTestMode()
     -- cleared flags on real boss frames. Defensively clear to avoid stale
     -- dfIsTestFrame leaking from an older-session toggle.
     C_Timer.After(0.15, function()
-        for setIndex = 1, 2 do
+        for setIndex = 1, PinnedFrames.MAX_SETS do
             local frames = self.bossFrames[setIndex]
             if frames then
                 for i = 1, 8 do
@@ -3186,7 +3298,7 @@ end
 function PinnedFrames:UpdateTestFrames()
     if not self.testModeActive then return end
 
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local pool = self.testFrames[setIndex]
         if pool then
             for i = 1, #pool do
@@ -3274,7 +3386,7 @@ end
 
 -- Restore real `[@bossN,help]show;hide` drivers on all boss-mode sets.
 local function RestoreBossFrameDrivers()
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             local frames = PinnedFrames.bossFrames[setIndex]
@@ -3297,7 +3409,7 @@ function PinnedFrames:RunBossSpawnScript(steps)
     local myGen = self.bossSpawnGeneration
 
     -- Start from a clean slate so the script's sequence is deterministic.
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             for i = 1, 8 do
@@ -3312,7 +3424,7 @@ function PinnedFrames:RunBossSpawnScript(steps)
         if t > maxT then maxT = t end
         C_Timer.After(t, function()
             if PinnedFrames.bossSpawnGeneration ~= myGen then return end
-            for setIndex = 1, 2 do
+            for setIndex = 1, PinnedFrames.MAX_SETS do
                 local set = GetSetDB(setIndex)
                 if set and set.enabled and IsBossSet(set) then
                     ForceBossFrameVisible(setIndex, bossIndex, sign == "+")
@@ -3350,7 +3462,7 @@ function PinnedFrames:SetBossSpawnTest(arg)
     end
 
     local anyBossSet = false
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             anyBossSet = true
@@ -3404,7 +3516,7 @@ function PinnedFrames:SetBossTestMode(visibleCount)
     self.bossTestCount = visibleCount
 
     local anyToggled = false
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             local frames = self.bossFrames[setIndex]

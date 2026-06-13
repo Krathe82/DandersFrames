@@ -2093,8 +2093,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     local pagePinnedFrames = CreateSubTab("general", "general_pinnedframes", L["Pinned Frames"])
     BuildPage(pagePinnedFrames, function(self, db, Add, AddSpace, AddSyncPoint)
         Add(CreateCopyButton(self.child, {"pinnedFrames"}, L["Pinned Frames"], "general_pinnedframes"), 25, 2)
-        -- Constants
-        local HIGHLIGHT_MAX_SETS = 2
+        -- Constants — mirror the runtime cap so the editor builds exactly as many
+        -- tab buttons as the backend allows (sets beyond the current count are hidden).
+        local HIGHLIGHT_MAX_SETS = (DF.PinnedFrames and DF.PinnedFrames.MAX_SETS) or 5
         
         -- Initialize pinnedFrames in db if needed
         if not db.pinnedFrames then
@@ -2128,7 +2129,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         if db.pinnedFrames.disableInPvP == nil then db.pinnedFrames.disableInPvP = true end
 
         -- Migration: add new options to existing sets
-        for i = 1, 2 do
+        for i = 1, #db.pinnedFrames.sets do
             local set = db.pinnedFrames.sets[i]
             if set then
                 if set.autoAddTanks == nil then set.autoAddTanks = false end
@@ -2153,6 +2154,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- between sets with different frameTypes — which calls RefreshCurrentPage —
         -- doesn't snap back to tab 1)
         pagePinnedFrames.persistedTab = pagePinnedFrames.persistedTab or 1
+        -- Clamp into the live set count — a set may have been removed since this
+        -- was last persisted (or in the other mode), so never address a nil set.
+        local setCount = #db.pinnedFrames.sets
+        if pagePinnedFrames.persistedTab > setCount then pagePinnedFrames.persistedTab = setCount end
+        if pagePinnedFrames.persistedTab < 1 then pagePinnedFrames.persistedTab = 1 end
         local activeHighlightTab = pagePinnedFrames.persistedTab
         -- Sub-tab within a set's editor:
         --   "setup"      = Settings + Frame Type   (always present)
@@ -2164,7 +2170,49 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local activeSubTab = pagePinnedFrames.persistedSubTab
         local tabButtons = {}
         local controlsToRefresh = {}
-        
+        -- Forward refs assigned in the tab-strip build below; RefreshTabs reads them.
+        local tabContainer, addSetBtn, setMeta
+
+        -- Invalidate + rebuild the pinned page (after add/remove the whole editor
+        -- must re-render with the new tab count + the active set's widgets).
+        local function RebuildPinnedPage()
+            if GUI.InvalidatePage then GUI:InvalidatePage(GUI.CurrentPageName) end
+            if GUI.RefreshCurrentPage then GUI.RefreshCurrentPage() end
+        end
+
+        local function DoAddSet()
+            if not DF.PinnedFrames then return end
+            -- Target the mode currently being edited (party/raid are independent).
+            local newIndex = DF.PinnedFrames:AddSet(GUI.SelectedMode)
+            if newIndex then
+                pagePinnedFrames.persistedTab = newIndex  -- jump to the new set
+                RebuildPinnedPage()
+            end
+        end
+
+        if not StaticPopupDialogs["DANDERS_PINNED_REMOVE_SET"] then
+            StaticPopupDialogs["DANDERS_PINNED_REMOVE_SET"] = {
+                text = L["Remove this pinned set? Its members and settings will be lost."],
+                button1 = YES, button2 = NO,
+                timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
+                OnAccept = function(_, data)
+                    if data and DF.PinnedFrames and DF.PinnedFrames:RemoveSet(data.idx, data.mode) then
+                        if pagePinnedFrames.persistedTab > 1 then
+                            pagePinnedFrames.persistedTab = pagePinnedFrames.persistedTab - 1
+                        end
+                        if data.rebuild then data.rebuild() end
+                    end
+                end,
+            }
+        end
+
+        local function DoRemoveSet(idx)
+            if not DF.PinnedFrames then return end
+            -- Capture the edited mode at click time (robust if the GUI mode changes
+            -- while the confirm popup is open). Party/raid set lists are independent.
+            StaticPopup_Show("DANDERS_PINNED_REMOVE_SET", nil, nil, { idx = idx, mode = GUI.SelectedMode, rebuild = RebuildPinnedPage })
+        end
+
         local function GetCurrentSet()
             return db.pinnedFrames.sets[activeHighlightTab]
         end
@@ -2182,34 +2230,64 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         local function RefreshTabs()
             local themeColor = GUI.GetThemeColor()
+            local count = #db.pinnedFrames.sets
             for i, tab in ipairs(tabButtons) do
                 local set = db.pinnedFrames.sets[i]
-                local isActive = (i == activeHighlightTab)
-                if isActive then
-                    tab:SetBackdropColor(0.18, 0.18, 0.18, 1)
-                    tab:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
-                    tab.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+                if not set then
+                    -- Tab button beyond the current set count — hide it.
+                    tab:Hide()
                 else
-                    tab:SetBackdropColor(0.1, 0.1, 0.1, 1)
-                    tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-                    tab.text:SetTextColor(0.5, 0.5, 0.5)
-                end
-                -- On/off pip, independent of the selected-tab highlight above.
-                if tab.statusDot then
-                    if set.enabled then
-                        tab.statusDot:SetVertexColor(0.30, 0.82, 0.38)  -- green = enabled
+                    tab:Show()
+                    tab:SetPoint("LEFT", tabContainer, "LEFT", (i - 1) * 124, 0)
+                    local isActive = (i == activeHighlightTab)
+                    if isActive then
+                        tab:SetBackdropColor(0.18, 0.18, 0.18, 1)
+                        tab:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
+                        tab.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
                     else
-                        tab.statusDot:SetVertexColor(0.32, 0.32, 0.32)  -- grey = disabled
+                        tab:SetBackdropColor(0.1, 0.1, 0.1, 1)
+                        tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+                        tab.text:SetTextColor(0.5, 0.5, 0.5)
                     end
+                    -- On/off pip, independent of the selected-tab highlight above.
+                    if tab.statusDot then
+                        if set.enabled then
+                            tab.statusDot:SetVertexColor(0.30, 0.82, 0.38)  -- green = enabled
+                        else
+                            tab.statusDot:SetVertexColor(0.32, 0.32, 0.32)  -- grey = disabled
+                        end
+                    end
+                    -- Remove (×) only on the active tab, and only when more than one
+                    -- set exists (the last set can't be removed). Keeps the strip clean.
+                    if tab.removeBtn then
+                        if isActive and count > 1 then tab.removeBtn:Show() else tab.removeBtn:Hide() end
+                    end
+                    local displayName = set.name
+                    if displayName == L["Pinned"] .. " " .. i or displayName == "" then displayName = L["Pinned"] .. " " .. i end
+                    -- Show the pinned member count on the tab (player sets only — boss
+                    -- sets auto-track boss1-8 and have no member list).
+                    if set.frameType ~= "friendlyBoss" then
+                        displayName = displayName .. "  (" .. #(set.players or {}) .. ")"
+                    end
+                    tab.text:SetText(displayName)
                 end
-                local displayName = set.name
-                if displayName == L["Pinned"] .. " " .. i or displayName == "" then displayName = L["Pinned"] .. " " .. i end
-                -- Show the pinned member count on the tab (player sets only — boss
-                -- sets auto-track boss1-8 and have no member list).
-                if set.frameType ~= "friendlyBoss" then
-                    displayName = displayName .. "  (" .. #(set.players or {}) .. ")"
+            end
+            -- "+ Add set" sits just after the last set; hidden at the cap.
+            if addSetBtn then
+                if count < HIGHLIGHT_MAX_SETS then
+                    addSetBtn:ClearAllPoints()
+                    addSetBtn:SetPoint("LEFT", tabContainer, "LEFT", count * 124, 0)
+                    addSetBtn:Show()
+                else
+                    addSetBtn:Hide()
                 end
-                tab.text:SetText(displayName)
+            end
+            -- Count + active-set meter (each enabled set is a live secure header).
+            if setMeta then
+                local active = 0
+                for _, s in ipairs(db.pinnedFrames.sets) do if s.enabled then active = active + 1 end end
+                setMeta:SetText(count .. "/" .. HIGHLIGHT_MAX_SETS .. "   " .. active .. " " .. L["active"])
+                if active >= 4 then setMeta:SetTextColor(0.95, 0.7, 0.2) else setMeta:SetTextColor(0.45, 0.45, 0.45) end
             end
         end
         
@@ -2269,10 +2347,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(headerGroup, nil, "both")
         
         -- Tab container
-        local tabContainer = CreateFrame("Frame", nil, self.child)
-        tabContainer:SetSize(460, 32)
+        tabContainer = CreateFrame("Frame", nil, self.child)
+        tabContainer:SetSize(560, 32)
         Add(tabContainer, 32, "both")
-        
+
         for i = 1, HIGHLIGHT_MAX_SETS do
             local tab = CreateFrame("Button", nil, tabContainer, "BackdropTemplate")
             tab:SetSize(120, 28)
@@ -2288,6 +2366,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tab.statusDot:SetTexture("Interface\\Buttons\\WHITE8x8")
             tab.statusDot:SetSize(7, 7)
             tab.statusDot:SetPoint("LEFT", tab, "LEFT", 8, 0)
+            -- Remove (×) button on the right — shown by RefreshTabs only on the
+            -- active tab when more than one set exists. Confirms before removing.
+            tab.removeBtn = CreateFrame("Button", nil, tab)
+            tab.removeBtn:SetSize(16, 16)
+            tab.removeBtn:SetPoint("RIGHT", tab, "RIGHT", -4, 0)
+            tab.removeBtn.x = tab.removeBtn:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+            tab.removeBtn.x:SetPoint("CENTER")
+            tab.removeBtn.x:SetText("×")
+            tab.removeBtn.x:SetTextColor(0.6, 0.6, 0.6)
+            tab.removeBtn:SetScript("OnEnter", function(s) s.x:SetTextColor(0.95, 0.3, 0.3) end)
+            tab.removeBtn:SetScript("OnLeave", function(s) s.x:SetTextColor(0.6, 0.6, 0.6) end)
+            tab.removeBtn:SetScript("OnClick", function() DoRemoveSet(i) end)
+            tab.removeBtn:Hide()
             tab:SetScript("OnClick", function()
                 local oldSet = GetCurrentSet()
                 local oldType = oldSet and oldSet.frameType
@@ -2310,6 +2401,28 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tab:SetScript("OnLeave", function() RefreshTabs() end)
             tabButtons[i] = tab
         end
+
+        -- "+ Add set" button — RefreshTabs positions it after the last set and
+        -- hides it at the cap. Adds a (disabled) set to every mode + jumps to it.
+        addSetBtn = CreateFrame("Button", nil, tabContainer, "BackdropTemplate")
+        addSetBtn:SetSize(64, 28)
+        addSetBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        addSetBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        addSetBtn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        addSetBtn.text = addSetBtn:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+        addSetBtn.text:SetPoint("CENTER")
+        addSetBtn.text:SetText("+ " .. L["Add"])
+        addSetBtn.text:SetTextColor(0.55, 0.75, 0.95)
+        addSetBtn:SetScript("OnEnter", function(s) s:SetBackdropBorderColor(0.4, 0.6, 0.9, 1) end)
+        addSetBtn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.25, 0.25, 0.25, 1) end)
+        addSetBtn:SetScript("OnClick", DoAddSet)
+
+        -- Count / active-set meter, right of the strip (each enabled set is a live
+        -- secure header — surfacing the active count makes the perf cost visible).
+        setMeta = tabContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        setMeta:SetPoint("RIGHT", tabContainer, "RIGHT", -2, 0)
+        setMeta:SetTextColor(0.45, 0.45, 0.45)
+
         RefreshTabs()
 
         -- ===== SUB-TABS (Setup / Appearance / Members) =====

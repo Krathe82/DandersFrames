@@ -2864,7 +2864,7 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     --     mode-explicit path (ApplyPlayerTestLayout reads the raid DB).
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
-        for i = 1, 2 do
+        for i = 1, DF.PinnedFrames.MAX_SETS do
             local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
             DF.PinnedFrames:SetEnabled(i, setEnabled or false)
             DF.PinnedFrames:ApplyLayoutSettings(i)
@@ -3102,7 +3102,7 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
     -- frames so they re-size back to the global frame width.
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
-        for i = 1, 2 do
+        for i = 1, DF.PinnedFrames.MAX_SETS do
             -- Restore enabled state first (hides containers if globally disabled)
             local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
             DF.PinnedFrames:SetEnabled(i, setEnabled or false)

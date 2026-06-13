@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [Unreleased]
+
+### New Features
+
+* (Pinned Frames) You can now have **more than two pinned sets** — up to four, and **Party and Raid are independent** (e.g. four sets in raid, one in party). The set editor gains a **+ Add** button to create a new set and an **×** on the active tab to remove one (the last set can't be removed). A counter shows how many sets are defined and how many are currently active, since each enabled set is a live frame group. Use **Copy Pinned Frames** if you want both modes to match.
+
 ## [4.4.1]
 
 ### Bug Fixes
