@@ -365,10 +365,12 @@ local function GetAuraDesignerDB()
     -- The editor is mode-tabbed: it edits the preset the active mode uses
     -- (party → its assigned preset, etc.). Because edited == used, live
     -- frames stay in sync with the editor automatically.
+    -- Base variant: the editor edits your base raid preset, not the active runtime
+    -- auto-layout's overlay (it edits the layout only while IN edit-auto-layout).
     local adDB
-    if DF.GetModeAuraDesigner then
+    if DF.GetModeBaseAuraDesigner then
         local mode = (GUI and GUI.SelectedMode) or "party"
-        adDB = DF:GetModeAuraDesigner(mode)
+        adDB = DF:GetModeBaseAuraDesigner(mode)
     end
     -- Pre-migration / very-early fallback to the legacy inline config.
     adDB = adDB or (db and db.auraDesigner)
@@ -4003,9 +4005,14 @@ local function BuildGlobalView(parent)
             -- Copy at the preset level: the source mode's preset content is
             -- copied INTO the dest mode's preset, in place, so the dest preset
             -- object identity (and every consumer bound to it) is preserved.
-            local source = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(srcMode))
+            -- BASE resolvers: this page edits the user's BASE presets — with a
+            -- runtime auto-layout active, the ACTIVE resolver would copy
+            -- from/into the layout's preset instead.
+            local source = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(srcMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(srcMode))
                 or (DF:GetDB(srcMode) and DF:GetDB(srcMode).auraDesigner)
-            local dest = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(dstMode))
+            local dest = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(dstMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(dstMode))
                 or (DF:GetDB(dstMode) and DF:GetDB(dstMode).auraDesigner)
             if source and dest and source ~= dest then
                 local function DeepCopy(src)
@@ -6651,10 +6658,15 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- so without this the stale page (bound to the old preset) would be reused.
     local _adPreset = DF.GetModeDesignerPresetName
         and DF:GetModeDesignerPresetName("aura", (GUI and GUI.SelectedMode) or "party")
+    -- Editing identity: entering edit of the ACTIVE layout keeps the same table
+    -- object (editingProfile == activeRuntimeProfile), so _adLayout alone
+    -- misses the transition and the editing-banner offset is never applied.
+    local _adEditing = (DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()) or false
     if mainFrame and prevDB == dbRef
        and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH
        and mainFrame.dfBuiltLayout == _adLayout
-       and mainFrame.dfBuiltPreset == _adPreset then
+       and mainFrame.dfBuiltPreset == _adPreset
+       and mainFrame.dfBuiltEditing == _adEditing then
         mainFrame:SetParent(parent)
         mainFrame:SetAllPoints()
         mainFrame:Show()
@@ -6691,6 +6703,7 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     mainFrame.dfBuiltFrameH = _adH
     mainFrame.dfBuiltLayout = _adLayout
     mainFrame.dfBuiltPreset = _adPreset
+    mainFrame.dfBuiltEditing = _adEditing
 
     -- Override RefreshStates: Aura Designer uses its own layout system.
     --

@@ -372,9 +372,10 @@ function FlatRaidFrames:BuildSortedNameList()
     -- combat (Midnight), and even ~= on a secret string throws. A secret (or
     -- missing) name falls back to the unit token — plain and unique. Pure
     -- per-element substitution keeps the comparator a consistent total order.
+    -- Prefer fullName (realm-qualified, matches the nameList) over the short name.
     local issecretvalue = issecretvalue or function() return false end
     local function NameKey(m)
-        local n = m.name
+        local n = m.fullName or m.name
         if n == nil or issecretvalue(n) then return tostring(m.unit) end
         return n
     end

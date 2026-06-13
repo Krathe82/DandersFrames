@@ -228,6 +228,17 @@ local BuildPicker
 -- text / name length / group-number format). Font/anchor/offset stay group-level.
 local function BuildContentSection(GUI, parent, elem, tdDB, state, page, card, yStart, isGroupItem)
     local y = yStart
+    -- Text Designer is preset-based: a raid auto-layout overrides the whole PRESET
+    -- (shown by the preset bar's Inherit/preset name), NOT individual fields. So the
+    -- generic per-setting override star/reset doesn't apply here — same as the Aura
+    -- Designer, which opts out the same way. Without this, the controls below would
+    -- attach the indicator and then mis-resolve (the layout tracks the preset name,
+    -- not e.g. fontSize), showing a misleading "(Global: N)" against the designer
+    -- defaults. This is the universal element entry point (text elements, groups,
+    -- and group items all pass through here before BuildAppearanceSection), so one
+    -- flag here covers every TD field. Re-set on each card build; an underscore key,
+    -- so DesignerConfigEqual / migration ignore it.
+    if elem then elem._skipOverrideIndicators = true end
     if not isGroupItem then
         local label = CreateSectionLabel(GUI, parent, L["Content"])
         label:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yStart)
@@ -2438,6 +2449,9 @@ end
 -- values lands in Phase 2 of the larger TD work.
 local function BuildGlobalTab(GUI, parent, state, tdDB, page)
     local defaults = tdDB.globalDefaults
+    -- Preset-based, so no per-setting auto-layout override star/reset here either
+    -- (see BuildContentSection). Matches the Aura Designer.
+    if defaults then defaults._skipOverrideIndicators = true end
 
     local label = parent:CreateFontString(nil, "OVERLAY")
     GUI:SetSettingsFont(label, 9, "")
@@ -2566,7 +2580,9 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- so live frames stay in sync with the editor). EnsureDB guarantees the
     -- preset carries the full TD schema.
     local _tdEditMode = (GUI and GUI.SelectedMode) or "party"
-    local tdDB = (DF.GetModeTextDesigner and DF:GetModeTextDesigner(_tdEditMode))
+    -- Base variant: the editor edits your base raid preset, not the active runtime
+    -- auto-layout's overlay (it edits the layout only while IN edit-auto-layout).
+    local tdDB = (DF.GetModeBaseTextDesigner and DF:GetModeBaseTextDesigner(_tdEditMode))
         or (DF.TextDesigner:EnsureDB(db))
     DF.TextDesigner:EnsureDB({ textDesigner = tdDB })
     local state = GetState(page)
@@ -2600,10 +2616,16 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- (cards bound to the previous layout's elements; Preview never re-Init'd), so
     -- TD edits stop showing on the preview/test frames until /reload.
     local _tdLayout = (DF.AutoProfilesUI and (DF.AutoProfilesUI.editingProfile or DF.AutoProfilesUI.activeRuntimeProfile)) or nil
+    -- Editing identity: entering edit of the CURRENTLY-ACTIVE layout keeps the
+    -- same table object (editingProfile == activeRuntimeProfile), so _tdLayout
+    -- alone misses the transition and the page never rebuilds with the editing
+    -- banner offset (-56) — the banner overlays the preset/controls bars (and
+    -- exiting leaves a stale gap).
+    local _tdEditing = (DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()) or false
     -- Preset identity: switching the mode's preset keeps the same db/size/layout,
     -- so without this the stale page (bound to the old preset) would be reused.
     local _tdPreset = DF.GetModeDesignerPresetName and DF:GetModeDesignerPresetName("text", _tdMode)
-    if state.built and (state.activeDB ~= db or state.builtFrameW ~= _tdW or state.builtFrameH ~= _tdH or state.builtLayout ~= _tdLayout or state.builtPreset ~= _tdPreset) then
+    if state.built and (state.activeDB ~= db or state.builtFrameW ~= _tdW or state.builtFrameH ~= _tdH or state.builtLayout ~= _tdLayout or state.builtPreset ~= _tdPreset or state.builtEditing ~= _tdEditing) then
         if state.cardFrames then
             for _, card in pairs(state.cardFrames) do
                 card:Hide()
@@ -2696,6 +2718,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     state.builtFrameH = _tdH
     state.builtLayout = _tdLayout
     state.builtPreset = _tdPreset
+    state.builtEditing = _tdEditing
 
     -- While editing a raid auto-layout, the AutoProfiles editing banner (~50px)
     -- overlays the top of the content frame; push the top row down to clear it.

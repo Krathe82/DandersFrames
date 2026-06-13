@@ -1928,8 +1928,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             -- Aura Designer global defaults + clear per-instance overrides.
             -- AD config now lives in the preset this mode uses, not inline.
+            -- BASE resolver: "apply font globally" edits the user's base
+            -- preset — with a runtime auto-layout active, the ACTIVE resolver
+            -- would mutate the layout's preset instead (editor model is BASE).
             local _adMode = (db == DF.db.raid) and "raid" or "party"
-            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(_adMode)
+            local _adCfg = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(_adMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(_adMode))
             if _adCfg then
                 if _adCfg.defaults then
                     local adDefaults = _adCfg.defaults
@@ -2695,8 +2699,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             input:SetAutoFocus(false)
             input:SetTextInsets(2, 2, 0, 0)
             local function UpdateFill() local pct = (slider:GetValue() - minVal) / (maxVal - minVal); fill:SetWidth(math.max(1, pct * 168)) end
-            local function UpdateValue(val) slider:SetValue(val); input:SetText(step < 1 and string.format("%.1f", val) or string.format("%d", val)); UpdateFill() end
+            -- `updating` guard: Refresh()/UpdateValue are programmatic syncs —
+            -- without it every page rebuild fired OnValueChanged, re-writing the
+            -- db and running the user callback (e.g. the Test Count slider
+            -- Exit+Enter'ing test mode on every rebuild, and a boss-set switch
+            -- silently clamp-writing a player set's testCount).
+            local updating = false
+            local function UpdateValue(val)
+                updating = true
+                slider:SetValue(val)
+                updating = false
+                input:SetText(step < 1 and string.format("%.1f", val) or string.format("%d", val))
+                UpdateFill()
+            end
             slider:SetScript("OnValueChanged", function(_, value)
+                if updating then return end
                 -- Runtime override protection
                 if GUI.SelectedMode == "raid" and DF.AutoProfilesUI
                    and DF.AutoProfilesUI:HandleRuntimeWrite(GetPinnedKey(dbKey), value) then
@@ -2819,9 +2836,17 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 local mdb = DF:GetDB(mode)
                 return (mdb and mdb[baselineKey]) or minVal
             end
+            -- Float-tolerant compare (half a step): fractional-step slider drags
+            -- produce values like 0.5999999, so exact == against the baseline
+            -- never matched and dragging Scale back to the inherited value left
+            -- a stale override + star at an identical-looking number.
+            local function MatchesBaseline(v)
+                local m = MatchValue()
+                return v ~= nil and m ~= nil and math.abs(v - m) < (step * 0.5)
+            end
             local function IsOverridden()
                 local set = GetCurrentSet()
-                return set ~= nil and set[overrideKey] ~= nil and set[overrideKey] ~= MatchValue()
+                return set ~= nil and set[overrideKey] ~= nil and not MatchesBaseline(set[overrideKey])
             end
             local function EffectiveValue()
                 local set = GetCurrentSet()
@@ -2830,7 +2855,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             -- Store an override only when it differs from the inherited value; setting
             -- it back to the inherited value clears it (so no stale star remains).
             local function SetOverride(v)
-                if v == MatchValue() then GetCurrentSet()[overrideKey] = nil
+                if MatchesBaseline(v) then GetCurrentSet()[overrideKey] = nil
                 else GetCurrentSet()[overrideKey] = v end
             end
             local function FmtVal(v) return step < 1 and string.format("%.1f", v) or string.format("%d", v) end
@@ -3224,34 +3249,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         showLabelCheck.enabledWhen = function() return GetCurrentSet().locked == true end
         if showLabelCheck.Refresh then showLabelCheck.Refresh() end
 
-        -- Disable in Arena/Battlegrounds: surfaces the per-mode disableInPvP
-        -- gate (nil = disabled in PvP, the safe default — instanced PvP fires
-        -- roster events on nearly every action and overran the script
-        -- watchdog). Custom get/set: the key lives on the mode's pinnedFrames
-        -- table, not on a set, so the per-set refreshable helper doesn't fit.
-        local pvpCheck = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Disable in Arena/Battlegrounds"],
-            nil, nil,
-            function()
-                -- Re-evaluate immediately: turning it ON while in PvP hides the
-                -- frames; turning it OFF resumes processing.
-                if DF.PinnedFrames and DF.PinnedFrames.ProcessAllSets then
-                    DF.PinnedFrames:ProcessAllSets()
-                end
-            end,
-            function()
-                local pf = db.pinnedFrames
-                local v = pf and pf.disableInPvP
-                if v == nil then v = true end
-                return v
-            end,
-            function(val)
-                if db.pinnedFrames then
-                    db.pinnedFrames.disableInPvP = val and true or false
-                end
-            end,
-            "disableInPvP"), 28)
-        pvpCheck.tooltip = L["Keep pinned frames hidden and inactive inside arenas and battlegrounds. Recommended: PvP roster churn is heavy, and pinned sets are built for organised party/raid play."]
-
         -- Party-only: show this pinned set while solo (off by default — pinned
         -- frames highlight other group members). Raid implies a group, so hide it
         -- in raid mode.
@@ -3450,7 +3447,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
         local function OnFrameTypeChanged()
             if not DF.PinnedFrames then return end
-            if InCombatLockdown() then return end
+            -- No combat early-return: the dropdown already wrote set.frameType,
+            -- so bailing here left the page AND runtime desynced (Members tab
+            -- shown for a now-boss set, wrong Test Count max) until some later
+            -- rebuild. Reinitialize self-defers in combat (pendingReinitialize
+            -- → PLAYER_REGEN_ENABLED), and the page rebuild isn't secure work.
             DF.PinnedFrames:Reinitialize()
             if GUI.RefreshCurrentPage then GUI.RefreshCurrentPage() end
         end

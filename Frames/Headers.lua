@@ -8302,8 +8302,21 @@ end)
 -- roster-event-shaped ProcessRosterUpdate. Combat-gated (secure nameList writes are
 -- illegal in combat; it re-applies on the next out-of-combat sort otherwise).
 function DF:RefreshMainFrameSorting()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then
+        -- Don't drop the request: re-apply on the next out-of-combat sorting
+        -- pass (same flag the roster events use) so a mid-combat hide toggle /
+        -- membership change still lands without needing a roster change.
+        DF.pendingSortingUpdate = true
+        return
+    end
+    -- Route like ProcessRosterUpdate: arena frames are driven by the arena
+    -- header (never the party/raid sorters), and the raid sorters only apply
+    -- when actually in a raid — re-filtering all 8 hidden raid group headers
+    -- from a 5-man (or Show()ing them in arena) is wasted churn at best.
+    local contentType = DF.GetContentType and DF:GetContentType()
+    if contentType == "arena" then return end
     if DF.ApplyPartyGroupSorting then DF:ApplyPartyGroupSorting() end
+    if not IsInRaid() then return end
     local rdb = DF.GetRaidDB and DF:GetRaidDB()
     if rdb and rdb.raidUseGroups then
         if DF.ApplyRaidGroupSorting then DF:ApplyRaidGroupSorting() end

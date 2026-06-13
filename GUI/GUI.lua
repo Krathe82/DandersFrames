@@ -1583,8 +1583,13 @@ function GUI:CreateDesignerPresetBar(parent, opts)
 
     -- True while editing a raid auto-layout (the only context with an "inherit
     -- the global preset" choice — normal party/raid modes ARE the base).
+    -- Mode-gated: auto-layouts are RAID-only, but the GUI can be reopened on
+    -- the party tab while editing (ToggleGUI re-derives SelectedMode) — the
+    -- PARTY preset bar must not show layout state, and its "Inherit (Global)"
+    -- click must never clear the RAID layout's override.
     local function IsEditingLayout()
-        return DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()
+        return getMode() == "raid"
+            and DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()
     end
 
     -- The label to show on the dropdown button: "Inherit (Global)" when the
@@ -1619,26 +1624,39 @@ function GUI:CreateDesignerPresetBar(parent, opts)
     CreatePanelBackdrop(menu)
     menu:Hide()
 
+    -- Row pool: frames can't be garbage-collected in WoW, so recreating the
+    -- items on every open (the old Hide+SetParent(nil) approach) leaked a row
+    -- set per click. Reuse instead.
+    local menuRows = {}
     local function BuildMenu()
-        for _, c in ipairs({ menu:GetChildren() }) do c:Hide(); c:SetParent(nil) end
+        for _, row in ipairs(menuRows) do row:Hide() end
+        local used = 0
         local y = -4
         local function AddItem(label, onClick)
-            local item = CreateFrame("Button", nil, menu)
-            item:SetHeight(20)
+            used = used + 1
+            local item = menuRows[used]
+            if not item then
+                item = CreateFrame("Button", nil, menu)
+                item:SetHeight(20)
+                item.text = item:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+                item.text:SetPoint("LEFT", 4, 0)
+                item:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 1, 1) end)
+                item:SetScript("OnLeave", function(s) s.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b) end)
+                item:SetScript("OnClick", function(s)
+                    s.onClick()
+                    menu:Hide()
+                    bar:Refresh()
+                    onChange()
+                end)
+                menuRows[used] = item
+            end
+            item:ClearAllPoints()
             item:SetPoint("TOPLEFT", 4, y)
             item:SetPoint("TOPRIGHT", -4, y)
-            local t = item:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-            t:SetPoint("LEFT", 4, 0)
-            t:SetText(label)
-            t:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-            item:SetScript("OnEnter", function() t:SetTextColor(1, 1, 1) end)
-            item:SetScript("OnLeave", function() t:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b) end)
-            item:SetScript("OnClick", function()
-                onClick()
-                menu:Hide()
-                bar:Refresh()
-                onChange()
-            end)
+            item.text:SetText(label)
+            item.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+            item.onClick = onClick
+            item:Show()
             y = y - 20
         end
         -- "Inherit (Global)" — only while editing a raid auto-layout. Clears the
@@ -1662,8 +1680,9 @@ function GUI:CreateDesignerPresetBar(parent, opts)
     -- per-layout preset is one click + Enter. nil (blank) otherwise. (Duplicate
     -- names after its source preset, not the layout.)
     local function EditingLayoutName()
+        if not IsEditingLayout() then return nil end  -- mode-gated (raid only)
         local apu = DF.AutoProfilesUI
-        if apu and apu.IsEditing and apu:IsEditing() and apu.editingProfile then
+        if apu and apu.editingProfile then
             return apu.editingProfile.name
         end
         return nil

@@ -3000,7 +3000,14 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
                         overrides[key] = DeepCopyValue(currentVal)
                         autoStored = autoStored + 1
                     end
-                elseif matches and overrides[key] ~= nil then
+                elseif matches and overrides[key] ~= nil
+                    and key ~= "textDesignerPreset" and key ~= "auraDesignerPreset" then
+                    -- Designer preset refs are exempt from the equal→remove
+                    -- cleanup: SetModeDesignerPreset deliberately stamps the
+                    -- override even when the chosen name EQUALS the global's
+                    -- (explicit pin vs Inherit is presence-based). Removing it
+                    -- here silently reverted the layout to "Inherit (Global)"
+                    -- on exit.
                     overrides[key] = nil
                     autoCleaned = autoCleaned + 1
                 end
@@ -3825,14 +3832,35 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
         for setIdx, realSet in pairs(realSets) do
             local ov = pinnedGroups[setIdx]
             if ov and ov.enabled ~= nil then
+                -- __newindex: WRITES must reach the real set, or every direct
+                -- field write from the Options page (width/height overrides,
+                -- preset refs, border seeding, label, roster, position…)
+                -- rawsets onto this throwaway view and silently reverts on the
+                -- next layout switch / reload. `enabled` itself is exempt by
+                -- construction: it is rawset on the view, so __newindex never
+                -- fires for it — the runtime override value stays view-local
+                -- while HandleRuntimeWrite persists it to override/global.
                 viewSets[setIdx] = setmetatable(
                     { enabled = ov.enabled and true or false },
-                    { __index = realSet })
+                    {
+                        __index = realSet,
+                        __newindex = function(_, key, value)
+                            realSet[key] = value
+                        end,
+                    })
             else
                 viewSets[setIdx] = realSet  -- live reference
             end
         end
-        overlay.pinnedFrames = setmetatable({ sets = viewSets }, { __index = realPF })
+        -- Top-level fields (disableInPvP, …) must equally write through to the
+        -- real pinnedFrames table; `sets` is rawset above so __newindex never
+        -- fires for it.
+        overlay.pinnedFrames = setmetatable({ sets = viewSets }, {
+            __index = realPF,
+            __newindex = function(_, key, value)
+                realPF[key] = value
+            end,
+        })
     end
 
     -- Activate the overlay (proxy reads this automatically)
@@ -3908,7 +3936,20 @@ function AutoProfilesUI:HandleRuntimeWrite(key, value)
         if pf and pf.sets and pf.sets[setIndex] then
             pf.sets[setIndex][setting] = value
         end
-        local isOverridden = DF.raidOverrides.pinnedFrames ~= nil
+        -- Post-decouple, `enabled` is the ONLY layout-overridable pinned key
+        -- (PINNED_OVERRIDABLE). Every other pinned setting reads through the
+        -- overlay view to the real table, so the value just written IS the live
+        -- effective value — the caller must apply/refresh it normally. Treating
+        -- the whole pinnedFrames overlay as "overridden" suppressed callbacks
+        -- for ALL pinned edits whenever any set had an Enable override.
+        local isOverridden = false
+        if setting == "enabled" then
+            local overlayPF = DF.raidOverrides.pinnedFrames
+            local overlaySet = overlayPF and overlayPF.sets and overlayPF.sets[setIndex]
+            -- Only sets carrying an enabled override become view PROXIES (with
+            -- a metatable); sets without one are the real table by reference.
+            isOverridden = overlaySet ~= nil and getmetatable(overlaySet) ~= nil
+        end
         DF:Debug("LAYOUT", "HandleRuntimeWrite: pinned key %s — overridden=%s, wrote to real table", key, tostring(isOverridden))
         return isOverridden
     end

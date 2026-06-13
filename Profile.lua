@@ -438,6 +438,21 @@ end
 -- ============================================================
 
 -- Export profile with optional category filtering
+-- Strip GUI-internal flags from an already-deep-copied table before
+-- serialization. ONLY the known UI wart (_skipOverrideIndicators, set on
+-- bound designer tables by the editor) — other underscore keys are migration
+-- markers (_specScopedV1, …) the receiver must keep or it would re-migrate.
+local function StripInternalKeys(t)
+    if type(t) ~= "table" then return t end
+    t._skipOverrideIndicators = nil
+    for _, v in pairs(t) do
+        if type(v) == "table" then
+            StripInternalKeys(v)
+        end
+    end
+    return t
+end
+
 function DF:ExportProfile(categories, frameTypes, profileName)
     local L = DF.L
     local LibSerialize = LibStub and LibStub("LibSerialize", true)
@@ -497,6 +512,15 @@ function DF:ExportProfile(categories, frameTypes, profileName)
         if DF.db.auraBlacklist then
             exportData.auraBlacklist = DF:DeepCopy(DF.db.auraBlacklist)
         end
+        -- Include the designer preset LIBRARIES (profile-root). Post-migration
+        -- the mode tables only carry preset NAME strings — without the
+        -- libraries the receiver's refs dangle and all AD/TD content is lost.
+        if DF.db.auraDesignerPresets then
+            exportData.auraDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.auraDesignerPresets))
+        end
+        if DF.db.textDesignerPresets then
+            exportData.textDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.textDesignerPresets))
+        end
         exportData.categories = nil
     else
         -- Selective category export
@@ -516,6 +540,15 @@ function DF:ExportProfile(categories, frameTypes, profileName)
         -- Aura blacklist: top-level key, include with auras category
         if categorySet.auras and DF.db.auraBlacklist then
             exportData.auraBlacklist = DF:DeepCopy(DF.db.auraBlacklist)
+        end
+        -- Designer preset libraries: travel with their own categories (the
+        -- mode tables only carry preset NAME refs). autoLayout also pulls both
+        -- in — layout overrides may reference presets by name.
+        if (categorySet.auraDesigner or categorySet.autoLayout) and DF.db.auraDesignerPresets then
+            exportData.auraDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.auraDesignerPresets))
+        end
+        if (categorySet.text or categorySet.autoLayout) and DF.db.textDesignerPresets then
+            exportData.textDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.textDesignerPresets))
         end
     end
 
@@ -675,17 +708,21 @@ end
 -- never render (blank frame text). For each mode whose imported payload was
 -- legacy-only, reset that mode's TD so an unforced
 -- MigrateTextDesignerFromLegacy rebuilds it from the just-imported legacy
--- settings; modes whose payload carried a textDesigner table (or no text at
--- all) keep their existing TD untouched. Returns true if any mode was reset.
+-- settings; modes whose payload carried a textDesigner table (materialised
+-- by ImportDesignerPresets) keep their TD untouched. Resets the SAME table
+-- the migration rebuilds (GetModeTextDesigner — the mode's preset).
+-- Returns true if any mode was reset.
 local function ResetTDForLegacyImport(payloads)
-    if not (DF.TextDesigner and DF.TextDesigner.EnsureDB) then return false end
     local any = false
     for mode, payload in pairs(payloads) do
         if type(payload) == "table" and payload.textDesigner == nil
             and (payload.nameFont ~= nil or payload.nameFontSize ~= nil
                 or payload.showHealthText ~= nil or payload.statusTextEnabled ~= nil) then
-            local db = DF:GetDB(mode)
-            local tdDB = db and DF.TextDesigner:EnsureDB(db)
+            local tdDB = DF.GetModeTextDesigner and DF:GetModeTextDesigner(mode)
+            if not tdDB and DF.TextDesigner and DF.TextDesigner.EnsureDB then
+                local db = DF:GetDB(mode)
+                tdDB = db and DF.TextDesigner:EnsureDB(db)
+            end
             if tdDB then
                 tdDB.elements = {}
                 tdDB.migratedFromLegacy = nil
@@ -745,6 +782,11 @@ function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTy
             classColors = DF:DeepCopy(DF.db.classColors or {}),
             powerColors = DF:DeepCopy(DF.db.powerColors or {}),
             auraBlacklist = DF:DeepCopy(DF.db.auraBlacklist or { buffs = {}, debuffs = {} }),
+            -- Designer preset LIBRARIES (profile-root): the copied mode tables
+            -- carry preset NAME refs, so omitting these would leave the new
+            -- profile with dangling refs → empty Default → all AD/TD gone.
+            auraDesignerPresets = DF:DeepCopy(DF.db.auraDesignerPresets or {}),
+            textDesignerPresets = DF:DeepCopy(DF.db.textDesignerPresets or {}),
             linkedSections = {},
             partyEnabled = DF.db.partyEnabled ~= false,
             raidEnabled  = DF.db.raidEnabled  ~= false,
@@ -808,10 +850,25 @@ function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTy
         end
     end
 
+    -- Designer preset libraries + legacy inline designer tables. Must run
+    -- AFTER the mode tables are applied (it materialises inline AD/TD from
+    -- old exports into the library the imported refs point at).
+    if DF.ImportDesignerPresets then
+        -- Explicit user selection gates; a full export imports everything;
+        -- otherwise fall back to the payload's own category list.
+        local presetCategories = selectedCategories
+        if not presetCategories and not importInfo.isFullExport then
+            presetCategories = importInfo.detectedCategories
+        end
+        DF:ImportDesignerPresets(importData, presetCategories)
+    end
+
     -- Legacy-text payloads → Text Designer (see ResetTDForLegacyImport).
-    -- Only when the text category was actually imported, and only for the
-    -- imported frame types — rebuilding from legacy keys that didn't merge
-    -- would convert the RECEIVER's stale legacy values instead.
+    -- AFTER ImportDesignerPresets (which materialises inline TD tables — those
+    -- payloads skip the rebuild). Only when the text category was actually
+    -- imported, and only for the imported frame types — rebuilding from
+    -- legacy keys that didn't merge would convert the RECEIVER's stale
+    -- legacy values instead.
     local textImported = importInfo.isFullExport and not selectedCategories
     if not textImported then
         for _, cat in ipairs(selectedCategories or importInfo.detectedCategories or {}) do
@@ -862,6 +919,12 @@ function DF:ImportProfile(str)
     end
     if newProfile.raid then
         DF.db.raid = newProfile.raid
+    end
+
+    -- Designer preset libraries + legacy inline designer tables (see
+    -- ApplyImportedProfile) — after the mode tables, before the refresh.
+    if DF.ImportDesignerPresets then
+        DF:ImportDesignerPresets(newProfile)
     end
 
     -- Legacy-text payloads → Text Designer (see ResetTDForLegacyImport).

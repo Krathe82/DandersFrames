@@ -490,9 +490,9 @@ DF.ExportCategories = {
     -- TEXT - Name, status, health text & fonts
     -- ===========================================
     text = {
-        -- Text Designer (whole-table, like the auraDesigner category below --
-        -- legacy name/health/status text is retired, so an export without
-        -- this table imports as completely blank frame text)
+        -- Text Designer (preset NAME ref; legacy inline table for old exports —
+        -- the library itself travels at top level, see Profile.lua)
+        "textDesignerPreset",
         "textDesigner",
 
         -- Global Font Shadow Settings
@@ -1273,7 +1273,9 @@ DF.ExportCategories = {
     -- AURA DESIGNER - Spec-specific aura indicators
     -- ===========================================
     auraDesigner = {
-        "auraDesigner",  -- The entire auraDesigner table is treated as one setting
+        "auraDesigner",        -- Legacy inline table (pre-preset exports)
+        "auraDesignerPreset",  -- Preset NAME ref (post-migration; the library
+                               -- itself travels at top level, see Profile.lua)
     },
 
     -- ===========================================
