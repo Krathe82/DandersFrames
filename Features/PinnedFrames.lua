@@ -471,6 +471,23 @@ function PinnedFrames:CleanOfflinePlayers(set, roster)
     return changed
 end
 
+-- Debounced entry point for the recurring event-driven path. In instanced PvP the
+-- roster / unit event stream can fire many times per frame; calling ProcessAllSets
+-- on each one re-runs the full populate + header rebuild until the per-frame budget
+-- is exhausted ("script ran too long"). Coalesce a burst into a single deferred run
+-- so that even an opt-in (disableInPvP = false) set stays within budget. One-time /
+-- explicit callers (init, reinit, mode change) still call ProcessAllSets directly
+-- for immediate effect.
+local processAllSetsPending = false
+function PinnedFrames:RequestProcessAllSets()
+    if processAllSetsPending then return end
+    processAllSetsPending = true
+    C_Timer.After(0.05, function()
+        processAllSetsPending = false
+        PinnedFrames:ProcessAllSets()
+    end)
+end
+
 -- Process all pinned sets for current mode
 function PinnedFrames:ProcessAllSets()
     local hlDB = GetPinnedDB()
@@ -796,6 +813,10 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
                 f.dfPinnedBorderDB = borderDB
                 f.dfPinnedEffDB = effDB
                 f.dfPinnedHideAuras = set.hideAuras
+                -- Per-set Aura/Text Designer preset (nil = inherit the mode's preset;
+                -- the resolver falls back to FrameMode when the stamp is nil).
+                f.dfAuraPresetOverride = set.auraDesignerPreset
+                f.dfTextPresetOverride = set.textDesignerPreset
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = IsInRaid()
             end
@@ -1438,6 +1459,9 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
             child.dfPinnedBorderDB = borderDB
             child.dfPinnedEffDB = effDB
             child.dfPinnedHideAuras = set.hideAuras
+            -- Per-set Aura/Text Designer preset (nil = inherit the mode's preset).
+            child.dfAuraPresetOverride = set.auraDesignerPreset
+            child.dfTextPresetOverride = set.textDesignerPreset
             child:SetSize(frameWidth, frameHeight)
             -- Also update the isRaidFrame flag for proper DB selection in other functions
             child.isRaidFrame = IsInRaid()
@@ -2288,7 +2312,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
             end
         end
 
-        PinnedFrames:ProcessAllSets()
+        -- Debounced: roster events can storm (especially in instanced PvP), so
+        -- coalesce them into one deferred ProcessAllSets to stay within budget.
+        PinnedFrames:RequestProcessAllSets()
     end
 end)
 
@@ -2695,6 +2721,8 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isB
             pool[i].dfPinnedBorderDB = GetSetBorderDB(setDB, GetSetBaselineDB(setDB, db))
             pool[i].dfPinnedEffDB = setDB and BuildPinnedEffDB(db, setDB.hideAuras, setDB.hideIcons) or nil
             pool[i].dfPinnedHideAuras = setDB and setDB.hideAuras
+            pool[i].dfAuraPresetOverride = setDB and setDB.auraDesignerPreset
+            pool[i].dfTextPresetOverride = setDB and setDB.textDesignerPreset
             pool[i]:SetSize(fw, fh)
             pool[i].isRaidFrame = isRaidMode
             pool[i].isPinnedBossFrame = isBossSet or false
@@ -2750,6 +2778,8 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
                 f.dfPinnedBorderDB = borderDB
                 f.dfPinnedEffDB = effDB
                 f.dfPinnedHideAuras = set.hideAuras
+                f.dfAuraPresetOverride = set.auraDesignerPreset
+                f.dfTextPresetOverride = set.textDesignerPreset
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = isRaidMode
 

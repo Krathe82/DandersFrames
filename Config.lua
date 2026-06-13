@@ -2295,6 +2295,13 @@ DF.PartyDefaults = {
     -- them per set (set.scale / customWidth / customHeight). growDirection,
     -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
+        -- Keep pinned frames dormant in all instanced PvP (arena + battlegrounds).
+        -- The runtime gate reads the current mode's copy (arena resolves to party
+        -- config, BG to raid), so the "Disable in PvP" toggle writes both modes in
+        -- lockstep to act as one global switch — hence the key lives in each mode's
+        -- defaults. Default true: pinned is a party/raid feature and the PvP event
+        -- storm could exhaust the per-frame budget ("script ran too long").
+        disableInPvP = true,
         sets = {
             [1] = {
                 enabled = false,
@@ -3793,6 +3800,13 @@ DF.RaidDefaults = {
     -- them per set (set.scale / customWidth / customHeight). growDirection,
     -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
+        -- Keep pinned frames dormant in all instanced PvP (arena + battlegrounds).
+        -- The runtime gate reads the current mode's copy (arena resolves to party
+        -- config, BG to raid), so the "Disable in PvP" toggle writes both modes in
+        -- lockstep to act as one global switch — hence the key lives in each mode's
+        -- defaults. Default true: pinned is a party/raid feature and the PvP event
+        -- storm could exhaust the per-frame budget ("script ran too long").
+        disableInPvP = true,
         sets = {
             [1] = {
                 enabled = false,

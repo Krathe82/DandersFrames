@@ -2095,6 +2095,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Initialize pinnedFrames in db if needed
         if not db.pinnedFrames then
             db.pinnedFrames = {
+                disableInPvP = true,  -- mode-level: dormant in arena/battlegrounds
                 sets = {
                     [1] = {
                         enabled = false, name = "Pinned 1", players = {},
@@ -2118,6 +2119,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             }
         end
         
+        -- Migration: mode-level disableInPvP (existing profiles predate it). nil is
+        -- treated as true by the runtime gate, but seed it so the toggle reads right.
+        if db.pinnedFrames.disableInPvP == nil then db.pinnedFrames.disableInPvP = true end
+
         -- Migration: add new options to existing sets
         for i = 1, 2 do
             local set = db.pinnedFrames.sets[i]
@@ -2880,7 +2885,110 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             table.insert(controlsToRefresh, wrapper)
             return wrapper
         end
-        
+
+        -- Per-set Aura/Text Designer preset picker. Unlike CreateRefreshableDropdown
+        -- its menu is rebuilt every open (the preset library grows/shrinks as presets
+        -- are created/renamed/deleted on the AD/TD pages), and the first entry,
+        -- "Inherit", maps to nil — the set then follows its mode's preset via the
+        -- resolver's FrameMode fallback. Preset refs are global-per-mode (never an
+        -- auto-layout override), so this writes straight to the set with no star.
+        -- `kind` is "aura" or "text"; `dbKey` the matching set ref.
+        local function CreatePinnedPresetDropdown(parent, label, kind, dbKey, callback)
+            local wrapper = CreateFrame("Frame", nil, parent)
+            wrapper:SetSize(250, 50)
+            local lbl = wrapper:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            lbl:SetPoint("TOPLEFT", 0, 0)
+            lbl:SetText(label)
+            lbl:SetTextColor(0.8, 0.8, 0.8)
+            local btn = CreateFrame("Button", nil, wrapper, "BackdropTemplate")
+            btn:SetPoint("TOPLEFT", 0, -16)
+            btn:SetSize(220, 24)
+            btn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            btn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            btn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            btn.Text = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            btn.Text:SetPoint("LEFT", 8, 0)
+            btn.Text:SetPoint("RIGHT", -20, 0)
+            btn.Text:SetJustifyH("LEFT")
+            btn.Text:SetTextColor(0.8, 0.8, 0.8)
+            local arrow = btn:CreateTexture(nil, "OVERLAY")
+            arrow:SetPoint("RIGHT", -8, 0)
+            arrow:SetSize(12, 12)
+            arrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+            arrow:SetVertexColor(0.5, 0.5, 0.5)
+
+            local INHERIT = {}  -- unique sentinel; stored as nil
+            local function InheritLabel()
+                local modeName = (DF.GetModeDesignerPresetName and DF:GetModeDesignerPresetName(kind, GUI.SelectedMode))
+                    or DF.DEFAULT_PRESET
+                return L["Inherit"] .. " (" .. tostring(modeName) .. ")"
+            end
+            local function UpdateText()
+                local set = GetCurrentSet()
+                local cur = set and set[dbKey]
+                btn.Text:SetText(cur and tostring(cur) or InheritLabel())
+            end
+
+            local menuFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+            menuFrame:SetPoint("TOPLEFT", btn, "BOTTOMLEFT", 0, -2)
+            menuFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+            menuFrame:SetClampedToScreen(true)
+            menuFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            menuFrame:SetBackdropColor(0.12, 0.12, 0.12, 0.98)
+            menuFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            menuFrame:Hide()
+            menuFrame.rowPool = {}
+
+            local function Choose(key)
+                local set = GetCurrentSet()
+                if set then set[dbKey] = (key ~= INHERIT) and key or nil end
+                UpdateText()
+                menuFrame:Hide()
+                if callback then callback() end
+            end
+
+            local function BuildMenu()
+                local pool = menuFrame.rowPool
+                local rows = { { key = INHERIT, text = InheritLabel() } }
+                for _, name in ipairs(DF:ListDesignerPresets(kind)) do
+                    rows[#rows + 1] = { key = name, text = name }
+                end
+                for idx, row in ipairs(rows) do
+                    local menuBtn = pool[idx]
+                    if not menuBtn then
+                        menuBtn = CreateFrame("Button", nil, menuFrame)
+                        menuBtn:SetPoint("TOPLEFT", 2, -2 - (idx - 1) * 22)
+                        menuBtn:SetPoint("TOPRIGHT", -2, -2 - (idx - 1) * 22)
+                        menuBtn:SetHeight(22)
+                        menuBtn.Text = menuBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+                        menuBtn.Text:SetPoint("LEFT", 8, 0)
+                        menuBtn.Highlight = menuBtn:CreateTexture(nil, "HIGHLIGHT")
+                        menuBtn.Highlight:SetAllPoints()
+                        local tc = GUI.GetThemeColor()
+                        menuBtn.Highlight:SetColorTexture(tc.r, tc.g, tc.b, 0.3)
+                        pool[idx] = menuBtn
+                    end
+                    menuBtn.Text:SetText(row.text)
+                    menuBtn.Text:SetTextColor(0.8, 0.8, 0.8)
+                    local key = row.key
+                    menuBtn:SetScript("OnClick", function() Choose(key) end)
+                    menuBtn:Show()
+                end
+                for i = #rows + 1, #pool do pool[i]:Hide() end
+                menuFrame:SetSize(220, #rows * 22 + 4)
+            end
+
+            btn:SetScript("OnClick", function()
+                if menuFrame:IsShown() then menuFrame:Hide() else BuildMenu(); menuFrame:Show() end
+            end)
+            btn:SetScript("OnEnter", function(s) s:SetBackdropBorderColor(0.5, 0.5, 0.5, 1) end)
+            btn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1) end)
+            wrapper.Refresh = UpdateText
+            UpdateText()
+            table.insert(controlsToRefresh, wrapper)
+            return wrapper
+        end
+
         -- Helper function to update layout
         local function UpdateHighlightLayout()
             if DF.PinnedFrames then
@@ -3027,6 +3135,77 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Auras"], "hideAuras", RefreshPinnedDisplay), 28)
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Status Icons"], "hideIcons", RefreshPinnedDisplay), 28)
+
+        -- Disable in PvP (GLOBAL across both modes, not per-set): keep pinned frames
+        -- dormant in all instanced PvP. Default on — pinned is a party/raid feature
+        -- and the arena/BG event storm can exhaust the per-frame budget. Turning it
+        -- off re-enables pinned there; the debounced RequestProcessAllSets keeps that
+        -- opt-in from stampeding.
+        --
+        -- The runtime gate reads the CURRENT mode's pinnedFrames.disableInPvP (arena
+        -- resolves to party config, battlegrounds to raid). To make one checkbox act
+        -- globally — and to match the "Disable in PvP" label — the toggle writes BOTH
+        -- modes in lockstep, so whichever mode the gate resolves to sees the same
+        -- value. Hidden while editing a raid auto-layout (it's global, nothing
+        -- layout-specific to override); outside the editor DF.db.party/.raid are the
+        -- plain mode profiles, so the paired write lands on the real globals.
+        local function GetDisableInPvP()
+            local v = db.pinnedFrames.disableInPvP
+            if v == nil then return true end  -- runtime gate treats nil as true
+            return v
+        end
+        local function SetDisableInPvP(val)
+            for _, m in ipairs({ "party", "raid" }) do
+                local mdb = DF.db and DF.db[m]
+                if mdb and mdb.pinnedFrames then
+                    mdb.pinnedFrames.disableInPvP = val
+                end
+            end
+        end
+        local disablePvPContainer = CreateFrame("Frame", nil, self.child)
+        disablePvPContainer:SetSize(250, 24)
+        local dpvpCB = CreateFrame("CheckButton", nil, disablePvPContainer, "BackdropTemplate")
+        dpvpCB:SetSize(18, 18)
+        dpvpCB:SetPoint("LEFT", 0, 0)
+        dpvpCB:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        dpvpCB:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        dpvpCB:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        dpvpCB.Check = dpvpCB:CreateTexture(nil, "OVERLAY")
+        dpvpCB.Check:SetTexture("Interface\\Buttons\\WHITE8x8")
+        local dpvpTC = GUI.GetThemeColor()
+        dpvpCB.Check:SetVertexColor(dpvpTC.r, dpvpTC.g, dpvpTC.b)
+        dpvpCB.Check:SetPoint("CENTER")
+        dpvpCB.Check:SetSize(10, 10)
+        dpvpCB:SetCheckedTexture(dpvpCB.Check)
+        local dpvpTxt = disablePvPContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        dpvpTxt:SetPoint("LEFT", dpvpCB, "RIGHT", 8, 0)
+        dpvpTxt:SetTextColor(0.8, 0.8, 0.8)
+        dpvpCB:SetScript("OnClick", function(s)
+            SetDisableInPvP(s:GetChecked() and true or false)
+            -- Re-evaluate visibility for the live mode (debounced + combat-safe).
+            if DF.PinnedFrames and IsEditingActiveMode() and DF.PinnedFrames.RequestProcessAllSets then
+                DF.PinnedFrames:RequestProcessAllSets()
+            end
+        end)
+        dpvpCB:SetScript("OnEnter", function(s)
+            GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+            GameTooltip:SetText(L["Disable in PvP"], 1, 1, 1)
+            GameTooltip:AddLine(L["Pinned frames are a party/raid feature. Leave on to keep them hidden in arena and battlegrounds, where the constant unit churn can hurt performance. Applies to both party and raid pinned sets."], 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        dpvpCB:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        disablePvPContainer.Refresh = function()
+            dpvpTxt:SetText(L["Disable in PvP"])
+            dpvpCB:SetChecked(GetDisableInPvP())
+        end
+        -- Mode-global setting: not layout-overridable, so hide it while editing a
+        -- raid auto-layout (its banner already points users at the base settings).
+        disablePvPContainer.hideOn = function()
+            return DF.AutoProfilesUI and DF.AutoProfilesUI:IsEditing()
+        end
+        disablePvPContainer.Refresh()
+        table.insert(controlsToRefresh, disablePvPContainer)
+        settingsGroup:AddWidget(disablePvPContainer, 28)
 
         -- Reset Position button
         local resetPosBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
@@ -3202,6 +3381,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Scale inherits the Match mode's frameScale; overridable with star/reset.
         pinnedScaleSlider = CreateMatchOverrideSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, "scale", "frameScale", UpdateHighlightLayout)
         layoutGroup:AddWidget(pinnedScaleSlider, 55)
+
+        -- Per-set Aura / Text Designer preset. "Inherit" (default) follows this mode's
+        -- preset; pick a named preset to give this set its own aura/text look. Presets
+        -- are created and edited on the Aura/Text Designer pages — here you only choose
+        -- which one this pinned set renders with. The Text picker shows whenever the
+        -- Text Designer module is loaded.
+        layoutGroup:AddWidget(CreatePinnedPresetDropdown(self.child, L["Aura Designer Preset"], "aura", "auraDesignerPreset", RefreshPinnedDisplay), 55)
+        if DF.TextDesigner then
+            layoutGroup:AddWidget(CreatePinnedPresetDropdown(self.child, L["Text Designer Preset"], "text", "textDesignerPreset", RefreshPinnedDisplay), 55)
+        end
 
         -- Border Override (Stage 2b): a single toggle. Off → inherit the Based-on
         -- mode's frame border. On → snapshot that border into the set and reveal the

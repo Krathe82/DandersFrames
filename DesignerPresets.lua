@@ -377,9 +377,21 @@ end
 local function ForEachDesignerRef(fn)
     local prof = DF._realProfile or DF.db
     if not prof then return end
-    if prof.party then fn(prof.party) end
-    local raid = DF._realRaidDB or prof.raid
-    if raid then fn(raid) end
+    -- Each mode DB owns a ref (modeDB.<kind>Preset) AND every pinned set can carry
+    -- its own per-set ref (set.<kind>Preset) — visit both so rename/delete repoint
+    -- pinned selections too.
+    local function withPinned(modeDB)
+        if not modeDB then return end
+        fn(modeDB)
+        local pf = modeDB.pinnedFrames
+        if pf and pf.sets then
+            for _, set in pairs(pf.sets) do
+                if type(set) == "table" then fn(set) end
+            end
+        end
+    end
+    withPinned(prof.party)
+    withPinned(DF._realRaidDB or prof.raid)
     ForEachRaidLayoutOverride(prof, function(layout) fn(layout.overrides) end)
 end
 
