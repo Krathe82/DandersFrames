@@ -30,6 +30,18 @@ if not L then return end
 --@do-not-package@
 
 L["    Show Frame Glow"] = true
+-- Designer Presets (Aura/Text Designer preset bar)
+L["Preset:"] = true
+L["Inherit (Global)"] = true
+L["Duplicate"] = true
+L["Rename"] = true
+L["Name the new preset:"] = true
+L["Name the duplicated preset:"] = true
+L["Rename preset:"] = true
+L["Delete preset \"%s\"? Anything using it reverts to Default."] = true
+L["Pick an Aura Designer preset below for this layout. 'Inherit (Global)' follows your global one."] = true
+L["Pick a Text Designer preset below for this layout. 'Inherit (Global)' follows your global one."] = true
+L["Clears this layout's Aura Designer preset override so it follows your global Aura Designer preset."] = true
 -- ClickCasting UI strings
 L["1 = High"] = true
 L["10 = Low"] = true

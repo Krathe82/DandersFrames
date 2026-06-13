@@ -1490,6 +1490,248 @@ function GUI:CreateButton(parent, text, width, height, func)
     return btn
 end
 
+-- ============================================================
+-- DESIGNER PRESET BAR (shared by the Aura / Text Designer editors)
+-- Compact row: "Preset: [dropdown ▾]  [New][Duplicate][Rename][Delete]".
+-- Picking a preset assigns it to the mode (opts.getMode()) AND retargets the
+-- editor; the buttons manage the library. After any change the bar calls
+-- opts.onChange() so the host page can rebuild + refresh live frames.
+-- opts = { kind = "aura"|"text", getMode = fn->mode, onChange = fn }.
+-- Returns the bar frame; call bar:Refresh() to resync.
+-- ============================================================
+
+-- One reusable name-input popup (callback + default passed via `data`).
+-- Structural dialog definitions; per-call handlers are assigned in the launchers
+-- below (closures capturing default/callback) — the StaticPopup `data` field and
+-- the editbox field name both vary across client versions, so we avoid relying
+-- on them. The editbox is `self.EditBox` on current retail (12.0 GameDialog).
+StaticPopupDialogs["DANDERSFRAMES_PRESET_NAME"] = {
+    text = "%s",
+    button1 = ACCEPT or "Accept",
+    button2 = CANCEL or "Cancel",
+    hasEditBox = true,
+    editBoxWidth = 220,
+    maxLetters = 40,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+StaticPopupDialogs["DANDERSFRAMES_PRESET_DELETE"] = {
+    text = "%s",
+    button1 = DELETE or "Delete",
+    button2 = CANCEL or "Cancel",
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+local function PromptPresetName(titleText, default, callback)
+    local dialog = StaticPopupDialogs["DANDERSFRAMES_PRESET_NAME"]
+    dialog.OnShow = function(self)
+        local eb = self.EditBox or self.editBox or (self.GetEditBox and self:GetEditBox())
+        if eb then
+            eb:SetText(default or "")
+            eb:HighlightText()
+            eb:SetFocus()
+        end
+    end
+    dialog.OnAccept = function(self)
+        local eb = self.EditBox or self.editBox or (self.GetEditBox and self:GetEditBox())
+        if callback and eb then callback(eb:GetText()) end
+    end
+    dialog.EditBoxOnEnterPressed = function(self)
+        if callback then callback(self:GetText()) end
+        local p = self:GetParent()
+        if p then p:Hide() end
+    end
+    StaticPopup_Show("DANDERSFRAMES_PRESET_NAME", titleText)
+end
+
+local function ConfirmDeletePreset(kind, name, onDone)
+    local dialog = StaticPopupDialogs["DANDERSFRAMES_PRESET_DELETE"]
+    dialog.OnAccept = function()
+        if DF.DeleteDesignerPreset then
+            DF:DeleteDesignerPreset(kind, name)
+            if onDone then onDone() end
+        end
+    end
+    StaticPopup_Show("DANDERSFRAMES_PRESET_DELETE",
+        format(L["Delete preset \"%s\"? Anything using it reverts to Default."], name))
+end
+
+function GUI:CreateDesignerPresetBar(parent, opts)
+    opts = opts or {}
+    local kind = opts.kind or "aura"
+    local getMode = opts.getMode or function() return "party" end
+    local onChange = opts.onChange or function() end
+
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetHeight(24)
+
+    local label = bar:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    label:SetPoint("LEFT", 0, 0)
+    label:SetText(L["Preset:"])
+    label:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    local function CurrentName()
+        return DF:GetModeDesignerPresetName(kind, getMode())
+    end
+
+    -- True while editing a raid auto-layout (the only context with an "inherit
+    -- the global preset" choice — normal party/raid modes ARE the base).
+    local function IsEditingLayout()
+        return DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()
+    end
+
+    -- The label to show on the dropdown button: "Inherit (Global)" when the
+    -- edited layout has no override, otherwise the resolved preset name.
+    local function CurrentLabel()
+        if IsEditingLayout() and DF.IsLayoutDesignerInheriting and DF:IsLayoutDesignerInheriting(kind) then
+            return L["Inherit (Global)"]
+        end
+        return CurrentName()
+    end
+
+    -- Dropdown button + menu (rebuilt on each open so it always reflects the lib)
+    local ddBtn = CreateFrame("Button", nil, bar, "BackdropTemplate")
+    ddBtn:SetSize(150, 22)
+    ddBtn:SetPoint("LEFT", label, "RIGHT", 6, 0)
+    CreateElementBackdrop(ddBtn)
+    ddBtn.text = ddBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    ddBtn.text:SetPoint("LEFT", 6, 0)
+    ddBtn.text:SetPoint("RIGHT", -16, 0)
+    ddBtn.text:SetJustifyH("LEFT")
+    ddBtn.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    local arrow = ddBtn:CreateTexture(nil, "OVERLAY")
+    arrow:SetPoint("RIGHT", -4, 0)
+    arrow:SetSize(10, 10)
+    arrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+    arrow:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    local menu = CreateFrame("Frame", nil, ddBtn, "BackdropTemplate")
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:SetPoint("TOPLEFT", ddBtn, "BOTTOMLEFT", 0, -1)
+    menu:SetWidth(150)
+    CreatePanelBackdrop(menu)
+    menu:Hide()
+
+    local function BuildMenu()
+        for _, c in ipairs({ menu:GetChildren() }) do c:Hide(); c:SetParent(nil) end
+        local y = -4
+        local function AddItem(label, onClick)
+            local item = CreateFrame("Button", nil, menu)
+            item:SetHeight(20)
+            item:SetPoint("TOPLEFT", 4, y)
+            item:SetPoint("TOPRIGHT", -4, y)
+            local t = item:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            t:SetPoint("LEFT", 4, 0)
+            t:SetText(label)
+            t:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+            item:SetScript("OnEnter", function() t:SetTextColor(1, 1, 1) end)
+            item:SetScript("OnLeave", function() t:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b) end)
+            item:SetScript("OnClick", function()
+                onClick()
+                menu:Hide()
+                bar:Refresh()
+                onChange()
+            end)
+            y = y - 20
+        end
+        -- "Inherit (Global)" — only while editing a raid auto-layout. Clears the
+        -- layout's preset override so it follows your global preset.
+        if IsEditingLayout() then
+            AddItem(L["Inherit (Global)"], function()
+                if DF.InheritLayoutDesignerPreset then DF:InheritLayoutDesignerPreset(kind) end
+            end)
+        end
+        for _, name in ipairs(DF:ListDesignerPresets(kind)) do
+            AddItem(name, function() DF:SetModeDesignerPreset(kind, getMode(), name) end)
+        end
+        menu:SetHeight(-y + 4)
+    end
+    ddBtn:SetScript("OnClick", function()
+        if menu:IsShown() then menu:Hide() else BuildMenu(); menu:Show() end
+    end)
+
+    -- When editing a raid auto-layout, default the NEW preset name to the
+    -- layout's name (e.g. editing "31-40" → prefill "31-40") so making a
+    -- per-layout preset is one click + Enter. nil (blank) otherwise. (Duplicate
+    -- names after its source preset, not the layout.)
+    local function EditingLayoutName()
+        local apu = DF.AutoProfilesUI
+        if apu and apu.IsEditing and apu:IsEditing() and apu.editingProfile then
+            return apu.editingProfile.name
+        end
+        return nil
+    end
+
+    -- Action buttons
+    local newBtn = GUI:CreateButton(bar, L["New"], 48, 22, function()
+        PromptPresetName(L["Name the new preset:"], EditingLayoutName() or "", function(text)
+            local n = DF:CreateDesignerPreset(kind, text)
+            if n then
+                DF:SetModeDesignerPreset(kind, getMode(), n)
+                bar:Refresh(); onChange()
+            end
+        end)
+    end)
+    newBtn:SetPoint("LEFT", ddBtn, "RIGHT", 6, 0)
+
+    local dupBtn = GUI:CreateButton(bar, L["Duplicate"], 72, 22, function()
+        local cur = CurrentName()
+        -- Duplicate defaults to "<source> copy" (New uses the layout name, but a
+        -- duplicate is of a specific preset, so name it after the source).
+        PromptPresetName(L["Name the duplicated preset:"], cur .. " copy", function(text)
+            local n = DF:DuplicateDesignerPreset(kind, cur, text)
+            if n then
+                DF:SetModeDesignerPreset(kind, getMode(), n)
+                bar:Refresh(); onChange()
+            end
+        end)
+    end)
+    dupBtn:SetPoint("LEFT", newBtn, "RIGHT", 4, 0)
+
+    local renameBtn = GUI:CreateButton(bar, L["Rename"], 62, 22, function()
+        local cur = CurrentName()
+        if cur == DF.DEFAULT_PRESET then return end
+        PromptPresetName(L["Rename preset:"], cur, function(text)
+            DF:RenameDesignerPreset(kind, cur, text)
+            bar:Refresh(); onChange()
+        end)
+    end)
+    renameBtn:SetPoint("LEFT", dupBtn, "RIGHT", 4, 0)
+
+    local delBtn = GUI:CreateButton(bar, L["Delete"], 56, 22, function()
+        local cur = CurrentName()
+        if cur == DF.DEFAULT_PRESET then return end
+        ConfirmDeletePreset(kind, cur, function() bar:Refresh(); onChange() end)
+    end)
+    delBtn:SetPoint("LEFT", renameBtn, "RIGHT", 4, 0)
+
+    local function SetActionEnabled(btn, on)
+        if on then
+            btn:Enable()
+            btn.Text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+        else
+            btn:Disable()
+            btn.Text:SetTextColor(0.4, 0.4, 0.4)   -- greyed: Default can't be renamed/deleted
+        end
+    end
+
+    function bar:Refresh()
+        ddBtn.text:SetText(CurrentLabel())
+        -- Rename/Delete act on the resolved preset; disable for the non-editable
+        -- Default and while a layout is inheriting (you're following the global,
+        -- not sitting on a layout-specific preset).
+        local inheriting = IsEditingLayout() and DF.IsLayoutDesignerInheriting
+            and DF:IsLayoutDesignerInheriting(kind)
+        local canModify = (CurrentName() ~= DF.DEFAULT_PRESET) and not inheriting
+        SetActionEnabled(renameBtn, canModify)
+        SetActionEnabled(delBtn, canModify)
+    end
+
+    bar:Refresh()
+    return bar
+end
+
 -- Creates a button with an icon and text
 -- iconName is the name of the icon file (without path/extension)
 -- iconSize is optional (defaults to 16)

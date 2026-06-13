@@ -1707,48 +1707,9 @@ local contentRightInset     -- Right inset for left-side panels
 local origY_framePreview    -- original yPos of framePreview
 local currentBannerShift = 0 -- tracks current coexist banner offset
 
--- ============================================================
--- AUTO LAYOUT RESET POPUP
--- Confirmation dialog before wiping all Aura Designer overrides
--- ============================================================
-
-StaticPopupDialogs["DF_AURA_DESIGNER_RESET_GLOBAL"] = {
-    text = L["Reset all Aura Designer settings in this auto layout to match your global profile?\n\nThis cannot be undone."],
-    button1 = L["Reset"],
-    button2 = L["Cancel"],
-    OnAccept = function()
-        local AutoProfilesUI = DF.AutoProfilesUI
-        if not AutoProfilesUI or not AutoProfilesUI:IsEditing() then return end
-
-        local editingProfile = AutoProfilesUI.editingProfile
-        if not editingProfile or not editingProfile.overrides then return end
-
-        -- Aura Designer config now lives in named presets; a layout overrides
-        -- only the preset NAME it uses (the string key auraDesignerPreset).
-        -- Resetting clears that override so the layout follows the global choice.
-        local hadOverride = editingProfile.overrides["auraDesignerPreset"] ~= nil
-        editingProfile.overrides["auraDesignerPreset"] = nil
-
-        -- Restore the global preset name from the snapshot.
-        if AutoProfilesUI.globalSnapshot then
-            local realRaidDB = DF._realRaidDB
-            if realRaidDB then
-                realRaidDB["auraDesignerPreset"] = AutoProfilesUI.globalSnapshot["auraDesignerPreset"]
-            end
-        end
-
-        DF:Debug("AUTOPROFILE", "Reset Aura Designer overrides: had=%s", tostring(hadOverride))
-
-        -- Refresh Aura Designer page
-        DF:AuraDesigner_RefreshPage()
-        DF:InvalidateAuraLayout()
-        DF:UpdateAllFrames()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+-- (The DF_AURA_DESIGNER_RESET_GLOBAL popup was retired with the editing-banner
+-- "Reset to Global" button — the preset dropdown's "Inherit (Global)" entry now
+-- clears a layout's Aura Designer preset override.)
 
 -- ============================================================
 -- UI STATE (v4 redesign — tabbed right panel)
@@ -6686,9 +6647,14 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- frame dimensions, so neither check below distinguishes them — without this,
     -- switching between same-size raid layouts reuses the stale page.
     local _adLayout = (DF.AutoProfilesUI and (DF.AutoProfilesUI.editingProfile or DF.AutoProfilesUI.activeRuntimeProfile)) or nil
+    -- Preset identity: switching the mode's preset keeps the same db/size/layout,
+    -- so without this the stale page (bound to the old preset) would be reused.
+    local _adPreset = DF.GetModeDesignerPresetName
+        and DF:GetModeDesignerPresetName("aura", (GUI and GUI.SelectedMode) or "party")
     if mainFrame and prevDB == dbRef
        and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH
-       and mainFrame.dfBuiltLayout == _adLayout then
+       and mainFrame.dfBuiltLayout == _adLayout
+       and mainFrame.dfBuiltPreset == _adPreset then
         mainFrame:SetParent(parent)
         mainFrame:SetAllPoints()
         mainFrame:Show()
@@ -6724,6 +6690,7 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     mainFrame.dfBuiltFrameW = _adW
     mainFrame.dfBuiltFrameH = _adH
     mainFrame.dfBuiltLayout = _adLayout
+    mainFrame.dfBuiltPreset = _adPreset
 
     -- Override RefreshStates: Aura Designer uses its own layout system.
     --
@@ -6767,6 +6734,13 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     end
 
     local yPos = 0
+    -- While editing a raid auto-layout, the AutoProfiles editing banner is a ~50px
+    -- overlay anchored to the top of the content frame; this custom AD page lays
+    -- its own content out from the top too, so push everything down to clear it
+    -- (otherwise the editing banner sits on top of the enable banner / preset bar).
+    if DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing() then
+        yPos = -56
+    end
 
     -- ========================================
     -- ENABLE BANNER (full width)
@@ -6789,6 +6763,35 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     end
 
     yPos = yPos - (BANNER_H + 4)
+
+    -- ========================================
+    -- PRESET BAR (which named preset this mode uses + library management)
+    -- ========================================
+    if GUI.CreateDesignerPresetBar then
+        local presetBar = GUI:CreateDesignerPresetBar(mainFrame, {
+            kind = "aura",
+            getMode = function() return (GUI and GUI.SelectedMode) or "party" end,
+            onChange = function()
+                -- Re-invoke the build NEXT frame: the dfBuiltPreset guard then
+                -- forces a full rebuild so the editor rebinds to the newly chosen
+                -- preset. Deferred so we don't tear down the bar from inside its
+                -- own click handler.
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(0, function()
+                        if DF.BuildAuraDesignerPage then DF.BuildAuraDesignerPage(GUI, page, db) end
+                        DF:InvalidateAuraLayout()
+                        DF:UpdateAllFrames()
+                        local E = DF.AuraDesigner and DF.AuraDesigner.Engine
+                        if E and E.ForceRefreshAllFrames then E:ForceRefreshAllFrames() end
+                    end)
+                end
+            end,
+        })
+        presetBar:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 10, yPos)
+        presetBar:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -10, yPos)
+        enableBanner.presetBar = presetBar
+        yPos = yPos - (24 + SECTION_GAP)
+    end
 
     -- ========================================
     -- COEXISTENCE INFO BANNER

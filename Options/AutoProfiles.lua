@@ -3236,41 +3236,8 @@ function AutoProfilesUI:CreateEditingBanner(parent)
         AutoProfilesUI:ExitEditing()
     end)
 
-    -- Reset Aura Designer button (only visible on Aura Designer page)
-    local resetADBtn = CreateFrame("Button", nil, banner, "BackdropTemplate")
-    resetADBtn:SetSize(140, 26)
-    resetADBtn:SetPoint("RIGHT", exitBtn, "LEFT", -8, 0)
-    resetADBtn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    resetADBtn:SetBackdropColor(0.12, 0.06, 0.06, 1)
-    resetADBtn:SetBackdropBorderColor(0.5, 0.15, 0.15, 1)
-
-    local resetADText = resetADBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
-    resetADText:SetPoint("CENTER")
-    resetADText:SetText(L["Reset to Global"])
-    resetADText:SetTextColor(1, 0.5, 0.5)
-
-    resetADBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropBorderColor(0.8, 0.2, 0.2, 1)
-        resetADText:SetTextColor(1, 1, 1)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText(L["Reset Aura Designer to Global"])
-        GameTooltip:AddLine(L["Removes all Aura Designer overrides from this auto layout, restoring it to match your global profile."], 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    resetADBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(0.5, 0.15, 0.15, 1)
-        resetADText:SetTextColor(1, 0.5, 0.5)
-        GameTooltip:Hide()
-    end)
-    resetADBtn:SetScript("OnClick", function()
-        StaticPopup_Show("DF_AURA_DESIGNER_RESET_GLOBAL")
-    end)
-    resetADBtn:Hide()
-    banner.resetADBtn = resetADBtn
+    -- (The per-layout "Reset to Global" Aura Designer button was retired when the
+    -- preset dropdown gained an "Inherit (Global)" entry that does the same job.)
 
     editingBanner = banner
     return banner
@@ -3281,24 +3248,21 @@ function AutoProfilesUI:UpdateEditingBanner()
 
     local info = self:GetEditingInfo()
     if info then
-        editingBanner.profileText:SetText(info.contentName .. " → \"" .. info.name .. "\"")
+        -- Use "»" (Latin-1) not "→" (U+2192): the bundled font lacks the arrow
+        -- glyph and renders it as a "?" / missing-glyph box.
+        editingBanner.profileText:SetText(info.contentName .. " » \"" .. info.name .. "\"")
 
-        -- Show contextual info text based on the current page
+        -- Show contextual info text based on the current page. Aura/Text Designer
+        -- are chosen via the preset dropdown on their pages (with an "Inherit
+        -- (Global)" entry), so point there; other pages keep the generic message.
         local GUI = DF.GUI
-        local isAuraDesignerPage = GUI and GUI.CurrentPageName == "auras_auradesigner"
-        if isAuraDesignerPage then
-            editingBanner.infoText:SetText(info.rangeText .. " · |cffff6666" .. L["Per-setting reset is not available for Aura Designer"] .. "|r")
+        local pageName = GUI and GUI.CurrentPageName
+        if pageName == "auras_auradesigner" then
+            editingBanner.infoText:SetText(info.rangeText .. " · |cffffcc66" .. L["Pick an Aura Designer preset below for this layout. 'Inherit (Global)' follows your global one."] .. "|r")
+        elseif pageName == "text_designer" then
+            editingBanner.infoText:SetText(info.rangeText .. " · |cffffcc66" .. L["Pick a Text Designer preset below for this layout. 'Inherit (Global)' follows your global one."] .. "|r")
         else
             editingBanner.infoText:SetText(info.rangeText .. " · " .. L["Only changed settings will be saved"])
-        end
-
-        -- Show/hide the Reset Aura Designer button
-        if editingBanner.resetADBtn then
-            if isAuraDesignerPage then
-                editingBanner.resetADBtn:Show()
-            else
-                editingBanner.resetADBtn:Hide()
-            end
         end
 
         editingBanner:Show()
