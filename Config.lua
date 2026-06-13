@@ -2290,6 +2290,10 @@ DF.PartyDefaults = {
     vehicleIconY = 1,
 
     -- Pinned Frames
+    -- NOTE: scale and width/height are intentionally omitted — pinned frames
+    -- INHERIT those from the Based-on mode's main frames unless the user overrides
+    -- them per set (set.scale / customWidth / customHeight). growDirection,
+    -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
         sets = {
             [1] = {
@@ -2302,7 +2306,6 @@ DF.PartyDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = 200 },
                 locked = false,
                 showLabel = false,
@@ -2324,7 +2327,6 @@ DF.PartyDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = -200 },
                 locked = false,
                 showLabel = false,
@@ -3786,6 +3788,10 @@ DF.RaidDefaults = {
     vehicleIconY = 1,
 
     -- Pinned Frames
+    -- NOTE: scale and width/height are intentionally omitted — pinned frames
+    -- INHERIT those from the Based-on mode's main frames unless the user overrides
+    -- them per set (set.scale / customWidth / customHeight). growDirection,
+    -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
         sets = {
             [1] = {
@@ -3798,7 +3804,6 @@ DF.RaidDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = 200 },
                 locked = false,
                 showLabel = false,
@@ -3820,7 +3825,6 @@ DF.RaidDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = -200 },
                 locked = false,
                 showLabel = false,

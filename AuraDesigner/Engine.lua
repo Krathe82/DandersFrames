@@ -360,6 +360,13 @@ function Engine:UpdateFrame(frame)
     end
     if not Adapter or not Indicators then return end
 
+    -- Pinned set with Hide Auras: clear AD indicators. UpdateFrame doesn't gate on
+    -- adDB.enabled, so the effective-DB flag swap can't suppress AD — guard here.
+    if frame.dfPinnedHideAuras then
+        Indicators:HideAll(frame)
+        return
+    end
+
     -- Skip invisible frames (e.g. disabled pinned frame children)
     if not frame:IsVisible() then return end
 
@@ -845,6 +852,12 @@ function Engine:UpdateTestFrame(frame)
         Indicators = DF.AuraDesigner.Indicators
     end
     if not Indicators then return end
+
+    -- Pinned set with Hide Auras: clear AD indicators (see UpdateFrame).
+    if frame.dfPinnedHideAuras then
+        Indicators:HideAll(frame)
+        return
+    end
 
     -- Skip invisible frames (e.g. disabled pinned frame children)
     if not frame:IsVisible() then return end

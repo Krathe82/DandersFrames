@@ -416,6 +416,10 @@ end
 
 -- Helper to get correct DB based on frame type
 function DF:GetFrameDB(frame)
+    -- Pinned frames with Hide Auras / Hide Status Icons carry an effective DB that
+    -- forces the relevant show flags off over the mode base — so every aura/icon
+    -- updater (which all read GetFrameDB(frame).<flag>) hides via its existing path.
+    if frame and frame.dfPinnedEffDB then return frame.dfPinnedEffDB end
     if frame and DF:IsRaidFrame(frame) then
         return DF:GetRaidDB()
     else

@@ -47,14 +47,172 @@ end
 -- ============================================================
 
 -- Get pinned frames config for actual current mode
+-- The mode DB (party/raid) the REAL pinned frames inherit their sizing/colours
+-- from. Uses live IsInRaid(): the real pinned frames are live-group entities. The
+-- test-mode PREVIEW frames size themselves from an explicit isRaidMode instead
+-- (see ApplyPlayerTestLayout), so raid test mode never routes through here.
+local function GetPinnedModeDB()
+    return IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+end
+
 local function GetPinnedDB()
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     return db and db.pinnedFrames
 end
 
 -- Get the current actual mode (not cached)
 local function GetActualMode()
     return IsInRaid() and "raid" or "party"
+end
+
+-- Party-only "Show when solo" gate. When solo (not in any group) a pinned set
+-- stays HIDDEN unless its showInSoloMode is explicitly set — pinned frames
+-- highlight other group members, which don't exist solo. Raid is unaffected
+-- (being in a raid implies a group, and raid has no solo toggle by design).
+-- Test-mode previews always pass — they simulate a group so the frames can be
+-- configured. Default (nil) = hidden when solo; the checkbox opts in to showing.
+local function PinnedSoloAllowed(set)
+    if DF.testMode or DF.raidTestMode then return true end
+    if IsInGroup() then return true end
+    return set and set.showInSoloMode == true  -- opt-in to show when solo
+end
+
+-- Resolve which mode's main-frame DB a pinned set inherits its baseline look
+-- from (size, and later border/background). set.matchMode is "party" / "raid";
+-- it defaults to the set's OWN mode (a party set mirrors party frames, a raid
+-- set mirrors raid frames), and a set can cross-match the opposite mode. Since a
+-- set only ever displays in its own mode, `activeDB` (the caller's resolved mode
+-- — active mode for real frames, explicit test-mode DB otherwise) IS the own
+-- mode, so an unset/legacy matchMode falls through to it.
+local function GetSetBaselineDB(set, activeDB)
+    local m = set and set.matchMode
+    if m == "party" then return DF:GetDB("party") end
+    if m == "raid"  then return DF:GetRaidDB() end
+    return activeDB  -- unset/legacy → the set's own (displayed) mode
+end
+
+-- Resolve a set's per-button frame width/height. The baseline is the main frames
+-- of the set's Match mode (db.frameWidth/Height, via GetSetBaselineDB); a set may
+-- override either dimension per-set via set.customWidth / customHeight (nil =
+-- inherit the Match value). The per-set `scale` multiplier still applies on top
+-- via the container's SetScale, so this is the unscaled base size.
+local function GetSetFrameSize(set, db)
+    db = GetSetBaselineDB(set, db)
+    local w = (set and set.customWidth) or (db and db.frameWidth) or 120
+    local h = (set and set.customHeight) or (db and db.frameHeight) or 50
+    return w, h
+end
+
+-- Grow direction is a pinned-ONLY setting: the main party/raid frames' own
+-- growDirection means *group* arrangement (labelled "Rows / Columns"), which is a
+-- different concept from how pinned buttons flow — so it is NOT inherited. Plain
+-- per-set value, default HORIZONTAL.
+local function GetSetGrowDirection(set)
+    return (set and set.growDirection) or "HORIZONTAL"
+end
+
+-- Scale DOES inherit the Match mode's frameScale (a plain multiplier, same
+-- meaning everywhere) unless the set overrides it (set.scale ~= nil).
+local function GetSetScale(set)
+    if set and set.scale then return set.scale end
+    local b = GetSetBaselineDB(set, GetPinnedModeDB())
+    return (b and b.frameScale) or 1.0
+end
+
+-- Frame-border keys are all "frame…Border…" (frameShowBorder, frameBorderStyle,
+-- frameBorderColor, …); pixelPerfect is the one extra frame-level key BuildSpec
+-- reads. Used to snapshot a set's Border Override from the Based-on mode.
+local function IsFrameBorderKey(key)
+    if type(key) ~= "string" then return false end
+    if key == "pixelPerfect" then return true end
+    return key:find("^frame") ~= nil and key:find("Border") ~= nil
+end
+
+-- The DB a set's frame border renders from: the set itself when Border Override
+-- is on (a complete snapshot seeded from the Based-on mode, so edits are
+-- independent), else the Based-on mode DB (live inherit). `baselineDB` is the
+-- resolved Based-on mode DB.
+local function GetSetBorderDB(set, baselineDB)
+    if set and set.borderOverride then return set end
+    return baselineDB
+end
+
+-- Per-frame effective DB for the Hide Auras / Hide Status Icons toggles: a thin
+-- overlay on the mode `base` that forces showBuffs/showDebuffs off (hideAuras) and
+-- every `<name>IconEnabled` flag off (hideIcons), so the existing aura/icon
+-- updaters hide via their own paths. Returns nil when neither is set, so
+-- GetFrameDB falls through to the normal mode db (zero overhead when unused).
+-- Defensive / Missing-Buff are aura *indicators* (named with the IconEnabled
+-- suffix) — they belong under Hide Auras, not Hide Status Icons.
+local AURA_INDICATOR_ICON_KEYS = {
+    defensiveIconEnabled   = true,
+    missingBuffIconEnabled = true,
+}
+local function BuildPinnedEffDB(base, hideAuras, hideIcons)
+    if not base or not (hideAuras or hideIcons) then return nil end
+    local t = setmetatable({}, { __index = base })
+    if hideAuras then
+        t.showBuffs = false
+        t.showDebuffs = false
+        t.defensiveIconEnabled = false
+        t.missingBuffIconEnabled = false
+    end
+    if hideIcons then
+        for k in pairs(base) do
+            if type(k) == "string" and k:find("IconEnabled", 1, true)
+               and not AURA_INDICATOR_ICON_KEYS[k] then
+                t[k] = false
+            end
+        end
+    end
+    return t
+end
+
+-- Snapshot the Based-on mode's frame border into a set so its Border Override
+-- controls start identical to the inherited look and edits never leak back to the
+-- real frames (colour tables are deep-copied). Normally only fills keys the set
+-- doesn't already have (so toggling Override off then on preserves prior edits);
+-- pass force=true to overwrite every key — used by "Reset Border to Inherited".
+function PinnedFrames:SeedSetBorderOverride(set, force)
+    if not set then return end
+    local baseDB = GetSetBaselineDB(set, GetPinnedModeDB())
+    if not baseDB then return end
+    for key, value in pairs(baseDB) do
+        if IsFrameBorderKey(key) and (force or set[key] == nil) then
+            if type(value) == "table" then
+                set[key] = DF:DeepCopy(value)
+            else
+                set[key] = value
+            end
+        end
+    end
+end
+
+-- Shallow value compare that also handles the flat {r,g,b,a} colour tables the
+-- border keys use, so we can tell whether an override actually differs from the
+-- inherited value (drives "reset only shows when changed").
+local function BorderValEqual(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) == "table" then
+        for k, v in pairs(a) do if b[k] ~= v then return false end end
+        for k, v in pairs(b) do if a[k] ~= v then return false end end
+        return true
+    end
+    return a == b
+end
+
+-- True only when Border Override is on AND at least one border key has been
+-- changed from the inherited (Based-on) value.
+function PinnedFrames:IsBorderOverrideChanged(set)
+    if not set or not set.borderOverride then return false end
+    local baseDB = GetSetBaselineDB(set, GetPinnedModeDB())
+    if not baseDB then return false end
+    for key, val in pairs(set) do
+        if IsFrameBorderKey(key) and not BorderValEqual(val, baseDB[key]) then
+            return true
+        end
+    end
+    return false
 end
 
 -- Get a specific set's config
@@ -180,8 +338,9 @@ function PinnedFrames:AutoPopulateSet(set, roster)
         local fullName = GetUnitName("player", true)
         local shortName = fullName and fullName:match("([^%-]+)") or fullName
 
-        -- Auto-add player if DPS filter is on
-        if set.autoAddDPS and shortName and not existingPlayers[shortName] then
+        -- Auto-add player if DPS filter is on (unless Exclude Self — the solo
+        -- player is always self, so excludeSelf means never auto-add here).
+        if set.autoAddDPS and not set.excludeSelf and shortName and not existingPlayers[shortName] then
             table.insert(set.players, fullName)
             changed = true
         end
@@ -194,7 +353,7 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                     -- Solo player is always DAMAGER
                     local pShort = playerName:match("([^%-]+)") or playerName
                     if pShort == shortName then
-                        if not set.autoAddDPS then
+                        if not set.autoAddDPS or set.excludeSelf then
                             table.remove(set.players, i)
                             changed = true
                         end
@@ -212,6 +371,14 @@ function PinnedFrames:AutoPopulateSet(set, roster)
     -- Build name → role map for the removal pass
     local rosterRoles = {}  -- shortName -> role
     local isRaid = IsInRaid()
+
+    -- Identify the player for the Exclude Self option (gates auto-add/remove of self).
+    local selfFull = GetUnitName("player", true)
+    local selfShort = selfFull and selfFull:match("([^%-]+)") or selfFull
+    local function IsSelfName(name)
+        if not name then return false end
+        return name == selfFull or (name:match("([^%-]+)") or name) == selfShort
+    end
     for i = 1, numMembers do
         local unit = isRaid and ("raid" .. i) or (i == 1 and "player" or "party" .. (i - 1))
         local fullName = GetUnitName(unit, true)
@@ -232,6 +399,11 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                     shouldAdd = true
                 elseif set.autoAddDPS and role == "DAMAGER" then
                     shouldAdd = true
+                end
+
+                -- Exclude Self: never auto-add the player to this set.
+                if shouldAdd and set.excludeSelf and UnitIsUnit(unit, "player") then
+                    shouldAdd = false
                 end
 
                 if shouldAdd then
@@ -265,6 +437,9 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                     elseif set.autoAddDPS and role == "DAMAGER" then
                         matchesFilter = true
                     end
+
+                    -- Exclude Self: drop an auto-added self even if the role matches.
+                    if set.excludeSelf and IsSelfName(playerName) then matchesFilter = false end
 
                     if not matchesFilter then
                         table.remove(set.players, i)
@@ -434,7 +609,7 @@ end
 -- This determines which corner the header anchors to AND the container anchors to UIParent
 -- Supports START, CENTER, and END for both frameAnchor and columnAnchor
 local function GetContainerAnchorPoint(set)
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local frameAnchor = set.frameAnchor or "START"
     local columnAnchor = set.columnAnchor or "START"
 
@@ -644,15 +819,14 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
     if not handler or not set then return end
     if InCombatLockdown() then return end
 
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     if not db then return end
 
-    local frameWidth    = db.frameWidth or 120
-    local frameHeight   = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
     local hSpacing      = set.horizontalSpacing or 2
     local vSpacing      = set.verticalSpacing or 2
     local unitsPerRow   = set.unitsPerRow or 5
-    local horizontal    = (set.growDirection == "HORIZONTAL")
+    local horizontal    = (GetSetGrowDirection(set) == "HORIZONTAL")
     local frameAnchor   = set.frameAnchor or "START"
     local columnAnchor  = set.columnAnchor or "START"
     local anchor        = GetContainerAnchorPoint(set)
@@ -661,11 +835,17 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
 
     -- Size each boss frame to the current mode. SetSize on secure frames is
     -- combat-restricted; we already bailed above on InCombatLockdown.
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
     local frames = self.bossFrames[setIndex]
     if frames then
         for i = 1, 8 do
             local f = frames[i]
             if f then
+                f.dfPinnedWidth, f.dfPinnedHeight = frameWidth, frameHeight
+                f.dfPinnedBorderDB = borderDB
+                f.dfPinnedEffDB = effDB
+                f.dfPinnedHideAuras = set.hideAuras
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = IsInRaid()
             end
@@ -938,7 +1118,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
     local pos = set.position or { point = containerAnchor, x = 0, y = 200 * (setIndex == 1 and 1 or -1) }
     -- If saved anchor doesn't match current growth anchor, convert on first layout pass
     local useAnchor = pos.point or containerAnchor
-    local initScale = set.scale or 1.0
+    local initScale = GetSetScale(set)
     container:SetScale(initScale)
     container:ClearAllPoints()
     container:SetPoint(useAnchor, UIParent, useAnchor, (pos.x or 0) / initScale, (pos.y or 0) / initScale)
@@ -1283,27 +1463,41 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     local header = self.headers[setIndex]
     if not header then return end
     
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     if not db then
         DF:DebugError("PINNED", "ApplyLayoutSettings: db is nil")
         return
     end
     
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
-    
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
+    -- Border DB this set renders from: its own snapshot when Border Override is on,
+    -- else the Based-on mode (live inherit). Stamped onto each child so
+    -- DF:ApplyFrameBorder uses it instead of the shared per-mode db.
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    -- Effective DB + AD flag for Hide Auras / Hide Status Icons (nil when neither).
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
+
     -- CRITICAL: Resize all child frames to match current raid/party settings
     -- This ensures frames use the correct size when switching between raid and party
     for i = 1, 40 do
         local child = header:GetAttribute("child" .. i)
         if child then
+            -- Stamp the resolved pinned size so DF:ApplyFrameLayout (which otherwise
+            -- sizes from the shared per-mode db) keeps this set's Match/Custom size.
+            child.dfPinnedWidth, child.dfPinnedHeight = frameWidth, frameHeight
+            child.dfPinnedBorderDB = borderDB
+            child.dfPinnedEffDB = effDB
+            child.dfPinnedHideAuras = set.hideAuras
             child:SetSize(frameWidth, frameHeight)
             -- Also update the isRaidFrame flag for proper DB selection in other functions
             child.isRaidFrame = IsInRaid()
+            -- Re-render the border now so border edits apply live (the per-frame
+            -- ApplyFrameLayout also picks up dfPinnedBorderDB on its next tick).
+            if DF.ApplyFrameBorder then DF:ApplyFrameBorder(child, borderDB) end
         end
     end
     
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local hSpacing = set.horizontalSpacing or 2
     local vSpacing = set.verticalSpacing or 2
     local unitsPerRow = set.unitsPerRow or 5
@@ -1365,7 +1559,7 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     -- Apply scale FIRST (before any position work)
     local container = self.containers[setIndex]
     if container then
-        container:SetScale(set.scale or 1.0)
+        container:SetScale(GetSetScale(set))
     end
     
     -- Anchor the header to the correct corner of container
@@ -1442,7 +1636,7 @@ function PinnedFrames:ApplyBossLayout(setIndex)
 
     -- Container anchor + scale + saved position handling.
     local anchor = GetContainerAnchorPoint(set)
-    container:SetScale(set.scale or 1.0)
+    container:SetScale(GetSetScale(set))
 
     local pos = set.position
     if pos then
@@ -1504,9 +1698,8 @@ function PinnedFrames:ResizeContainer(setIndex)
     -- arena/roster event churn, so skip the child-count loop entirely.
     if not set.enabled then return end
 
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local db = GetPinnedModeDB()
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
 
     if IsBossSet(set) then
         local frames = self.bossFrames[setIndex]
@@ -1524,7 +1717,7 @@ function PinnedFrames:ResizeContainer(setIndex)
             return
         end
 
-        local horizontal = set.growDirection == "HORIZONTAL"
+        local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
         local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
         local unitsPerRow = set.unitsPerRow or 5
 
@@ -1558,7 +1751,7 @@ function PinnedFrames:ResizeContainer(setIndex)
         return
     end
     
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
     local unitsPerRow = set.unitsPerRow or 5
     
@@ -1637,12 +1830,18 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
 
     set.enabled = enabled
 
+    -- Effective visibility = configured enabled AND the party solo gate. The
+    -- stored config (set.enabled) is unchanged; only show/hide reads `visible`,
+    -- so a solo-hidden set re-appears automatically when you join a group (the
+    -- roster handler re-runs SetEnabled on the solo↔group transition).
+    local visible = enabled and PinnedSoloAllowed(set)
+
     local container = self.containers[setIndex]
     local header = self.headers[setIndex]
     local isBoss = IsBossSet(set)
 
     if not container or (not isBoss and not header) then
-        if enabled then
+        if visible then
             self:CreateSetFrames(setIndex)
         end
         return
@@ -1656,12 +1855,12 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
 
     -- Player mode: toggle header child events
     if not isBoss and header then
-        SetChildFrameEvents(header, enabled)
+        SetChildFrameEvents(header, visible)
     end
 
     local label = self.labels[setIndex]
 
-    if enabled then
+    if visible then
         container:Show()
         if header then header:Show() end
 
@@ -1852,7 +2051,16 @@ function PinnedFrames:Initialize()
             self:ApplyLayoutSettings(i)
         end
     end
-    
+
+    -- Apply the party "Show when solo" gate: CreateSetFrames above shows based on
+    -- raw enabled, so re-run SetEnabled to hide solo sets that haven't opted in.
+    -- Record the initial group state for solo<->group transition detection.
+    self.wasInGroup = IsInGroup()
+    for i = 1, 2 do
+        local set = GetSetDB(i)
+        if set then self:SetEnabled(i, set.enabled) end
+    end
+
     DF:Debug("PINNED", "Initialized pinned frames")
 end
 
@@ -2114,7 +2322,20 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
             PinnedFrames:Reinitialize()
             return
         end
-        
+
+        -- Solo <-> group transition: re-apply each set's visibility so the party
+        -- "Show when solo" gate takes effect (SetEnabled reads PinnedSoloAllowed).
+        -- Only on the actual transition — not every roster change inside a group.
+        local inGroup = IsInGroup()
+        if PinnedFrames.wasInGroup == nil then PinnedFrames.wasInGroup = inGroup end
+        if inGroup ~= PinnedFrames.wasInGroup then
+            PinnedFrames.wasInGroup = inGroup
+            for i = 1, 2 do
+                local set = GetSetDB(i)
+                if set then PinnedFrames:SetEnabled(i, set.enabled) end
+            end
+        end
+
         PinnedFrames:ProcessAllSets()
     end
 end)
@@ -2447,8 +2668,7 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     end
 
     local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
     container:SetSize(frameWidth, frameHeight)
 
     -- Use the SAVED anchor point (pos.point) first — that's what the user
@@ -2458,7 +2678,7 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     -- TOPLEFT but using (x=0, y=200) that was saved for CENTER.
     local pos = set.position or {}
     local anchor = pos.point or GetContainerAnchorPoint(set)
-    local scale = set.scale or 1.0
+    local scale = GetSetScale(set)
     container:SetScale(scale)
     container:ClearAllPoints()
     container:SetPoint(
@@ -2517,7 +2737,13 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isB
             -- flipped since last Enter.
             pool[i]:SetParent(container)
             local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-            pool[i]:SetSize(db.frameWidth or 120, db.frameHeight or 50)
+            local setDB = GetSetDBForMode(setIndex, isRaidMode)
+            local fw, fh = GetSetFrameSize(setDB, db)
+            pool[i].dfPinnedWidth, pool[i].dfPinnedHeight = fw, fh
+            pool[i].dfPinnedBorderDB = GetSetBorderDB(setDB, GetSetBaselineDB(setDB, db))
+            pool[i].dfPinnedEffDB = setDB and BuildPinnedEffDB(db, setDB.hideAuras, setDB.hideIcons) or nil
+            pool[i].dfPinnedHideAuras = setDB and setDB.hideAuras
+            pool[i]:SetSize(fw, fh)
             pool[i].isRaidFrame = isRaidMode
             pool[i].isPinnedBossFrame = isBossSet or false
         end
@@ -2532,15 +2758,16 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     if not set or not container or not pool then return end
 
     local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
 
     local hSpacing = set.horizontalSpacing or 2
     local vSpacing = set.verticalSpacing or 2
     local unitsPerRow = set.unitsPerRow or 5
     local frameAnchor = set.frameAnchor or "START"
     local columnAnchor = set.columnAnchor or "START"
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local anchor = GetContainerAnchorPoint(set)
 
     local n = set.testCount or 3
@@ -2567,6 +2794,10 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
         local f = pool[i]
         if f then
             if i <= n then
+                f.dfPinnedWidth, f.dfPinnedHeight = frameWidth, frameHeight
+                f.dfPinnedBorderDB = borderDB
+                f.dfPinnedEffDB = effDB
+                f.dfPinnedHideAuras = set.hideAuras
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = isRaidMode
 
@@ -2633,6 +2864,22 @@ function PinnedFrames:EnterTestMode()
         return
     end
     local actualModeMatches = (isRaidMode == IsInRaid())
+
+    -- Hide ALL real (live-mode) pinned frames while any test mode is active — the
+    -- test frames ARE the preview, so the real party/raid pinned must not leak
+    -- through. Without this an enabled party set's real frame shows during raid
+    -- test mode (its set index isn't in the raid test loop below, so the per-set
+    -- hide never reaches it). ExitTestMode restores them per live enabled state.
+    for setIndex = 1, 2 do
+        if self.headers[setIndex] then self.headers[setIndex]:Hide() end
+        local rc = self.containers[setIndex]
+        if rc then
+            if rc.mover then rc.mover:Hide() end
+            if rc.bg then rc.bg:Hide() end
+            if rc.border then rc.border:Hide() end
+        end
+        if self.labels[setIndex] then self.labels[setIndex]:Hide() end
+    end
 
     for setIndex = 1, 2 do
         local set = GetSetDBForMode(setIndex, isRaidMode)

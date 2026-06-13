@@ -75,14 +75,27 @@ local function ParsePinnedKey(key)
     return nil, nil
 end
 
--- Settings that can be overridden per pinned frame set
+-- Settings that can be overridden per pinned frame set.
+-- Decoupled from auto layouts (2026-06-07): pinned frames are a global,
+-- per-mode modular highlight. The ONLY thing a raid auto layout overrides is
+-- whether each set is shown (enabled) for that layout — everything else is
+-- global and edited on the Pinned Frames page. This keeps pinned settings out
+-- of the layout-override store entirely (no more stale pinned.N.* data).
 local PINNED_OVERRIDABLE = {
-    enabled = true, locked = true, showLabel = true,
-    growDirection = true, unitsPerRow = true, scale = true,
-    horizontalSpacing = true, verticalSpacing = true, frameAnchor = true,
-    columnAnchor = true, autoAddTanks = true, autoAddHealers = true,
-    autoAddDPS = true, keepOfflinePlayers = true, players = true,
+    enabled = true,
 }
+
+-- True unless `key` is a pinned key (pinned.N.setting) whose setting is NOT
+-- overridable. Non-pinned keys are always allowed (governed elsewhere). This is
+-- the single gate that keeps non-overridable pinned settings out of the layout
+-- override store — used by SetProfileSetting / IsSettingOverridden below.
+local function IsKeyOverridable(key)
+    local _, setting = ParsePinnedKey(key)
+    if setting then
+        return PINNED_OVERRIDABLE[setting] == true
+    end
+    return true
+end
 
 -- ============================================================
 -- OVERRIDE KEY → TAB MAPPING
@@ -2842,10 +2855,13 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     DF:Debug("LAYOUT", "EnterEditing: applied %d overrides for live preview", overrideCount)
     
     -- Refresh pinned frames to show overridden settings in live preview.
-    -- Only when actually in a raid: PinnedFrames' methods key off live IsInRaid(),
-    -- so running them while not in a raid would apply this raid layout's pinned
-    -- state to the PARTY pinned set. When not in a raid the raid pinned preview is
-    -- handled by the mode-aware test-mode pinned frames instead.
+    --   * In an actual raid: re-apply each set's enabled + layout to the LIVE
+    --     pinned frames (their methods key off live IsInRaid()).
+    --   * In raid TEST mode: the live frames stay party-mode and must not be
+    --     touched (that would apply the raid layout to the party set / leak the
+    --     party header). Instead just re-run the raid test-mode pinned frames so
+    --     they re-size to the layout's overridden frame width via their own
+    --     mode-explicit path (ApplyPlayerTestLayout reads the raid DB).
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
         for i = 1, 2 do
@@ -2855,6 +2871,9 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
             DF.PinnedFrames:ResizeContainer(i)
             DF.PinnedFrames:UpdateHeaderNameList(i)
         end
+    elseif DF.PinnedFrames and DF.raidTestMode then
+        DF.PinnedFrames:ExitTestMode()
+        DF.PinnedFrames:EnterTestMode()
     end
 
     -- Refresh test mode frames so they display override values.
@@ -3071,9 +3090,9 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         DF:RefreshTestFramesWithLayout()
     end
     
-    -- Refresh pinned frames to show global settings again. Guarded by IsInRaid()
-    -- for the same reason as on enter-editing: while not in a raid these methods
-    -- target the PARTY pinned set, so a raid layout edit must not touch them.
+    -- Refresh pinned frames to show global settings again (mirror of EnterEditing):
+    -- live raid re-applies to the real frames; raid test mode just re-runs the test
+    -- frames so they re-size back to the global frame width.
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
         for i = 1, 2 do
@@ -3084,6 +3103,9 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
             DF.PinnedFrames:ResizeContainer(i)
             DF.PinnedFrames:UpdateHeaderNameList(i)
         end
+    elseif DF.PinnedFrames and DF.raidTestMode then
+        DF.PinnedFrames:ExitTestMode()
+        DF.PinnedFrames:EnterTestMode()
     end
     
     -- Refresh UI to hide banner and re-enable Auto Profiles tab
@@ -3613,6 +3635,16 @@ end
 function AutoProfilesUI:SetProfileSetting(key, value)
     if not self.editingProfile then return false end
 
+    -- Non-overridable pinned setting (everything except `enabled` post-decouple):
+    -- never store it as a layout override. Strip any existing one and bail so the
+    -- control's plain global write is the only effect.
+    if not IsKeyOverridable(key) then
+        if self.editingProfile.overrides then
+            self.editingProfile.overrides[key] = nil
+        end
+        return false
+    end
+
     -- Ensure overrides table exists
     if not self.editingProfile.overrides then
         self.editingProfile.overrides = {}
@@ -3680,10 +3712,20 @@ end
 
 -- Check if a setting is currently overridden
 function AutoProfilesUI:IsSettingOverridden(key)
+    if not IsKeyOverridable(key) then return false end
     if not self.editingProfile or not self.editingProfile.overrides then
         return false
     end
     return self.editingProfile.overrides[key] ~= nil
+end
+
+-- Is a pinned-frame SETTING (bare name, e.g. "enabled" / "scale") overridable
+-- per auto layout? Post-decouple only `enabled` is. The pinned options page uses
+-- this to decide whether to show any override UI (star / reset / Global: text)
+-- for a control — non-overridable controls show none, making it clear they're
+-- global/independent of auto layouts.
+function AutoProfilesUI:IsPinnedSettingOverridable(setting)
+    return PINNED_OVERRIDABLE[setting] == true
 end
 
 -- Get active profile based on current content/raid size (for runtime, not editing)
@@ -3804,18 +3846,29 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
         overlay[tableName] = parent
     end
 
-    -- Pinned keys: deep-copy pinnedFrames from real table, apply overrides
+    -- Pinned keys: build a LIVE VIEW of the real pinnedFrames, not a deep copy.
+    -- Post-decouple the only pinned override is per-set `enabled`, so every other
+    -- pinned setting must read through to the live global (edits reflect
+    -- immediately, and there's nothing to go stale). Each set that has an
+    -- `enabled` override becomes a thin proxy that returns the overridden enabled
+    -- but reads every other field live from the real set; sets with no override
+    -- are the real table by reference. The whole pinnedFrames table is itself a
+    -- live view (top-level fields read through to real).
     if next(pinnedGroups) then
-        local pf = DeepCopyValue(DF._realRaidDB.pinnedFrames)
-        if type(pf) ~= "table" then pf = {} end
-        if type(pf.sets) ~= "table" then pf.sets = {} end
-        for setIdx, settings in pairs(pinnedGroups) do
-            if not pf.sets[setIdx] then pf.sets[setIdx] = {} end
-            for setting, value in pairs(settings) do
-                pf.sets[setIdx][setting] = DeepCopyValue(value)
+        local realPF = DF._realRaidDB.pinnedFrames or {}
+        local realSets = type(realPF.sets) == "table" and realPF.sets or {}
+        local viewSets = {}
+        for setIdx, realSet in pairs(realSets) do
+            local ov = pinnedGroups[setIdx]
+            if ov and ov.enabled ~= nil then
+                viewSets[setIdx] = setmetatable(
+                    { enabled = ov.enabled and true or false },
+                    { __index = realSet })
+            else
+                viewSets[setIdx] = realSet  -- live reference
             end
         end
-        overlay.pinnedFrames = pf
+        overlay.pinnedFrames = setmetatable({ sets = viewSets }, { __index = realPF })
     end
 
     -- Activate the overlay (proxy reads this automatically)

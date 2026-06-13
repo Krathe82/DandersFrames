@@ -2314,6 +2314,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             container.overrideCheckIcon = checkIcon
             
             container.UpdateOverrideIndicators = function(self)
+                -- Only the per-set `enabled` flag is layout-overridable now; every
+                -- other pinned setting is global/independent of auto layouts, so it
+                -- shows no override UI at all (no star, reset, or "Global:" text).
+                if not (DF.AutoProfilesUI and DF.AutoProfilesUI.IsPinnedSettingOverridable
+                        and DF.AutoProfilesUI:IsPinnedSettingOverridable(dbKey)) then
+                    self.overrideStar:Hide(); self.overrideResetBtn:Hide()
+                    self.overrideGlobalText:Hide(); self.overrideCheckIcon:Hide()
+                    return
+                end
                 -- Debug mode
                 if GUI.IsOverrideDebugMode and GUI.IsOverrideDebugMode() then
                     self.overrideStar:Show()
@@ -2463,6 +2472,20 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end)
             container.Refresh = function()
                 cb:SetChecked(GetCurrentSet()[dbKey])
+                -- Optional disabled state: when container.enabledWhen() is false the
+                -- checkbox is greyed and can't be toggled (e.g. Show Label is moot
+                -- until Lock Position is on, since the drag label shows instead).
+                if container.enabledWhen then
+                    if container.enabledWhen() then
+                        cb:Enable()
+                        txt:SetTextColor(0.8, 0.8, 0.8)
+                        cb.Check:SetVertexColor(tc.r, tc.g, tc.b)
+                    else
+                        cb:Disable()
+                        txt:SetTextColor(0.4, 0.4, 0.4)
+                        cb.Check:SetVertexColor(0.4, 0.4, 0.4)
+                    end
+                end
                 if container.UpdateOverrideIndicators then container:UpdateOverrideIndicators() end
             end
             
@@ -2593,7 +2616,173 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             table.insert(controlsToRefresh, container)
             return container
         end
-        
+
+        -- Slider whose baseline value comes from the set's Match mode (the
+        -- party/raid main-frame field `baselineKey`, e.g. "frameWidth"), with
+        -- auto-layout-style override UX: changing it stores a per-set override in
+        -- set[overrideKey] (e.g. "customWidth"); a gold star + reset button appear,
+        -- and reset clears the override to revert to the Match value. This makes
+        -- "Match sets the value, the user overrides it" read the same as a layout
+        -- override. These keys are NOT auto-layout overridable, so there is no
+        -- runtime/HandleRuntimeWrite path — writes go straight to the set.
+        local function CreateMatchOverrideSlider(parent, label, minVal, maxVal, step, overrideKey, baselineKey, callback)
+            local container = CreateFrame("Frame", nil, parent)
+            container:SetSize(250, 50)
+            local lbl = container:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            lbl:SetPoint("TOPLEFT", 0, 0)
+            lbl:SetText(label)
+            lbl:SetTextColor(0.8, 0.8, 0.8)
+            local track = CreateFrame("Frame", nil, container, "BackdropTemplate")
+            track:SetPoint("TOPLEFT", 0, -18)
+            track:SetSize(170, 8)
+            track:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            track:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            track:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            local fill = track:CreateTexture(nil, "ARTWORK")
+            fill:SetPoint("LEFT", 1, 0)
+            fill:SetHeight(6)
+            local tc = GUI.GetThemeColor()
+            fill:SetColorTexture(tc.r, tc.g, tc.b, 0.8)
+            local slider = CreateFrame("Slider", nil, container)
+            slider:SetPoint("TOPLEFT", 0, -18)
+            slider:SetSize(170, 8)
+            slider:SetOrientation("HORIZONTAL")
+            slider:SetMinMaxValues(minVal, maxVal)
+            slider:SetValueStep(step)
+            slider:SetObeyStepOnDrag(true)
+            slider:SetHitRectInsets(-4, -4, -8, -8)
+            local thumb = slider:CreateTexture(nil, "OVERLAY")
+            thumb:SetSize(12, 16)
+            thumb:SetColorTexture(tc.r, tc.g, tc.b, 1)
+            slider:SetThumbTexture(thumb)
+            local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
+            input:SetPoint("LEFT", track, "RIGHT", 8, 0)
+            input:SetSize(50, 20)
+            input:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            input:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            input:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            input:SetFontObject(DFFontHighlightSmall)
+            input:SetJustifyH("CENTER")
+            input:SetAutoFocus(false)
+            input:SetTextInsets(2, 2, 0, 0)
+
+            local function MatchValue()
+                local set = GetCurrentSet()
+                local mode = (set and set.matchMode) or GUI.SelectedMode
+                local mdb = DF:GetDB(mode)
+                return (mdb and mdb[baselineKey]) or minVal
+            end
+            local function IsOverridden()
+                local set = GetCurrentSet()
+                return set ~= nil and set[overrideKey] ~= nil and set[overrideKey] ~= MatchValue()
+            end
+            local function EffectiveValue()
+                local set = GetCurrentSet()
+                return (set and set[overrideKey]) or MatchValue()
+            end
+            -- Store an override only when it differs from the inherited value; setting
+            -- it back to the inherited value clears it (so no stale star remains).
+            local function SetOverride(v)
+                if v == MatchValue() then GetCurrentSet()[overrideKey] = nil
+                else GetCurrentSet()[overrideKey] = v end
+            end
+            local function FmtVal(v) return step < 1 and string.format("%.1f", v) or string.format("%d", v) end
+            local function UpdateFill() local pct = (slider:GetValue() - minVal) / (maxVal - minVal); fill:SetWidth(math.max(1, pct * 168)) end
+
+            -- Reset-to-Match button (TOPRIGHT) + gold override star to its left,
+            -- mirroring AddPinnedOverrideIndicators so it reads like a layout override.
+            local resetBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
+            resetBtn:SetSize(18, 18)
+            resetBtn:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, 0)
+            resetBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            resetBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            resetBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            resetBtn:Hide()
+            local resetIcon = resetBtn:CreateTexture(nil, "OVERLAY")
+            resetIcon:SetPoint("CENTER")
+            resetIcon:SetSize(12, 12)
+            resetIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+            resetIcon:SetVertexColor(0.6, 0.6, 0.6)
+            resetBtn:SetScript("OnEnter", function(s)
+                s:SetBackdropBorderColor(1, 0.8, 0.2, 1); resetIcon:SetVertexColor(1, 0.8, 0.2)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT"); GameTooltip:SetText(L["Reset to inherited value"]); GameTooltip:Show()
+            end)
+            resetBtn:SetScript("OnLeave", function(s)
+                s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1); resetIcon:SetVertexColor(0.6, 0.6, 0.6); GameTooltip:Hide()
+            end)
+
+            local starFrame = CreateFrame("Button", nil, container, "BackdropTemplate")
+            starFrame:SetSize(18, 18)
+            starFrame:SetPoint("RIGHT", resetBtn, "LEFT", -2, 0)
+            starFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            starFrame:SetBackdropColor(0, 0, 0, 0)
+            starFrame:SetBackdropBorderColor(0, 0, 0, 0)
+            starFrame:Hide()
+            local starIcon = starFrame:CreateTexture(nil, "OVERLAY")
+            starIcon:SetSize(12, 12)
+            starIcon:SetPoint("CENTER")
+            starIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\star")
+            starIcon:SetVertexColor(1, 0.8, 0.2)
+            starFrame:SetScript("OnEnter", function(s)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+                GameTooltip:SetText(L["Overriding inherited value"])
+                GameTooltip:AddLine(string.format(L["Inherited value: %s"], FmtVal(MatchValue())), 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            starFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            local function UpdateIndicators()
+                if IsOverridden() then starFrame:Show(); resetBtn:Show() else starFrame:Hide(); resetBtn:Hide() end
+            end
+            container.UpdateOverrideIndicators = UpdateIndicators
+
+            -- Guard against the programmatic slider:SetValue (Refresh/Reset) being
+            -- misread as a user edit and writing the baseline back as an override.
+            local updating = false
+            local function UpdateValue(val)
+                updating = true
+                slider:SetValue(val)
+                updating = false
+                input:SetText(FmtVal(slider:GetValue()))
+                UpdateFill()
+            end
+
+            slider:SetScript("OnValueChanged", function(_, value)
+                if updating then UpdateFill(); return end
+                SetOverride(value)
+                input:SetText(FmtVal(value)); UpdateFill()
+                if callback then callback() end
+                UpdateIndicators()
+            end)
+            input:SetScript("OnEnterPressed", function(s)
+                local val = tonumber(s:GetText())
+                if val then
+                    val = math.max(minVal, math.min(maxVal, val))
+                    SetOverride(val)
+                    UpdateValue(val)
+                    if callback then callback() end
+                    UpdateIndicators()
+                end
+                s:ClearFocus()
+            end)
+            input:SetScript("OnEscapePressed", function(s) s:ClearFocus(); UpdateValue(EffectiveValue()) end)
+
+            resetBtn:SetScript("OnClick", function()
+                GetCurrentSet()[overrideKey] = nil
+                UpdateValue(EffectiveValue())
+                if callback then callback() end
+                UpdateIndicators()
+            end)
+
+            container.Refresh = function()
+                UpdateValue(EffectiveValue())
+                UpdateIndicators()
+            end
+            container.Refresh()
+            table.insert(controlsToRefresh, container)
+            return container
+        end
+
         -- Helper function to create refreshable dropdown
         local function CreateRefreshableDropdown(parent, label, options, dbKey, callback)
             local wrapper = CreateFrame("Frame", nil, parent)
@@ -2719,7 +2908,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== SETTINGS GROUP (Column 1) =====
         local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
-        
+
+        -- While editing a raid auto layout, make the decouple explicit via an info
+        -- banner: only the per-set Enable flag can differ per layout; everything
+        -- else is shared. Hidden unless editing a raid layout.
+        local pinnedLayoutNote = GUI:CreateInfoBanner(self.child, {
+            tone = "info",
+            text = L["Auto layouts can only change whether pinned frames are shown (Enable). All other pinned frame settings are shared across layouts."],
+        })
+        pinnedLayoutNote.hideOn = function()
+            return not (GUI.SelectedMode == "raid" and DF.AutoProfilesUI and DF.AutoProfilesUI:IsEditing())
+        end
+        settingsGroup:AddWidget(pinnedLayoutNote, pinnedLayoutNote.layoutHeight or 44)
+
         -- SetEnabled / SetLocked / SetShowLabel internally use GetSetDB → IsInRaid(),
         -- so calling them while editing the inactive mode would mutate the active
         -- mode's state. Only call them when the selected mode matches the live mode;
@@ -2747,6 +2948,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
         end), 28)
+        -- Forward ref so Lock Position can re-grey Show Label when toggled.
+        local showLabelCheck
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Lock Position"], "locked", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
@@ -2754,8 +2957,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
+            -- Show Label only matters while locked (otherwise the drag label shows).
+            if showLabelCheck and showLabelCheck.Refresh then showLabelCheck.Refresh() end
         end), 28)
-        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
+        showLabelCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
                 DF.PinnedFrames:SetShowLabel(activeHighlightTab, GetCurrentSet().showLabel)
@@ -2763,6 +2968,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
         end), 28)
+        -- Grey out Show Label while unlocked — the "Drag to Move" label shows then,
+        -- not the set's label, so the toggle has no visible effect.
+        showLabelCheck.enabledWhen = function() return GetCurrentSet().locked == true end
+        if showLabelCheck.Refresh then showLabelCheck.Refresh() end
 
         -- Disable in Arena/Battlegrounds: surfaces the per-mode disableInPvP
         -- gate (nil = disabled in PvP, the safe default — instanced PvP fires
@@ -2791,6 +3000,30 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end,
             "disableInPvP"), 28)
         pvpCheck.tooltip = L["Keep pinned frames hidden and inactive inside arenas and battlegrounds. Recommended: PvP roster churn is heavy, and pinned sets are built for organised party/raid play."]
+
+        -- Party-only: show this pinned set while solo (off by default — pinned
+        -- frames highlight other group members). Raid implies a group, so hide it
+        -- in raid mode.
+        local soloCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show in Solo Mode"], "showInSoloMode", function()
+            if not DF.PinnedFrames then return end
+            -- Re-apply visibility so the solo gate takes effect immediately.
+            DF.PinnedFrames:SetEnabled(activeHighlightTab, GetCurrentSet().enabled)
+            RefreshTestModeIfActive()
+        end), 28)
+        soloCheck.hideOn = function() return GUI.SelectedMode == "raid" end
+
+        -- Declutter toggles: hide auras / status icons on this set's frames for a
+        -- clean highlight. Re-stamp the effective DB and re-render so it applies live.
+        local function RefreshPinnedDisplay()
+            UpdateHighlightLayout()
+            if DF.UpdateAll then DF:UpdateAll() end
+            if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
+                DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+            end
+            RefreshTestModeIfActive()
+        end
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Auras"], "hideAuras", RefreshPinnedDisplay), 28)
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Status Icons"], "hideIcons", RefreshPinnedDisplay), 28)
 
         -- Reset Position button
         local resetPosBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
@@ -2864,8 +3097,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         Add(settingsGroup, nil, 1)
         
-        -- ===== FRAME TYPE GROUP (full width) =====
-        local frameTypeGroup = GUI:CreateSettingsGroup(self.child, 560)
+        -- ===== FRAME TYPE GROUP (Column 2) =====
+        local frameTypeGroup = GUI:CreateSettingsGroup(self.child, 280)
         local frameTypeHeader = GUI:CreateHeader(self.child, L["Frame Type"])
         -- Gold "New" badge next to the header (the Friendly Boss NPCs option was
         -- introduced in 4.3.2). Clears when the user navigates away from the
@@ -2907,33 +3140,161 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             55
         )
 
-        Add(frameTypeGroup, nil, "both")
+        Add(frameTypeGroup, nil, 2)
         AddSpace(10, "both")
 
-        -- ===== LAYOUT GROUP (Column 2) =====
+        -- ===== FRAME STYLE GROUP (Column 1) — inherited from your frames, overridable =====
         local layoutGroup = GUI:CreateSettingsGroup(self.child, 280)
-        layoutGroup:AddWidget(GUI:CreateHeader(self.child, L["Layout"]), 40)
-        
+        layoutGroup:AddWidget(GUI:CreateHeader(self.child, L["Frame Style"]), 40)
+
+        -- Up-front explainer for the Match inheritance + per-setting override model.
+        local matchInfoBanner = GUI:CreateInfoBanner(self.child, {
+            tone = "info",
+            text = L["Pinned frames are based on your Party or Raid frames — choose which below. Change any setting to override it for these frames; use the reset button beside an overridden setting to revert it to the inherited value."],
+        })
+        layoutGroup:AddWidget(matchInfoBanner, matchInfoBanner.layoutHeight or 44)
+
+        -- Match (Stage 2a): which mode's main frames this pinned set inherits its
+        -- baseline look from. Defaults to the page's OWN mode (a party set mirrors
+        -- party frames, a raid set mirrors raid frames); pick the opposite mode to
+        -- cross-match it (e.g. raid pinned frames sized/styled like party frames).
+        -- Per-set custom overrides (size, etc.) still win over the baseline. It
+        -- leads the group because it is the baseline every other option/override
+        -- builds on. Seed unset/legacy values to the own mode so it always shows one.
+        do
+            local pf = DF:GetDB(GUI.SelectedMode)
+            pf = pf and pf.pinnedFrames
+            if pf and pf.sets then
+                for _, s in pairs(pf.sets) do
+                    if s.matchMode ~= "party" and s.matchMode ~= "raid" then
+                        s.matchMode = GUI.SelectedMode
+                    end
+                end
+            end
+        end
+        -- Forward refs so the Match dropdown can refresh every Match-override control's
+        -- displayed baseline when the matched mode changes (an un-overridden control
+        -- then shows the new mode's value; an overridden one keeps its star).
+        local pinnedWidthSlider, pinnedHeightSlider, pinnedScaleSlider
+        local function RefreshMatchOverrides()
+            if pinnedWidthSlider then pinnedWidthSlider.Refresh() end
+            if pinnedHeightSlider then pinnedHeightSlider.Refresh() end
+            if pinnedScaleSlider then pinnedScaleSlider.Refresh() end
+        end
+
+        local matchOptions = { party = L["Party"], raid = L["Raid"] }
+        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Based on"], matchOptions, "matchMode", function()
+            UpdateHighlightLayout()
+            RefreshMatchOverrides()
+        end), 55)
+
+        -- Width / Height inherit the Match mode's frame size; changing either
+        -- stores a per-set override (gold star + reset-to-Match), exactly like a
+        -- layout override but with the Match value as the baseline.
+        pinnedWidthSlider = CreateMatchOverrideSlider(self.child, L["Width"], 20, 300, 1, "customWidth", "frameWidth", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedWidthSlider, 55)
+        pinnedHeightSlider = CreateMatchOverrideSlider(self.child, L["Height"], 10, 200, 1, "customHeight", "frameHeight", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedHeightSlider, 55)
+
+        -- Scale inherits the Match mode's frameScale; overridable with star/reset.
+        pinnedScaleSlider = CreateMatchOverrideSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, "scale", "frameScale", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedScaleSlider, 55)
+
+        -- Border Override (Stage 2b): a single toggle. Off → inherit the Based-on
+        -- mode's frame border. On → snapshot that border into the set and reveal the
+        -- full border controls (independent for this set). The proxy delegates
+        -- reads/writes to the current set so CreateBorderControls tracks tab/mode.
+        local borderSetProxy = setmetatable({}, {
+            __index = function(_, k) local s = GetCurrentSet(); return s and s[k] end,
+            __newindex = function(_, k, v) local s = GetCurrentSet(); if s then s[k] = v end end,
+        })
+        -- Declared first so the border controls' update hooks can refresh the
+        -- reset icon's visibility after an edit.
+        local borderResetIcon
+        local function refreshBorderReset()
+            if borderResetIcon then
+                borderResetIcon:SetShown(DF.PinnedFrames and DF.PinnedFrames:IsBorderOverrideChanged(GetCurrentSet()) or false)
+            end
+        end
+
+        local borderCheck = CreateRefreshableCheckbox(self.child, L["Override Border"], "borderOverride", function()
+            if GetCurrentSet().borderOverride and DF.PinnedFrames then
+                DF.PinnedFrames:SeedSetBorderOverride(GetCurrentSet())
+            end
+            UpdateHighlightLayout()
+            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+        end)
+        -- Reset-to-inherited icon on the row's right, matching the refresh icon the
+        -- other override controls use. Re-snapshots the border from the Based-on
+        -- frames (discards edits). Shown only when a border setting actually differs
+        -- from the inherited value.
+        do
+            local rb = CreateFrame("Button", nil, borderCheck, "BackdropTemplate")
+            rb:SetSize(18, 18)
+            rb:SetPoint("TOPRIGHT", borderCheck, "TOPRIGHT", 0, -2)
+            rb:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            rb:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            rb:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            local ic = rb:CreateTexture(nil, "OVERLAY")
+            ic:SetPoint("CENTER"); ic:SetSize(12, 12)
+            ic:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+            ic:SetVertexColor(0.6, 0.6, 0.6)
+            rb:SetScript("OnEnter", function(s)
+                s:SetBackdropBorderColor(1, 0.8, 0.2, 1); ic:SetVertexColor(1, 0.8, 0.2)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT"); GameTooltip:SetText(L["Reset Border to Inherited"]); GameTooltip:Show()
+            end)
+            rb:SetScript("OnLeave", function(s)
+                s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1); ic:SetVertexColor(0.6, 0.6, 0.6); GameTooltip:Hide()
+            end)
+            rb:SetScript("OnClick", function()
+                if DF.PinnedFrames then DF.PinnedFrames:SeedSetBorderOverride(GetCurrentSet(), true) end
+                UpdateHighlightLayout()
+                if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+            end)
+            borderResetIcon = rb
+            local origRefresh = borderCheck.Refresh
+            borderCheck.Refresh = function(...) if origRefresh then origRefresh(...) end refreshBorderReset() end
+            refreshBorderReset()
+        end
+        layoutGroup:AddWidget(borderCheck, 28)
+        GUI:CreateBorderControls(layoutGroup, borderSetProxy, "frame", {
+            parent  = self.child,
+            include = {
+                inset = true, offset = true, blendMode = true,
+                gradient = true, shadow = true,
+                classColor = true, roleColor = true,
+                alpha = true,
+            },
+            fullUpdate  = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            lightUpdate = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            lightColors = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            refreshStates = function() if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end end,
+            hideWhen   = function() return not (GetCurrentSet() and GetCurrentSet().borderOverride) end,
+            sizeMin = 1, sizeMax = 16, sizeStep = 1,
+        })
+
+        Add(layoutGroup, nil, 1)
+
+        -- ===== LAYOUT GROUP (Column 2) — pinned-only arrangement (no main-frame
+        -- equivalent, so these are independent settings, not Match overrides) =====
+        local arrangeGroup = GUI:CreateSettingsGroup(self.child, 280)
+        arrangeGroup:AddWidget(GUI:CreateHeader(self.child, L["Layout"]), 40)
+
+        -- Direction: how the pinned frames flow (pinned-only; NOT inherited — the
+        -- main frames' growDirection means group Rows/Columns, a different concept).
         local directionOptions = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
-        
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
+
         local frameAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
 
         local columnAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
-        
-        layoutGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
-        layoutGroup:AddWidget(CreateRefreshableSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, "scale", UpdateHighlightLayout), 55)
-        
-        Add(layoutGroup, nil, 2)
-        
-        -- ===== SPACING GROUP (Column 1) =====
-        local spacingGroup = GUI:CreateSettingsGroup(self.child, 280)
-        spacingGroup:AddWidget(GUI:CreateHeader(self.child, L["Spacing"]), 40)
-        spacingGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
-        spacingGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
-        Add(spacingGroup, nil, 1)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
+
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
+        Add(arrangeGroup, nil, 2)
         
         if not IsCurrentBossMode() then
         -- ===== AUTO-POPULATE GROUP (Column 2) =====
@@ -2959,6 +3320,16 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 28)
         autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add DPS"], "autoAddDPS", function()
             if GetCurrentSet().autoAddDPS and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        -- Exclude Self: keep the player out of this set's auto-add (e.g. Aug Evoker
+        -- who buffs others). Re-runs auto-populate so self is added/removed live.
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Exclude Self"], "excludeSelf", function()
+            if DF.PinnedFrames then
                 DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
                 DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
                 if rosterWidget then rosterWidget:Refresh() end

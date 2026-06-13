@@ -62,8 +62,12 @@ function DF:ApplyFrameLayout(frame)
     -- Frame size (with pixel-perfect support)
     -- Skip during combat for secure frames
     if not skipResize then
-        local frameWidth = db.frameWidth or 120
-        local frameHeight = db.frameHeight or 50
+        -- Pinned frames carry their own resolved size (Match baseline + per-set
+        -- Width/Height overrides, via PinnedFrames.GetSetFrameSize). Prefer it so the shared
+        -- per-mode db.frameWidth/Height doesn't clobber a pinned set's size on
+        -- the next update tick. Main frames have no stamp and use the mode db.
+        local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
+        local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
         DF:SetPixelPerfectSize(frame, frameWidth, frameHeight, db)
     end
     

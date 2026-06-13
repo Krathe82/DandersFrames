@@ -119,8 +119,11 @@ function DF:ApplyResourceBarLayout(frame)
         -- Compute health bar dimensions from settings instead of GetWidth/GetHeight
         -- which can return stale values before WoW's layout engine processes anchor changes
         local padding = db.framePadding or 0
-        local frameWidth = db.frameWidth or 120
-        local frameHeight = db.frameHeight or 50
+        -- Prefer a pinned set's resolved size (Match baseline + Width/Height override) so a
+        -- "Match Frame Width" resource bar tracks the pinned frame, not the shared
+        -- per-mode db width. Main frames have no stamp and use the mode db.
+        local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
+        local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
         if db.pixelPerfect and DF.PixelPerfect then
             frameWidth = DF:PixelPerfect(frameWidth)
             frameHeight = DF:PixelPerfect(frameHeight)
