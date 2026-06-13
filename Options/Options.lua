@@ -1926,16 +1926,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if db.groupLabelFont ~= nil then
                 db.groupLabelFont = font; db.groupLabelOutline = outline
             end
-            -- Aura Designer global defaults + clear per-instance overrides
-            if db.auraDesigner then
-                if db.auraDesigner.defaults then
-                    local adDefaults = db.auraDesigner.defaults
+            -- Aura Designer global defaults + clear per-instance overrides.
+            -- AD config now lives in the preset this mode uses, not inline.
+            local _adMode = (db == DF.db.raid) and "raid" or "party"
+            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(_adMode)
+            if _adCfg then
+                if _adCfg.defaults then
+                    local adDefaults = _adCfg.defaults
                     adDefaults.durationFont = font; adDefaults.durationOutline = outline
                     adDefaults.stackFont = font; adDefaults.stackOutline = outline
                 end
                 -- Clear per-instance font overrides so all indicators inherit global
-                if db.auraDesigner.auras then
-                    for _, auraCfg in pairs(db.auraDesigner.auras) do
+                if _adCfg.auras then
+                    for _, auraCfg in pairs(_adCfg.auras) do
                         if auraCfg.indicators then
                             for _, inst in ipairs(auraCfg.indicators) do
                                 inst.durationFont = nil; inst.durationOutline = nil
@@ -5283,7 +5286,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
         -- Refresh banner content based on current state
         adBanner.refreshContent = function(_, d)
-            local adEnabled = d.auraDesigner and d.auraDesigner.enabled
+            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner((d == DF.db.raid) and "raid" or "party")
+            local adEnabled = _adCfg and _adCfg.enabled
             if adEnabled and d.showBuffs then
                 adBannerText:SetText(L["Aura Designer is active alongside Buffs."])
                 enableBuffsBtn:Hide()
@@ -5302,7 +5306,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
 
         adBanner.hideOn = function(d)
-            return not (d.auraDesigner and d.auraDesigner.enabled)
+            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner((d == DF.db.raid) and "raid" or "party")
+            return not (_adCfg and _adCfg.enabled)
         end
 
         Add(adBanner, 32, "both")

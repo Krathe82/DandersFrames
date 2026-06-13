@@ -477,9 +477,9 @@ end
 
 -- Check if Aura Designer is enabled for a frame
 function DF:IsAuraDesignerEnabled(frame)
-    local frameDB = frame and DF.GetFrameDB and DF:GetFrameDB(frame)
-    if frameDB and frameDB.auraDesigner then
-        return frameDB.auraDesigner.enabled
+    local adDB = frame and DF.ResolveAuraDesigner and DF:ResolveAuraDesigner(frame)
+    if adDB then
+        return adDB.enabled
     end
     return false
 end

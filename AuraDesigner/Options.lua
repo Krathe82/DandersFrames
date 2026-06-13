@@ -362,7 +362,16 @@ end
 DF.MigrateAuraDesignerIconBorderKeys = MigrateAuraDesignerIconBorderKeys
 
 local function GetAuraDesignerDB()
-    local adDB = db.auraDesigner
+    -- The editor is mode-tabbed: it edits the preset the active mode uses
+    -- (party → its assigned preset, etc.). Because edited == used, live
+    -- frames stay in sync with the editor automatically.
+    local adDB
+    if DF.GetModeAuraDesigner then
+        local mode = (GUI and GUI.SelectedMode) or "party"
+        adDB = DF:GetModeAuraDesigner(mode)
+    end
+    -- Pre-migration / very-early fallback to the legacy inline config.
+    adDB = adDB or (db and db.auraDesigner)
     if adDB and (not adDB._specScopedV1 or not adDB._specScopedV2) then
         MigrateToSpecScoped(adDB)
     end
@@ -1714,20 +1723,17 @@ StaticPopupDialogs["DF_AURA_DESIGNER_RESET_GLOBAL"] = {
         local editingProfile = AutoProfilesUI.editingProfile
         if not editingProfile or not editingProfile.overrides then return end
 
-        -- Remove the auraDesigner override (stored as a single top-level key)
-        local hadOverride = editingProfile.overrides["auraDesigner"] ~= nil
-        editingProfile.overrides["auraDesigner"] = nil
+        -- Aura Designer config now lives in named presets; a layout overrides
+        -- only the preset NAME it uses (the string key auraDesignerPreset).
+        -- Resetting clears that override so the layout follows the global choice.
+        local hadOverride = editingProfile.overrides["auraDesignerPreset"] ~= nil
+        editingProfile.overrides["auraDesignerPreset"] = nil
 
-        -- Restore from global snapshot
+        -- Restore the global preset name from the snapshot.
         if AutoProfilesUI.globalSnapshot then
             local realRaidDB = DF._realRaidDB
             if realRaidDB then
-                local globalVal = AutoProfilesUI.globalSnapshot["auraDesigner"]
-                if globalVal then
-                    realRaidDB["auraDesigner"] = DF:DeepCopy(globalVal)
-                else
-                    realRaidDB["auraDesigner"] = nil
-                end
+                realRaidDB["auraDesignerPreset"] = AutoProfilesUI.globalSnapshot["auraDesignerPreset"]
             end
         end
 
@@ -4033,16 +4039,24 @@ local function BuildGlobalView(parent)
         copyBtn:SetScript("OnClick", function()
             local srcMode = (GUI and GUI.SelectedMode) or "party"
             local dstMode = (srcMode == "party") and "raid" or "party"
-            local source = DF:GetDB(srcMode).auraDesigner
-            local dest = DF:GetDB(dstMode).auraDesigner
-            local function DeepCopy(src)
-                if type(src) ~= "table" then return src end
-                local copy = {}
-                for k, v in pairs(src) do copy[k] = DeepCopy(v) end
-                return copy
+            -- Copy at the preset level: the source mode's preset content is
+            -- copied INTO the dest mode's preset, in place, so the dest preset
+            -- object identity (and every consumer bound to it) is preserved.
+            local source = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(srcMode))
+                or (DF:GetDB(srcMode) and DF:GetDB(srcMode).auraDesigner)
+            local dest = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(dstMode))
+                or (DF:GetDB(dstMode) and DF:GetDB(dstMode).auraDesigner)
+            if source and dest and source ~= dest then
+                local function DeepCopy(src)
+                    if type(src) ~= "table" then return src end
+                    local copy = {}
+                    for k, v in pairs(src) do copy[k] = DeepCopy(v) end
+                    return copy
+                end
+                -- Clear stale dest keys the source no longer has, then overwrite.
+                for k in pairs(dest) do dest[k] = nil end
+                for k, v in pairs(source) do dest[k] = DeepCopy(v) end
             end
-            local newCopy = DeepCopy(source)
-            for k, v in pairs(newCopy) do dest[k] = v end
             DF:Debug("Aura Designer: Copied " .. srcMode .. " settings to " .. dstMode)
         end)
         g:AddWidget(copyBtn, 32)
@@ -7169,8 +7183,8 @@ function DF:ApplyAuraDesignerTabState()
     if not DF.db then return end
 
     local mode = (guiRef.SelectedMode) or "party"
-    local modeDB = DF:GetDB(mode)
-    local adEnabled = modeDB and modeDB.auraDesigner and modeDB.auraDesigner.enabled
+    local adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(mode)
+    local adEnabled = adCfg and adCfg.enabled
 
     -- My Buff Indicators tab removed — feature deprecated
 end

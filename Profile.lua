@@ -282,6 +282,16 @@ function DF:SetProfile(name)
     -- empty and enabling TD renders nothing. Per-profile guard makes this a
     -- no-op for already-migrated / user-built profiles. Runs before the refresh
     -- so the migrated elements render immediately.
+    -- Designer Presets: migrate this profile's inline auraDesigner/textDesigner
+    -- (party/raid + raid auto-layout overrides) into the named preset library.
+    -- Per-profile guard makes this a no-op for already-migrated profiles. Runs
+    -- BEFORE the TD-legacy migration so that migration builds its elements into
+    -- the presets (its guard flag then persists, avoiding a rebuild-then-discard
+    -- on later profile switches).
+    if DF.MigrateDesignerPresets then
+        DF:MigrateDesignerPresets()
+    end
+
     if DF.MigrateTextDesignerFromLegacy then
         DF:MigrateTextDesignerFromLegacy()
     end

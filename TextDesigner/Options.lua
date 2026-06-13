@@ -2562,8 +2562,13 @@ end
 -- ============================================================
 
 function DF.BuildTextDesignerPage(GUI, page, db)
-    DF.TextDesigner:EnsureDB(db)
-    local tdDB = db.textDesigner
+    -- TD is mode-tabbed: edit the preset the active mode uses (edited == used,
+    -- so live frames stay in sync with the editor). EnsureDB guarantees the
+    -- preset carries the full TD schema.
+    local _tdEditMode = (GUI and GUI.SelectedMode) or "party"
+    local tdDB = (DF.GetModeTextDesigner and DF:GetModeTextDesigner(_tdEditMode))
+        or (DF.TextDesigner:EnsureDB(db))
+    DF.TextDesigner:EnsureDB({ textDesigner = tdDB })
     local state = GetState(page)
 
     -- Override RefreshStates: TD doesn't use the Add() widget helper, so the

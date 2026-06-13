@@ -5089,6 +5089,15 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- migratedFromLegacy flag), so re-running on every login is a no-op
             -- once it has run. The function-exists guard is belt-and-suspenders;
             -- the Text Designer files now load in every build.
+            -- Designer Presets: move every inline auraDesigner / textDesigner
+            -- config (party/raid + each raid auto-layout override) into the
+            -- named preset library. Runs BEFORE the TD-legacy migration below so
+            -- that migration builds its elements straight into the "Party"/"Raid"
+            -- presets (its guard flag then persists on the preset). Idempotent.
+            if DF.MigrateDesignerPresets then
+                DF:MigrateDesignerPresets()
+            end
+
             if DF.MigrateTextDesignerFromLegacy then
                 DF:MigrateTextDesignerFromLegacy()
             end

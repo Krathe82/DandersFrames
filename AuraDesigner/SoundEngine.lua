@@ -157,7 +157,8 @@ function SoundEngine:StartLoop(auraName, soundCfg)
         -- have nil, which would otherwise register as muted.
         local mode = DF:GetCurrentMode()
         local db = DF:GetDB(mode)
-        if not db or not db.auraDesigner or db.auraDesigner.soundEnabled == false then
+        local adCfg = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(mode)) or (db and db.auraDesigner)
+        if not adCfg or adCfg.soundEnabled == false then
             self:TransitionTo(auraName, STATE_IDLE)
             return
         end
@@ -264,12 +265,11 @@ function SoundEngine:RunEvaluation()
 
     local mode = DF:GetCurrentMode()
     local db = DF:GetDB(mode)
-    if not db or not db.auraDesigner or not db.auraDesigner.enabled then
+    local adDB = (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(mode)) or (db and db.auraDesigner)
+    if not adDB or not adDB.enabled then
         self:StopAll()
         return
     end
-
-    local adDB = db.auraDesigner
 
     -- Global mute check. nil = default (enabled); only explicit false is muted.
     if adDB.soundEnabled == false then

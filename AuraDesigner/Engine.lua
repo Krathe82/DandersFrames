@@ -378,7 +378,7 @@ function Engine:UpdateFrame(frame)
 
     local db = DF:GetFrameDB(frame)
     if not db then return end
-    local adDB = db.auraDesigner
+    local adDB = DF:ResolveAuraDesigner(frame)
     if not adDB then return end
 
     local spec = self:ResolveSpec(adDB)
@@ -864,7 +864,7 @@ function Engine:UpdateTestFrame(frame)
 
     local db = DF:GetFrameDB(frame)
     if not db then return end
-    local adDB = db.auraDesigner
+    local adDB = DF:ResolveAuraDesigner(frame)
     if not adDB or not adDB.enabled then
         Indicators:HideAll(frame)
         return
@@ -1089,7 +1089,7 @@ function Engine:PreWarmIndicators(frame)
 
     local db = DF:GetFrameDB(frame)
     if not db then return end
-    local adDB = db.auraDesigner
+    local adDB = DF:ResolveAuraDesigner(frame)
     if not adDB then return end
 
     -- Resolve spec

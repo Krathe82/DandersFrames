@@ -1192,7 +1192,7 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
     end
 
     -- Update Aura Designer test indicators
-    if db.testShowAuraDesigner and db.auraDesigner and db.auraDesigner.enabled then
+    if db.testShowAuraDesigner and DF:IsAuraDesignerEnabled(frame) then
         local ADEngine = DF.AuraDesigner and DF.AuraDesigner.Engine
         if ADEngine and ADEngine.UpdateTestFrame then
             ADEngine:UpdateTestFrame(frame)
@@ -5933,7 +5933,7 @@ function DF:UpdateAllTestAuraDesigner()
     local function UpdateFrame(frame)
         if not frame or not frame:IsShown() then return end
         local db = DF:GetFrameDB(frame)
-        if db and db.testShowAuraDesigner and db.auraDesigner and db.auraDesigner.enabled then
+        if db and db.testShowAuraDesigner and DF:IsAuraDesignerEnabled(frame) then
             ADEngine:UpdateTestFrame(frame)
         else
             ADEngine:ClearFrame(frame)
