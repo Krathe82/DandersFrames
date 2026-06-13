@@ -175,18 +175,62 @@ end
 -- No IsVisible() guard: SetAttribute works on hidden frames, so we pre-set nameList
 -- even before the header is shown (e.g. after a reload in the arena prep room).
 -- The header picks it up as soon as it becomes visible.
+--
+-- LATE-JOIN GUARD (mirrors ApplyArenaHeaderSorting's incomplete handling):
+-- a teammate can EXIST before their name resolves (loading in during prep —
+-- common in non-rated arenas). A nameList missing them (nil/secret skipped)
+-- or carrying a literal "Unknown" token FILTERS their frame out, and nothing
+-- fixes it for the whole round (name resolution fires no roster event, and
+-- combat blocks attribute writes once the gates open). Names come from
+-- GetRaidRosterInfo — the source SecureGroupHeaderTemplate matches raid-kind
+-- nameList tokens against (realm-qualified, and usually resolved before the
+-- player object loads). If any member is still unresolved, show EVERYONE in
+-- INDEX order and let the arena sort retry re-request FrameSort's order once
+-- names resolve.
 local function SortArenaFrames(units)
     if not DF.arenaHeader then return false end
 
-    local nameList = UnitsToNameList(units)
-    if nameList == "" then return false end
+    wipe(namesBuf)
+    local complete = true
+    for i = 1, #units do
+        local unit = units[i]
+        local name
+        local raidIndex = unit:match("^raid(%d+)$")
+        if raidIndex then
+            name = GetRaidRosterInfo(tonumber(raidIndex))
+        else
+            name = GetUnitName(unit, true)
+        end
+        -- issecretvalue first: comparing/testing a secret value crashes.
+        if issecretvalue(name) or not name or name == UNKNOWNOBJECT then
+            complete = false
+        else
+            namesBuf[#namesBuf + 1] = name
+        end
+    end
 
+    if not complete or #namesBuf == 0 then
+        DF:Debug("FRAMESORT", "Arena nameList incomplete — using INDEX + retry")
+        DF.arenaHeader:SetAttribute("nameList", nil)
+        DF.arenaHeader:SetAttribute("sortMethod", "INDEX")
+        DF.arenaHeader:SetAttribute("groupBy", nil)
+        DF.arenaHeader:SetAttribute("groupingOrder", nil)
+        if DF.SetArenaSortIncomplete then
+            DF:SetArenaSortIncomplete(true)
+        end
+        return true
+    end
+
+    local nameList = tconcat(namesBuf, ",")
     DF:Debug("FRAMESORT", "Sorting arena frames:", nameList)
 
     DF.arenaHeader:SetAttribute("nameList", nameList)
     DF.arenaHeader:SetAttribute("sortMethod", "NAMELIST")
     DF.arenaHeader:SetAttribute("groupBy", nil)
     DF.arenaHeader:SetAttribute("groupingOrder", nil)
+    if DF.SetArenaSortIncomplete then
+        DF:SetArenaSortIncomplete(false)
+    end
     return true
 end
 
