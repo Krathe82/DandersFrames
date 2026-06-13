@@ -2900,7 +2900,18 @@ function DF:GetContentType()
         DF.cachedContentType = "arena"
         return "arena"
     end
-    
+
+    -- ARENA RELOAD FIX: snapshot the saved content-type hint ONCE, before any
+    -- detection branch below can overwrite it. Early calls (e.g.
+    -- FinalizeHeaderInit → UpdateHeaderVisibility at ADDON_LOADED on a reload)
+    -- run while IsInInstance()/IsInRaid() may still be unreliable; without the
+    -- snapshot, those calls wiped DandersFramesCharDB.lastContentType (or
+    -- overwrote it with "openWorld") before the reload fallback could use it.
+    if not DF._contentTypeHintCaptured and DandersFramesCharDB then
+        DF._contentTypeHintCaptured = true
+        DF._contentTypeHintAtLoad = DandersFramesCharDB.lastContentType
+    end
+
     local inInstance, instanceType = IsInInstance()
     
     -- Cache instance type for other uses
@@ -2929,7 +2940,7 @@ function DF:GetContentType()
         -- before the reload. Only trust "arena" — other types recover fine on their own.
         if DF.useContentTypeFallback and not inInstance
            and (instanceType == "none" or instanceType == nil)
-           and DandersFramesCharDB and DandersFramesCharDB.lastContentType == "arena" then
+           and DF._contentTypeHintAtLoad == "arena" then
             DF.cachedContentType = "arena"
             return "arena"
         end
@@ -2957,6 +2968,18 @@ function DF:GetContentType()
     
     -- In a raid group but not in an instance = open world (world boss, etc.)
     if IsInRaid() then
+        -- ARENA RELOAD FIX (part 2): IsInRaid() can recover before
+        -- IsInInstance() after a reload in arena (arena groups ARE raid
+        -- groups). Without this, the not-yet-recovered instanceType made us
+        -- conclude "openWorld" — showing raid frames over the arena header
+        -- and overwriting the saved arena hint.
+        if DF.useContentTypeFallback and not inInstance
+           and (instanceType == "none" or instanceType == nil)
+           and DF._contentTypeHintAtLoad == "arena" then
+            DF.cachedContentType = "arena"
+            return "arena"
+        end
+
         DF.cachedContentType = "openWorld"
         DF.useContentTypeFallback = nil
         if DandersFramesCharDB then DandersFramesCharDB.lastContentType = "openWorld" end
@@ -3334,6 +3357,26 @@ DF._MainEventDispatcher = function(self, event, arg1)
         
         -- Ensure structure exists in per-character DB
         if DandersFramesCharDB.specProfiles == nil then DandersFramesCharDB.specProfiles = {} end
+
+        -- ARENA RELOAD FIX: snapshot the saved content-type hint before any
+        -- GetContentType call can overwrite it (GetContentType also
+        -- self-captures; this pins the earliest possible point), and arm the
+        -- fallback NOW on a /reload — the player only already exists at
+        -- ADDON_LOADED on a reload (same detection Headers.lua uses for the
+        -- combat-safe finalize). PLAYER_ENTERING_WORLD also arms it
+        -- (isReloadingUi), but that's too late for the FinalizeHeaderInit →
+        -- UpdateHeaderVisibility call that runs inside the ADDON_LOADED
+        -- combat-safe window on a combat reload in arena.
+        -- Fresh logins must NOT arm it: a stale "arena" hint from a previous
+        -- session would misclassify the login zone (the fallback only clears
+        -- once real detection returns a definite answer).
+        if not DF._contentTypeHintCaptured then
+            DF._contentTypeHintCaptured = true
+            DF._contentTypeHintAtLoad = DandersFramesCharDB.lastContentType
+        end
+        if UnitExists("player") then
+            DF.useContentTypeFallback = true
+        end
 
         -- Language override lives per-character because the locale files
         -- need to read it at file-load time, before any profile resolution
