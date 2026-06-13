@@ -133,8 +133,7 @@ AuraDesigner\Indicators.lua
 AuraDesigner\SoundEngine.lua
 AuraDesigner\Options.lua
 
-# Text Designer (alpha-only)
-#@alpha@
+# Text Designer
 TextDesigner\TextDesigner.lua
 TextDesigner\MidnightSafe.lua
 TextDesigner\DataSource.lua
@@ -143,7 +142,6 @@ TextDesigner\Render.lua
 TextDesigner\Migration.lua
 TextDesigner\Preview.lua
 TextDesigner\Options.lua
-#@end-alpha@
 
 # Aura Blacklist
 AuraBlacklist\Config.lua

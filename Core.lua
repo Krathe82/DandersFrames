@@ -4994,8 +4994,8 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- One-time migration of legacy name/health/status text settings into
             -- Text Designer elements. Naturally idempotent (per-mode guard +
             -- migratedFromLegacy flag), so re-running on every login is a no-op
-            -- once it has run. Alpha-only — the function only exists when the
-            -- Text Designer files are loaded.
+            -- once it has run. The function-exists guard is belt-and-suspenders;
+            -- the Text Designer files now load in every build.
             if DF.MigrateTextDesignerFromLegacy then
                 DF:MigrateTextDesignerFromLegacy()
             end

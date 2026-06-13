@@ -1,5 +1,11 @@
 # DandersFrames Changelog
 
+## [4.4.1]
+
+### Bug Fixes
+
+* (Text Designer) Fixed the Text Designer being left out of the 4.4.0 release, which left its settings page empty and could make frame text disappear. It is now included and working.
+
 ## [4.4.0]
 
 ### New Features
