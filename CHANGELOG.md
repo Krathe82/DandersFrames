@@ -1,6 +1,6 @@
 # DandersFrames Changelog
 
-## [Unreleased]
+## [4.4.0]
 
 ### New Features
 
@@ -60,10 +60,6 @@
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Designers) The Aura/Text Designer preview now rebuilds to the **frame size of the auto layout being edited**, and edits keep applying to test-mode frames after **switching between auto layouts**. (by Krathe)
 * (Frames) Bars referencing a **texture you don't have installed** now fall back to the bundled default with a one-time notice, instead of rendering black. (Requires WoW 12.0.7.) (by Krathe)
-
-## [4.4.0]
-
-* Behind-the-scenes improvements and groundwork for upcoming features.
 
 ## [4.3.12]
 
