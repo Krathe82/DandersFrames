@@ -24,10 +24,11 @@ GUI.SelectedMode = "party"
 
 -- Registry of tabs that should show a "New" badge until opened.
 -- Add tab IDs here for new features; the badge auto-hides once viewed.
+-- Reset each release cycle to the tabs that are new since the last stable
+-- (prior entries are persisted as seen and would otherwise show stale badges).
 GUI.NewTabs = {
-    ["indicators_targetedlist"] = true,
-    ["general_pinnedframes"] = true,
-    ["auras_dispel"] = true,
+    ["text_designer"] = true,
+    ["general_nicknames"] = true,
 }
 
 -- Registry of section headers (inside a tab) that should show a "New" badge
@@ -36,8 +37,6 @@ GUI.NewTabs = {
 -- The badge is created by GUI:AddSectionNewBadge and cleared by SelectTab
 -- when the user leaves the owning tab (persisted via seenSections).
 GUI.NewSections = {
-    ["general_pinnedframes.frameType"] = true,
-    ["auras_dispel.overlaySource"] = true,
 }
 
 -- Live-tracked badges pending a "seen" mark, keyed by tabName → { key = badge }.
