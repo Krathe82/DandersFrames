@@ -8643,6 +8643,11 @@ IteratePinnedFrames = function(callback)
     end
 end
 
+-- Public alias so other files (e.g. the AFK timer ticker in StatusIcons.lua)
+-- can tick pinned-frame children, which IterateAllFrames does not cover.
+-- Call with a dot (DF.IteratePinnedFrames(cb)) — the function takes (callback).
+DF.IteratePinnedFrames = IteratePinnedFrames
+
 -- Helper to find pinned frame for a specific unit (player-mode or boss-mode set)
 local function FindPinnedFrameForUnit(unit)
     if not DF.PinnedFrames or not DF.PinnedFrames.initialized then
@@ -9167,10 +9172,15 @@ headerChildEventFrame:SetScript("OnEvent", function(self, event, arg1)
             if frame and frame.dfEventsEnabled ~= false then
                 DF:UpdateAFKIcon(frame)
             end
-            local pinnedFrame = FindPinnedFrameForUnit(unit)
-            if pinnedFrame then
-                DF:UpdateAFKIcon(pinnedFrame)
-            end
+            -- Update AFK on EVERY pinned frame, not just FindPinnedFrameForUnit's
+            -- single match: that lookup can miss (pinned child's unit token may
+            -- differ from the event's, or not match at this instant), leaving the
+            -- icon to appear only on a later full refresh — the "doesn't show
+            -- instantly" bug. Pinned frames are few; UpdateAFKIcon is a cheap
+            -- GUID-cache read, and each frame reflects its own unit's state.
+            IteratePinnedFrames(function(pf)
+                DF:UpdateAFKIcon(pf)
+            end)
         end
         return
     end

@@ -1167,19 +1167,30 @@ afkTickerFrame:SetScript("OnUpdate", function(self, elapsed)
     -- Update all live frames via the proper iterator.
     -- GetChildren() on SecureGroupHeaderTemplate returns secure-template internals,
     -- not the unit buttons — IterateAllFrames uses GetAttribute("child"..i) instead.
-    if DF.IterateAllFrames then
-        DF:IterateAllFrames(function(frame)
-            if not frame.unit or not frame.afkIcon then return end
-            if not frame.afkIcon:IsShown() then return end
-            local db = DF:GetFrameDB(frame)
-            if not db then return end
-            local isParty = not frame.isRaidFrame
-            if (isParty and partyTimerEnabled) or (not isParty and raidTimerEnabled) then
-                DF:UpdateAFKIcon(frame)
-            end
-        end)
+    -- skipHidden=true for the big party/raid/arena pass: only tick already-shown
+    -- countdowns (avoid per-frame work for the many hidden frames). For the few
+    -- pinned frames skipHidden=false, so the ticker also SHOWS a newly-AFK pinned
+    -- icon within 1s as a safety net if its event-driven show was missed.
+    local function tickAFK(frame, skipHidden)
+        if not frame.unit or not frame.afkIcon then return end
+        if skipHidden and not frame.afkIcon:IsShown() then return end
+        local db = DF:GetFrameDB(frame)
+        if not db then return end
+        local isParty = not frame.isRaidFrame
+        if (isParty and partyTimerEnabled) or (not isParty and raidTimerEnabled) then
+            DF:UpdateAFKIcon(frame)
+        end
     end
-    
+
+    if DF.IterateAllFrames then
+        DF:IterateAllFrames(function(f) tickAFK(f, true) end)
+    end
+
+    -- Pinned frames are separate headers that IterateAllFrames does not cover.
+    if DF.IteratePinnedFrames then
+        DF.IteratePinnedFrames(function(f) tickAFK(f, false) end)
+    end
+
     -- Update test frames if in test mode
     if DF.testMode then
         for i = 0, 4 do

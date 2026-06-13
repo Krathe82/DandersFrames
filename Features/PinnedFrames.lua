@@ -1567,26 +1567,23 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
         header:ClearAllPoints()
         header:SetPoint(containerAnchorPoint, container, containerAnchorPoint, 0, 0)
 
-        -- Restore saved position — convert if anchor changed
+        -- Restore saved position. Pin the container by the anchor the user
+        -- actually dragged it to (pos.point), NOT the current growth anchor:
+        -- pos.x/pos.y were saved relative to pos.point, so applying them at a
+        -- different corner makes the frame jump on re-enable / layout refresh
+        -- (the old GetLeft()-gated conversion silently no-ops on a just-shown
+        -- frame whose layout hasn't flushed yet — the reported "disable/enable
+        -- moves it" bug). The header still anchors to the container at
+        -- containerAnchorPoint for internal grid growth; the container box is
+        -- sized to the grid, so pinning the saved corner keeps the visual
+        -- position even if the growth direction later changes. Mirrors
+        -- EnsureTestContainer so live and test frames restore identically.
         local pos = set.position
         if pos then
-            local savedAnchor = pos.point or "CENTER"
-            if savedAnchor ~= containerAnchorPoint and container:GetLeft() then
-                -- Anchor changed (user changed growth direction) — convert coordinates
-                -- ConvertAnchorPosition returns screen-space offsets (affected by scale),
-                -- so multiply by scale to convert back to logical space for storage
-                local newX, newY = ConvertAnchorPosition(container, savedAnchor, containerAnchorPoint)
-                if newX and newY then
-                    local cs = container:GetScale() or 1
-                    pos.point = containerAnchorPoint
-                    pos.x = newX * cs
-                    pos.y = newY * cs
-                end
-            end
+            local anchor = pos.point or containerAnchorPoint
             container:ClearAllPoints()
             local s = container:GetScale() or 1
-            container:SetPoint(containerAnchorPoint, UIParent, containerAnchorPoint, (pos.x or 0) / s, (pos.y or 0) / s)
-            pos.point = containerAnchorPoint
+            container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
         end
     end
     
@@ -1638,22 +1635,14 @@ function PinnedFrames:ApplyBossLayout(setIndex)
     local anchor = GetContainerAnchorPoint(set)
     container:SetScale(GetSetScale(set))
 
+    -- Pin by the saved drag anchor (pos.point), not the current growth anchor —
+    -- same rationale as ApplyLayoutSettings (avoids the disable/enable jump).
     local pos = set.position
     if pos then
-        local savedAnchor = pos.point or anchor
-        if savedAnchor ~= anchor and container:GetLeft() then
-            local newX, newY = ConvertAnchorPosition(container, savedAnchor, anchor)
-            if newX and newY then
-                local cs = container:GetScale() or 1
-                pos.point = anchor
-                pos.x = newX * cs
-                pos.y = newY * cs
-            end
-        end
+        local posAnchor = pos.point or anchor
         container:ClearAllPoints()
         local s = container:GetScale() or 1
-        container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
-        pos.point = anchor
+        container:SetPoint(posAnchor, UIParent, posAnchor, (pos.x or 0) / s, (pos.y or 0) / s)
     end
 
     -- Push slot coords + sizes to the secure handler. The allocator snippet
@@ -1884,6 +1873,19 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
         if header then header:Hide() end
         if label then label:Hide() end
         if container.mover then container.mover:Hide() end
+    end
+end
+
+-- Re-sync every set's show/hide state against the CURRENT profile + mode
+-- config. SetEnabled handles create/show/hide plus the party solo gate, reading
+-- each set's freshly-resolved config. Called after a profile switch
+-- (FullProfileRefresh): without it a set that was shown under the previous
+-- profile lingers on screen when the new profile has that set disabled.
+function PinnedFrames:RefreshEnabledState()
+    if not self.initialized then return end
+    for i = 1, 2 do
+        local set = GetSetDB(i)
+        if set then self:SetEnabled(i, set.enabled) end
     end
 end
 

@@ -5821,6 +5821,12 @@ function DF:FullProfileRefresh()
     
     -- === REFRESH PINNED FRAMES IF ACTIVE ===
     if DF.PinnedFrames and DF.PinnedFrames.initialized then
+        -- Sync each set's visibility to the NEW profile FIRST — hide sets it
+        -- disables, show/create sets it enables — so a set shown under the
+        -- previous profile doesn't linger in a stale state after the switch.
+        if DF.PinnedFrames.RefreshEnabledState then
+            DF.PinnedFrames:RefreshEnabledState()
+        end
         for setIndex = 1, 2 do
             if DF.PinnedFrames.headers[setIndex] then
                 DF.PinnedFrames:ApplyLayoutSettings(setIndex)
