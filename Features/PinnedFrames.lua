@@ -1407,6 +1407,53 @@ function PinnedFrames:UpdateHeaderNameList(setIndex)
             PinnedFrames:RefreshChildFrames(setIndex)
         end
     end)
+
+    -- #78: members of a "Hide from Main Frames" set must also be dropped from the
+    -- MAIN party/raid headers — rebuild them so they pick up / release the name.
+    -- (We're already past the combat early-return above.) Auto-add coincides with
+    -- GROUP_ROSTER_UPDATE which rebuilds main anyway; this covers manual add/remove.
+    if set.hideFromMainFrames and DF.RefreshMainFrameSorting then
+        DF:RefreshMainFrameSorting()
+    end
+end
+
+-- #78: the set of (realm-qualified) roster names that belong to a pinned set with
+-- "Hide from Main Frames" on, in the CURRENT mode. The main party/raid nameList
+-- build (DF:BuildSortedNameList) filters these out so a pinned member doesn't also
+-- show in the main frames. Resolves stored names → actual roster names exactly like
+-- UpdateHeaderNameList, so the keys match the main members' names directly. Returns
+-- nil when nothing is hidden (cheap no-op for the common case).
+function DF:GetPinnedHiddenNames()
+    if PinnedFrames.testModeActive then return nil end  -- never hide real units in test
+    local hlDB = GetPinnedDB()
+    if not hlDB or not hlDB.sets then return nil end
+    local result, roster
+    for i = 1, 2 do
+        local set = hlDB.sets[i]
+        if set and set.enabled and set.hideFromMainFrames and not IsBossSet(set)
+           and set.players and #set.players > 0 then
+            roster = roster or GetGroupRoster()
+            for _, storedName in ipairs(set.players) do
+                local rosterName = IsPlayerInGroup(storedName, roster)
+                if rosterName then
+                    result = result or {}
+                    result[rosterName] = true
+                end
+            end
+        end
+    end
+    -- The player IS hideable when pinned into a hiding set. Flag them explicitly
+    -- via the roster rather than a name match — the main PARTY builder names the
+    -- player UnitName("player") (no realm) while the pinned roster uses
+    -- GetUnitName("player", true), so a plain name-key lookup can miss them.
+    if result then
+        roster = roster or GetGroupRoster()
+        local selfRoster = IsPlayerInGroup(GetUnitName("player", true), roster)
+        if selfRoster and result[selfRoster] then
+            result.__hidePlayer = true
+        end
+    end
+    return result
 end
 
 -- Apply layout settings to a header

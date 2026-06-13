@@ -273,7 +273,14 @@ function FlatRaidFrames:BuildSortedNameList()
     local playerName = UnitName("player")
     local playerRealm = GetRealmName()
     local playerEntry = nil
-    
+
+    -- #78: drop members belonging to a pinned set with "Hide from Main Frames" on,
+    -- so a pinned unit doesn't also appear in the flat raid frames. The player is
+    -- hidden only when they themselves are pinned into a hiding set (__hidePlayer).
+    -- nil (the common case) is a cheap no-op. Name match mirrors the secure-header
+    -- builder: realm-qualified fullName for others, __hidePlayer flag for self.
+    local hidden = DF.GetPinnedHiddenNames and DF:GetPinnedHiddenNames()
+
     for i = 1, numMembers do
         local unit = "raid" .. i
         local name, realm = UnitName(unit)
@@ -325,14 +332,42 @@ function FlatRaidFrames:BuildSortedNameList()
             }
             
             if isPlayer then
-                playerEntry = entry
+                if not (hidden and hidden.__hidePlayer) then
+                    playerEntry = entry
+                end
             else
-                table.insert(members, entry)
+                if not (hidden and hidden[fullName]) then
+                    table.insert(members, entry)
+                end
             end
             end  -- group visibility filter
         end
     end
     
+    -- #78: when frame sorting is OFF, "Hide from Main Frames" still forces this
+    -- nameList path (the only way to exclude a unit from a secure header). Don't
+    -- impose role order — the user turned sorting off. Emit the kept members in
+    -- raid-index order (deterministic, to avoid an unstable-sort reshuffle), just
+    -- with the hidden units removed. Mirrors DF:BuildSortedNameList's behaviour.
+    if not db.sortEnabled then
+        local ordered = {}
+        if playerEntry then ordered[#ordered + 1] = playerEntry end
+        for _, e in ipairs(members) do ordered[#ordered + 1] = e end
+        table.sort(ordered, function(a, b)
+            local ia = tonumber(string.match(a.unit or "", "%d+")) or 50
+            local ib = tonumber(string.match(b.unit or "", "%d+")) or 50
+            if ia ~= ib then return ia < ib end
+            return (a.fullName or "") < (b.fullName or "")
+        end)
+        local idxNames = {}
+        for _, e in ipairs(ordered) do
+            idxNames[#idxNames + 1] = e.isPlayer and e.name or e.fullName
+        end
+        local idxResult = table.concat(idxNames, ",")
+        DebugPrint("BuildSortedNameList (sorting off, index order):", idxResult)
+        return idxResult
+    end
+
     -- Per-element key for name comparisons: a unit's name can be SECRET in
     -- combat (Midnight), and even ~= on a secret string throws. A secret (or
     -- missing) name falls back to the unit token — plain and unique. Pure
@@ -917,10 +952,17 @@ function FlatRaidFrames:UpdateSorting()
     
     DebugPrint("UpdateSorting: sortEnabled=", sortEnabled, "selfPosition=", selfPosition)
     DebugPrint("  separateMeleeRanged=", separateMeleeRanged, "sortByClass=", sortByClass, "sortAlphabetical=", sortAlphabetical)
-    
+
+    -- #78: excluding pinned-and-hidden members can ONLY be done via the nameList
+    -- (INDEX and groupBy modes assign every unit and can't drop one), so force the
+    -- nameList path whenever a "Hide from Main Frames" set is active. When sorting
+    -- is off, BuildSortedNameList emits the kept members in raid-index order, so
+    -- hiding never silently turns sorting on.
+    local hasHidden = DF.GetPinnedHiddenNames and DF:GetPinnedHiddenNames() ~= nil
+
     -- CRITICAL: Handle sortEnabled=false first
     -- Must clear ALL sorting attributes to prevent stale nameList/groupBy from persisting
-    if not sortEnabled then
+    if not sortEnabled and not hasHidden then
         DebugPrint("  Sorting DISABLED - using INDEX mode (clearing all attributes)")
         
         -- Clear all sorting attributes with nil
@@ -945,10 +987,11 @@ function FlatRaidFrames:UpdateSorting()
     
     -- Determine if we need nameList (complex sorting) or can use groupBy (simple role sorting)
     -- Use groupBy when: selfPosition=="SORTED" AND no advanced options
-    local useGroupBy = selfPosition == "SORTED" 
-                       and not separateMeleeRanged 
-                       and not sortByClass 
+    local useGroupBy = selfPosition == "SORTED"
+                       and not separateMeleeRanged
+                       and not sortByClass
                        and not sortAlphabetical
+                       and not hasHidden  -- #78: groupBy can't exclude units; force nameList
     
     DebugPrint("  useGroupBy=", useGroupBy)
     

@@ -4158,7 +4158,13 @@ function DF:ApplyRaidGroupSorting()
     -- - OR any advanced option is enabled (all groups need it)
     local needsAdvancedSorting = separateMeleeRanged or sortByClass or sortAlphabetical
     local playerNeedsNameList = (selfPosition ~= "SORTED")
-    
+    -- #78: hidden pinned members can only be dropped via the nameList path, so force
+    -- it on every group when a "Hide from Main Frames" set is active (see
+    -- ApplyPartyGroupSorting). With sorting otherwise off, BuildSortedNameList emits
+    -- the kept members in index order (not role order), so hiding never silently
+    -- turns sorting on.
+    local hasHidden = DF.GetPinnedHiddenNames and DF:GetPinnedHiddenNames() ~= nil
+
     if DF.debugHeaders then
         print("|cFF00FF00[DF Headers]|r ApplyRaidGroupSorting:")
         print("|cFF00FF00[DF Headers]|r   playerGroup=", playerGroup, "selfPosition=", selfPosition)
@@ -4251,7 +4257,7 @@ function DF:ApplyRaidGroupSorting()
 
                 -- CHECK sortEnabled FIRST (like party sorting does)
                 -- This ensures ALL headers get sorting disabled, not just those that don't need nameList
-                if not sortEnabled then
+                if not sortEnabled and not hasHidden then
                     sortKey = "INDEX:" .. i
 
                     -- Sorting disabled - clear ALL sorting attributes with nil
@@ -4273,7 +4279,7 @@ function DF:ApplyRaidGroupSorting()
                     -- 1. Advanced sorting enabled (all groups)
                     -- 2. OR player's group with FIRST/LAST position
                     local isPlayerGroup = (i == playerGroup)
-                    local useNameList = needsAdvancedSorting or (isPlayerGroup and playerNeedsNameList)
+                    local useNameList = needsAdvancedSorting or (isPlayerGroup and playerNeedsNameList) or hasHidden
 
                     if useNameList then
                         -- Use nameList for custom sorting
@@ -4728,6 +4734,58 @@ end
 -- @param includesPlayer: Whether the player is in this group
 -- @return: Comma-separated nameList string
 function DF:BuildSortedNameList(members, db, selfPosition, includesPlayer)
+    -- #78: drop members that belong to a pinned set with "Hide from Main Frames" on,
+    -- so a pinned unit doesn't also appear in the main party/raid frames. The player
+    -- is hidden only when they themselves are pinned into a hiding set (flagged via
+    -- __hidePlayer). Live lookup so the filter tracks roster/membership changes; nil
+    -- (the common case) is a cheap no-op.
+    local hidden = DF.GetPinnedHiddenNames and DF:GetPinnedHiddenNames()
+    if hidden then
+        local kept = {}
+        for _, m in ipairs(members) do
+            local hide
+            if m.isPlayer then
+                hide = hidden.__hidePlayer  -- only when the player is pinned into a hiding set
+            else
+                hide = hidden[m.name]
+            end
+            if not hide then
+                kept[#kept + 1] = m
+            end
+        end
+        members = kept
+    end
+
+    -- #78: when frame sorting is OFF, "Hide from Main Frames" still forces the
+    -- nameList path (the only way to exclude a unit from a secure header). In that
+    -- case we must NOT impose role/class ordering — the user turned sorting off and
+    -- expects natural order. Emit the kept members in group-index order (player
+    -- first, then by unit index), mirroring what the INDEX sortMethod would have
+    -- shown, just with the hidden units removed. The order MUST be deterministic
+    -- (not raw pairs() iteration, which is unstable and would reshuffle the secure
+    -- header mid-encounter — see the bug-947 tiebreak note below), so we sort by a
+    -- stable per-unit index.
+    if not db.sortEnabled then
+        local ordered = {}
+        for _, m in ipairs(members) do ordered[#ordered + 1] = m end
+        local function UnitIndex(m)
+            if m.isPlayer then return 0 end
+            return tonumber(string.match(m.unit or "", "%d+")) or 50
+        end
+        table.sort(ordered, function(a, b)
+            local ia, ib = UnitIndex(a), UnitIndex(b)
+            if ia ~= ib then return ia < ib end
+            return (a.name or "") < (b.name or "")
+        end)
+        local idxNames = {}
+        for _, m in ipairs(ordered) do idxNames[#idxNames + 1] = m.name end
+        local idxResult = ProcessNameList(table.concat(idxNames, ","), STRIP_REALMS_FROM_NAMELIST)
+        if DF.debugHeaders then
+            print("|cFF00FF00[DF Headers]|r   Sorting OFF + hide active: preserving index order:", idxResult)
+        end
+        return idxResult
+    end
+
     local roleOrder = db.sortRoleOrder or {"TANK", "HEALER", "MELEE", "RANGED"}
     local separateMeleeRanged = db.sortSeparateMeleeRanged
     local sortByClass = db.sortByClass
@@ -6173,14 +6231,21 @@ function DF:ApplyPartyGroupSorting()
     
     -- Determine if we need nameList (any advanced option or FIRST/LAST)
     local needsNameList = (selfPosition ~= "SORTED") or separateMeleeRanged or sortByClass or sortAlphabetical
-    
+
+    -- #78: excluding pinned-and-hidden members can ONLY be done via the nameList
+    -- (the native-role / INDEX modes below assign every unit and can't drop one),
+    -- so force the nameList path whenever a "Hide from Main Frames" set is active.
+    -- When sorting is off, BuildSortedNameList emits the kept members in index
+    -- order (not role order), so hiding never silently turns sorting on.
+    local hasHidden = DF.GetPinnedHiddenNames and DF:GetPinnedHiddenNames() ~= nil
+
     if DF.debugHeaders then
         print("|cFF00FF00[DF Headers]|r ApplyPartyGroupSorting:")
-        print("|cFF00FF00[DF Headers]|r   selfPosition=", selfPosition, "sortEnabled=", tostring(sortEnabled))
+        print("|cFF00FF00[DF Headers]|r   selfPosition=", selfPosition, "sortEnabled=", tostring(sortEnabled), "hasHidden=", tostring(hasHidden))
         print("|cFF00FF00[DF Headers]|r   needsNameList=", tostring(needsNameList))
     end
-    
-    if not needsNameList and sortEnabled then
+
+    if not needsNameList and sortEnabled and not hasHidden then
         -- Simple SORTED mode with no advanced options: Use native role sorting (works in combat)
         SetHeaderAttribute(DF.partyHeader, "nameList", nil)
         
@@ -6205,7 +6270,7 @@ function DF:ApplyPartyGroupSorting()
         if DF.debugHeaders then
             print("|cFF00FF00[DF Headers]|r   Using native role sorting (combat-safe)")
         end
-    elseif not sortEnabled then
+    elseif not sortEnabled and not hasHidden then
         -- Sorting disabled entirely - clear ALL sorting attributes
         -- CRITICAL: Must clear all attributes to prevent stale nameList/groupBy from persisting
         SetHeaderAttribute(DF.partyHeader, "nameList", nil)
@@ -8231,6 +8296,22 @@ headerEventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 end)
 
 -- Separated roster update processing for debounce
+-- #78: re-apply main-frame header sorting directly so the "Hide from Main Frames"
+-- filter takes effect live (toggling the option, or a hiding set's membership
+-- changing). Targeted re-filter — calls the sort functions straight, rather than the
+-- roster-event-shaped ProcessRosterUpdate. Combat-gated (secure nameList writes are
+-- illegal in combat; it re-applies on the next out-of-combat sort otherwise).
+function DF:RefreshMainFrameSorting()
+    if InCombatLockdown() then return end
+    if DF.ApplyPartyGroupSorting then DF:ApplyPartyGroupSorting() end
+    local rdb = DF.GetRaidDB and DF:GetRaidDB()
+    if rdb and rdb.raidUseGroups then
+        if DF.ApplyRaidGroupSorting then DF:ApplyRaidGroupSorting() end
+    elseif DF.ApplyRaidFlatSorting then
+        DF:ApplyRaidFlatSorting()
+    end
+end
+
 function DF:ProcessRosterUpdate()
     DF:RosterDebugEvent("Headers.lua:ProcessRosterUpdate")
     local numGroup = GetNumGroupMembers()

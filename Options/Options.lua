@@ -2442,7 +2442,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         
         -- Helper function to create refreshable checkbox
-        local function CreateRefreshableCheckbox(parent, label, dbKey, callback)
+        local function CreateRefreshableCheckbox(parent, label, dbKey, callback, tooltip)
             local container = CreateFrame("Frame", nil, parent)
             container:SetSize(250, 24)
             local cb = CreateFrame("CheckButton", nil, container, "BackdropTemplate")
@@ -2462,6 +2462,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             txt:SetPoint("LEFT", cb, "RIGHT", 8, 0)
             txt:SetText(label)
             txt:SetTextColor(0.8, 0.8, 0.8)
+            if tooltip then
+                cb:SetScript("OnEnter", function(s)
+                    GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(label, 1, 1, 1)
+                    GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
+                    GameTooltip:Show()
+                end)
+                cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            end
             cb:SetScript("OnClick", function(s)
                 local val = s:GetChecked()
                 -- Runtime override protection
@@ -3135,6 +3144,20 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Auras"], "hideAuras", RefreshPinnedDisplay), 28)
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Status Icons"], "hideIcons", RefreshPinnedDisplay), 28)
+
+        -- Hide from Main Frames (#78): when on, this set's members are filtered out
+        -- of the main party/raid frames so they only appear in the pinned set. Re-
+        -- filter the main headers on toggle (out of combat). Boss sets pin boss units,
+        -- not main-frame members, so it's moot there → hidden in boss mode.
+        local hideMainCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide from Main Frames"], "hideFromMainFrames", function()
+            RefreshPinnedDisplay()
+            -- Defer past CreateRefreshableCheckbox's trailing DF:UpdateAll() so the
+            -- re-filter isn't stomped, then re-apply the main-frame sort directly.
+            C_Timer.After(0, function()
+                if DF.RefreshMainFrameSorting then DF:RefreshMainFrameSorting() end
+            end)
+        end, L["Hide from Main Frames Tooltip"]), 28)
+        hideMainCheck.hideOn = function() return IsCurrentBossMode() end
 
         -- Disable in PvP (GLOBAL across both modes, not per-set): keep pinned frames
         -- dormant in all instanced PvP. Default on — pinned is a party/raid feature
