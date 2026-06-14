@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### New Features
+
+* (Targeted Spells) On-frame targeted spell icons are back for **party frames** — an icon appears on the party member an enemy is casting at, so you can spot incoming danger at a glance. Works in dungeons, arenas, and the open world; enable it under **Indicators → Targeted Spells**. Party members who share the same class, role, race, and sex can't be told apart and won't show an icon — you'll be warned by name when that happens. Technique credit to Ellesmere (EllesmereUI). Raid frames aren't supported.
+
 ### Bug Fixes
 
 * (Arena) Fixed teammates who load in late sometimes staying missing from your frames for the whole round, and the frame order breaking after a reload mid-match. (by Krathe)

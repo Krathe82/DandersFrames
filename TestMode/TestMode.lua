@@ -5844,7 +5844,9 @@ function DF:UpdateAllTestTargetedSpell()
         if not frame then return end
         local db = DF:GetFrameDB(frame)
 
-        if db.testShowTargetedSpell then
+        -- Auto-show the preview whenever the feature is enabled (matches the
+        -- personal-display test behaviour); raid frames keep it force-disabled.
+        if db.targetedSpellEnabled then
             DF:UpdateTestTargetedSpell(frame, testData)
         else
             -- Hide all icons and their highlights (new multi-icon system)
