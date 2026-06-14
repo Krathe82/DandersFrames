@@ -3169,7 +3169,9 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                     dualColor     = opts.dualColor,
                     alpha         = not proxy.hideIcon,
                     thickness     = not proxy.hideIcon, thicknessMin = 0, thicknessMax = opts.thicknessMax or 5,
-                    animation     = true,
+                    -- Animation rides the border, which text-only icons don't draw,
+                    -- so hide it there too (no border = nowhere for the glow to attach).
+                    animation     = not proxy.hideIcon,
                     iconEffects   = opts.iconEffects,
                     tint          = true,  -- secret-safe; works on all auras
                 },
