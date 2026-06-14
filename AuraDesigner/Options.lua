@@ -3160,11 +3160,14 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                 },
                 include = {
                     threshold     = true,
-                    colorOverride = true,
+                    -- Border-specific expiring overrides (colour override + its
+                    -- border colour/alpha, and thickness) are hidden for text-only
+                    -- icons, which draw no border. Threshold, animation, tint and
+                    -- the whole-frame icon effects still apply. (Other types:
+                    -- proxy.hideIcon is false, so these stay on.)
+                    colorOverride = not proxy.hideIcon,
                     dualColor     = opts.dualColor,
-                    alpha         = true,
-                    -- Text-only icons draw no border, so hide the expiring-border
-                    -- thickness control there (other types: proxy.hideIcon is false).
+                    alpha         = not proxy.hideIcon,
                     thickness     = not proxy.hideIcon, thicknessMin = 0, thicknessMax = opts.thicknessMax or 5,
                     animation     = true,
                     iconEffects   = opts.iconEffects,
