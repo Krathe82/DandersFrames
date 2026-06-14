@@ -61,13 +61,18 @@ local activeCasters = {}
 -- Permanent in-memory flag — not persisted, not detected, just on.
 DF.GroupTargetedSpellsAPIBlocked = true
 
+-- The party path uses fingerprinting (live), not the dead relay. This
+-- flag stays false so the party group-frame display is enabled.
+DF.GroupTargetedSpellsAPIBlockedParty = false
+
 -- Force-disables the group-frame targetedSpellEnabled setting on both
 -- party and raid profiles for the current profile. Called from Init,
 -- so the GUI reflects the disabled state on every load.
 local function ForceDisableGroupTargetedSpellSettings()
     if not DF.db then return end
-    if DF.db.party then DF.db.party.targetedSpellEnabled = false end
+    -- Raid group-frame display is permanently API-blocked (relay is dead).
     if DF.db.raid then DF.db.raid.targetedSpellEnabled = false end
+    -- party.targetedSpellEnabled is now user-controlled (fingerprint path).
 end
 
 -- Personal display variables (declared early for HandleTargetChange access)
@@ -1636,6 +1641,30 @@ local function ResolveFingerprintTarget(casterUnit, texture, spellName, duration
 end
 DF.TargetedSpells_ResolveFingerprintTarget = ResolveFingerprintTarget
 
+-- Names of party members that can't be distinguished this run.
+function DF:TargetedSpells_GetUntrackableNames()
+    local names = {}
+    for unit in pairs(untrackableUnits) do
+        local n = UnitName(unit)
+        if n then names[#names + 1] = n end
+    end
+    table.sort(names)
+    return names
+end
+
+-- Fired when the roster fingerprint composition changes (the OnEvent
+-- GROUP_ROSTER_UPDATE / PLAYER_ROLES_ASSIGNED branch calls this).
+function DF:TargetedSpells_OnRosterFingerprintChanged()
+    -- Refresh the settings-page readout if it exists (defined in a later task).
+    if DF.RefreshTargetedSpellUntrackable then DF:RefreshTargetedSpellUntrackable() end
+    local db = DF:GetDB("party")
+    if not db or not db.targetedSpellEnabled or db.targetedSpellWarnDuplicates == false then return end
+    local names = DF:TargetedSpells_GetUntrackableNames()
+    if #names < 2 then return end
+    local L = DF.L
+    print("|cff00ff00DandersFrames|r " .. string.format(L["Targeted Spells can't tell %s apart (identical class/race/sex/role) — their casts won't show on frames."], table.concat(names, ", ")))
+end
+
 -- ============================================================
 -- CAST EVENT HANDLING
 -- ============================================================
@@ -2139,7 +2168,9 @@ local function NeedsCastEvents()
     if not DF.db then return false end
     local function modeNeeds(modeDb)
         if not modeDb then return false end
-        local groupOn = (not DF.GroupTargetedSpellsAPIBlocked) and modeDb.targetedSpellEnabled
+        local blocked = (modeDb == DF.db.raid) and DF.GroupTargetedSpellsAPIBlocked
+            or (modeDb == DF.db.party) and DF.GroupTargetedSpellsAPIBlockedParty
+        local groupOn = (not blocked) and modeDb.targetedSpellEnabled
         local personalOn = modeDb.personalTargetedSpellEnabled
         return groupOn or personalOn
     end
@@ -2165,20 +2196,11 @@ function DF:UpdateTargetedSpellEventRegistration()
 end
 
 function DF:EnableTargetedSpells()
-    -- If the API has blocked group-frame targeted spells, do not enable the
-    -- group side at all. Personal display registration is handled separately.
-    if DF.GroupTargetedSpellsAPIBlocked then
-        ForceDisableGroupTargetedSpellSettings()
-        DF:UpdateTargetedSpellEventRegistration()
-        return
-    end
-
-    RegisterTargetedSpellEvents()
-
-    -- Track enabled state for unified handler
+    -- Raid group-frame display is permanently API-blocked; force it off.
+    -- The party fingerprint path is live, so still register events + scan.
+    ForceDisableGroupTargetedSpellSettings()
     DF.targetedSpellsEnabled = true
-
-    -- Initial scan
+    DF:UpdateTargetedSpellEventRegistration()
     ScanAllEnemyCasts()
 end
 

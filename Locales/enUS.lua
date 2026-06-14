@@ -1440,6 +1440,7 @@ L["Targeted Spell Alpha"] = true
 L["Targeted Spell Click-Through"] = true
 L["Targeted Spells"] = true
 L["Targeted Spells (on frames)"] = true
+L["Targeted Spells can't tell %s apart (identical class/race/sex/role) — their casts won't show on frames."] = true
 L["Test"] = true
 L["Test Count"] = true
 L["Test mode disabled."] = true
