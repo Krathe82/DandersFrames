@@ -1442,6 +1442,95 @@ function DF:CreateTargetedSpellIndicator(frame)
 end
 
 -- ============================================================
+-- FINGERPRINT DETECTION (party-only group Targeted Spells)
+-- Infers which party member an enemy is targeting by matching
+-- the target's class/role/race/sex against a roster fingerprint.
+-- Ellesmere's technique (used with permission, June 2026).
+-- ============================================================
+
+-- Two fingerprints are indistinguishable when every dimension BOTH
+-- have is equal. A dimension missing on either side cannot be used
+-- to tell them apart, so it does not count as a difference.
+local function FingerprintsCollide(a, b)
+    if not a or not b then return false end
+    if a.class ~= b.class then return false end        -- class is the hard key
+    if a.role and b.role and a.role ~= b.role then return false end
+    if a.race and b.race and a.race ~= b.race then return false end
+    if a.sex  and b.sex  and a.sex  ~= b.sex  then return false end
+    return true
+end
+
+-- Given [unit]=fingerprint, return [unit]=true for members that
+-- collide with at least one OTHER member (i.e. untrackable this run).
+local function ComputeUntrackable(fps)
+    local out = {}
+    for u1, f1 in pairs(fps) do
+        for u2, f2 in pairs(fps) do
+            if u1 ~= u2 and FingerprintsCollide(f1, f2) then
+                out[u1] = true
+                break
+            end
+        end
+    end
+    return out
+end
+
+-- Return a list of units whose fingerprint matches the target's.
+-- targetFP may have missing dimensions (secret reads); we match on
+-- whatever is present, class required.
+local function MatchFingerprint(targetFP, fps)
+    local matches = {}
+    if not targetFP or not targetFP.class then return matches end
+    for u, f in pairs(fps) do
+        if f.class == targetFP.class
+            and (not targetFP.role or not f.role or f.role == targetFP.role)
+            and (not targetFP.race or not f.race or f.race == targetFP.race)
+            and (not targetFP.sex  or not f.sex  or f.sex  == targetFP.sex) then
+            matches[#matches + 1] = u
+        end
+    end
+    return matches
+end
+
+-- Self-test for the pure matching logic. Run in-game:
+--   /dump DandersFrames.TargetedSpells_RunFingerprintTests()
+function DF.TargetedSpells_RunFingerprintTests()
+    local function fp(c, r, ra, s) return { class = c, role = r, race = ra, sex = s } end
+    local pass, fail = 0, 0
+    local function check(name, cond)
+        if cond then pass = pass + 1 else fail = fail + 1; print("FAIL: " .. name) end
+    end
+
+    -- Distinct classes -> no collisions, unique match
+    local roster = {
+        player = fp("PRIEST", "HEALER", "Human", 2),
+        party1 = fp("WARRIOR", "TANK", "Orc", 1),
+        party2 = fp("MAGE", "DAMAGER", "Gnome", 1),
+    }
+    local untrackable = ComputeUntrackable(roster)
+    check("no collisions when classes differ", next(untrackable) == nil)
+    check("unique match by class", #MatchFingerprint(fp("MAGE"), roster) == 1)
+
+    -- Two identical DPS -> both untrackable, ambiguous match
+    roster.party3 = fp("MAGE", "DAMAGER", "Gnome", 1)
+    untrackable = ComputeUntrackable(roster)
+    check("identical members untrackable", untrackable.party2 and untrackable.party3)
+    check("ambiguous match returns 2", #MatchFingerprint(fp("MAGE", "DAMAGER", "Gnome", 1), roster) == 2)
+
+    -- Same class, different race -> distinguishable
+    roster.party3 = fp("MAGE", "DAMAGER", "Troll", 1)
+    untrackable = ComputeUntrackable(roster)
+    check("race distinguishes same class", not untrackable.party2 and not untrackable.party3)
+
+    -- Target with secret race (missing dim) -> falls back to class+role+sex
+    check("missing target dim still narrows",
+        #MatchFingerprint(fp("MAGE", "DAMAGER", nil, 1), roster) == 2)
+
+    print(string.format("Fingerprint tests: %d passed, %d failed", pass, fail))
+    return fail == 0
+end
+
+-- ============================================================
 -- CAST EVENT HANDLING
 -- ============================================================
 
