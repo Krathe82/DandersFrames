@@ -2111,6 +2111,7 @@ DF.PartyDefaults = {
     targetedSpellSortByTime = true,
     targetedSpellSortNewestFirst = true,
     targetedSpellSpacing = 2,
+    targetedSpellWarnDuplicates = true,
     targetedSpellX = 0,
     targetedSpellY = -28,
 

@@ -5917,7 +5917,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllTargetedSpellLayouts then DF:UpdateAllTargetedSpellLayouts() end
             TargetedSpellLightweightUpdate()
         end
-        
+
+        -- ===== DISCLAIMER BANNER (full width) =====
+        local tsDisclaimerBanner = GUI:CreateInfoBanner(self.child, {
+            tone = "info",
+            text = L["Targeted Spells guesses who an enemy is targeting from their class, role, race, and sex. Members who share all four can't be told apart and won't show an icon."],
+        })
+        Add(tsDisclaimerBanner, tsDisclaimerBanner.layoutHeight, "both")
+
         -- ===== SETTINGS GROUP (Column 1) =====
         local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
@@ -5926,6 +5933,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             self:RefreshStates()
             if DF.ToggleTargetedSpells then DF:ToggleTargetedSpells(db.targetedSpellEnabled) end
         end), 30)
+        local tsWarnDup = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Warn About Untrackable Duplicates"], db, "targetedSpellWarnDuplicates", nil), 30)
+        tsWarnDup.disableOn = HideTargetedSpellOptions
+        local tsUntrackableLabel = settingsGroup:AddWidget(GUI:CreateLabel(self.child, "", 250), 30)
+        function DF:RefreshTargetedSpellUntrackable()
+            if not tsUntrackableLabel then return end
+            local names = DF.TargetedSpells_GetUntrackableNames and DF:TargetedSpells_GetUntrackableNames() or {}
+            if #names >= 2 then
+                tsUntrackableLabel:SetText(string.format(L["Currently can't track: %s"], table.concat(names, ", ")))
+            else
+                tsUntrackableLabel:SetText("")
+            end
+        end
+        DF:RefreshTargetedSpellUntrackable()
         local tsImportantOnly = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Important Spells Only"], db, "targetedSpellImportantOnly", function()
             self:RefreshStates()
             FullUpdate()
@@ -6155,14 +6175,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
             local title = overlay:CreateFontString(nil, "OVERLAY", "DFFontNormalHuge")
             title:SetPoint("CENTER", 0, 80)
-            title:SetText(L["Disabled — WoW API Change"])
+            title:SetText(L["Not Available on Raid Frames"])
             title:SetTextColor(1, 0.82, 0)
 
             local body = overlay:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
             body:SetPoint("TOP", title, "BOTTOM", 0, -20)
             body:SetWidth(520)
             body:SetJustifyH("CENTER")
-            body:SetText(L["A WoW API change prevents addons from detecting which party or raid member an enemy is targeting. Group-frame Targeted Spells can no longer function and has been disabled.\n\nThe Personal Targeted Spells display still works and will warn you about casts targeting you."])
+            body:SetText(L["Targeted Spells isn't available on raid frames — too many members share the same class, role, race, and sex to tell them apart.\n\nPersonal Targeted Spells still works for casts targeting you."])
 
             local gotoBtn = GUI:CreateButton(overlay, L["Open Personal Targeted Spells"], 260, 30, function()
                 if GUI.SelectTab then GUI.SelectTab("indicators_personal_targeted") end
@@ -6176,7 +6196,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             overlay:Hide()
         end
 
-        if DF.GroupTargetedSpellsAPIBlocked then
+        if GUI.SelectedMode == "raid" then
             self.apiBlockedOverlay:Show()
         else
             self.apiBlockedOverlay:Hide()
@@ -6188,7 +6208,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     GUI.RefreshTargetedSpellsOverlay = function()
         local page = GUI.Pages and GUI.Pages["indicators_targetedspells"]
         if page and page.apiBlockedOverlay then
-            if DF.GroupTargetedSpellsAPIBlocked then
+            if GUI.SelectedMode == "raid" then
                 page.apiBlockedOverlay:Show()
             else
                 page.apiBlockedOverlay:Hide()
