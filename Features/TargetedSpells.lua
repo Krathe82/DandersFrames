@@ -1624,7 +1624,6 @@ local function ResolveFingerprintTarget(casterUnit, texture, spellName, duration
     local matches = MatchFingerprint(targetFP, rosterFingerprints)
     if #matches ~= 1 then return end                          -- ambiguous / none -> nothing
     local unit = matches[1]
-    if unit == "player" then return end                       -- personal "player" display owns the player's own frame
     local frame = GetFrameForUnit(unit)
     if not frame then return end
     -- If this caster was showing on a different frame, clear the old one.
@@ -1635,8 +1634,9 @@ local function ResolveFingerprintTarget(casterUnit, texture, spellName, duration
     local db = DF:GetFrameDB(frame)
     local icon = DF:ShowTargetedSpellIcon(frame, casterUnit, casterUnit, texture, spellName, durationObject, isChannel, spellID, startTime)
     if icon then
-        icon:SetAlpha(db.targetedSpellAlpha or 1)             -- our path doesn't use SetAlphaFromBoolean
         casterShownFrame[casterUnit] = frame
+        PositionIcons(frame)                                  -- size + anchor the icon (Show alone leaves it 0-size/unanchored)
+        icon:SetAlpha(db.targetedSpellAlpha or 1)             -- our path doesn't use SetAlphaFromBoolean
     end
 end
 DF.TargetedSpells_ResolveFingerprintTarget = ResolveFingerprintTarget
