@@ -1530,6 +1530,60 @@ function DF.TargetedSpells_RunFingerprintTests()
     return fail == 0
 end
 
+-- Live caches, rebuilt on roster/role change.
+local rosterFingerprints = {}   -- [unit] = fingerprint
+local untrackableUnits   = {}   -- [unit] = true (collides with another member)
+local lastCompositionKey = nil
+
+-- Read one party member's fingerprint. Own-party tokens (player/partyN)
+-- are not identity-restricted, so all four reads are normally available.
+-- IMPORTANT: read the class/race TOKEN (2nd return), never the localized
+-- 1st return (which is ConditionalSecret and goes secret in M+).
+local function ReadMemberFingerprint(unit)
+    local _, classToken = UnitClass(unit)            -- 2nd return = "WARRIOR" token
+    if issecretvalue(classToken) or type(classToken) ~= "string" then return nil end
+    local f = { class = classToken }
+    local role = UnitGroupRolesAssigned(unit)
+    if not issecretvalue(role) and type(role) == "string" and role ~= "NONE" then f.role = role end
+    local okR, _, raceToken = pcall(UnitRace, unit)  -- 2nd return = englishRaceName
+    if okR and not issecretvalue(raceToken) and type(raceToken) == "string" then f.race = raceToken end
+    local okS, sex = pcall(UnitSex, unit)
+    if okS and not issecretvalue(sex) and type(sex) == "number" then f.sex = sex end
+    return f
+end
+
+-- Cheap composition key so repeated roster events don't re-fire work.
+local function BuildCompositionKey()
+    local parts = {}
+    for i = 1, 4 do
+        local u = "party" .. i
+        if UnitExists(u) then
+            local _, c = UnitClass(u)
+            parts[#parts + 1] = (type(c) == "string" and c or "?") .. ":" .. (UnitGroupRolesAssigned(u) or "?")
+        end
+    end
+    return table.concat(parts, "|")
+end
+
+-- Rebuild fingerprints + untrackable set for player + party1-4.
+-- Returns true if the composition actually changed.
+local function BuildRosterFingerprints(force)
+    local key = BuildCompositionKey()
+    if not force and key == lastCompositionKey then return false end
+    lastCompositionKey = key
+    wipe(rosterFingerprints)
+    local units = { "player", "party1", "party2", "party3", "party4" }
+    for _, u in ipairs(units) do
+        if UnitExists(u) then
+            local f = ReadMemberFingerprint(u)
+            if f then rosterFingerprints[u] = f end
+        end
+    end
+    untrackableUnits = ComputeUntrackable(rosterFingerprints)
+    return true
+end
+DF.TargetedSpells_BuildRosterFingerprints = BuildRosterFingerprints
+
 -- ============================================================
 -- CAST EVENT HANDLING
 -- ============================================================
@@ -1850,6 +1904,12 @@ local function OnEvent(self, event, unit, ...)
         HandleCastStop(unit, false)
     elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
         ScanAllEnemyCasts()
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
+        if BuildRosterFingerprints(false) then
+            if DF.TargetedSpells_OnRosterFingerprintChanged then
+                DF:TargetedSpells_OnRosterFingerprintChanged()
+            end
+        end
     end
 
     -- ============================================================
@@ -1988,6 +2048,9 @@ local function RegisterTargetedSpellEvents()
     eventFrame:RegisterEvent("UPDATE_INSTANCE_INFO")
     -- CVAR changes that affect nameplate visibility.
     eventFrame:RegisterEvent("CVAR_UPDATE")
+    -- Roster composition changes: rebuild fingerprint cache.
+    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    eventFrame:RegisterEvent("PLAYER_ROLES_ASSIGNED")
     eventFrame:Show()
 end
 
