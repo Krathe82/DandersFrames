@@ -1584,6 +1584,58 @@ local function BuildRosterFingerprints(force)
 end
 DF.TargetedSpells_BuildRosterFingerprints = BuildRosterFingerprints
 
+-- Per-caster generation counter so a mid-cast retarget invalidates
+-- stale deferred resolves (prevents flashing the wrong frame).
+local resolveGen = {}
+-- Which frame currently shows each caster's icon (for retarget cleanup).
+local casterShownFrame = {}
+
+-- Read the enemy target's fingerprint, gated by party membership.
+-- Returns a fingerprint table, or nil if the target isn't a party member
+-- (pets/NPCs excluded) or its class is unreadable.
+local function ReadTargetFingerprint(casterUnit)
+    local target = casterUnit .. "target"
+    if not UnitExists(target) then return nil end
+    -- Party gate: non-secret boolean post-hotfix. Excludes pets/NPCs.
+    if IsInGroup() and not UnitInParty(target) then return nil end
+    local _, classToken = UnitClass(target)
+    if issecretvalue(classToken) or type(classToken) ~= "string" then return nil end
+    local f = { class = classToken }
+    local role = UnitGroupRolesAssigned(target)
+    if not issecretvalue(role) and type(role) == "string" and role ~= "NONE" then f.role = role end
+    local okR, _, raceToken = pcall(UnitRace, target)
+    if okR and not issecretvalue(raceToken) and type(raceToken) == "string" then f.race = raceToken end
+    local okS, sex = pcall(UnitSex, target)
+    if okS and not issecretvalue(sex) and type(sex) == "number" then f.sex = sex end
+    return f
+end
+
+-- Resolve which single party member this caster is targeting and show
+-- the icon there. Ambiguous / no-match / non-party -> show nothing.
+local function ResolveFingerprintTarget(casterUnit, texture, spellName, durationObject, isChannel, spellID, startTime, myGen)
+    if resolveGen[casterUnit] ~= myGen then return end       -- stale resolve
+    local targetFP = ReadTargetFingerprint(casterUnit)
+    if not targetFP then return end
+    local matches = MatchFingerprint(targetFP, rosterFingerprints)
+    if #matches ~= 1 then return end                          -- ambiguous / none -> nothing
+    local unit = matches[1]
+    if unit == "player" then return end                       -- personal "player" display owns the player's own frame
+    local frame = GetFrameForUnit(unit)
+    if not frame then return end
+    -- If this caster was showing on a different frame, clear the old one.
+    local prev = casterShownFrame[casterUnit]
+    if prev and prev ~= frame then
+        DF:HideTargetedSpellIcon(prev, casterUnit)
+    end
+    local db = DF:GetFrameDB(frame)
+    local icon = DF:ShowTargetedSpellIcon(frame, casterUnit, casterUnit, texture, spellName, durationObject, isChannel, spellID, startTime)
+    if icon then
+        icon:SetAlpha(db.targetedSpellAlpha or 1)             -- our path doesn't use SetAlphaFromBoolean
+        casterShownFrame[casterUnit] = frame
+    end
+end
+DF.TargetedSpells_ResolveFingerprintTarget = ResolveFingerprintTarget
+
 -- ============================================================
 -- CAST EVENT HANDLING
 -- ============================================================
@@ -1628,6 +1680,8 @@ local function ProcessCastInternal(casterUnit, isChannel)
                 DF:HideTargetedSpellIcon(frame, casterUnit)
             end
         end
+        resolveGen[casterUnit] = (resolveGen[casterUnit] or 0) + 1
+        casterShownFrame[casterUnit] = nil
     end
     
     -- Track this caster by unit token (not GUID - GUIDs are secret values)
@@ -1647,10 +1701,16 @@ local function ProcessCastInternal(casterUnit, isChannel)
     -- Check content type for raid frames
     local showOnRaidFrames = ShouldShowRaidTargetedSpells(raidDb)
     
-    -- Group-frame icon loop removed: Blizzard's UnitIsUnit hotfix on
-    -- 2026-04-07 made it impossible to detect which party member an enemy
-    -- is targeting from inside an addon. The "Targeted List" feature is
-    -- planned as a replacement. See _Reference/targeted-list-mockup.html.
+    -- Party-only fingerprint detection (replaces the dead relay loop).
+    -- Raid is intentionally unsupported (collisions are near-total).
+    if not DF.GroupTargetedSpellsAPIBlockedParty and showOnPartyFrames and db.targetedSpellEnabled and not IsInRaid() then
+        if not lastCompositionKey then BuildRosterFingerprints(true) end
+        resolveGen[casterUnit] = (resolveGen[casterUnit] or 0) + 1
+        local myGen = resolveGen[casterUnit]
+        ResolveFingerprintTarget(casterUnit, texture, name, durationObject, isChannel, spellID, startTime, myGen)
+        C_Timer.After(0.1,  function() ResolveFingerprintTarget(casterUnit, texture, name, durationObject, isChannel, spellID, startTime, myGen) end)
+        C_Timer.After(0.25, function() ResolveFingerprintTarget(casterUnit, texture, name, durationObject, isChannel, spellID, startTime, myGen) end)
+    end
 
     -- Create personal display icon (always, for every cast - use SetAlphaFromBoolean for visibility)
     if ShouldShowPersonalTargetedSpells(db) then
@@ -1800,7 +1860,9 @@ local function HandleCastStop(casterUnit, wasInterrupted)
     
     -- Remove from active casters (using unit token, not GUID)
     activeCasters[casterUnit] = nil
-    
+    resolveGen[casterUnit] = (resolveGen[casterUnit] or 0) + 1
+    casterShownFrame[casterUnit] = nil
+
     -- Get db for interrupt setting
     local db = DF:GetDB()
     
@@ -1889,6 +1951,20 @@ local function OnEvent(self, event, unit, ...)
     elseif event == "UNIT_TARGET" then
         -- Enemy changed target mid-cast
         HandleTargetChange(unit)
+        -- Fingerprint re-resolve on retarget (party only)
+        if not IsInRaid() and activeCasters[unit] then
+            resolveGen[unit] = (resolveGen[unit] or 0) + 1
+            local myGen = resolveGen[unit]
+            local c = activeCasters[unit]
+            C_Timer.After(0.05, function()
+                local nm, _, tex = UnitCastingInfo(unit)
+                if not nm then nm, _, tex = UnitChannelInfo(unit) end
+                if nm then
+                    local dur = UnitCastingDuration(unit) or UnitChannelDuration(unit)
+                    ResolveFingerprintTarget(unit, tex, nm, dur, c.isChannel, c.spellID, c.startTime, myGen)
+                end
+            end)
+        end
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         -- New nameplate, check if casting
         local castName = UnitCastingInfo(unit)
