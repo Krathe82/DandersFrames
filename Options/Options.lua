@@ -5956,6 +5956,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         tsNameplateOffscreen.disableOn = HideTargetedSpellOptions
+        settingsGroup:AddWidget(GUI:CreateButton(self.child, L["Run Setup Wizard"], 160, 24, function()
+            if DF.ShowTargetedSpellSetupWizard then DF:ShowTargetedSpellSetupWizard() end
+        end), 34)
         Add(settingsGroup, nil, 1)
         
         -- ===== CONTENT TYPES GROUP (Column 2) =====

@@ -5160,6 +5160,31 @@ DF._MainEventDispatcher = function(self, event, arg1)
             DandersFramesDB_v2.seenAuraSetupWizard = true
         end
 
+        -- Show the Targeted Spells opt-in setup wizard once per account.
+        -- The feature defaults OFF; this wizard explains what it does, its
+        -- limitations, and that it relies on unsupported Blizzard behaviour
+        -- before letting the user turn it on. Mark seen at schedule time so a
+        -- close/cancel still counts (no re-nag on the next login).
+        if DandersFramesDB_v2 and not DandersFramesDB_v2.targetedSpellWizardSeen then
+            DandersFramesDB_v2.targetedSpellWizardSeen = true
+            if DF.ShowTargetedSpellSetupWizard then
+                -- Delay so it doesn't fight the loading screen. Longer than the
+                -- Aura Setup wizard's 3s so the two don't collide on a brand-new
+                -- account that qualifies for both; if a popup is already showing
+                -- when we fire, wait a bit and retry once rather than stomp it.
+                local function ShowTSWizard(attempt)
+                    if DF.IsPopupShown and DF:IsPopupShown() then
+                        if attempt < 3 then
+                            C_Timer.After(5, function() ShowTSWizard(attempt + 1) end)
+                        end
+                        return
+                    end
+                    DF:ShowTargetedSpellSetupWizard()
+                end
+                C_Timer.After(5, function() ShowTSWizard(1) end)
+            end
+        end
+
     elseif event == "GROUP_ROSTER_UPDATE" then
         if DF.RosterDebugEvent then DF:RosterDebugEvent("Core.lua:GROUP_ROSTER_UPDATE") end
 

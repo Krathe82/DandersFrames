@@ -2239,6 +2239,58 @@ function DF:ToggleTargetedSpells(enabled)
 end
 
 -- ============================================================
+-- SETUP WIZARD
+-- Opt-in flow shown once on first login (and re-runnable from the
+-- settings page). Explains what the feature does, its limitations,
+-- and that it relies on unsupported Blizzard behaviour that could
+-- break at any time. Selecting "Enable Targeted Spells" turns it on.
+-- ============================================================
+function DF:ShowTargetedSpellSetupWizard()
+    local L = DF.L
+    if not DF.ShowPopupWizard then
+        DF:DebugWarn("ShowTargetedSpellSetupWizard: Popup module not loaded")
+        return
+    end
+
+    DF:ShowPopupWizard({
+        title = L["Targeted Spells"],
+        steps = {
+            {
+                id = "intro",
+                question = L["Targeted Spells is back"],
+                description = L["Puts an icon on the party member an enemy is about to hit, so you can react to incoming danger. It works by matching the enemy's target to your group by class, role, race, and sex."],
+                type = "single",
+                options = {
+                    { label = L["Next"], value = "next" },
+                },
+                next = "choice",
+            },
+            {
+                id = "choice",
+                question = L["Before you turn it on"],
+                description = L["A few things to know:\n\n- Party only — raid frames aren't supported.\n- If two members share the same class, role, race and sex, they can't be told apart and won't show an icon (you'll be warned by name).\n- This relies on Blizzard behaviour that isn't officially supported. Blizzard could change it at any time — if they do, the feature simply stops working and there's no fix. There's no guarantee it stays."],
+                type = "single",
+                options = {
+                    { label = L["Enable Targeted Spells"], value = "enable" },
+                    { label = L["Not Now"], value = "no" },
+                },
+                next = nil,
+            },
+        },
+        onComplete = function(answers)
+            if answers and answers.choice == "enable" then
+                local pdb = DF:GetDB("party")
+                if pdb then pdb.targetedSpellEnabled = true end
+                if DF.ToggleTargetedSpells then DF:ToggleTargetedSpells(true) end
+            end
+        end,
+        onCancel = function()
+            -- User closed/cancelled: feature stays off. No-op.
+        end,
+    })
+end
+
+-- ============================================================
 -- PERSONAL TARGETED SPELLS DISPLAY
 -- Shows incoming spells targeting the player in center of screen
 -- ============================================================
