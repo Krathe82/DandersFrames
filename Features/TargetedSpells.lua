@@ -2115,10 +2115,9 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
     local durationY = db.personalTargetedSpellDurationY or 0
     local durationColor = db.personalTargetedSpellDurationColor or {r = 1, g = 1, b = 1}
     local highlightImportant = db.personalTargetedSpellHighlightImportant ~= false
-    local highlightStyle = db.personalTargetedSpellHighlightStyle or "glow"
-    local highlightColor = db.personalTargetedSpellHighlightColor or {r = 1, g = 0.8, b = 0}
-    local highlightSize = db.personalTargetedSpellHighlightSize or 3
-    local highlightInset = db.personalTargetedSpellHighlightInset or 0
+    -- Important-spell highlight reads the personalTargetedSpellImportant* border keys
+    -- directly via BuildSpec (see the highlight block below); the old
+    -- personalTargetedSpellHighlightStyle/Color/Size/Inset locals are retired here.
     local importantOnly = db.personalTargetedSpellImportantOnly
     
     if durationOutline == "NONE" then durationOutline = "" end
@@ -2140,37 +2139,20 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
         end
     end
     
-    -- Important spell highlight
+    -- Important Spell Border: a second DF.Border (full toolkit via BuildSpec),
+    -- shown on important spells, gated by the Highlight-Important toggle + the
+    -- secret-safe isImportant alpha. Frame offset is inset-INDEPENDENT — the
+    -- engine's spec.inset owns the inset symmetrically (keeps it centred).
     if icon.highlightFrame then
-        -- Calculate position with inset (negative inset = larger, positive = smaller/inward)
-        local offset = borderSize + highlightSize - highlightInset
-        
-        -- Position the highlight frame
+        local hlSize  = db.personalTargetedSpellImportantBorderSize or 3
+        local offset  = borderSize + hlSize
         icon.highlightFrame:ClearAllPoints()
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
-        
-        -- Highlight border via the unified DF.Border backend. The style maps onto
-        -- a DF.Border animation (glow→PROC, marchingAnts→DF_DASH, pulse→DF_PULSATE,
-        -- solidBorder→static). The highlightFrame stays as the secret-safe alpha
-        -- gate (SetAlphaFromBoolean), positioned just outside the base border.
-        if highlightImportant and spellID and highlightStyle ~= "none" and icon.highlightBorder then
+        if highlightImportant and spellID and icon.highlightBorder then
             local isImportant = C_Spell.IsSpellImportant(spellID)
-            local hSize = math.max(1, highlightSize)
-            local spec = {
-                enabled = true,
-                size    = hSize,
-                inset   = 0,
-                style   = "SOLID",
-                color   = { r = highlightColor.r, g = highlightColor.g, b = highlightColor.b, a = 1 },
-            }
-            if highlightStyle == "marchingAnts" then
-                spec.animation = { type = "DF_DASH", thickness = hSize, color = spec.color }
-            elseif highlightStyle == "pulse" then
-                spec.animation = { type = "DF_PULSATE", color = spec.color }
-            elseif highlightStyle == "glow" then
-                spec.animation = { type = "PROC", color = spec.color }
-            end
+            local spec = DF.Border:BuildSpec(db, "personalTargetedSpellImportant", { iconMode = true })
+            spec.enabled = true
             DF.Border:Apply(icon.highlightBorder, spec)
             icon.highlightFrame:Show()
             icon.highlightFrame:SetAlphaFromBoolean(isImportant)

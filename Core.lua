@@ -3519,29 +3519,45 @@ function DF:MigrateTargetedSpellImportantBorder()
     if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
     local styleToAnim = { glow = "PROC", marchingAnts = "DF_DASH", pulse = "DF_PULSATE",
                           solidBorder = "NONE", none = "NONE" }
-    for _, profile in pairs(DandersFramesDB_v2.profiles) do
-        if type(profile) == "table" and not profile._tsImportantBorderV1 then
-            for _, modeKey in ipairs({ "party", "raid" }) do
-                local m = profile[modeKey]
-                if type(m) == "table" then
-                    if m.targetedSpellHighlightColor ~= nil and m.targetedSpellImportantBorderColor == nil then
-                        m.targetedSpellImportantBorderColor = m.targetedSpellHighlightColor
-                        if m.targetedSpellImportantBorderAnimationColor == nil then
-                            m.targetedSpellImportantBorderAnimationColor = m.targetedSpellHighlightColor
-                        end
-                    end
-                    if m.targetedSpellHighlightSize ~= nil and m.targetedSpellImportantBorderSize == nil then
-                        m.targetedSpellImportantBorderSize = m.targetedSpellHighlightSize
-                    end
-                    if m.targetedSpellHighlightInset ~= nil and m.targetedSpellImportantBorderInset == nil then
-                        m.targetedSpellImportantBorderInset = m.targetedSpellHighlightInset
-                    end
-                    if m.targetedSpellHighlightStyle ~= nil and m.targetedSpellImportantBorderAnimationType == nil then
-                        m.targetedSpellImportantBorderAnimationType = styleToAnim[m.targetedSpellHighlightStyle] or "PROC"
-                    end
-                end
+    -- Copy a feature's old <prefix>Highlight* keys into its new
+    -- <prefix>ImportantBorder* set when the new key is still nil. Value-idempotent;
+    -- shared by the group (targetedSpell) and personal (personalTargetedSpell) sets.
+    local function mapHighlight(m, p)
+        if m[p.."HighlightColor"] ~= nil and m[p.."ImportantBorderColor"] == nil then
+            m[p.."ImportantBorderColor"] = m[p.."HighlightColor"]
+            if m[p.."ImportantBorderAnimationColor"] == nil then
+                m[p.."ImportantBorderAnimationColor"] = m[p.."HighlightColor"]
             end
-            profile._tsImportantBorderV1 = true
+        end
+        if m[p.."HighlightSize"] ~= nil and m[p.."ImportantBorderSize"] == nil then
+            m[p.."ImportantBorderSize"] = m[p.."HighlightSize"]
+        end
+        if m[p.."HighlightInset"] ~= nil and m[p.."ImportantBorderInset"] == nil then
+            m[p.."ImportantBorderInset"] = m[p.."HighlightInset"]
+        end
+        if m[p.."HighlightStyle"] ~= nil and m[p.."ImportantBorderAnimationType"] == nil then
+            m[p.."ImportantBorderAnimationType"] = styleToAnim[m[p.."HighlightStyle"]] or "PROC"
+        end
+    end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" then
+            -- Group/party Targeted Spells. Guarded independently from personal so a
+            -- profile already through this step still receives the personal one.
+            if not profile._tsImportantBorderV1 then
+                for _, modeKey in ipairs({ "party", "raid" }) do
+                    local m = profile[modeKey]
+                    if type(m) == "table" then mapHighlight(m, "targetedSpell") end
+                end
+                profile._tsImportantBorderV1 = true
+            end
+            -- Personal Targeted Spell.
+            if not profile._personalTsImportantBorderV1 then
+                for _, modeKey in ipairs({ "party", "raid" }) do
+                    local m = profile[modeKey]
+                    if type(m) == "table" then mapHighlight(m, "personalTargetedSpell") end
+                end
+                profile._personalTsImportantBorderV1 = true
+            end
         end
     end
 end

@@ -7583,20 +7583,29 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local highlightSection = Add(GUI:CreateCollapsibleSection(self.child, L["Important Spells"], true), 36, "both")
         currentSection = highlightSection
         
-        local personalHighlightStyleOptions = { glow = L["Glow"], marchingAnts = L["Marching Ants"], solidBorder = L["Solid Border"], pulse = L["Pulse"], none = L["None"] }
-        
+        local function HidePersonalHighlightOptions(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
+
         local highlightGroup = GUI:CreateSettingsGroup(self.child, 260)
         highlightGroup:AddWidget(GUI:CreateHeader(self.child, L["Highlight Settings"]), 40)
-        local ptsHighlight = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "personalTargetedSpellHighlightImportant", PersonalTargetedUpdate), 30)
+        local ptsHighlight = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "personalTargetedSpellHighlightImportant", function()
+            self:RefreshStates()
+            PersonalTargetedUpdate()
+        end), 30)
         ptsHighlight.disableOn = HidePersonalOptions
-        local ptsHighlightStyle = highlightGroup:AddWidget(GUI:CreateDropdown(self.child, L["Highlight Style"], personalHighlightStyleOptions, db, "personalTargetedSpellHighlightStyle", PersonalTargetedUpdate), 55)
-        ptsHighlightStyle.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightColor = highlightGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "personalTargetedSpellHighlightColor", false, PersonalTargetedUpdate), 35)
-        ptsHighlightColor.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightSize = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 6, 1, db, "personalTargetedSpellHighlightSize", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsHighlightSize.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightInset = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -4, 8, 1, db, "personalTargetedSpellHighlightInset", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsHighlightInset.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
+        -- Important Spell Border: the highlight on its own DF.Border (full toolkit),
+        -- gated by the Highlight Important Spells toggle above.
+        GUI:CreateBorderControls(highlightGroup, db, "personalTargetedSpellImportant", {
+            parent        = self.child,
+            noShowToggle  = true,  -- the Highlight Important Spells checkbox is the gate
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = PersonalTargetedUpdate,
+            lightUpdate   = PersonalTargetedUpdate,
+            lightColors   = PersonalTargetedUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HidePersonalHighlightOptions,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(highlightGroup, nil, 1)
         
         currentSection = nil
