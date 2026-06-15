@@ -5037,10 +5037,12 @@ local function TargetedList_ApplyBarContent(bar, activeRec)
     if bar.highlightFrame then
         if party and party.targetedListHighlightImportant then
             local hc = party.targetedListHighlightColor or {r=1, g=0.8, b=0}
-            if DF.InitGlowBorder then DF.InitGlowBorder(bar.highlightFrame) end
-            if DF.UpdateGlowBorder then
-                DF.UpdateGlowBorder(bar.highlightFrame, 2, hc.r, hc.g, hc.b, 0.8)
-            end
+            bar.highlightBorder = bar.highlightBorder or DF.Border:New(bar.highlightFrame)
+            DF.Border:Apply(bar.highlightBorder, {
+                enabled = true, size = 2, inset = 0, style = "SOLID",
+                color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
+                animation = { type = "PROC", color = { r = hc.r, g = hc.g, b = hc.b, a = 1 } },
+            })
             bar.highlightFrame:Show()
             if isTest and activeRec.testIsImportant ~= nil then
                 -- Clean bool — use SetShown directly
@@ -6093,10 +6095,12 @@ function DF:LightweightUpdateTargetedListHighlightColor()
     if not db then return end
     local hc = db.targetedListHighlightColor or {r=1, g=0.8, b=0}
     for _, bar in pairs(casterToBar) do
-        if bar.highlightFrame and bar.highlightFrame:IsShown() then
-            if DF.UpdateGlowBorder then
-                DF.UpdateGlowBorder(bar.highlightFrame, 2, hc.r, hc.g, hc.b, 0.8)
-            end
+        if bar.highlightFrame and bar.highlightFrame:IsShown() and bar.highlightBorder then
+            DF.Border:Apply(bar.highlightBorder, {
+                enabled = true, size = 2, inset = 0, style = "SOLID",
+                color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
+                animation = { type = "PROC", color = { r = hc.r, g = hc.g, b = hc.b, a = 1 } },
+            })
         end
     end
 end

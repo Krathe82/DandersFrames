@@ -5824,14 +5824,7 @@ function DF:UpdateAllTestTargetedSpell()
                     -- Also hide pinned frame if it exists
                     if icon.highlightFrame then
                         icon.highlightFrame:Hide()
-                        -- Stop any animations
-                        if icon.highlightFrame.pulseAnim and icon.highlightFrame.pulseAnim:IsPlaying() then
-                            icon.highlightFrame.pulseAnim:Stop()
-                        end
-                        -- Unregister from animator
-                        if DF.TargetedSpellAnimator then
-                            DF.TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                        end
+                        if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
                     end
                 end
             end
