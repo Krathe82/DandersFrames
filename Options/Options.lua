@@ -6519,7 +6519,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             lightColors  = function() DF:LightweightUpdateMissingBuffBorderColor() end,
             refreshStates = function() self:RefreshStates() end,
             hideWhen     = function(d) return not d.missingBuffIconEnabled end,
-            sizeMin = 1, sizeMax = 6, sizeStep = 1,
+            sizeMin = 0, sizeMax = 6, sizeStep = 1,  -- 0 = animation-only (no solid edge)
         })
         borderGroup.hideOn = HideMissingBuffOptions
         Add(borderGroup, nil, 1)
@@ -7548,7 +7548,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             lightColors  = PersonalTargetedUpdate,
             refreshStates = function() self:RefreshStates() end,
             hideWhen     = function(d) return not d.personalTargetedSpellEnabled end,
-            sizeMin = 1, sizeMax = 5, sizeStep = 1,
+            sizeMin = 0, sizeMax = 5, sizeStep = 1,  -- 0 = animation-only (no solid edge)
         })
         AddToSection(borderGroup, nil, 1)
         
