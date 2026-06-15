@@ -1,10 +1,46 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-12T23:50:11Z"
+DF.BUILD_DATE = "2026-06-15T14:30:23Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
 
 ## [Unreleased]
+
+### New Features
+
+* (Targeted Spells) On-frame targeted spell icons are back for **party frames** — an icon appears on the party member an enemy is casting at, so you can spot incoming danger at a glance. Works in dungeons, arenas, and the open world; enable it under **Indicators → Targeted Spells**. Party members who share the same class, role, race, and sex can't be told apart and won't show an icon — you'll be warned by name when that happens. Technique credit to Ellesmere (EllesmereUI). Raid frames aren't supported.
+* (Aura / Text Designer) New **Designer Presets** — save named presets of your Aura Designer and Text Designer setups and choose which one each mode uses. Each **Party / Raid** tab gains a **Preset** selector plus **New / Duplicate / Rename / Delete** (a non-deletable **Default** is always available), so you can build different setups — a focused tank layout vs a minimal one, say — and switch between them without rebuilding. Raid auto-layouts can point at their own preset, and editing a preset updates every consumer using it. (by Krathe)
+* (Pinned Frames) You can now have **more than two pinned sets** — up to four, and **Party and Raid are independent** (e.g. four sets in raid, one in party). The set editor gains a **+ Add** button to create a new set and an **×** on the active tab to remove one (the last set can't be removed). A counter shows how many sets are defined and how many are currently active, since each enabled set is a live frame group. Use **Copy Pinned Frames** if you want both modes to match.
+* (Pinned Frames) New per-set **Hide Auras** and **Hide Status Icons** toggles — strip the buff/debuff (and Aura Designer) display or the status icons from a pinned set for a clean, health-only highlight. (by Krathe)
+* (Pinned Frames) New **Exclude Self** option per pinned set — keeps you out of that set's Auto-add (Tanks/Healers/DPS), handy for Augmentation Evoker and other buff-others playstyles. Works in groups and solo. (by Krathe)
+* (Pinned Frames) New **Disable in PvP** toggle (on by default) — pinned frames stay dormant in arena and battlegrounds, where the constant unit churn could otherwise hurt performance. Turn it off to highlight teammates there. (by Krathe)
+* (Pinned Frames) Each pinned set can now choose its own **Aura Designer** and **Text Designer preset** — pick one in Frame Style, or leave it on **Inherit** to follow the mode's preset. Lets a highlighted set show a different aura/text layout from your normal frames. (by Krathe)
+* (Pinned Frames) Pinned frames are now **independently customisable** per party/raid mode: a **Frame Style** section with a **Based on** selector (Party / Raid, defaulting to their own mode) sets the inherited look, and the settings that also exist on your main frames — **Width**, **Height** and **Scale** — inherit the chosen frames' value and can be overridden per set, each showing a star and a reset button, just like an auto-layout override. An **Override Border** toggle lets a set take its own border/glow (snapshotted from the chosen frames, then fully editable, with a one-click reset to re-inherit) to make highlighted players stand out. A party-only **Show in Solo Mode** toggle keeps them visible when you're not grouped. (by Krathe)
+
+### Improvements
+
+* (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+
+### Bug Fixes
+
+* (Arena) Fixed teammates who load in late sometimes staying missing from your frames for the whole round, and the frame order breaking after a reload mid-match. (by Krathe)
+* (Arena) Fixed your frames staying hidden after a reload during a match. (by Krathe)
+* (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
+* (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
+* (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
+* (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
+* (Raid Frames) Fixed missing frames for players who are still loading in, such as battleground backfills joining mid-match. (by Krathe)
+* (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
+* (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
+* (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
+
+## [4.4.1]
+
+### Bug Fixes
+
+* (Text Designer) Fixed the Text Designer being left out of the 4.4.0 release, which left its settings page empty and could make frame text disappear. It is now included and working.
+
+## [4.4.0]
 
 ### New Features
 
@@ -64,10 +100,6 @@ DF.CHANGELOG_TEXT = [===[
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
 * (Designers) The Aura/Text Designer preview now rebuilds to the **frame size of the auto layout being edited**, and edits keep applying to test-mode frames after **switching between auto layouts**. (by Krathe)
 * (Frames) Bars referencing a **texture you don't have installed** now fall back to the bundled default with a one-time notice, instead of rendering black. (Requires WoW 12.0.7.) (by Krathe)
-
-## [4.4.0]
-
-* Behind-the-scenes improvements and groundwork for upcoming features.
 
 ## [4.3.12]
 
