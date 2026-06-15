@@ -1245,14 +1245,7 @@ function DF:HideTargetedSpellIcon(frame, casterKey, skipInterruptAnim)
         end
         if icon.highlightFrame then
             icon.highlightFrame:Hide()
-            -- Clean up animator reference
-            TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-            TargetedSpellAnimator_UpdateState()
-            HideAnimatedBorder(icon.highlightFrame)
-            HideSolidBorder(icon.highlightFrame)
-            if icon.highlightFrame.pulseAnim then
-                icon.highlightFrame.pulseAnim:Stop()
-            end
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
         end
         if icon.icon then
             icon.icon:SetDesaturated(false)

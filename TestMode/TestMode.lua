@@ -5621,67 +5621,33 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 -- Calculate position with inset
                 local offset = borderSize + highlightSize - highlightInset
                 
-                -- Hide all styles first - always do this
+                -- Highlight border via the unified DF.Border backend, mirroring the
+                -- live ApplyIconSettings mapping (glow→PROC, marchingAnts→DF_DASH,
+                -- pulse→DF_PULSATE, solidBorder→static). Overlay lazily allocated.
                 if icon.highlight then icon.highlight:Hide() end
-                if DF.HideSolidBorder then DF.HideSolidBorder(icon.highlightFrame) end
-                if DF.HideGlowBorder then DF.HideGlowBorder(icon.highlightFrame) end
-                if DF.HideAnimatedBorder then DF.HideAnimatedBorder(icon.highlightFrame) end
-                if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-                -- Remove from animator
-                if DF.TargetedSpellAnimator then
-                    DF.TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                end
-                
-                -- Only show if highlighting is enabled, spell is important, and style is not "none"
+                icon.highlightBorder = icon.highlightBorder or DF.Border:New(icon.highlightFrame)
                 local shouldShowHighlight = highlightImportant and spell.isImportant and highlightStyle and highlightStyle ~= "none"
-                
                 if shouldShowHighlight then
                     icon.highlightFrame:ClearAllPoints()
                     icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
                     icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
                     icon.highlightFrame:SetAlpha(1)
                     icon.highlightFrame:Show()
-                    
-                    -- Apply style using edge-based borders
-                    if highlightStyle == "glow" then
-                        -- Glow border with ADD blend mode
-                        if DF.InitGlowBorder and DF.UpdateGlowBorder then
-                            DF.InitGlowBorder(icon.highlightFrame)
-                            DF.UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                        end
+                    local hSize = math.max(1, highlightSize)
+                    local spec = {
+                        enabled = true, size = hSize, inset = 0, style = "SOLID",
+                        color = { r = highlightColor.r, g = highlightColor.g, b = highlightColor.b, a = 1 },
+                    }
+                    if highlightStyle == "marchingAnts" then
+                        spec.animation = { type = "DF_DASH", thickness = hSize, color = spec.color }
                     elseif highlightStyle == "pulse" then
-                        -- Pulsing glow with animation
-                        if DF.InitGlowBorder and DF.UpdateGlowBorder and DF.InitPulseAnimation then
-                            DF.InitGlowBorder(icon.highlightFrame)
-                            DF.UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                            DF.InitPulseAnimation(icon.highlightFrame)
-                            -- Store color for pulse animation to use
-                            icon.highlightFrame.pulseR = highlightColor.r
-                            icon.highlightFrame.pulseG = highlightColor.g
-                            icon.highlightFrame.pulseB = highlightColor.b
-                            if icon.highlightFrame.pulseAnim then
-                                icon.highlightFrame.pulseAnim:Play()
-                            end
-                        end
-                    elseif highlightStyle == "marchingAnts" then
-                        -- Animated marching ants border
-                        if DF.InitAnimatedBorder and DF.TargetedSpellAnimator then
-                            DF.InitAnimatedBorder(icon.highlightFrame)
-                            icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                            icon.highlightFrame.animR = highlightColor.r
-                            icon.highlightFrame.animG = highlightColor.g
-                            icon.highlightFrame.animB = highlightColor.b
-                            icon.highlightFrame.animA = 1
-                            DF.TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                        end
-                    elseif highlightStyle == "solidBorder" then
-                        -- Solid border
-                        if DF.InitSolidBorder and DF.UpdateSolidBorder then
-                            DF.InitSolidBorder(icon.highlightFrame)
-                            DF.UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                        end
+                        spec.animation = { type = "DF_PULSATE", color = spec.color }
+                    elseif highlightStyle == "glow" then
+                        spec.animation = { type = "PROC", color = spec.color }
                     end
+                    DF.Border:Apply(icon.highlightBorder, spec)
                 else
+                    DF.Border:Apply(icon.highlightBorder, { enabled = false })
                     icon.highlightFrame:Hide()
                 end
             end
