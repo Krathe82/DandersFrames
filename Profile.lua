@@ -292,6 +292,11 @@ function DF:SetProfile(name)
         DF:CleanupLegacyTextLayoutOverrides()
     end
 
+    -- Appearance-preserving border migration (per-profile guarded, no-op once run).
+    if DF.MigrateBorderInsetFold then
+        DF:MigrateBorderInsetFold()
+    end
+
     -- Apply the profile — runtime state is already clear so the proxy reads
     -- the new profile directly with no stale overlay
     DF:FullProfileRefresh()
@@ -820,6 +825,17 @@ function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTy
         end
     end
 
+    -- Fold/zero border insets on the just-imported configs (pre-rework look).
+    -- Clear the active profile's guards so the imported data is re-scanned; the
+    -- steps are value-idempotent, so already-migrated entries are untouched.
+    if DF.MigrateBorderInsetFold then
+        if DF.db then
+            DF.db._borderInsetFoldV1 = nil
+            DF.db._buffDebuffInsetZeroV1 = nil
+        end
+        DF:MigrateBorderInsetFold()
+    end
+
     -- Force DIRECT aura source mode — imported profiles may have BLIZZARD
     -- which is no longer supported.
     if DF.db.party then DF.db.party.auraSourceMode = "DIRECT" end
@@ -860,6 +876,16 @@ function DF:ImportProfile(str)
         if ResetTDForLegacyImport({ party = newProfile.party, raid = newProfile.raid }) then
             DF:MigrateTextDesignerFromLegacy()
         end
+    end
+
+    -- Fold/zero border insets on the just-imported configs (pre-rework look);
+    -- value-idempotent, so clearing the guards only re-scans the imported data.
+    if DF.MigrateBorderInsetFold then
+        if DF.db then
+            DF.db._borderInsetFoldV1 = nil
+            DF.db._buffDebuffInsetZeroV1 = nil
+        end
+        DF:MigrateBorderInsetFold()
     end
 
     -- Force DIRECT aura source mode — imported profiles may have BLIZZARD

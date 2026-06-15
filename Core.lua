@@ -3315,6 +3315,151 @@ function DF:MigrateAuraBorderKeys(modeDb)
     end
 end
 
+-- ============================================================
+-- BORDER INSET FOLD / ZERO  (appearance-preserving migration)
+--
+-- The unified-border rework changed two border families' inset semantics, so
+-- older profiles render oddly under the new (correct) offset model. One-time,
+-- per-profile guarded; rewrites the stored values to keep the pre-rework look.
+--
+-- 1) AURA DESIGNER icon/square (_borderInsetFoldV1): old visible band was
+--    BorderSize + BorderInset (inset EXTENDED the band, straddling the edge);
+--    new = BorderSize alone, inset a pure outward offset (spec.inset =
+--    -BorderInset), so a stored inset now floats the band in a gap. Fold the
+--    inset back into size (BorderSize += BorderInset, likewise
+--    ExpiringBorderSize; BorderInset = 0), clamped to the slider cap. No-op at 0.
+--
+-- 2) BUFF/DEBUFF icons (_buffDebuffInsetZeroV1): changed the OPPOSITE way — old
+--    band = 2*thickness - inset (inset REDUCED width, hugging the edge); new =
+--    the same icon-mode model, so the stored inset floats it in a gap. Fix is to
+--    ZERO the inset, written EXPLICITLY (the render falls back to the legacy
+--    `or 1` when the key is absent, which would keep the gap), and stripped from
+--    raid auto-layout overrides so each layout inherits the zeroed base.
+--
+-- Iterates the raw SavedVariables profiles directly (never the WrapDB proxy).
+-- The preset-library walk is nil-guarded, so this is correct with or without
+-- the Designer Presets feature present.
+-- ============================================================
+local AD_BORDER_SIZE_MAX = 5   -- AD border-size slider cap (AuraDesigner/Options.lua)
+
+local function FoldIndicatorBorderInset(ind, seen)
+    if type(ind) ~= "table" then return end
+    if seen[ind] then return end       -- a materialised inline config and its
+    seen[ind] = true                   -- library copy may share this table ref
+    local t = ind.type
+    if t ~= "icon" and t ~= "square" then return end
+    local inset = ind.BorderInset or ind.borderInset
+    if not inset or inset == 0 then
+        -- Nothing to fold; drop any lingering legacy inset key so a render
+        -- fallback can't later resurrect a stale value.
+        ind.borderInset = nil
+        return
+    end
+    local function foldSize(v)
+        local folded = (v or 1) + inset
+        if folded < 0 then folded = 0 end
+        if folded > AD_BORDER_SIZE_MAX then folded = AD_BORDER_SIZE_MAX end
+        return folded
+    end
+    ind.BorderSize = foldSize(ind.BorderSize or ind.borderThickness)
+    if ind.ExpiringBorderSize then
+        ind.ExpiringBorderSize = foldSize(ind.ExpiringBorderSize)
+    end
+    ind.BorderInset = 0
+    -- Clear legacy duplicates so the render fallback can't reintroduce pre-fold
+    -- geometry.
+    ind.borderThickness = nil
+    ind.borderInset = nil
+end
+
+local function FoldAuraDesignerConfig(cfg, seen)
+    if type(cfg) ~= "table" or type(cfg.auras) ~= "table" then return end
+    for _, entry in pairs(cfg.auras) do
+        if type(entry) == "table" then
+            if entry.indicators then
+                -- Flat (V1) shape: auras[auraName] = auraCfg
+                for _, ind in ipairs(entry.indicators) do
+                    FoldIndicatorBorderInset(ind, seen)
+                end
+            else
+                -- Per-spec shape: auras[spec][auraName] = auraCfg
+                for _, auraCfg in pairs(entry) do
+                    if type(auraCfg) == "table" and type(auraCfg.indicators) == "table" then
+                        for _, ind in ipairs(auraCfg.indicators) do
+                            FoldIndicatorBorderInset(ind, seen)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Write 0 EXPLICITLY (don't just leave absent): the render falls back to the
+-- legacy `or 1` when the key is missing (Update.lua), which would keep the gap.
+local function ZeroBuffDebuffBorderInset(profile)
+    for _, modeKey in ipairs({ "party", "raid" }) do
+        local mode = profile[modeKey]
+        if type(mode) == "table" then
+            mode.buffBorderInset = 0
+            mode.debuffBorderInset = 0
+        end
+    end
+    -- Raid auto-layout overrides: strip the inset keys so each layout inherits
+    -- the now-zeroed base (mirrors CleanupLegacyTextLayoutOverrides' traversal).
+    -- Pinned sets don't override buff/debuff keys, so they inherit the base.
+    local autoDb = profile.raidAutoProfiles
+    if type(autoDb) == "table" then
+        local function stripLayout(layout)
+            local ov = layout and layout.overrides
+            if type(ov) ~= "table" then return end
+            ov.buffBorderInset = nil
+            ov.debuffBorderInset = nil
+        end
+        for _, ctKey in ipairs({ "instanced", "openWorld" }) do
+            local ct = autoDb[ctKey]
+            if type(ct) == "table" and type(ct.profiles) == "table" then
+                for _, layout in pairs(ct.profiles) do stripLayout(layout) end
+            end
+        end
+        if type(autoDb.mythic) == "table" then stripLayout(autoDb.mythic.profile) end
+    end
+end
+
+-- One-shot per-profile, two independently-guarded steps so a profile already
+-- through step 1 still receives step 2. Both steps are value-idempotent.
+function DF:MigrateBorderInsetFold()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" then
+            -- Step 1: AD icon/square fold (preset libraries + inline configs).
+            if not profile._borderInsetFoldV1 then
+                local seen = {}
+                -- Canonical store when Designer Presets exist (nil-guarded so this
+                -- stays correct where they don't).
+                local lib = profile.auraDesignerPresets
+                if type(lib) == "table" then
+                    for _, presetCfg in pairs(lib) do
+                        FoldAuraDesignerConfig(presetCfg, seen)
+                    end
+                end
+                if type(profile.party) == "table" then
+                    FoldAuraDesignerConfig(profile.party.auraDesigner, seen)
+                end
+                if type(profile.raid) == "table" then
+                    FoldAuraDesignerConfig(profile.raid.auraDesigner, seen)
+                end
+                profile._borderInsetFoldV1 = true
+            end
+            -- Step 2: zero buff/debuff border inset (mode-level + raid overrides).
+            if not profile._buffDebuffInsetZeroV1 then
+                ZeroBuffDebuffBorderInset(profile)
+                profile._buffDebuffInsetZeroV1 = true
+            end
+        end
+    end
+end
+
 -- The handler body is stored on DF as _MainEventDispatcher so the profiler
 -- can swap it for an instrumented version at runtime. The frame's actual
 -- script is a thin trampoline that calls through DF — re-binding takes
@@ -5047,6 +5192,14 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- TD owns the built-in text (gated on migratedFromLegacy inside).
             if DF.CleanupLegacyTextLayoutOverrides then
                 DF:CleanupLegacyTextLayoutOverrides()
+            end
+
+            -- Appearance-preserving border migration: fold AD icon/square inset
+            -- into BorderSize and zero buff/debuff inset so the unified-border
+            -- rework keeps the pre-rework look. Per-profile guarded (no-op once
+            -- run); independent of Designer Presets (preset walk is nil-guarded).
+            if DF.MigrateBorderInsetFold then
+                DF:MigrateBorderInsetFold()
             end
 
             -- CRITICAL: Update power bars now that unit data is available
