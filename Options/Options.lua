@@ -6894,15 +6894,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         tsAlpha.disableOn = HideTargetedSpellOptions
         local hideSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
         hideSwipe.disableOn = HideTargetedSpellOptions
-        local tsShowBorder = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "targetedSpellShowBorder", function()
-            self:RefreshStates()
-            FullUpdate()
-        end), 30)
-        tsShowBorder.disableOn = HideTargetedSpellOptions
-        local tsBorderSize = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 0, 8, 1, db, "targetedSpellBorderSize", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsBorderSize.disableOn = HideBorderOptions
-        local tsColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "targetedSpellBorderColor", false, FullUpdate), 35)
-        tsColor.disableOn = HideBorderOptions
+        -- Full DF.Border toolkit (matches Personal Targeted Spell): Show Border,
+        -- Size, Style/Gradient, Colour, Alpha, Inset, Blend Mode, Shadow, Animate.
+        -- BuildSpec in ApplyIconSettings already reads every targetedSpell* border
+        -- key, so these controls light up the whole engine.
+        GUI:CreateBorderControls(borderGroup, db, "targetedSpell", {
+            parent        = self.child,
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = FullUpdate,
+            lightUpdate   = TargetedSpellLightweightUpdate,
+            lightColors   = FullUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HideTargetedSpellOptions,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(borderGroup, nil, 1)
         
         -- Duration Group (col2)
