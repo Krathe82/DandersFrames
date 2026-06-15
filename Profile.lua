@@ -306,6 +306,9 @@ function DF:SetProfile(name)
     if DF.MigrateBorderInsetFold then
         DF:MigrateBorderInsetFold()
     end
+    if DF.MigrateTargetedSpellImportantBorder then
+        DF:MigrateTargetedSpellImportantBorder()
+    end
 
     -- Apply the profile — runtime state is already clear so the proxy reads
     -- the new profile directly with no stale overlay

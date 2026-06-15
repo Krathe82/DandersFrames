@@ -3509,6 +3509,43 @@ local function ZeroBuffDebuffBorderInset(profile)
     end
 end
 
+-- One-time: carry the old bespoke important-spell highlight settings
+-- (targetedSpellHighlightStyle/Color/Size/Inset) into the new Important Spell
+-- Border key set (targetedSpellImportantBorder*), which is a second DF.Border
+-- gated by the Highlight-Important toggle. Defaults already match the old
+-- defaults, so untouched profiles need nothing; this only preserves customised
+-- highlights. Per-profile guarded. Style maps onto a DF.Border animation type.
+function DF:MigrateTargetedSpellImportantBorder()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    local styleToAnim = { glow = "PROC", marchingAnts = "DF_DASH", pulse = "DF_PULSATE",
+                          solidBorder = "NONE", none = "NONE" }
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" and not profile._tsImportantBorderV1 then
+            for _, modeKey in ipairs({ "party", "raid" }) do
+                local m = profile[modeKey]
+                if type(m) == "table" then
+                    if m.targetedSpellHighlightColor ~= nil and m.targetedSpellImportantBorderColor == nil then
+                        m.targetedSpellImportantBorderColor = m.targetedSpellHighlightColor
+                        if m.targetedSpellImportantBorderAnimationColor == nil then
+                            m.targetedSpellImportantBorderAnimationColor = m.targetedSpellHighlightColor
+                        end
+                    end
+                    if m.targetedSpellHighlightSize ~= nil and m.targetedSpellImportantBorderSize == nil then
+                        m.targetedSpellImportantBorderSize = m.targetedSpellHighlightSize
+                    end
+                    if m.targetedSpellHighlightInset ~= nil and m.targetedSpellImportantBorderInset == nil then
+                        m.targetedSpellImportantBorderInset = m.targetedSpellHighlightInset
+                    end
+                    if m.targetedSpellHighlightStyle ~= nil and m.targetedSpellImportantBorderAnimationType == nil then
+                        m.targetedSpellImportantBorderAnimationType = styleToAnim[m.targetedSpellHighlightStyle] or "PROC"
+                    end
+                end
+            end
+            profile._tsImportantBorderV1 = true
+        end
+    end
+end
+
 -- One-shot per-profile, two independently-guarded steps so a profile already
 -- through step 1 still receives step 2. Both steps are value-idempotent.
 function DF:MigrateBorderInsetFold()
@@ -5302,6 +5339,12 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- run); independent of Designer Presets (preset walk is nil-guarded).
             if DF.MigrateBorderInsetFold then
                 DF:MigrateBorderInsetFold()
+            end
+
+            -- Carry old important-spell highlight settings into the new
+            -- Important Spell Border key set (per-profile guarded, no-op once run).
+            if DF.MigrateTargetedSpellImportantBorder then
+                DF:MigrateTargetedSpellImportantBorder()
             end
 
             -- CRITICAL: Update power bars now that unit data is available
