@@ -631,39 +631,11 @@ local function CreateSingleIcon(parent, index)
     iconFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     container.iconFrame = iconFrame
     
-    -- Icon border - 4 edge textures (consistent with defensive/missing buff icons)
+    -- Icon border via the unified DF.Border backend (iconMode). The per-update
+    -- ApplyIconSettings drives BuildSpec + Apply; here we just allocate it.
     local defBorderSize = 2
-    local borderLeft = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderLeft:SetPoint("TOPLEFT", 0, 0)
-    borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    borderLeft:SetWidth(defBorderSize)
-    borderLeft:SetColorTexture(1, 0.3, 0, 1)
-    container.borderLeft = borderLeft
-    iconFrame.borderLeft = borderLeft
-    
-    local borderRight = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderRight:SetPoint("TOPRIGHT", 0, 0)
-    borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    borderRight:SetWidth(defBorderSize)
-    borderRight:SetColorTexture(1, 0.3, 0, 1)
-    container.borderRight = borderRight
-    iconFrame.borderRight = borderRight
-    
-    local borderTop = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderTop:SetPoint("TOPLEFT", defBorderSize, 0)
-    borderTop:SetPoint("TOPRIGHT", -defBorderSize, 0)
-    borderTop:SetHeight(defBorderSize)
-    borderTop:SetColorTexture(1, 0.3, 0, 1)
-    container.borderTop = borderTop
-    iconFrame.borderTop = borderTop
-    
-    local borderBottom = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderBottom:SetPoint("BOTTOMLEFT", defBorderSize, 0)
-    borderBottom:SetPoint("BOTTOMRIGHT", -defBorderSize, 0)
-    borderBottom:SetHeight(defBorderSize)
-    borderBottom:SetColorTexture(1, 0.3, 0, 1)
-    container.borderBottom = borderBottom
-    iconFrame.borderBottom = borderBottom
+    iconFrame.border = DF.Border:New(iconFrame)
+    container.border = iconFrame.border
     
     -- Important spell highlight frame - use a frame so we can SetAlphaFromBoolean
     -- Set frame level ABOVE iconFrame so it renders on top when inset
@@ -1090,68 +1062,27 @@ local function ApplyIconSettings(icon, db, spellID)
         end
     end
     
-    -- Border
-    -- Border - 4 edge textures (consistent with defensive/missing buff icons)
-    if showBorder then
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderLeft:SetWidth(borderSize)
-            icon.borderLeft:Show()
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderRight:SetWidth(borderSize)
-            icon.borderRight:Show()
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderTop:SetHeight(borderSize)
-            icon.borderTop:ClearAllPoints()
-            icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-            icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            icon.borderTop:Show()
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderBottom:SetHeight(borderSize)
-            icon.borderBottom:ClearAllPoints()
-            icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-            icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            icon.borderBottom:Show()
-        end
-        
-        -- Adjust icon texture position for border
+    -- Border via the unified DF.Border backend (iconMode) — parity with Personal
+    -- Targeted Spell / Targeted List. BuildSpec reads the targetedSpell* keys;
+    -- spec.size carries the (pixel-perfect-adjusted) thickness, and the art +
+    -- cooldown inset by that thickness when the border is shown.
+    if icon.border then
+        local spec = DF.Border:BuildSpec(db, "targetedSpell", { iconMode = true })
+        spec.enabled = showBorder
+        spec.size = borderSize
+        DF.Border:Apply(icon.border, spec)
+    end
+    do
+        local ai = showBorder and borderSize or 0
         if icon.icon then
             icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
+            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
         end
-        
-        -- Adjust cooldown to match icon texture
         if icon.cooldown then
             icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-        end
-    else
-        -- Hide all border edges
-        if icon.borderLeft then icon.borderLeft:Hide() end
-        if icon.borderRight then icon.borderRight:Hide() end
-        if icon.borderTop then icon.borderTop:Hide() end
-        if icon.borderBottom then icon.borderBottom:Hide() end
-        
-        -- Full size icon when no border
-        if icon.icon then
-            icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-        end
-        
-        -- Adjust cooldown to match
-        if icon.cooldown then
-            icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
+            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
         end
     end
     
