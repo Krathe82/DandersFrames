@@ -3125,6 +3125,10 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
     -- = full rebuild (threshold-mode toggle needs it).
     local function AddExpiringBorderGroup(opts)
         opts = opts or {}
+        -- Text-only mode hides the icon texture, so the border-specific expiring
+        -- controls are hidden. Scoped to the ICON type only — squares/bars are
+        -- unaffected (this border-visibility change is icon-only by design).
+        local iconTextOnly = (typeKey == "icon") and proxy.hideIcon
         AddGroup(L["Expiring"], function(g)
             GUI:CreateExpiringControls(g, proxy, {
                 parent        = parent,
@@ -3160,11 +3164,19 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                 },
                 include = {
                     threshold     = true,
-                    colorOverride = true,
+                    -- Border-specific expiring overrides (colour override + its
+                    -- border colour/alpha, and thickness) are hidden for a
+                    -- text-only ICON, which draws no border. Threshold, animation,
+                    -- tint and the whole-frame icon effects still apply. Squares
+                    -- and bars are never gated here (iconTextOnly is icon-only),
+                    -- so their controls always stay on.
+                    colorOverride = not iconTextOnly,
                     dualColor     = opts.dualColor,
-                    alpha         = true,
-                    thickness     = true, thicknessMin = 0, thicknessMax = opts.thicknessMax or 5,
-                    animation     = true,
+                    alpha         = not iconTextOnly,
+                    thickness     = not iconTextOnly, thicknessMin = 0, thicknessMax = opts.thicknessMax or 5,
+                    -- Animation rides the border, which a text-only icon doesn't
+                    -- draw, so hide it there too (no border = nowhere to attach).
+                    animation     = not iconTextOnly,
                     iconEffects   = opts.iconEffects,
                     tint          = true,  -- secret-safe; works on all auras
                 },
@@ -3195,7 +3207,14 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateSlider(parent, L["Frame Level"], -10, 30, 1, proxy, "frameLevel"), 54)
             g:AddWidget(GUI:CreateDropdown(parent, L["Frame Strata"], FRAME_STRATA_OPTIONS, proxy, "frameStrata"), 54)
             g:AddWidget(GUI:CreateCheckbox(parent, L["Hide Cooldown Swipe"], proxy, "hideSwipe"), 28)
-            g:AddWidget(GUI:CreateCheckbox(parent, L["Hide Icon (Text Only)"], proxy, "hideIcon"), 28)
+            -- Text-only mode: the icon TEXTURE is hidden, so a border (static OR
+            -- expiring) would frame nothing. Rebuild the page on toggle so the
+            -- Border group + the expiring-border thickness control hide/show
+            -- (gated on proxy.hideIcon below) — matching the runtime, which
+            -- force-disables both borders in this mode.
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Hide Icon (Text Only)"], proxy, "hideIcon", function()
+                DF:AuraDesigner_RefreshPage()
+            end), 28)
         end)
         -- Show When Missing
         AddGroup(L["Show When Missing"], function(g)
@@ -3221,6 +3240,9 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
         -- indicators (the indicator's job is to show aura state, not unit
         -- identity), and AD's Expiring section already covers "colour by
         -- time remaining" implicitly through its own colour curve.
+        -- Text-only mode hides the icon texture, so the whole Border group is
+        -- hidden (the runtime force-disables the border there too).
+        if not proxy.hideIcon then
         AddGroup(L["Border"], function(g)
             GUI:CreateBorderControls(g, proxy, "", {
                 parent  = parent,
@@ -3265,6 +3287,7 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                 sizeMin = 1, sizeMax = 5, sizeStep = 1,
             })
         end)
+        end  -- if not proxy.hideIcon (text-only hides the Border group)
         -- Expiring (moved up next to Border — the border's expiring colour and
         -- the per-icon effects all key off the same threshold, so grouping
         -- them adjacent reads more naturally than burying Expiring at the

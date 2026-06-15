@@ -2334,6 +2334,12 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     -- (spec.size = thickness + inset, spec.inset = -inset).
     -- Also store the base BorderColor so applyState can fall back to it when
     -- thickness/alpha overrides are configured without a colour override.
+    -- Base border ENABLED state for the expiring callback (ADApplyExpiringBorderState
+    -- reads dfAD_baseBorderEnabled ~= false). Without this it was nil → treated as
+    -- enabled, so an expiring border drew even with Show Border off OR in hide-icon
+    -- (text-only) mode. Mirror the square path: gate on both ShowBorder and hideIcon
+    -- so text-only icons never draw a static OR expiring border.
+    icon.dfAD_baseBorderEnabled    = borderEnabled and not hideIcon
     icon.dfAD_baseBorderSize       = borderThickness
     icon.dfAD_baseBorderInset      = borderInset
     icon.dfAD_baseBorderColor      = spec.color
