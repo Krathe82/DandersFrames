@@ -5621,9 +5621,10 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 if icon.highlight then icon.highlight:Hide() end
                 icon.highlightBorder = icon.highlightBorder or DF.Border:New(icon.highlightFrame)
                 if highlightImportant and spell.isImportant then
+                    -- Inset owned by the engine (BuildSpec spec.inset); frame
+                    -- offset is inset-independent so the band stays centred.
                     local hlSize  = db.targetedSpellImportantBorderSize or 3
-                    local hlInset = db.targetedSpellImportantBorderInset or 2
-                    local offset  = borderSize + hlSize - hlInset
+                    local offset  = borderSize + hlSize
                     icon.highlightFrame:ClearAllPoints()
                     icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
                     icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)

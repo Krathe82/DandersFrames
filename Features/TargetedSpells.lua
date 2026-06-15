@@ -659,9 +659,12 @@ local function ApplyIconSettings(icon, db, spellID)
         -- shown on important spells, gated by the Highlight-Important toggle + the
         -- secret-safe isImportant alpha. Positioned just outside the base border;
         -- sized/inset from the targetedSpellImportantBorder* keys.
+        -- Frame offset is inset-INDEPENDENT: it just clears the base border + the
+        -- highlight band. The Border Inset is owned by the engine (BuildSpec sets
+        -- spec.inset), which nudges the band symmetrically on all four edges, so it
+        -- stays centred as the slider moves. (The old `- hlInset` double-applied it.)
         local hlSize  = db.targetedSpellImportantBorderSize or 3
-        local hlInset = db.targetedSpellImportantBorderInset or 2
-        local offset  = borderSize + hlSize - hlInset
+        local offset  = borderSize + hlSize
         icon.highlightFrame:ClearAllPoints()
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
