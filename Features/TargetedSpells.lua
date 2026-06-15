@@ -649,7 +649,11 @@ local function CreateSingleIcon(parent, index)
     container.highlightFrame = highlightFrame
     
     iconFrame.highlightFrame = highlightFrame
-    
+    -- DF.Border overlay for the important-spell highlight (Stage 2). highlightFrame
+    -- stays the secret-safe alpha gate; this DF.Border child draws the highlight.
+    container.highlightBorder = DF.Border:New(highlightFrame)
+    iconFrame.highlightBorder = container.highlightBorder
+
     -- Icon texture - positioned with inset for border, with TexCoord cropping
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("TOPLEFT", defBorderSize, -defBorderSize)
@@ -1006,58 +1010,32 @@ local function ApplyIconSettings(icon, db, spellID)
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
         
-        -- Hide all highlight styles first
-        HideAnimatedBorder(icon.highlightFrame)
-        HideSolidBorder(icon.highlightFrame)
-        HideGlowBorder(icon.highlightFrame)
-        if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-        TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-        
-        if highlightImportant and spellID and highlightStyle ~= "none" then
+        -- Highlight border via the unified DF.Border backend. The style maps onto
+        -- a DF.Border animation (glow→PROC, marchingAnts→DF_DASH, pulse→DF_PULSATE,
+        -- solidBorder→static). The highlightFrame stays as the secret-safe alpha
+        -- gate (SetAlphaFromBoolean), positioned just outside the base border.
+        if highlightImportant and spellID and highlightStyle ~= "none" and icon.highlightBorder then
             local isImportant = C_Spell.IsSpellImportant(spellID)
-            
-            if highlightStyle == "glow" then
-                -- Glow effect using edge borders with ADD blend mode
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "marchingAnts" then
-                -- Animated marching ants border
-                InitAnimatedBorder(icon.highlightFrame)
-                icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                icon.highlightFrame.animR = highlightColor.r
-                icon.highlightFrame.animG = highlightColor.g
-                icon.highlightFrame.animB = highlightColor.b
-                icon.highlightFrame.animA = 1
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                TargetedSpellAnimator_UpdateState()
-                
-            elseif highlightStyle == "solidBorder" then
-                -- Solid colored border (4 edge textures, no fill)
-                InitSolidBorder(icon.highlightFrame)
-                UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
+            local hSize = math.max(1, highlightSize)
+            local spec = {
+                enabled = true,
+                size    = hSize,
+                inset   = 0,
+                style   = "SOLID",
+                color   = { r = highlightColor.r, g = highlightColor.g, b = highlightColor.b, a = 1 },
+            }
+            if highlightStyle == "marchingAnts" then
+                spec.animation = { type = "DF_DASH", thickness = hSize, color = spec.color }
             elseif highlightStyle == "pulse" then
-                -- Pulsing glow using edge borders with ADD blend
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                InitPulseAnimation(icon.highlightFrame)
-                -- Store color for pulse animation to use
-                icon.highlightFrame.pulseR = highlightColor.r
-                icon.highlightFrame.pulseG = highlightColor.g
-                icon.highlightFrame.pulseB = highlightColor.b
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                icon.highlightFrame.pulseAnim:Play()
+                spec.animation = { type = "DF_PULSATE", color = spec.color }
+            elseif highlightStyle == "glow" then
+                spec.animation = { type = "PROC", color = spec.color }
             end
+            DF.Border:Apply(icon.highlightBorder, spec)
+            icon.highlightFrame:Show()
+            icon.highlightFrame:SetAlphaFromBoolean(isImportant)
         else
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             icon.highlightFrame:Hide()
         end
     end
@@ -2366,7 +2344,9 @@ local function CreatePersonalIcon(index)
     highlightFrame:EnableMouse(false)
     highlightFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     icon.highlightFrame = highlightFrame
-    
+    -- DF.Border overlay for the important-spell highlight (Stage 2).
+    icon.highlightBorder = DF.Border:New(highlightFrame)
+
     -- Icon texture - positioned with default 2px inset so it lines up
     -- with the border at creation time. ApplyPersonalIconSettings
     -- recomputes the inset from the db's BorderSize on every render
@@ -2543,58 +2523,32 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
         
-        -- Hide all highlight styles first
-        HideAnimatedBorder(icon.highlightFrame)
-        HideSolidBorder(icon.highlightFrame)
-        HideGlowBorder(icon.highlightFrame)
-        if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-        TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-        
-        if highlightImportant and spellID and highlightStyle ~= "none" then
+        -- Highlight border via the unified DF.Border backend. The style maps onto
+        -- a DF.Border animation (glow→PROC, marchingAnts→DF_DASH, pulse→DF_PULSATE,
+        -- solidBorder→static). The highlightFrame stays as the secret-safe alpha
+        -- gate (SetAlphaFromBoolean), positioned just outside the base border.
+        if highlightImportant and spellID and highlightStyle ~= "none" and icon.highlightBorder then
             local isImportant = C_Spell.IsSpellImportant(spellID)
-            
-            if highlightStyle == "glow" then
-                -- Glow effect using edge borders with ADD blend mode
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "marchingAnts" then
-                -- Animated marching ants border
-                InitAnimatedBorder(icon.highlightFrame)
-                icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                icon.highlightFrame.animR = highlightColor.r
-                icon.highlightFrame.animG = highlightColor.g
-                icon.highlightFrame.animB = highlightColor.b
-                icon.highlightFrame.animA = 1
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                TargetedSpellAnimator_UpdateState()
-                
-            elseif highlightStyle == "solidBorder" then
-                -- Solid colored border (4 edge textures, no fill)
-                InitSolidBorder(icon.highlightFrame)
-                UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
+            local hSize = math.max(1, highlightSize)
+            local spec = {
+                enabled = true,
+                size    = hSize,
+                inset   = 0,
+                style   = "SOLID",
+                color   = { r = highlightColor.r, g = highlightColor.g, b = highlightColor.b, a = 1 },
+            }
+            if highlightStyle == "marchingAnts" then
+                spec.animation = { type = "DF_DASH", thickness = hSize, color = spec.color }
             elseif highlightStyle == "pulse" then
-                -- Pulsing glow using edge borders with ADD blend
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                InitPulseAnimation(icon.highlightFrame)
-                -- Store color for pulse animation to use
-                icon.highlightFrame.pulseR = highlightColor.r
-                icon.highlightFrame.pulseG = highlightColor.g
-                icon.highlightFrame.pulseB = highlightColor.b
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                icon.highlightFrame.pulseAnim:Play()
+                spec.animation = { type = "DF_PULSATE", color = spec.color }
+            elseif highlightStyle == "glow" then
+                spec.animation = { type = "PROC", color = spec.color }
             end
+            DF.Border:Apply(icon.highlightBorder, spec)
+            icon.highlightFrame:Show()
+            icon.highlightFrame:SetAlphaFromBoolean(isImportant)
         else
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             icon.highlightFrame:Hide()
         end
     end
