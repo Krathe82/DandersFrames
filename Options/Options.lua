@@ -6963,7 +6963,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             lightColors   = FullUpdate,
             refreshStates = function() self:RefreshStates() end,
             hideWhen      = HideHighlightOptions,
-            sizeMin = 1, sizeMax = 8, sizeStep = 1,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
         })
         AddToSection(highlightGroup, nil, 1)
         
