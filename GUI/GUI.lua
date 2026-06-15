@@ -3924,11 +3924,18 @@ function GUI:CreateBorderControls(group, dbTable, prefix, opts)
 
     local w = {}
 
-    w.show = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], dbTable, showKey, function()
-        if refreshStates then refreshStates() end
-        fullUpdate()
-    end), 30)
-    w.show.hideOn = hideShow
+    -- opts.noShowToggle: suppress the built-in "Show Border" checkbox for
+    -- consumers that gate the whole border on an external toggle (e.g. the
+    -- Targeted Spells "Highlight Important Spells" master). With the checkbox
+    -- gone, showKey stays nil so hideOff() reduces to hideShow() — the toolkit
+    -- shows/hides purely on the external hideWhen.
+    if not opts.noShowToggle then
+        w.show = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], dbTable, showKey, function()
+            if refreshStates then refreshStates() end
+            fullUpdate()
+        end), 30)
+        w.show.hideOn = hideShow
+    end
 
     -- Slider label reads "Border Thickness" (more meaningful than "Size") but
     -- the underlying db key stays `<prefix>BorderSize` and spec.size in the

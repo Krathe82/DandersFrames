@@ -5497,11 +5497,7 @@ function DF:UpdateTestTargetedSpell(frame, testData)
         local spacing = db.targetedSpellSpacing or 2
         local frameLevel = db.targetedSpellFrameLevel or 0
         local highlightImportant = db.targetedSpellHighlightImportant ~= false
-        local highlightStyle = db.targetedSpellHighlightStyle or "glow"
-        local highlightColor = db.targetedSpellHighlightColor or {r = 1, g = 0.8, b = 0}
-        local highlightSize = db.targetedSpellHighlightSize or 3
-        local highlightInset = db.targetedSpellHighlightInset or 0
-        
+
         if durationOutline == "NONE" then durationOutline = "" end
         
         -- Apply pixel perfect
@@ -5616,35 +5612,25 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 end
             end
             
-            -- Apply important spell highlight (show on important spells, including interrupted ones)
+            -- Apply important spell highlight (show on important spells, including
+            -- interrupted ones). Mirrors live ApplyIconSettings: the highlight is
+            -- its own DF.Border (full toolkit via BuildSpec on the
+            -- targetedSpellImportant* keys), gated by the Highlight Important
+            -- Spells master toggle. Overlay lazily allocated.
             if icon.highlightFrame then
-                -- Calculate position with inset
-                local offset = borderSize + highlightSize - highlightInset
-                
-                -- Highlight border via the unified DF.Border backend, mirroring the
-                -- live ApplyIconSettings mapping (glow→PROC, marchingAnts→DF_DASH,
-                -- pulse→DF_PULSATE, solidBorder→static). Overlay lazily allocated.
                 if icon.highlight then icon.highlight:Hide() end
                 icon.highlightBorder = icon.highlightBorder or DF.Border:New(icon.highlightFrame)
-                local shouldShowHighlight = highlightImportant and spell.isImportant and highlightStyle and highlightStyle ~= "none"
-                if shouldShowHighlight then
+                if highlightImportant and spell.isImportant then
+                    local hlSize  = db.targetedSpellImportantBorderSize or 3
+                    local hlInset = db.targetedSpellImportantBorderInset or 2
+                    local offset  = borderSize + hlSize - hlInset
                     icon.highlightFrame:ClearAllPoints()
                     icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
                     icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
                     icon.highlightFrame:SetAlpha(1)
                     icon.highlightFrame:Show()
-                    local hSize = math.max(1, highlightSize)
-                    local spec = {
-                        enabled = true, size = hSize, inset = 0, style = "SOLID",
-                        color = { r = highlightColor.r, g = highlightColor.g, b = highlightColor.b, a = 1 },
-                    }
-                    if highlightStyle == "marchingAnts" then
-                        spec.animation = { type = "DF_DASH", thickness = hSize, color = spec.color }
-                    elseif highlightStyle == "pulse" then
-                        spec.animation = { type = "DF_PULSATE", color = spec.color }
-                    elseif highlightStyle == "glow" then
-                        spec.animation = { type = "PROC", color = spec.color }
-                    end
+                    local spec = DF.Border:BuildSpec(db, "targetedSpellImportant", { iconMode = true })
+                    spec.enabled = true
                     DF.Border:Apply(icon.highlightBorder, spec)
                 else
                     DF.Border:Apply(icon.highlightBorder, { enabled = false })
@@ -5652,69 +5638,32 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 end
             end
             
-            -- Apply border settings - 4 edge textures (consistent with live code)
-            if showBorder then
-                if icon.borderLeft then
-                    icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderLeft:SetWidth(borderSize)
-                    icon.borderLeft:Show()
-                end
-                if icon.borderRight then
-                    icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderRight:SetWidth(borderSize)
-                    icon.borderRight:Show()
-                end
-                if icon.borderTop then
-                    icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderTop:SetHeight(borderSize)
-                    icon.borderTop:ClearAllPoints()
-                    icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-                    icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-                    icon.borderTop:Show()
-                end
-                if icon.borderBottom then
-                    icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderBottom:SetHeight(borderSize)
-                    icon.borderBottom:ClearAllPoints()
-                    icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                    icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-                    icon.borderBottom:Show()
-                end
-                
-                -- Adjust icon texture position for border
+            -- Border via the unified DF.Border backend (iconMode), mirroring live
+            -- ApplyIconSettings. The live create path replaced the old 4 edge
+            -- textures with a DF.Border, so test mode must render the same way.
+            icon.border = icon.border or DF.Border:New(icon.iconFrame)
+            local bspec = DF.Border:BuildSpec(db, "targetedSpell", { iconMode = true })
+            bspec.enabled = showBorder
+            bspec.size = borderSize
+            DF.Border:Apply(icon.border, bspec)
+            do
+                local ai = showBorder and borderSize or 0
                 if icon.icon then
                     icon.icon:ClearAllPoints()
-                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
+                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
                 end
-                
-                -- Adjust cooldown to match
                 if icon.cooldown then
                     icon.cooldown:ClearAllPoints()
-                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-                end
-            else
-                -- Hide all border edges
-                if icon.borderLeft then icon.borderLeft:Hide() end
-                if icon.borderRight then icon.borderRight:Hide() end
-                if icon.borderTop then icon.borderTop:Hide() end
-                if icon.borderBottom then icon.borderBottom:Hide() end
-                
-                -- Full size icon when no border
-                if icon.icon then
-                    icon.icon:ClearAllPoints()
-                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-                end
-                
-                -- Adjust cooldown to match
-                if icon.cooldown then
-                    icon.cooldown:ClearAllPoints()
-                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
+                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
                 end
             end
+            -- Hide any legacy edge textures left on a pooled icon.
+            if icon.borderLeft then icon.borderLeft:Hide() end
+            if icon.borderRight then icon.borderRight:Hide() end
+            if icon.borderTop then icon.borderTop:Hide() end
+            if icon.borderBottom then icon.borderBottom:Hide() end
             
             icon:SetAlpha(alpha)
             icon:Show()

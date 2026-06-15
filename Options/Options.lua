@@ -6955,6 +6955,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- gated by the Highlight Important Spells toggle above.
         GUI:CreateBorderControls(highlightGroup, db, "targetedSpellImportant", {
             parent        = self.child,
+            noShowToggle  = true,  -- the Highlight Important Spells checkbox is the gate
             include       = { alpha = true, inset = true, blendMode = true,
                               gradient = true, shadow = true, animate = true },
             fullUpdate    = FullUpdate,
