@@ -362,7 +362,18 @@ end
 DF.MigrateAuraDesignerIconBorderKeys = MigrateAuraDesignerIconBorderKeys
 
 local function GetAuraDesignerDB()
-    local adDB = db.auraDesigner
+    -- The editor is mode-tabbed: it edits the preset the active mode uses
+    -- (party → its assigned preset, etc.). Because edited == used, live
+    -- frames stay in sync with the editor automatically.
+    -- Base variant: the editor edits your base raid preset, not the active runtime
+    -- auto-layout's overlay (it edits the layout only while IN edit-auto-layout).
+    local adDB
+    if DF.GetModeBaseAuraDesigner then
+        local mode = (GUI and GUI.SelectedMode) or "party"
+        adDB = DF:GetModeBaseAuraDesigner(mode)
+    end
+    -- Pre-migration / very-early fallback to the legacy inline config.
+    adDB = adDB or (db and db.auraDesigner)
     if adDB and (not adDB._specScopedV1 or not adDB._specScopedV2) then
         MigrateToSpecScoped(adDB)
     end
@@ -1698,51 +1709,9 @@ local contentRightInset     -- Right inset for left-side panels
 local origY_framePreview    -- original yPos of framePreview
 local currentBannerShift = 0 -- tracks current coexist banner offset
 
--- ============================================================
--- AUTO LAYOUT RESET POPUP
--- Confirmation dialog before wiping all Aura Designer overrides
--- ============================================================
-
-StaticPopupDialogs["DF_AURA_DESIGNER_RESET_GLOBAL"] = {
-    text = L["Reset all Aura Designer settings in this auto layout to match your global profile?\n\nThis cannot be undone."],
-    button1 = L["Reset"],
-    button2 = L["Cancel"],
-    OnAccept = function()
-        local AutoProfilesUI = DF.AutoProfilesUI
-        if not AutoProfilesUI or not AutoProfilesUI:IsEditing() then return end
-
-        local editingProfile = AutoProfilesUI.editingProfile
-        if not editingProfile or not editingProfile.overrides then return end
-
-        -- Remove the auraDesigner override (stored as a single top-level key)
-        local hadOverride = editingProfile.overrides["auraDesigner"] ~= nil
-        editingProfile.overrides["auraDesigner"] = nil
-
-        -- Restore from global snapshot
-        if AutoProfilesUI.globalSnapshot then
-            local realRaidDB = DF._realRaidDB
-            if realRaidDB then
-                local globalVal = AutoProfilesUI.globalSnapshot["auraDesigner"]
-                if globalVal then
-                    realRaidDB["auraDesigner"] = DF:DeepCopy(globalVal)
-                else
-                    realRaidDB["auraDesigner"] = nil
-                end
-            end
-        end
-
-        DF:Debug("AUTOPROFILE", "Reset Aura Designer overrides: had=%s", tostring(hadOverride))
-
-        -- Refresh Aura Designer page
-        DF:AuraDesigner_RefreshPage()
-        DF:InvalidateAuraLayout()
-        DF:UpdateAllFrames()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+-- (The DF_AURA_DESIGNER_RESET_GLOBAL popup was retired with the editing-banner
+-- "Reset to Global" button — the preset dropdown's "Inherit (Global)" entry now
+-- clears a layout's Aura Designer preset override.)
 
 -- ============================================================
 -- UI STATE (v4 redesign — tabbed right panel)
@@ -4056,16 +4025,29 @@ local function BuildGlobalView(parent)
         copyBtn:SetScript("OnClick", function()
             local srcMode = (GUI and GUI.SelectedMode) or "party"
             local dstMode = (srcMode == "party") and "raid" or "party"
-            local source = DF:GetDB(srcMode).auraDesigner
-            local dest = DF:GetDB(dstMode).auraDesigner
-            local function DeepCopy(src)
-                if type(src) ~= "table" then return src end
-                local copy = {}
-                for k, v in pairs(src) do copy[k] = DeepCopy(v) end
-                return copy
+            -- Copy at the preset level: the source mode's preset content is
+            -- copied INTO the dest mode's preset, in place, so the dest preset
+            -- object identity (and every consumer bound to it) is preserved.
+            -- BASE resolvers: this page edits the user's BASE presets — with a
+            -- runtime auto-layout active, the ACTIVE resolver would copy
+            -- from/into the layout's preset instead.
+            local source = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(srcMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(srcMode))
+                or (DF:GetDB(srcMode) and DF:GetDB(srcMode).auraDesigner)
+            local dest = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(dstMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(dstMode))
+                or (DF:GetDB(dstMode) and DF:GetDB(dstMode).auraDesigner)
+            if source and dest and source ~= dest then
+                local function DeepCopy(src)
+                    if type(src) ~= "table" then return src end
+                    local copy = {}
+                    for k, v in pairs(src) do copy[k] = DeepCopy(v) end
+                    return copy
+                end
+                -- Clear stale dest keys the source no longer has, then overwrite.
+                for k in pairs(dest) do dest[k] = nil end
+                for k, v in pairs(source) do dest[k] = DeepCopy(v) end
             end
-            local newCopy = DeepCopy(source)
-            for k, v in pairs(newCopy) do dest[k] = v end
             DF:Debug("Aura Designer: Copied " .. srcMode .. " settings to " .. dstMode)
         end)
         g:AddWidget(copyBtn, 32)
@@ -6695,9 +6677,19 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     -- frame dimensions, so neither check below distinguishes them — without this,
     -- switching between same-size raid layouts reuses the stale page.
     local _adLayout = (DF.AutoProfilesUI and (DF.AutoProfilesUI.editingProfile or DF.AutoProfilesUI.activeRuntimeProfile)) or nil
+    -- Preset identity: switching the mode's preset keeps the same db/size/layout,
+    -- so without this the stale page (bound to the old preset) would be reused.
+    local _adPreset = DF.GetModeDesignerPresetName
+        and DF:GetModeDesignerPresetName("aura", (GUI and GUI.SelectedMode) or "party")
+    -- Editing identity: entering edit of the ACTIVE layout keeps the same table
+    -- object (editingProfile == activeRuntimeProfile), so _adLayout alone
+    -- misses the transition and the editing-banner offset is never applied.
+    local _adEditing = (DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()) or false
     if mainFrame and prevDB == dbRef
        and mainFrame.dfBuiltFrameW == _adW and mainFrame.dfBuiltFrameH == _adH
-       and mainFrame.dfBuiltLayout == _adLayout then
+       and mainFrame.dfBuiltLayout == _adLayout
+       and mainFrame.dfBuiltPreset == _adPreset
+       and mainFrame.dfBuiltEditing == _adEditing then
         mainFrame:SetParent(parent)
         mainFrame:SetAllPoints()
         mainFrame:Show()
@@ -6733,6 +6725,8 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     mainFrame.dfBuiltFrameW = _adW
     mainFrame.dfBuiltFrameH = _adH
     mainFrame.dfBuiltLayout = _adLayout
+    mainFrame.dfBuiltPreset = _adPreset
+    mainFrame.dfBuiltEditing = _adEditing
 
     -- Override RefreshStates: Aura Designer uses its own layout system.
     --
@@ -6776,6 +6770,13 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     end
 
     local yPos = 0
+    -- While editing a raid auto-layout, the AutoProfiles editing banner is a ~50px
+    -- overlay anchored to the top of the content frame; this custom AD page lays
+    -- its own content out from the top too, so push everything down to clear it
+    -- (otherwise the editing banner sits on top of the enable banner / preset bar).
+    if DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing() then
+        yPos = -56
+    end
 
     -- ========================================
     -- ENABLE BANNER (full width)
@@ -6798,6 +6799,35 @@ function DF.BuildAuraDesignerPage(guiRef, pageRef, dbRef)
     end
 
     yPos = yPos - (BANNER_H + 4)
+
+    -- ========================================
+    -- PRESET BAR (which named preset this mode uses + library management)
+    -- ========================================
+    if GUI.CreateDesignerPresetBar then
+        local presetBar = GUI:CreateDesignerPresetBar(mainFrame, {
+            kind = "aura",
+            getMode = function() return (GUI and GUI.SelectedMode) or "party" end,
+            onChange = function()
+                -- Re-invoke the build NEXT frame: the dfBuiltPreset guard then
+                -- forces a full rebuild so the editor rebinds to the newly chosen
+                -- preset. Deferred so we don't tear down the bar from inside its
+                -- own click handler.
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(0, function()
+                        if DF.BuildAuraDesignerPage then DF.BuildAuraDesignerPage(GUI, page, db) end
+                        DF:InvalidateAuraLayout()
+                        DF:UpdateAllFrames()
+                        local E = DF.AuraDesigner and DF.AuraDesigner.Engine
+                        if E and E.ForceRefreshAllFrames then E:ForceRefreshAllFrames() end
+                    end)
+                end
+            end,
+        })
+        presetBar:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 10, yPos)
+        presetBar:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -10, yPos)
+        enableBanner.presetBar = presetBar
+        yPos = yPos - (24 + SECTION_GAP)
+    end
 
     -- ========================================
     -- COEXISTENCE INFO BANNER
@@ -7192,8 +7222,8 @@ function DF:ApplyAuraDesignerTabState()
     if not DF.db then return end
 
     local mode = (guiRef.SelectedMode) or "party"
-    local modeDB = DF:GetDB(mode)
-    local adEnabled = modeDB and modeDB.auraDesigner and modeDB.auraDesigner.enabled
+    local adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(mode)
+    local adEnabled = adCfg and adCfg.enabled
 
     -- My Buff Indicators tab removed — feature deprecated
 end

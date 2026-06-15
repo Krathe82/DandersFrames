@@ -498,7 +498,7 @@ function DF:UpdateMyBuffIndicator(frame)
             return
         end
         -- Aura Designer replaces My Buff Indicators — hide when AD is active
-        if db.auraDesigner and db.auraDesigner.enabled then
+        if DF:IsAuraDesignerEnabled(frame) then
             if frame.dfMyBuffOverlay then
                 HideOverlay(frame.dfMyBuffOverlay)
             end

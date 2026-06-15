@@ -188,8 +188,14 @@ function DF:MigrateTextDesignerFromLegacy(force)
         if not db then
             DF:Debug("TD", "Migrate: no db for mode=%s", mode)
         else
-            -- Mirror Options' init so every TD field the editor expects exists.
-            local tdDB = DF.TextDesigner:EnsureDB(db)
+            -- Build into the mode's TD PRESET (the canonical store after the
+            -- Designer Presets migration). The migratedFromLegacy guard then
+            -- lives on the preset, so re-runs across profile switches are
+            -- no-ops instead of rebuilding a discarded inline table. `db` is
+            -- still the source of the legacy name/health/status settings.
+            local tdDB = (DF.GetModeTextDesigner and DF:GetModeTextDesigner(mode))
+                or DF.TextDesigner:EnsureDB(db)
+            DF.TextDesigner:EnsureDB({ textDesigner = tdDB })  -- ensure full schema
 
             local already = tdDB.migratedFromLegacy == true
                 or (tdDB.elements and #tdDB.elements > 0)

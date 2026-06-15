@@ -5,6 +5,7 @@
 ### New Features
 
 * (Targeted Spells) On-frame targeted spell icons are back for **party frames** — an icon appears on the party member an enemy is casting at, so you can spot incoming danger at a glance. Works in dungeons, arenas, and the open world; enable it under **Indicators → Targeted Spells**. Party members who share the same class, role, race, and sex can't be told apart and won't show an icon — you'll be warned by name when that happens. Technique credit to Ellesmere (EllesmereUI). Raid frames aren't supported.
+* (Pinned Frames) You can now have **more than two pinned sets** — up to four, and **Party and Raid are independent** (e.g. four sets in raid, one in party). The set editor gains a **+ Add** button to create a new set and an **×** on the active tab to remove one (the last set can't be removed). A counter shows how many sets are defined and how many are currently active, since each enabled set is a live frame group. Use **Copy Pinned Frames** if you want both modes to match.
 
 ### Bug Fixes
 
@@ -22,6 +23,8 @@
 ### New Features
 
 * **Text Designer** is now available in all versions (previously alpha-only) — add any number of custom text elements to your unit frames, each with its own font, size, colour (or class colour), anchor and position. Elements can show live data: identity (name, class, level, race, faction, group number, custom text), health, power, shields & heals, dead/offline status, threat and range. Find it under the **Text** tab.
+* (Aura / Text Designer) New **Designer Presets** — save named presets of your Aura Designer and Text Designer setups and choose which one each mode uses. Each **Party / Raid** tab gains a **Preset** selector plus **New / Duplicate / Rename / Delete** (a non-deletable **Default** is always available), so you can build different setups — a focused tank layout vs a minimal one, say — and switch between them without rebuilding. Raid auto-layouts can point at their own preset, and editing a preset updates every consumer using it. (by Krathe)
+* **Text Designer** is now available in all versions (previously alpha-only) — add any number of custom text elements to your unit frames, each with its own font, size, colour (or class colour), anchor and position. Elements can show live data including: **Identity** — Name, Class, Level, Race, Faction, Group Number, Custom Static Text; **Health** — Current HP, Max HP, HP Percent, HP Deficit, Max HP Reduction %; **Power** — Current Power, Power %, Power Deficit, Power Type; **Shields & Heals** — Absorb Amount, Heal Absorb Amount, Incoming Heal; **Status** — Dead / Offline / Ghost; **Threat & Range** — Aggro Flag, Threat on Current Target, In-Range / Out-of-Range text. Find it under the **Text** tab.
 * (Frames) **Unified border system** — every border (frame, buff/debuff icons, aura bars, defensive icons, missing-buff, resource bar, pet frames, targeted spells) now runs through one engine with consistent **Style / Colour / Alpha / Gradient** controls. (by Krathe)
 * (Borders) Added optional **border animations** — 10 effects (pulse, wipe, ripple, segment reveal, sides/corners-only, proc glow, dash, and more), available wherever a border is drawn. (by Krathe)
 * (Icons) Status icons now use crisp **modern Blizzard atlas art** (ready check, summon, resurrect, phased, vehicle, main tank/assist, AFK), with automatic fallback to the legacy texture. (by Krathe)
@@ -37,6 +40,11 @@
 * (Resource Bar) Added a **Color Mode** (Power Type / Class / **Custom**) with a custom-colour picker, and a **Texture** dropdown so the resource bar can use any statusbar texture. (by Krathe)
 * (Aura Designer) New **Background Color** effect — colour a frame's background when an aura is active (Replace or Tint), with the same Expiring colour override, Pulsate and out-of-range handling as the other effects. (by Krathe)
 * (Missing Buff) The missing-buff border can now use **Class or Role colour** instead of a single fixed colour. (by Krathe)
+* (Pinned Frames) New per-set **Hide Auras** and **Hide Status Icons** toggles — strip the buff/debuff (and Aura Designer) display or the status icons from a pinned set for a clean, health-only highlight. (by Krathe)
+* (Pinned Frames) New **Exclude Self** option per pinned set — keeps you out of that set's Auto-add (Tanks/Healers/DPS), handy for Augmentation Evoker and other buff-others playstyles. Works in groups and solo. (by Krathe)
+* (Pinned Frames) New **Disable in PvP** toggle (on by default) — pinned frames stay dormant in arena and battlegrounds, where the constant unit churn could otherwise hurt performance. Turn it off to highlight teammates there. (by Krathe)
+* (Pinned Frames) Each pinned set can now choose its own **Aura Designer** and **Text Designer preset** — pick one in Frame Style, or leave it on **Inherit** to follow the mode's preset. Lets a highlighted set show a different aura/text layout from your normal frames. (by Krathe)
+* (Pinned Frames) Pinned frames are now **independently customisable** per party/raid mode: a **Frame Style** section with a **Based on** selector (Party / Raid, defaulting to their own mode) sets the inherited look, and the settings that also exist on your main frames — **Width**, **Height** and **Scale** — inherit the chosen frames' value and can be overridden per set, each showing a star and a reset button, just like an auto-layout override. An **Override Border** toggle lets a set take its own border/glow (snapshotted from the chosen frames, then fully editable, with a one-click reset to re-inherit) to make highlighted players stand out. A party-only **Show in Solo Mode** toggle keeps them visible when you're not grouped. (by Krathe)
 
 ### Improvements
 
@@ -71,6 +79,11 @@
 * (Missing Buff) No longer flags a **cross-faction group member in the open world** for a buff you can't cast on them. (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras**. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`. (by Krathe)
+* (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+* (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
+* (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
+* (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
+* (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
 * (Aura Designer) Indicators are torn down when the Aura Designer is disabled, and re-applied on **profile swap**. (by Krathe)
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) Replace-mode health-bar highlight fixes — no more **flicker** on phased or out-of-range units, no **bleeding over the frame border**, and the expiring **Pulsate** option now works. (by Krathe)

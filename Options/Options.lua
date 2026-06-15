@@ -1926,16 +1926,23 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if db.groupLabelFont ~= nil then
                 db.groupLabelFont = font; db.groupLabelOutline = outline
             end
-            -- Aura Designer global defaults + clear per-instance overrides
-            if db.auraDesigner then
-                if db.auraDesigner.defaults then
-                    local adDefaults = db.auraDesigner.defaults
+            -- Aura Designer global defaults + clear per-instance overrides.
+            -- AD config now lives in the preset this mode uses, not inline.
+            -- BASE resolver: "apply font globally" edits the user's base
+            -- preset — with a runtime auto-layout active, the ACTIVE resolver
+            -- would mutate the layout's preset instead (editor model is BASE).
+            local _adMode = (db == DF.db.raid) and "raid" or "party"
+            local _adCfg = (DF.GetModeBaseAuraDesigner and DF:GetModeBaseAuraDesigner(_adMode))
+                or (DF.GetModeAuraDesigner and DF:GetModeAuraDesigner(_adMode))
+            if _adCfg then
+                if _adCfg.defaults then
+                    local adDefaults = _adCfg.defaults
                     adDefaults.durationFont = font; adDefaults.durationOutline = outline
                     adDefaults.stackFont = font; adDefaults.stackOutline = outline
                 end
                 -- Clear per-instance font overrides so all indicators inherit global
-                if db.auraDesigner.auras then
-                    for _, auraCfg in pairs(db.auraDesigner.auras) do
+                if _adCfg.auras then
+                    for _, auraCfg in pairs(_adCfg.auras) do
                         if auraCfg.indicators then
                             for _, inst in ipairs(auraCfg.indicators) do
                                 inst.durationFont = nil; inst.durationOutline = nil
@@ -2086,12 +2093,14 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
     local pagePinnedFrames = CreateSubTab("general", "general_pinnedframes", L["Pinned Frames"])
     BuildPage(pagePinnedFrames, function(self, db, Add, AddSpace, AddSyncPoint)
         Add(CreateCopyButton(self.child, {"pinnedFrames"}, L["Pinned Frames"], "general_pinnedframes"), 25, 2)
-        -- Constants
-        local HIGHLIGHT_MAX_SETS = 2
+        -- Constants — mirror the runtime cap so the editor builds exactly as many
+        -- tab buttons as the backend allows (sets beyond the current count are hidden).
+        local HIGHLIGHT_MAX_SETS = (DF.PinnedFrames and DF.PinnedFrames.MAX_SETS) or 5
         
         -- Initialize pinnedFrames in db if needed
         if not db.pinnedFrames then
             db.pinnedFrames = {
+                disableInPvP = true,  -- mode-level: dormant in arena/battlegrounds
                 sets = {
                     [1] = {
                         enabled = false, name = "Pinned 1", players = {},
@@ -2100,7 +2109,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         position = { point = "CENTER", x = 0, y = 200 },
                         locked = false, showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
-                        keepOfflinePlayers = true,
+                        keepOfflinePlayers = false,
                     },
                     [2] = {
                         enabled = false, name = "Pinned 2", players = {},
@@ -2109,20 +2118,27 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         position = { point = "CENTER", x = 0, y = -200 },
                         locked = false, showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
-                        keepOfflinePlayers = true,
+                        keepOfflinePlayers = false,
                     },
                 },
             }
         end
         
+        -- Migration: mode-level disableInPvP (existing profiles predate it). nil is
+        -- treated as true by the runtime gate, but seed it so the toggle reads right.
+        if db.pinnedFrames.disableInPvP == nil then db.pinnedFrames.disableInPvP = true end
+
         -- Migration: add new options to existing sets
-        for i = 1, 2 do
+        for i = 1, #db.pinnedFrames.sets do
             local set = db.pinnedFrames.sets[i]
             if set then
                 if set.autoAddTanks == nil then set.autoAddTanks = false end
                 if set.autoAddHealers == nil then set.autoAddHealers = false end
                 if set.autoAddDPS == nil then set.autoAddDPS = false end
-                if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = true end
+                -- Match Config's default (false). Post-fix, manual pins always
+                -- persist (CleanOfflinePlayers spares manualPlayers); this toggle
+                -- only keeps AUTO-added members after they go offline / leave.
+                if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = false end
                 if set.columnAnchor == nil then set.columnAnchor = "START" end
                 if set.frameAnchor == nil then set.frameAnchor = "START" end
                 if set.locked == nil then set.locked = false end
@@ -2138,10 +2154,65 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- between sets with different frameTypes — which calls RefreshCurrentPage —
         -- doesn't snap back to tab 1)
         pagePinnedFrames.persistedTab = pagePinnedFrames.persistedTab or 1
+        -- Clamp into the live set count — a set may have been removed since this
+        -- was last persisted (or in the other mode), so never address a nil set.
+        local setCount = #db.pinnedFrames.sets
+        if pagePinnedFrames.persistedTab > setCount then pagePinnedFrames.persistedTab = setCount end
+        if pagePinnedFrames.persistedTab < 1 then pagePinnedFrames.persistedTab = 1 end
         local activeHighlightTab = pagePinnedFrames.persistedTab
+        -- Sub-tab within a set's editor:
+        --   "setup"      = Settings + Frame Type   (always present)
+        --   "appearance" = Frame Style + Layout    (always present)
+        --   "members"    = Unit Selection + Auto-Populate (player sets only)
+        -- Persisted across page rebuilds; defaults to Setup. Clamped below so a
+        -- persisted "members" never sticks on a boss set (which has no Members tab).
+        pagePinnedFrames.persistedSubTab = pagePinnedFrames.persistedSubTab or "setup"
+        local activeSubTab = pagePinnedFrames.persistedSubTab
         local tabButtons = {}
         local controlsToRefresh = {}
-        
+        -- Forward refs assigned in the tab-strip build below; RefreshTabs reads them.
+        local tabContainer, addSetBtn, setMeta
+
+        -- Invalidate + rebuild the pinned page (after add/remove the whole editor
+        -- must re-render with the new tab count + the active set's widgets).
+        local function RebuildPinnedPage()
+            if GUI.InvalidatePage then GUI:InvalidatePage(GUI.CurrentPageName) end
+            if GUI.RefreshCurrentPage then GUI.RefreshCurrentPage() end
+        end
+
+        local function DoAddSet()
+            if not DF.PinnedFrames then return end
+            -- Target the mode currently being edited (party/raid are independent).
+            local newIndex = DF.PinnedFrames:AddSet(GUI.SelectedMode)
+            if newIndex then
+                pagePinnedFrames.persistedTab = newIndex  -- jump to the new set
+                RebuildPinnedPage()
+            end
+        end
+
+        if not StaticPopupDialogs["DANDERS_PINNED_REMOVE_SET"] then
+            StaticPopupDialogs["DANDERS_PINNED_REMOVE_SET"] = {
+                text = L["Remove this pinned set? Its members and settings will be lost."],
+                button1 = YES, button2 = NO,
+                timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
+                OnAccept = function(_, data)
+                    if data and DF.PinnedFrames and DF.PinnedFrames:RemoveSet(data.idx, data.mode) then
+                        if pagePinnedFrames.persistedTab > 1 then
+                            pagePinnedFrames.persistedTab = pagePinnedFrames.persistedTab - 1
+                        end
+                        if data.rebuild then data.rebuild() end
+                    end
+                end,
+            }
+        end
+
+        local function DoRemoveSet(idx)
+            if not DF.PinnedFrames then return end
+            -- Capture the edited mode at click time (robust if the GUI mode changes
+            -- while the confirm popup is open). Party/raid set lists are independent.
+            StaticPopup_Show("DANDERS_PINNED_REMOVE_SET", nil, nil, { idx = idx, mode = GUI.SelectedMode, rebuild = RebuildPinnedPage })
+        end
+
         local function GetCurrentSet()
             return db.pinnedFrames.sets[activeHighlightTab]
         end
@@ -2159,35 +2230,127 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         local function RefreshTabs()
             local themeColor = GUI.GetThemeColor()
+            local count = #db.pinnedFrames.sets
             for i, tab in ipairs(tabButtons) do
                 local set = db.pinnedFrames.sets[i]
-                local isActive = (i == activeHighlightTab)
-                if isActive then
-                    tab:SetBackdropColor(0.18, 0.18, 0.18, 1)
-                    tab:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
-                    tab.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+                if not set then
+                    -- Tab button beyond the current set count — hide it.
+                    tab:Hide()
                 else
-                    tab:SetBackdropColor(0.1, 0.1, 0.1, 1)
-                    tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-                    tab.text:SetTextColor(0.5, 0.5, 0.5)
+                    tab:Show()
+                    tab:SetPoint("LEFT", tabContainer, "LEFT", (i - 1) * 124, 0)
+                    local isActive = (i == activeHighlightTab)
+                    if isActive then
+                        tab:SetBackdropColor(0.18, 0.18, 0.18, 1)
+                        tab:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
+                        tab.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+                    else
+                        tab:SetBackdropColor(0.1, 0.1, 0.1, 1)
+                        tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+                        tab.text:SetTextColor(0.5, 0.5, 0.5)
+                    end
+                    -- On/off pip, independent of the selected-tab highlight above.
+                    if tab.statusDot then
+                        if set.enabled then
+                            tab.statusDot:SetVertexColor(0.30, 0.82, 0.38)  -- green = enabled
+                        else
+                            tab.statusDot:SetVertexColor(0.32, 0.32, 0.32)  -- grey = disabled
+                        end
+                    end
+                    -- Remove (×) only on the active tab, and only when more than one
+                    -- set exists (the last set can't be removed). Keeps the strip clean.
+                    if tab.removeBtn then
+                        if isActive and count > 1 then tab.removeBtn:Show() else tab.removeBtn:Hide() end
+                    end
+                    local displayName = set.name
+                    if displayName == L["Pinned"] .. " " .. i or displayName == "" then displayName = L["Pinned"] .. " " .. i end
+                    -- Show the pinned member count on the tab (player sets only — boss
+                    -- sets auto-track boss1-8 and have no member list).
+                    if set.frameType ~= "friendlyBoss" then
+                        displayName = displayName .. "  (" .. #(set.players or {}) .. ")"
+                    end
+                    tab.text:SetText(displayName)
                 end
-                local displayName = set.name
-                if displayName == L["Highlight"] .. " " .. i or displayName == "" then displayName = L["Highlight"] .. " " .. i end
-                tab.text:SetText(displayName)
+            end
+            -- "+ Add set" sits just after the last set; hidden at the cap.
+            if addSetBtn then
+                if count < HIGHLIGHT_MAX_SETS then
+                    addSetBtn:ClearAllPoints()
+                    addSetBtn:SetPoint("LEFT", tabContainer, "LEFT", count * 124, 0)
+                    addSetBtn:Show()
+                else
+                    addSetBtn:Hide()
+                end
+            end
+            -- Count + active-set meter (each enabled set is a live secure header).
+            if setMeta then
+                local active = 0
+                for _, s in ipairs(db.pinnedFrames.sets) do if s.enabled then active = active + 1 end end
+                setMeta:SetText(count .. "/" .. HIGHLIGHT_MAX_SETS .. "   " .. active .. " " .. L["active"])
+                if active >= 4 then setMeta:SetTextColor(0.95, 0.7, 0.2) else setMeta:SetTextColor(0.45, 0.45, 0.45) end
             end
         end
         
         -- ===== HEADER GROUP (full width) =====
         local headerGroup = GUI:CreateSettingsGroup(self.child, 560)
         headerGroup:AddWidget(GUI:CreateHeader(self.child, L["Pinned Frames"]), 40)
-        headerGroup:AddWidget(GUI:CreateLabel(self.child, L["Create separate frame groups to pin specific players like tanks, healers, or key raid members. Drag players from your group roster to add them."], 530), 40)
+        -- Auto-size the description's slot to the actual wrapped text height so the
+        -- box hugs the text at every width (no fixed bottom padding, no truncation).
+        -- GetStringHeight returns a stale single-line value right after a width
+        -- change, so we measure on a DEFERRED frame (OnSizeChanged -> C_Timer) once
+        -- the FontString has re-wrapped, then update the group's slot height and
+        -- bubble a relayout up to the page. Mirrors GUI:CreateInfoBanner.
+        local pinnedDescLabel = GUI:CreateLabel(self.child, L["Create separate frame groups to pin specific players like tanks, healers, or key raid members. Drag players from your group roster to add them."], 530)
+        do
+            local descFS
+            for _, r in ipairs({ pinnedDescLabel:GetRegions() }) do
+                if r.GetStringHeight then descFS = r break end
+            end
+            local applying, lastW = false, nil
+            local function ApplyDescHeight()
+                if applying or not descFS or not pinnedDescLabel:IsVisible() then return end
+                local g = pinnedDescLabel.settingsGroup
+                if not g then return end
+                local desired = math.ceil(descFS:GetStringHeight() or 18) + 6
+                for _, entry in ipairs(g.groupChildren) do
+                    if entry.widget == pinnedDescLabel then
+                        if entry.height ~= desired then
+                            applying = true
+                            entry.height = desired
+                            g:LayoutChildren()
+                            local p = g:GetParent()  -- bubble so the page's column layout sees the new height
+                            while p do
+                                if type(p.RefreshStates) == "function" and p.children then p:RefreshStates() break end
+                                p = p:GetParent()
+                            end
+                            applying = false
+                        end
+                        break
+                    end
+                end
+            end
+            local function ScheduleApply()
+                if C_Timer and C_Timer.After then C_Timer.After(0, ApplyDescHeight) else ApplyDescHeight() end
+            end
+            pinnedDescLabel:SetScript("OnSizeChanged", function(_, w)
+                if w == lastW then return end  -- only width changes affect wrap height
+                lastW = w
+                ScheduleApply()
+            end)
+            -- Re-measure when the page surfaces (GetStringHeight is unreliable while
+            -- hidden) and once on build in case the width never changes.
+            pinnedDescLabel:SetScript("OnShow", function() lastW = nil ScheduleApply() end)
+            ScheduleApply()
+        end
+        -- Initial slot fits 2 lines; the deferred measure grows/shrinks it to fit.
+        headerGroup:AddWidget(pinnedDescLabel, 34)
         Add(headerGroup, nil, "both")
         
         -- Tab container
-        local tabContainer = CreateFrame("Frame", nil, self.child)
-        tabContainer:SetSize(460, 32)
+        tabContainer = CreateFrame("Frame", nil, self.child)
+        tabContainer:SetSize(560, 32)
         Add(tabContainer, 32, "both")
-        
+
         for i = 1, HIGHLIGHT_MAX_SETS do
             local tab = CreateFrame("Button", nil, tabContainer, "BackdropTemplate")
             tab:SetSize(120, 28)
@@ -2195,7 +2358,27 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tab:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
             tab.text = tab:CreateFontString(nil, "OVERLAY", "DFFontNormal")
             tab.text:SetPoint("CENTER")
-            tab.text:SetText(L["Highlight"] .. " " .. i)
+            tab.text:SetText(L["Pinned"] .. " " .. i)
+            -- Status pip on the left: green = set enabled, dim grey = disabled.
+            -- Independent of the active-tab highlight (border + text colour), so a
+            -- set's on/off state is visible whether or not it's the selected tab.
+            tab.statusDot = tab:CreateTexture(nil, "OVERLAY")
+            tab.statusDot:SetTexture("Interface\\Buttons\\WHITE8x8")
+            tab.statusDot:SetSize(7, 7)
+            tab.statusDot:SetPoint("LEFT", tab, "LEFT", 8, 0)
+            -- Remove (×) button on the right — shown by RefreshTabs only on the
+            -- active tab when more than one set exists. Confirms before removing.
+            tab.removeBtn = CreateFrame("Button", nil, tab)
+            tab.removeBtn:SetSize(16, 16)
+            tab.removeBtn:SetPoint("RIGHT", tab, "RIGHT", -4, 0)
+            tab.removeBtn.x = tab.removeBtn:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+            tab.removeBtn.x:SetPoint("CENTER")
+            tab.removeBtn.x:SetText("×")
+            tab.removeBtn.x:SetTextColor(0.6, 0.6, 0.6)
+            tab.removeBtn:SetScript("OnEnter", function(s) s.x:SetTextColor(0.95, 0.3, 0.3) end)
+            tab.removeBtn:SetScript("OnLeave", function(s) s.x:SetTextColor(0.6, 0.6, 0.6) end)
+            tab.removeBtn:SetScript("OnClick", function() DoRemoveSet(i) end)
+            tab.removeBtn:Hide()
             tab:SetScript("OnClick", function()
                 local oldSet = GetCurrentSet()
                 local oldType = oldSet and oldSet.frameType
@@ -2218,10 +2401,82 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tab:SetScript("OnLeave", function() RefreshTabs() end)
             tabButtons[i] = tab
         end
+
+        -- "+ Add set" button — RefreshTabs positions it after the last set and
+        -- hides it at the cap. Adds a (disabled) set to every mode + jumps to it.
+        addSetBtn = CreateFrame("Button", nil, tabContainer, "BackdropTemplate")
+        addSetBtn:SetSize(64, 28)
+        addSetBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        addSetBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        addSetBtn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        addSetBtn.text = addSetBtn:CreateFontString(nil, "OVERLAY", "DFFontNormal")
+        addSetBtn.text:SetPoint("CENTER")
+        addSetBtn.text:SetText("+ " .. L["Add"])
+        addSetBtn.text:SetTextColor(0.55, 0.75, 0.95)
+        addSetBtn:SetScript("OnEnter", function(s) s:SetBackdropBorderColor(0.4, 0.6, 0.9, 1) end)
+        addSetBtn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.25, 0.25, 0.25, 1) end)
+        addSetBtn:SetScript("OnClick", DoAddSet)
+
+        -- Count / active-set meter, right of the strip (each enabled set is a live
+        -- secure header — surfacing the active count makes the perf cost visible).
+        setMeta = tabContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        setMeta:SetPoint("RIGHT", tabContainer, "RIGHT", -2, 0)
+        setMeta:SetTextColor(0.45, 0.45, 0.45)
+
         RefreshTabs()
-        
+
+        -- ===== SUB-TABS (Setup / Appearance / Members) =====
+        -- Splits the set editor so each concern has its own tab and no single page
+        -- is a long scroll. Switching just toggles group visibility via hideOn + a
+        -- RefreshStates() reflow (no page rebuild). The Members tab only exists for
+        -- player sets (boss sets auto-track boss1-8 and have no roster); the page
+        -- rebuilds on a frame-type change, so this list is rebuilt with it.
+        if activeSubTab == "members" and IsCurrentBossMode() then activeSubTab = "setup" end
+        local subTabDefs = { { key = "setup", label = L["Setup"] }, { key = "appearance", label = L["Appearance"] } }
+        if not IsCurrentBossMode() then
+            table.insert(subTabDefs, { key = "members", label = L["Members"] })
+        end
+        local subTabButtons = {}
+        local function RefreshSubTabs()
+            local themeColor = GUI.GetThemeColor()
+            for _, b in ipairs(subTabButtons) do
+                if b.key == activeSubTab then
+                    b:SetBackdropColor(0.18, 0.18, 0.18, 1)
+                    b:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
+                    b.text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+                else
+                    b:SetBackdropColor(0.1, 0.1, 0.1, 1)
+                    b:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+                    b.text:SetTextColor(0.6, 0.6, 0.6)
+                end
+            end
+        end
+        local subTabContainer = CreateFrame("Frame", nil, self.child)
+        subTabContainer:SetSize(460, 26)
+        for i, def in ipairs(subTabDefs) do
+            local b = CreateFrame("Button", nil, subTabContainer, "BackdropTemplate")
+            b.key = def.key
+            b:SetSize(110, 24)
+            b:SetPoint("LEFT", subTabContainer, "LEFT", (i - 1) * 116, 0)
+            b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            b.text = b:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            b.text:SetPoint("CENTER")
+            b.text:SetText(def.label)
+            b:SetScript("OnClick", function()
+                activeSubTab = def.key
+                pagePinnedFrames.persistedSubTab = def.key
+                RefreshSubTabs()
+                self:RefreshStates()  -- reflow: hideOn predicates re-evaluate against activeSubTab
+            end)
+            b:SetScript("OnEnter", function(s) if activeSubTab ~= def.key then s:SetBackdropBorderColor(0.4, 0.4, 0.4, 1); s.text:SetTextColor(0.75, 0.75, 0.75) end end)
+            b:SetScript("OnLeave", function() RefreshSubTabs() end)
+            subTabButtons[i] = b
+        end
+        RefreshSubTabs()
+        Add(subTabContainer, 30, "both")
+
         AddSpace(10, "both")
-        
+
         -- Helper to get the pinned override key for the current active tab
         local function GetPinnedKey(dbKey)
             return "pinned." .. activeHighlightTab .. "." .. dbKey
@@ -2314,6 +2569,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             container.overrideCheckIcon = checkIcon
             
             container.UpdateOverrideIndicators = function(self)
+                -- Only the per-set `enabled` flag is layout-overridable now; every
+                -- other pinned setting is global/independent of auto layouts, so it
+                -- shows no override UI at all (no star, reset, or "Global:" text).
+                if not (DF.AutoProfilesUI and DF.AutoProfilesUI.IsPinnedSettingOverridable
+                        and DF.AutoProfilesUI:IsPinnedSettingOverridable(dbKey)) then
+                    self.overrideStar:Hide(); self.overrideResetBtn:Hide()
+                    self.overrideGlobalText:Hide(); self.overrideCheckIcon:Hide()
+                    return
+                end
                 -- Debug mode
                 if GUI.IsOverrideDebugMode and GUI.IsOverrideDebugMode() then
                     self.overrideStar:Show()
@@ -2425,7 +2689,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         
         -- Helper function to create refreshable checkbox
-        local function CreateRefreshableCheckbox(parent, label, dbKey, callback)
+        local function CreateRefreshableCheckbox(parent, label, dbKey, callback, tooltip)
             local container = CreateFrame("Frame", nil, parent)
             container:SetSize(250, 24)
             local cb = CreateFrame("CheckButton", nil, container, "BackdropTemplate")
@@ -2445,6 +2709,15 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             txt:SetPoint("LEFT", cb, "RIGHT", 8, 0)
             txt:SetText(label)
             txt:SetTextColor(0.8, 0.8, 0.8)
+            if tooltip then
+                cb:SetScript("OnEnter", function(s)
+                    GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(label, 1, 1, 1)
+                    GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
+                    GameTooltip:Show()
+                end)
+                cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            end
             cb:SetScript("OnClick", function(s)
                 local val = s:GetChecked()
                 -- Runtime override protection
@@ -2463,6 +2736,20 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end)
             container.Refresh = function()
                 cb:SetChecked(GetCurrentSet()[dbKey])
+                -- Optional disabled state: when container.enabledWhen() is false the
+                -- checkbox is greyed and can't be toggled (e.g. Show Label is moot
+                -- until Lock Position is on, since the drag label shows instead).
+                if container.enabledWhen then
+                    if container.enabledWhen() then
+                        cb:Enable()
+                        txt:SetTextColor(0.8, 0.8, 0.8)
+                        cb.Check:SetVertexColor(tc.r, tc.g, tc.b)
+                    else
+                        cb:Disable()
+                        txt:SetTextColor(0.4, 0.4, 0.4)
+                        cb.Check:SetVertexColor(0.4, 0.4, 0.4)
+                    end
+                end
                 if container.UpdateOverrideIndicators then container:UpdateOverrideIndicators() end
             end
             
@@ -2525,8 +2812,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             input:SetAutoFocus(false)
             input:SetTextInsets(2, 2, 0, 0)
             local function UpdateFill() local pct = (slider:GetValue() - minVal) / (maxVal - minVal); fill:SetWidth(math.max(1, pct * 168)) end
-            local function UpdateValue(val) slider:SetValue(val); input:SetText(step < 1 and string.format("%.1f", val) or string.format("%d", val)); UpdateFill() end
+            -- `updating` guard: Refresh()/UpdateValue are programmatic syncs —
+            -- without it every page rebuild fired OnValueChanged, re-writing the
+            -- db and running the user callback (e.g. the Test Count slider
+            -- Exit+Enter'ing test mode on every rebuild, and a boss-set switch
+            -- silently clamp-writing a player set's testCount).
+            local updating = false
+            local function UpdateValue(val)
+                updating = true
+                slider:SetValue(val)
+                updating = false
+                input:SetText(step < 1 and string.format("%.1f", val) or string.format("%d", val))
+                UpdateFill()
+            end
             slider:SetScript("OnValueChanged", function(_, value)
+                if updating then return end
                 -- Runtime override protection
                 if GUI.SelectedMode == "raid" and DF.AutoProfilesUI
                    and DF.AutoProfilesUI:HandleRuntimeWrite(GetPinnedKey(dbKey), value) then
@@ -2593,7 +2893,181 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             table.insert(controlsToRefresh, container)
             return container
         end
-        
+
+        -- Slider whose baseline value comes from the set's Match mode (the
+        -- party/raid main-frame field `baselineKey`, e.g. "frameWidth"), with
+        -- auto-layout-style override UX: changing it stores a per-set override in
+        -- set[overrideKey] (e.g. "customWidth"); a gold star + reset button appear,
+        -- and reset clears the override to revert to the Match value. This makes
+        -- "Match sets the value, the user overrides it" read the same as a layout
+        -- override. These keys are NOT auto-layout overridable, so there is no
+        -- runtime/HandleRuntimeWrite path — writes go straight to the set.
+        local function CreateMatchOverrideSlider(parent, label, minVal, maxVal, step, overrideKey, baselineKey, callback)
+            local container = CreateFrame("Frame", nil, parent)
+            container:SetSize(250, 50)
+            local lbl = container:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            lbl:SetPoint("TOPLEFT", 0, 0)
+            lbl:SetText(label)
+            lbl:SetTextColor(0.8, 0.8, 0.8)
+            local track = CreateFrame("Frame", nil, container, "BackdropTemplate")
+            track:SetPoint("TOPLEFT", 0, -18)
+            track:SetSize(170, 8)
+            track:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            track:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            track:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            local fill = track:CreateTexture(nil, "ARTWORK")
+            fill:SetPoint("LEFT", 1, 0)
+            fill:SetHeight(6)
+            local tc = GUI.GetThemeColor()
+            fill:SetColorTexture(tc.r, tc.g, tc.b, 0.8)
+            local slider = CreateFrame("Slider", nil, container)
+            slider:SetPoint("TOPLEFT", 0, -18)
+            slider:SetSize(170, 8)
+            slider:SetOrientation("HORIZONTAL")
+            slider:SetMinMaxValues(minVal, maxVal)
+            slider:SetValueStep(step)
+            slider:SetObeyStepOnDrag(true)
+            slider:SetHitRectInsets(-4, -4, -8, -8)
+            local thumb = slider:CreateTexture(nil, "OVERLAY")
+            thumb:SetSize(12, 16)
+            thumb:SetColorTexture(tc.r, tc.g, tc.b, 1)
+            slider:SetThumbTexture(thumb)
+            local input = CreateFrame("EditBox", nil, container, "BackdropTemplate")
+            input:SetPoint("LEFT", track, "RIGHT", 8, 0)
+            input:SetSize(50, 20)
+            input:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            input:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            input:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            input:SetFontObject(DFFontHighlightSmall)
+            input:SetJustifyH("CENTER")
+            input:SetAutoFocus(false)
+            input:SetTextInsets(2, 2, 0, 0)
+
+            local function MatchValue()
+                local set = GetCurrentSet()
+                local mode = (set and set.matchMode) or GUI.SelectedMode
+                local mdb = DF:GetDB(mode)
+                return (mdb and mdb[baselineKey]) or minVal
+            end
+            -- Float-tolerant compare (half a step): fractional-step slider drags
+            -- produce values like 0.5999999, so exact == against the baseline
+            -- never matched and dragging Scale back to the inherited value left
+            -- a stale override + star at an identical-looking number.
+            local function MatchesBaseline(v)
+                local m = MatchValue()
+                return v ~= nil and m ~= nil and math.abs(v - m) < (step * 0.5)
+            end
+            local function IsOverridden()
+                local set = GetCurrentSet()
+                return set ~= nil and set[overrideKey] ~= nil and not MatchesBaseline(set[overrideKey])
+            end
+            local function EffectiveValue()
+                local set = GetCurrentSet()
+                return (set and set[overrideKey]) or MatchValue()
+            end
+            -- Store an override only when it differs from the inherited value; setting
+            -- it back to the inherited value clears it (so no stale star remains).
+            local function SetOverride(v)
+                if MatchesBaseline(v) then GetCurrentSet()[overrideKey] = nil
+                else GetCurrentSet()[overrideKey] = v end
+            end
+            local function FmtVal(v) return step < 1 and string.format("%.1f", v) or string.format("%d", v) end
+            local function UpdateFill() local pct = (slider:GetValue() - minVal) / (maxVal - minVal); fill:SetWidth(math.max(1, pct * 168)) end
+
+            -- Reset-to-Match button (TOPRIGHT) + gold override star to its left,
+            -- mirroring AddPinnedOverrideIndicators so it reads like a layout override.
+            local resetBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
+            resetBtn:SetSize(18, 18)
+            resetBtn:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, 0)
+            resetBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            resetBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            resetBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            resetBtn:Hide()
+            local resetIcon = resetBtn:CreateTexture(nil, "OVERLAY")
+            resetIcon:SetPoint("CENTER")
+            resetIcon:SetSize(12, 12)
+            resetIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+            resetIcon:SetVertexColor(0.6, 0.6, 0.6)
+            resetBtn:SetScript("OnEnter", function(s)
+                s:SetBackdropBorderColor(1, 0.8, 0.2, 1); resetIcon:SetVertexColor(1, 0.8, 0.2)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT"); GameTooltip:SetText(L["Reset to inherited value"]); GameTooltip:Show()
+            end)
+            resetBtn:SetScript("OnLeave", function(s)
+                s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1); resetIcon:SetVertexColor(0.6, 0.6, 0.6); GameTooltip:Hide()
+            end)
+
+            local starFrame = CreateFrame("Button", nil, container, "BackdropTemplate")
+            starFrame:SetSize(18, 18)
+            starFrame:SetPoint("RIGHT", resetBtn, "LEFT", -2, 0)
+            starFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            starFrame:SetBackdropColor(0, 0, 0, 0)
+            starFrame:SetBackdropBorderColor(0, 0, 0, 0)
+            starFrame:Hide()
+            local starIcon = starFrame:CreateTexture(nil, "OVERLAY")
+            starIcon:SetSize(12, 12)
+            starIcon:SetPoint("CENTER")
+            starIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\star")
+            starIcon:SetVertexColor(1, 0.8, 0.2)
+            starFrame:SetScript("OnEnter", function(s)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+                GameTooltip:SetText(L["Overriding inherited value"])
+                GameTooltip:AddLine(string.format(L["Inherited value: %s"], FmtVal(MatchValue())), 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            starFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            local function UpdateIndicators()
+                if IsOverridden() then starFrame:Show(); resetBtn:Show() else starFrame:Hide(); resetBtn:Hide() end
+            end
+            container.UpdateOverrideIndicators = UpdateIndicators
+
+            -- Guard against the programmatic slider:SetValue (Refresh/Reset) being
+            -- misread as a user edit and writing the baseline back as an override.
+            local updating = false
+            local function UpdateValue(val)
+                updating = true
+                slider:SetValue(val)
+                updating = false
+                input:SetText(FmtVal(slider:GetValue()))
+                UpdateFill()
+            end
+
+            slider:SetScript("OnValueChanged", function(_, value)
+                if updating then UpdateFill(); return end
+                SetOverride(value)
+                input:SetText(FmtVal(value)); UpdateFill()
+                if callback then callback() end
+                UpdateIndicators()
+            end)
+            input:SetScript("OnEnterPressed", function(s)
+                local val = tonumber(s:GetText())
+                if val then
+                    val = math.max(minVal, math.min(maxVal, val))
+                    SetOverride(val)
+                    UpdateValue(val)
+                    if callback then callback() end
+                    UpdateIndicators()
+                end
+                s:ClearFocus()
+            end)
+            input:SetScript("OnEscapePressed", function(s) s:ClearFocus(); UpdateValue(EffectiveValue()) end)
+
+            resetBtn:SetScript("OnClick", function()
+                GetCurrentSet()[overrideKey] = nil
+                UpdateValue(EffectiveValue())
+                if callback then callback() end
+                UpdateIndicators()
+            end)
+
+            container.Refresh = function()
+                UpdateValue(EffectiveValue())
+                UpdateIndicators()
+            end
+            container.Refresh()
+            table.insert(controlsToRefresh, container)
+            return container
+        end
+
         -- Helper function to create refreshable dropdown
         local function CreateRefreshableDropdown(parent, label, options, dbKey, callback)
             local wrapper = CreateFrame("Frame", nil, parent)
@@ -2688,7 +3162,110 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             table.insert(controlsToRefresh, wrapper)
             return wrapper
         end
-        
+
+        -- Per-set Aura/Text Designer preset picker. Unlike CreateRefreshableDropdown
+        -- its menu is rebuilt every open (the preset library grows/shrinks as presets
+        -- are created/renamed/deleted on the AD/TD pages), and the first entry,
+        -- "Inherit", maps to nil — the set then follows its mode's preset via the
+        -- resolver's FrameMode fallback. Preset refs are global-per-mode (never an
+        -- auto-layout override), so this writes straight to the set with no star.
+        -- `kind` is "aura" or "text"; `dbKey` the matching set ref.
+        local function CreatePinnedPresetDropdown(parent, label, kind, dbKey, callback)
+            local wrapper = CreateFrame("Frame", nil, parent)
+            wrapper:SetSize(250, 50)
+            local lbl = wrapper:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            lbl:SetPoint("TOPLEFT", 0, 0)
+            lbl:SetText(label)
+            lbl:SetTextColor(0.8, 0.8, 0.8)
+            local btn = CreateFrame("Button", nil, wrapper, "BackdropTemplate")
+            btn:SetPoint("TOPLEFT", 0, -16)
+            btn:SetSize(220, 24)
+            btn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            btn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            btn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            btn.Text = btn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+            btn.Text:SetPoint("LEFT", 8, 0)
+            btn.Text:SetPoint("RIGHT", -20, 0)
+            btn.Text:SetJustifyH("LEFT")
+            btn.Text:SetTextColor(0.8, 0.8, 0.8)
+            local arrow = btn:CreateTexture(nil, "OVERLAY")
+            arrow:SetPoint("RIGHT", -8, 0)
+            arrow:SetSize(12, 12)
+            arrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+            arrow:SetVertexColor(0.5, 0.5, 0.5)
+
+            local INHERIT = {}  -- unique sentinel; stored as nil
+            local function InheritLabel()
+                local modeName = (DF.GetModeDesignerPresetName and DF:GetModeDesignerPresetName(kind, GUI.SelectedMode))
+                    or DF.DEFAULT_PRESET
+                return L["Inherit"] .. " (" .. tostring(modeName) .. ")"
+            end
+            local function UpdateText()
+                local set = GetCurrentSet()
+                local cur = set and set[dbKey]
+                btn.Text:SetText(cur and tostring(cur) or InheritLabel())
+            end
+
+            local menuFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+            menuFrame:SetPoint("TOPLEFT", btn, "BOTTOMLEFT", 0, -2)
+            menuFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+            menuFrame:SetClampedToScreen(true)
+            menuFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            menuFrame:SetBackdropColor(0.12, 0.12, 0.12, 0.98)
+            menuFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            menuFrame:Hide()
+            menuFrame.rowPool = {}
+
+            local function Choose(key)
+                local set = GetCurrentSet()
+                if set then set[dbKey] = (key ~= INHERIT) and key or nil end
+                UpdateText()
+                menuFrame:Hide()
+                if callback then callback() end
+            end
+
+            local function BuildMenu()
+                local pool = menuFrame.rowPool
+                local rows = { { key = INHERIT, text = InheritLabel() } }
+                for _, name in ipairs(DF:ListDesignerPresets(kind)) do
+                    rows[#rows + 1] = { key = name, text = name }
+                end
+                for idx, row in ipairs(rows) do
+                    local menuBtn = pool[idx]
+                    if not menuBtn then
+                        menuBtn = CreateFrame("Button", nil, menuFrame)
+                        menuBtn:SetPoint("TOPLEFT", 2, -2 - (idx - 1) * 22)
+                        menuBtn:SetPoint("TOPRIGHT", -2, -2 - (idx - 1) * 22)
+                        menuBtn:SetHeight(22)
+                        menuBtn.Text = menuBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+                        menuBtn.Text:SetPoint("LEFT", 8, 0)
+                        menuBtn.Highlight = menuBtn:CreateTexture(nil, "HIGHLIGHT")
+                        menuBtn.Highlight:SetAllPoints()
+                        local tc = GUI.GetThemeColor()
+                        menuBtn.Highlight:SetColorTexture(tc.r, tc.g, tc.b, 0.3)
+                        pool[idx] = menuBtn
+                    end
+                    menuBtn.Text:SetText(row.text)
+                    menuBtn.Text:SetTextColor(0.8, 0.8, 0.8)
+                    local key = row.key
+                    menuBtn:SetScript("OnClick", function() Choose(key) end)
+                    menuBtn:Show()
+                end
+                for i = #rows + 1, #pool do pool[i]:Hide() end
+                menuFrame:SetSize(220, #rows * 22 + 4)
+            end
+
+            btn:SetScript("OnClick", function()
+                if menuFrame:IsShown() then menuFrame:Hide() else BuildMenu(); menuFrame:Show() end
+            end)
+            btn:SetScript("OnEnter", function(s) s:SetBackdropBorderColor(0.5, 0.5, 0.5, 1) end)
+            btn:SetScript("OnLeave", function(s) s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1) end)
+            wrapper.Refresh = UpdateText
+            UpdateText()
+            table.insert(controlsToRefresh, wrapper)
+            return wrapper
+        end
+
         -- Helper function to update layout
         local function UpdateHighlightLayout()
             if DF.PinnedFrames then
@@ -2719,7 +3296,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== SETTINGS GROUP (Column 1) =====
         local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
-        
+
+        -- While editing a raid auto layout, make the decouple explicit via an info
+        -- banner: only the per-set Enable flag can differ per layout; everything
+        -- else is shared. Hidden unless editing a raid layout.
+        local pinnedLayoutNote = GUI:CreateInfoBanner(self.child, {
+            tone = "info",
+            text = L["Auto layouts can only change whether pinned frames are shown (Enable). All other pinned frame settings are shared across layouts."],
+        })
+        pinnedLayoutNote.hideOn = function()
+            return not (GUI.SelectedMode == "raid" and DF.AutoProfilesUI and DF.AutoProfilesUI:IsEditing())
+        end
+        settingsGroup:AddWidget(pinnedLayoutNote, pinnedLayoutNote.layoutHeight or 44)
+
         -- SetEnabled / SetLocked / SetShowLabel internally use GetSetDB → IsInRaid(),
         -- so calling them while editing the inactive mode would mutate the active
         -- mode's state. Only call them when the selected mode matches the live mode;
@@ -2746,7 +3335,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
+            RefreshTabs()  -- update the on/off pip on this set's tab
         end), 28)
+        -- Forward ref so Lock Position can re-grey Show Label when toggled.
+        local showLabelCheck
         settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Lock Position"], "locked", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
@@ -2754,8 +3346,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
+            -- Show Label only matters while locked (otherwise the drag label shows).
+            if showLabelCheck and showLabelCheck.Refresh then showLabelCheck.Refresh() end
         end), 28)
-        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
+        showLabelCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
                 DF.PinnedFrames:SetShowLabel(activeHighlightTab, GetCurrentSet().showLabel)
@@ -2763,34 +3357,119 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
         end), 28)
+        -- Grey out Show Label while unlocked — the "Drag to Move" label shows then,
+        -- not the set's label, so the toggle has no visible effect.
+        showLabelCheck.enabledWhen = function() return GetCurrentSet().locked == true end
+        if showLabelCheck.Refresh then showLabelCheck.Refresh() end
 
-        -- Disable in Arena/Battlegrounds: surfaces the per-mode disableInPvP
-        -- gate (nil = disabled in PvP, the safe default — instanced PvP fires
-        -- roster events on nearly every action and overran the script
-        -- watchdog). Custom get/set: the key lives on the mode's pinnedFrames
-        -- table, not on a set, so the per-set refreshable helper doesn't fit.
-        local pvpCheck = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Disable in Arena/Battlegrounds"],
-            nil, nil,
-            function()
-                -- Re-evaluate immediately: turning it ON while in PvP hides the
-                -- frames; turning it OFF resumes processing.
-                if DF.PinnedFrames and DF.PinnedFrames.ProcessAllSets then
-                    DF.PinnedFrames:ProcessAllSets()
+        -- Party-only: show this pinned set while solo (off by default — pinned
+        -- frames highlight other group members). Raid implies a group, so hide it
+        -- in raid mode.
+        local soloCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show in Solo Mode"], "showInSoloMode", function()
+            if not DF.PinnedFrames then return end
+            -- Re-apply visibility so the solo gate takes effect immediately.
+            DF.PinnedFrames:SetEnabled(activeHighlightTab, GetCurrentSet().enabled)
+            RefreshTestModeIfActive()
+        end), 28)
+        soloCheck.hideOn = function() return GUI.SelectedMode == "raid" end
+
+        -- Declutter toggles: hide auras / status icons on this set's frames for a
+        -- clean highlight. Re-stamp the effective DB and re-render so it applies live.
+        local function RefreshPinnedDisplay()
+            UpdateHighlightLayout()
+            if DF.UpdateAll then DF:UpdateAll() end
+            if DF.AuraDesigner and DF.AuraDesigner.Engine and DF.AuraDesigner.Engine.ForceRefreshAllFrames then
+                DF.AuraDesigner.Engine:ForceRefreshAllFrames()
+            end
+            RefreshTestModeIfActive()
+        end
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Auras"], "hideAuras", RefreshPinnedDisplay), 28)
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide Status Icons"], "hideIcons", RefreshPinnedDisplay), 28)
+
+        -- Hide from Main Frames (#78): when on, this set's members are filtered out
+        -- of the main party/raid frames so they only appear in the pinned set. Re-
+        -- filter the main headers on toggle (out of combat). Boss sets pin boss units,
+        -- not main-frame members, so it's moot there → hidden in boss mode.
+        local hideMainCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Hide from Main Frames"], "hideFromMainFrames", function()
+            RefreshPinnedDisplay()
+            -- Defer past CreateRefreshableCheckbox's trailing DF:UpdateAll() so the
+            -- re-filter isn't stomped, then re-apply the main-frame sort directly.
+            C_Timer.After(0, function()
+                if DF.RefreshMainFrameSorting then DF:RefreshMainFrameSorting() end
+            end)
+        end, L["Hide from Main Frames Tooltip"]), 28)
+        hideMainCheck.hideOn = function() return IsCurrentBossMode() end
+
+        -- Disable in PvP (GLOBAL across both modes, not per-set): keep pinned frames
+        -- dormant in all instanced PvP. Default on — pinned is a party/raid feature
+        -- and the arena/BG event storm can exhaust the per-frame budget. Turning it
+        -- off re-enables pinned there; the debounced RequestProcessAllSets keeps that
+        -- opt-in from stampeding.
+        --
+        -- The runtime gate reads the CURRENT mode's pinnedFrames.disableInPvP (arena
+        -- resolves to party config, battlegrounds to raid). To make one checkbox act
+        -- globally — and to match the "Disable in PvP" label — the toggle writes BOTH
+        -- modes in lockstep, so whichever mode the gate resolves to sees the same
+        -- value. Hidden while editing a raid auto-layout (it's global, nothing
+        -- layout-specific to override); outside the editor DF.db.party/.raid are the
+        -- plain mode profiles, so the paired write lands on the real globals.
+        local function GetDisableInPvP()
+            local v = db.pinnedFrames.disableInPvP
+            if v == nil then return true end  -- runtime gate treats nil as true
+            return v
+        end
+        local function SetDisableInPvP(val)
+            for _, m in ipairs({ "party", "raid" }) do
+                local mdb = DF.db and DF.db[m]
+                if mdb and mdb.pinnedFrames then
+                    mdb.pinnedFrames.disableInPvP = val
                 end
-            end,
-            function()
-                local pf = db.pinnedFrames
-                local v = pf and pf.disableInPvP
-                if v == nil then v = true end
-                return v
-            end,
-            function(val)
-                if db.pinnedFrames then
-                    db.pinnedFrames.disableInPvP = val and true or false
-                end
-            end,
-            "disableInPvP"), 28)
-        pvpCheck.tooltip = L["Keep pinned frames hidden and inactive inside arenas and battlegrounds. Recommended: PvP roster churn is heavy, and pinned sets are built for organised party/raid play."]
+            end
+        end
+        local disablePvPContainer = CreateFrame("Frame", nil, self.child)
+        disablePvPContainer:SetSize(250, 24)
+        local dpvpCB = CreateFrame("CheckButton", nil, disablePvPContainer, "BackdropTemplate")
+        dpvpCB:SetSize(18, 18)
+        dpvpCB:SetPoint("LEFT", 0, 0)
+        dpvpCB:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        dpvpCB:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        dpvpCB:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        dpvpCB.Check = dpvpCB:CreateTexture(nil, "OVERLAY")
+        dpvpCB.Check:SetTexture("Interface\\Buttons\\WHITE8x8")
+        local dpvpTC = GUI.GetThemeColor()
+        dpvpCB.Check:SetVertexColor(dpvpTC.r, dpvpTC.g, dpvpTC.b)
+        dpvpCB.Check:SetPoint("CENTER")
+        dpvpCB.Check:SetSize(10, 10)
+        dpvpCB:SetCheckedTexture(dpvpCB.Check)
+        local dpvpTxt = disablePvPContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        dpvpTxt:SetPoint("LEFT", dpvpCB, "RIGHT", 8, 0)
+        dpvpTxt:SetTextColor(0.8, 0.8, 0.8)
+        dpvpCB:SetScript("OnClick", function(s)
+            SetDisableInPvP(s:GetChecked() and true or false)
+            -- Re-evaluate visibility for the live mode (debounced + combat-safe).
+            if DF.PinnedFrames and IsEditingActiveMode() and DF.PinnedFrames.RequestProcessAllSets then
+                DF.PinnedFrames:RequestProcessAllSets()
+            end
+        end)
+        dpvpCB:SetScript("OnEnter", function(s)
+            GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+            GameTooltip:SetText(L["Disable in PvP"], 1, 1, 1)
+            GameTooltip:AddLine(L["Pinned frames are a party/raid feature. Leave on to keep them hidden in arena and battlegrounds, where the constant unit churn can hurt performance. Applies to both party and raid pinned sets."], 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        dpvpCB:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        disablePvPContainer.Refresh = function()
+            dpvpTxt:SetText(L["Disable in PvP"])
+            dpvpCB:SetChecked(GetDisableInPvP())
+        end
+        -- Mode-global setting: not layout-overridable, so hide it while editing a
+        -- raid auto-layout (its banner already points users at the base settings).
+        disablePvPContainer.hideOn = function()
+            return DF.AutoProfilesUI and DF.AutoProfilesUI:IsEditing()
+        end
+        disablePvPContainer.Refresh()
+        table.insert(controlsToRefresh, disablePvPContainer)
+        settingsGroup:AddWidget(disablePvPContainer, 28)
 
         -- Reset Position button
         local resetPosBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
@@ -2861,11 +3540,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         nameInputContainer.Refresh = function() nameInput:SetText(GetCurrentSet().name or "") end
         table.insert(controlsToRefresh, nameInputContainer)
         settingsGroup:AddWidget(nameInputContainer, 48)
-        
+
         Add(settingsGroup, nil, 1)
-        
-        -- ===== FRAME TYPE GROUP (full width) =====
-        local frameTypeGroup = GUI:CreateSettingsGroup(self.child, 560)
+        settingsGroup.hideOn = function() return activeSubTab ~= "setup" end  -- Setup tab
+
+        -- ===== FRAME TYPE GROUP (Column 2) =====
+        local frameTypeGroup = GUI:CreateSettingsGroup(self.child, 280)
         local frameTypeHeader = GUI:CreateHeader(self.child, L["Frame Type"])
         -- Gold "New" badge next to the header (the Friendly Boss NPCs option was
         -- introduced in 4.3.2). Clears when the user navigates away from the
@@ -2880,7 +3560,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
         local function OnFrameTypeChanged()
             if not DF.PinnedFrames then return end
-            if InCombatLockdown() then return end
+            -- No combat early-return: the dropdown already wrote set.frameType,
+            -- so bailing here left the page AND runtime desynced (Members tab
+            -- shown for a now-boss set, wrong Test Count max) until some later
+            -- rebuild. Reinitialize self-defers in combat (pendingReinitialize
+            -- → PLAYER_REGEN_ENABLED), and the page rebuild isn't secure work.
             DF.PinnedFrames:Reinitialize()
             if GUI.RefreshCurrentPage then GUI.RefreshCurrentPage() end
         end
@@ -2907,80 +3591,200 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             55
         )
 
-        Add(frameTypeGroup, nil, "both")
+        Add(frameTypeGroup, nil, 2)
+        frameTypeGroup.hideOn = function() return activeSubTab ~= "setup" end  -- Setup tab
         AddSpace(10, "both")
 
-        -- ===== LAYOUT GROUP (Column 2) =====
+        -- ===== FRAME STYLE GROUP (Column 1) — inherited from your frames, overridable =====
         local layoutGroup = GUI:CreateSettingsGroup(self.child, 280)
-        layoutGroup:AddWidget(GUI:CreateHeader(self.child, L["Layout"]), 40)
-        
+        layoutGroup:AddWidget(GUI:CreateHeader(self.child, L["Frame Style"]), 40)
+
+        -- Up-front explainer for the Match inheritance + per-setting override model.
+        local matchInfoBanner = GUI:CreateInfoBanner(self.child, {
+            tone = "info",
+            text = L["Pinned frames are based on your Party or Raid frames — choose which below. Change any setting to override it for these frames; use the reset button beside an overridden setting to revert it to the inherited value."],
+        })
+        layoutGroup:AddWidget(matchInfoBanner, matchInfoBanner.layoutHeight or 44)
+
+        -- Match (Stage 2a): which mode's main frames this pinned set inherits its
+        -- baseline look from. Defaults to the page's OWN mode (a party set mirrors
+        -- party frames, a raid set mirrors raid frames); pick the opposite mode to
+        -- cross-match it (e.g. raid pinned frames sized/styled like party frames).
+        -- Per-set custom overrides (size, etc.) still win over the baseline. It
+        -- leads the group because it is the baseline every other option/override
+        -- builds on. Seed unset/legacy values to the own mode so it always shows one.
+        do
+            local pf = DF:GetDB(GUI.SelectedMode)
+            pf = pf and pf.pinnedFrames
+            if pf and pf.sets then
+                for _, s in pairs(pf.sets) do
+                    if s.matchMode ~= "party" and s.matchMode ~= "raid" then
+                        s.matchMode = GUI.SelectedMode
+                    end
+                end
+            end
+        end
+        -- Forward refs so the Match dropdown can refresh every Match-override control's
+        -- displayed baseline when the matched mode changes (an un-overridden control
+        -- then shows the new mode's value; an overridden one keeps its star).
+        local pinnedWidthSlider, pinnedHeightSlider, pinnedScaleSlider
+        local function RefreshMatchOverrides()
+            if pinnedWidthSlider then pinnedWidthSlider.Refresh() end
+            if pinnedHeightSlider then pinnedHeightSlider.Refresh() end
+            if pinnedScaleSlider then pinnedScaleSlider.Refresh() end
+        end
+
+        local matchOptions = { party = L["Party"], raid = L["Raid"] }
+        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Based on"], matchOptions, "matchMode", function()
+            UpdateHighlightLayout()
+            RefreshMatchOverrides()
+        end), 55)
+
+        -- Width / Height inherit the Match mode's frame size; changing either
+        -- stores a per-set override (gold star + reset-to-Match), exactly like a
+        -- layout override but with the Match value as the baseline.
+        pinnedWidthSlider = CreateMatchOverrideSlider(self.child, L["Width"], 20, 300, 1, "customWidth", "frameWidth", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedWidthSlider, 55)
+        pinnedHeightSlider = CreateMatchOverrideSlider(self.child, L["Height"], 10, 200, 1, "customHeight", "frameHeight", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedHeightSlider, 55)
+
+        -- Scale inherits the Match mode's frameScale; overridable with star/reset.
+        pinnedScaleSlider = CreateMatchOverrideSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, "scale", "frameScale", UpdateHighlightLayout)
+        layoutGroup:AddWidget(pinnedScaleSlider, 55)
+
+        -- Per-set Aura / Text Designer preset. "Inherit" (default) follows this mode's
+        -- preset; pick a named preset to give this set its own aura/text look. Presets
+        -- are created and edited on the Aura/Text Designer pages — here you only choose
+        -- which one this pinned set renders with. The Text picker shows whenever the
+        -- Text Designer module is loaded.
+        layoutGroup:AddWidget(CreatePinnedPresetDropdown(self.child, L["Aura Designer Preset"], "aura", "auraDesignerPreset", RefreshPinnedDisplay), 55)
+        if DF.TextDesigner then
+            layoutGroup:AddWidget(CreatePinnedPresetDropdown(self.child, L["Text Designer Preset"], "text", "textDesignerPreset", RefreshPinnedDisplay), 55)
+        end
+
+        -- Border Override (Stage 2b): a single toggle. Off → inherit the Based-on
+        -- mode's frame border. On → snapshot that border into the set and reveal the
+        -- full border controls (independent for this set). The proxy delegates
+        -- reads/writes to the current set so CreateBorderControls tracks tab/mode.
+        local borderSetProxy = setmetatable({}, {
+            __index = function(_, k) local s = GetCurrentSet(); return s and s[k] end,
+            __newindex = function(_, k, v) local s = GetCurrentSet(); if s then s[k] = v end end,
+        })
+        -- Declared first so the border controls' update hooks can refresh the
+        -- reset icon's visibility after an edit.
+        local borderResetIcon
+        local function refreshBorderReset()
+            if borderResetIcon then
+                borderResetIcon:SetShown(DF.PinnedFrames and DF.PinnedFrames:IsBorderOverrideChanged(GetCurrentSet()) or false)
+            end
+        end
+
+        local borderCheck = CreateRefreshableCheckbox(self.child, L["Override Border"], "borderOverride", function()
+            if GetCurrentSet().borderOverride and DF.PinnedFrames then
+                DF.PinnedFrames:SeedSetBorderOverride(GetCurrentSet())
+            end
+            UpdateHighlightLayout()
+            if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+        end)
+        -- Reset-to-inherited icon on the row's right, matching the refresh icon the
+        -- other override controls use. Re-snapshots the border from the Based-on
+        -- frames (discards edits). Shown only when a border setting actually differs
+        -- from the inherited value.
+        do
+            local rb = CreateFrame("Button", nil, borderCheck, "BackdropTemplate")
+            rb:SetSize(18, 18)
+            rb:SetPoint("TOPRIGHT", borderCheck, "TOPRIGHT", 0, -2)
+            rb:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+            rb:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            rb:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            local ic = rb:CreateTexture(nil, "OVERLAY")
+            ic:SetPoint("CENTER"); ic:SetSize(12, 12)
+            ic:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+            ic:SetVertexColor(0.6, 0.6, 0.6)
+            rb:SetScript("OnEnter", function(s)
+                s:SetBackdropBorderColor(1, 0.8, 0.2, 1); ic:SetVertexColor(1, 0.8, 0.2)
+                GameTooltip:SetOwner(s, "ANCHOR_RIGHT"); GameTooltip:SetText(L["Reset Border to Inherited"]); GameTooltip:Show()
+            end)
+            rb:SetScript("OnLeave", function(s)
+                s:SetBackdropBorderColor(0.3, 0.3, 0.3, 1); ic:SetVertexColor(0.6, 0.6, 0.6); GameTooltip:Hide()
+            end)
+            rb:SetScript("OnClick", function()
+                if DF.PinnedFrames then DF.PinnedFrames:SeedSetBorderOverride(GetCurrentSet(), true) end
+                UpdateHighlightLayout()
+                if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
+            end)
+            borderResetIcon = rb
+            local origRefresh = borderCheck.Refresh
+            borderCheck.Refresh = function(...) if origRefresh then origRefresh(...) end refreshBorderReset() end
+            refreshBorderReset()
+        end
+        layoutGroup:AddWidget(borderCheck, 28)
+        GUI:CreateBorderControls(layoutGroup, borderSetProxy, "frame", {
+            parent  = self.child,
+            include = {
+                inset = true, offset = true, blendMode = true,
+                gradient = true, shadow = true,
+                classColor = true, roleColor = true,
+                alpha = true,
+            },
+            fullUpdate  = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            lightUpdate = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            lightColors = function() UpdateHighlightLayout(); refreshBorderReset() end,
+            refreshStates = function() if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end end,
+            hideWhen   = function() return not (GetCurrentSet() and GetCurrentSet().borderOverride) end,
+            sizeMin = 1, sizeMax = 16, sizeStep = 1,
+        })
+
+        Add(layoutGroup, nil, 1)
+        layoutGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
+
+        -- ===== LAYOUT GROUP (Column 2) — pinned-only arrangement (no main-frame
+        -- equivalent, so these are independent settings, not Match overrides) =====
+        local arrangeGroup = GUI:CreateSettingsGroup(self.child, 280)
+        arrangeGroup:AddWidget(GUI:CreateHeader(self.child, L["Layout"]), 40)
+
+        -- Direction: how the pinned frames flow (pinned-only; NOT inherited — the
+        -- main frames' growDirection means group Rows/Columns, a different concept).
         local directionOptions = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
-        
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
+
         local frameAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
 
         local columnAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
-        layoutGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
-        
-        layoutGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
-        layoutGroup:AddWidget(CreateRefreshableSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, "scale", UpdateHighlightLayout), 55)
-        
-        Add(layoutGroup, nil, 2)
-        
-        -- ===== SPACING GROUP (Column 1) =====
-        local spacingGroup = GUI:CreateSettingsGroup(self.child, 280)
-        spacingGroup:AddWidget(GUI:CreateHeader(self.child, L["Spacing"]), 40)
-        spacingGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
-        spacingGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
-        Add(spacingGroup, nil, 1)
-        
-        if not IsCurrentBossMode() then
-        -- ===== AUTO-POPULATE GROUP (Column 2) =====
-        local autoPopGroup = GUI:CreateSettingsGroup(self.child, 280)
-        autoPopGroup:AddWidget(GUI:CreateHeader(self.child, L["Auto-Populate"]), 40)
-        autoPopGroup:AddWidget(GUI:CreateLabel(self.child, L["Automatically add players by role when they join your group."], 250), 30)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
 
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Tanks"], "autoAddTanks", function()
-            if GetCurrentSet().autoAddTanks and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Healers"], "autoAddHealers", function()
-            if GetCurrentSet().autoAddHealers and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add DPS"], "autoAddDPS", function()
-            if GetCurrentSet().autoAddDPS and DF.PinnedFrames then
-                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
-                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
-                if rosterWidget then rosterWidget:Refresh() end
-                SyncPlayersOverride()
-            end
-        end), 28)
-        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Keep when offline/left"], "keepOfflinePlayers", function() end), 28)
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
+        Add(arrangeGroup, nil, 2)
+        arrangeGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
 
-        Add(autoPopGroup, nil, 2)
-        end -- not IsCurrentBossMode
-        
         if not IsCurrentBossMode() then
-        -- ===== UNIT SELECTION (full width) =====
-        AddSpace(10, "both")
+        -- ===== MEMBERS SUB-TAB: Unit Selection (roster) first, then Auto-Populate.
+        -- Both are "who's in this group", so they lead the Members view; Settings /
+        -- Frame Type / Frame Style / Layout live on the Appearance sub-tab. =====
+        local membersHideOn = function() return activeSubTab ~= "members" end
 
         -- Unit Selection header with override indicator
         unitSelHeader = CreateFrame("Frame", nil, self.child)
         unitSelHeader:SetSize(500, 40)
+        unitSelHeader.hideOn = membersHideOn
         local unitSelTitle = unitSelHeader:CreateFontString(nil, "OVERLAY", "DFFontNormal")
         unitSelTitle:SetPoint("LEFT", 0, 0)
         unitSelTitle:SetText(L["Unit Selection"])
         unitSelTitle:SetTextColor(1, 1, 1)
+
+        -- "N pinned" count beside the title, themed. Updated on any roster change.
+        local unitSelCount = unitSelHeader:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        unitSelCount:SetPoint("LEFT", unitSelTitle, "RIGHT", 8, 0)
+        local function UpdateUnitSelCount()
+            local n = #((GetCurrentSet() and GetCurrentSet().players) or {})
+            unitSelCount:SetText(n .. " " .. L["pinned"])
+            local tc = GUI.GetThemeColor()
+            unitSelCount:SetTextColor(tc.r, tc.g, tc.b)
+        end
+        UpdateUnitSelCount()
 
         -- Override indicator for players list (header-level)
         AddPinnedOverrideIndicators(unitSelHeader, unitSelTitle, "players", function()
@@ -2994,6 +3798,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end)
         unitSelHeader.Refresh = function(self)
             if self.UpdateOverrideIndicators then self:UpdateOverrideIndicators() end
+            UpdateUnitSelCount()
         end
 
         Add(unitSelHeader, 40, "both")
@@ -3030,10 +3835,61 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         rosterWidget.Refresh = function(s)
             if originalRefresh then originalRefresh(s) end
             if unitSelHeader.UpdateOverrideIndicators then unitSelHeader:UpdateOverrideIndicators() end
+            UpdateUnitSelCount()
+            RefreshTabs()  -- keep the tab member count in sync with the roster
         end
         table.insert(controlsToRefresh, rosterWidget)
         table.insert(controlsToRefresh, unitSelHeader)
-        Add(rosterWidget, 340, "both")
+        -- The roster widget's content runs to ~364px (panes 240 + role buttons +
+        -- the "Add Offline Player" input), taller than its 340 frame. Reserve the
+        -- real height (plus a gap) so the following Auto-Populate group doesn't ride
+        -- up into the manual-entry row.
+        Add(rosterWidget, 378, "both")
+        rosterWidget.hideOn = membersHideOn
+
+        -- ===== AUTO-POPULATE GROUP (full width, under the roster) =====
+        local autoPopGroup = GUI:CreateSettingsGroup(self.child, 280)
+        autoPopGroup:AddWidget(GUI:CreateHeader(self.child, L["Auto-Populate"]), 40)
+        autoPopGroup:AddWidget(GUI:CreateLabel(self.child, L["Automatically add players by role when they join your group."], 510), 20)
+
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Tanks"], "autoAddTanks", function()
+            if GetCurrentSet().autoAddTanks and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add Healers"], "autoAddHealers", function()
+            if GetCurrentSet().autoAddHealers and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Auto-add DPS"], "autoAddDPS", function()
+            if GetCurrentSet().autoAddDPS and DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        -- Exclude Self: keep the player out of this set's auto-add (e.g. Aug Evoker
+        -- who buffs others). Re-runs auto-populate so self is added/removed live.
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Exclude Self"], "excludeSelf", function()
+            if DF.PinnedFrames then
+                DF.PinnedFrames:AutoPopulateSet(GetCurrentSet())
+                DF.PinnedFrames:UpdateHeaderNameList(activeHighlightTab)
+                if rosterWidget then rosterWidget:Refresh() end
+                SyncPlayersOverride()
+            end
+        end), 28)
+        autoPopGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Keep when offline/left"], "keepOfflinePlayers", function() end, L["Keep when offline/left Tooltip"]), 28)
+
+        Add(autoPopGroup, nil, "both")
+        autoPopGroup.hideOn = membersHideOn
         end -- not IsCurrentBossMode
 
         RefreshControls()
@@ -4912,7 +5768,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
 
         -- Refresh banner content based on current state
         adBanner.refreshContent = function(_, d)
-            local adEnabled = d.auraDesigner and d.auraDesigner.enabled
+            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner((d == DF.db.raid) and "raid" or "party")
+            local adEnabled = _adCfg and _adCfg.enabled
             if adEnabled and d.showBuffs then
                 adBannerText:SetText(L["Aura Designer is active alongside Buffs."])
                 enableBuffsBtn:Hide()
@@ -4931,7 +5788,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
 
         adBanner.hideOn = function(d)
-            return not (d.auraDesigner and d.auraDesigner.enabled)
+            local _adCfg = DF.GetModeAuraDesigner and DF:GetModeAuraDesigner((d == DF.db.raid) and "raid" or "party")
+            return not (_adCfg and _adCfg.enabled)
         end
 
         Add(adBanner, 32, "both")

@@ -752,9 +752,15 @@ function GUI:CreateLabel(parent, text, width, color)
     frame:SetSize(width or 380, 40)
     
     local lbl = frame:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    -- Anchor both top corners so the wrap width tracks the frame's width. The
+    -- layout engine (settings-group LayoutChildren / page column sizing) resizes
+    -- the frame to the available width, so the text now uses the full width and
+    -- wraps when the window is narrow instead of overflowing/clipping at a fixed
+    -- width. Standalone (un-laid-out) labels keep the frame's initial `width`.
     lbl:SetPoint("TOPLEFT", 0, -5)
-    lbl:SetWidth(width or 380)
+    lbl:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -5)
     lbl:SetJustifyH("LEFT")
+    lbl:SetWordWrap(true)
     lbl:SetText(text)
     
     if color then
@@ -1488,6 +1494,267 @@ function GUI:CreateButton(parent, text, width, height, func)
         PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
     end)
     return btn
+end
+
+-- ============================================================
+-- DESIGNER PRESET BAR (shared by the Aura / Text Designer editors)
+-- Compact row: "Preset: [dropdown ▾]  [New][Duplicate][Rename][Delete]".
+-- Picking a preset assigns it to the mode (opts.getMode()) AND retargets the
+-- editor; the buttons manage the library. After any change the bar calls
+-- opts.onChange() so the host page can rebuild + refresh live frames.
+-- opts = { kind = "aura"|"text", getMode = fn->mode, onChange = fn }.
+-- Returns the bar frame; call bar:Refresh() to resync.
+-- ============================================================
+
+-- One reusable name-input popup (callback + default passed via `data`).
+-- Structural dialog definitions; per-call handlers are assigned in the launchers
+-- below (closures capturing default/callback) — the StaticPopup `data` field and
+-- the editbox field name both vary across client versions, so we avoid relying
+-- on them. The editbox is `self.EditBox` on current retail (12.0 GameDialog).
+StaticPopupDialogs["DANDERSFRAMES_PRESET_NAME"] = {
+    text = "%s",
+    button1 = ACCEPT or "Accept",
+    button2 = CANCEL or "Cancel",
+    hasEditBox = true,
+    editBoxWidth = 220,
+    maxLetters = 40,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+StaticPopupDialogs["DANDERSFRAMES_PRESET_DELETE"] = {
+    text = "%s",
+    button1 = DELETE or "Delete",
+    button2 = CANCEL or "Cancel",
+    timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+local function PromptPresetName(titleText, default, callback)
+    local dialog = StaticPopupDialogs["DANDERSFRAMES_PRESET_NAME"]
+    dialog.OnShow = function(self)
+        local eb = self.EditBox or self.editBox or (self.GetEditBox and self:GetEditBox())
+        if eb then
+            eb:SetText(default or "")
+            eb:HighlightText()
+            eb:SetFocus()
+        end
+    end
+    dialog.OnAccept = function(self)
+        local eb = self.EditBox or self.editBox or (self.GetEditBox and self:GetEditBox())
+        if callback and eb then callback(eb:GetText()) end
+    end
+    dialog.EditBoxOnEnterPressed = function(self)
+        if callback then callback(self:GetText()) end
+        local p = self:GetParent()
+        if p then p:Hide() end
+    end
+    StaticPopup_Show("DANDERSFRAMES_PRESET_NAME", titleText)
+end
+
+local function ConfirmDeletePreset(kind, name, onDone)
+    local dialog = StaticPopupDialogs["DANDERSFRAMES_PRESET_DELETE"]
+    dialog.OnAccept = function()
+        if DF.DeleteDesignerPreset then
+            DF:DeleteDesignerPreset(kind, name)
+            if onDone then onDone() end
+        end
+    end
+    StaticPopup_Show("DANDERSFRAMES_PRESET_DELETE",
+        format(L["Delete preset \"%s\"? Anything using it reverts to Default."], name))
+end
+
+function GUI:CreateDesignerPresetBar(parent, opts)
+    opts = opts or {}
+    local kind = opts.kind or "aura"
+    local getMode = opts.getMode or function() return "party" end
+    local onChange = opts.onChange or function() end
+
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetHeight(24)
+
+    local label = bar:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    label:SetPoint("LEFT", 0, 0)
+    label:SetText(L["Preset:"])
+    label:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    local function CurrentName()
+        return DF:GetModeDesignerPresetName(kind, getMode())
+    end
+
+    -- True while editing a raid auto-layout (the only context with an "inherit
+    -- the global preset" choice — normal party/raid modes ARE the base).
+    -- Mode-gated: auto-layouts are RAID-only, but the GUI can be reopened on
+    -- the party tab while editing (ToggleGUI re-derives SelectedMode) — the
+    -- PARTY preset bar must not show layout state, and its "Inherit (Global)"
+    -- click must never clear the RAID layout's override.
+    local function IsEditingLayout()
+        return getMode() == "raid"
+            and DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing()
+    end
+
+    -- The label to show on the dropdown button: "Inherit (Global)" when the
+    -- edited layout has no override, otherwise the resolved preset name.
+    local function CurrentLabel()
+        if IsEditingLayout() and DF.IsLayoutDesignerInheriting and DF:IsLayoutDesignerInheriting(kind) then
+            return L["Inherit (Global)"]
+        end
+        return CurrentName()
+    end
+
+    -- Dropdown button + menu (rebuilt on each open so it always reflects the lib)
+    local ddBtn = CreateFrame("Button", nil, bar, "BackdropTemplate")
+    ddBtn:SetSize(150, 22)
+    ddBtn:SetPoint("LEFT", label, "RIGHT", 6, 0)
+    CreateElementBackdrop(ddBtn)
+    ddBtn.text = ddBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    ddBtn.text:SetPoint("LEFT", 6, 0)
+    ddBtn.text:SetPoint("RIGHT", -16, 0)
+    ddBtn.text:SetJustifyH("LEFT")
+    ddBtn.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    local arrow = ddBtn:CreateTexture(nil, "OVERLAY")
+    arrow:SetPoint("RIGHT", -4, 0)
+    arrow:SetSize(10, 10)
+    arrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+    arrow:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+
+    local menu = CreateFrame("Frame", nil, ddBtn, "BackdropTemplate")
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:SetPoint("TOPLEFT", ddBtn, "BOTTOMLEFT", 0, -1)
+    menu:SetWidth(150)
+    CreatePanelBackdrop(menu)
+    menu:Hide()
+
+    -- Row pool: frames can't be garbage-collected in WoW, so recreating the
+    -- items on every open (the old Hide+SetParent(nil) approach) leaked a row
+    -- set per click. Reuse instead.
+    local menuRows = {}
+    local function BuildMenu()
+        for _, row in ipairs(menuRows) do row:Hide() end
+        local used = 0
+        local y = -4
+        local function AddItem(label, onClick)
+            used = used + 1
+            local item = menuRows[used]
+            if not item then
+                item = CreateFrame("Button", nil, menu)
+                item:SetHeight(20)
+                item.text = item:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+                item.text:SetPoint("LEFT", 4, 0)
+                item:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 1, 1) end)
+                item:SetScript("OnLeave", function(s) s.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b) end)
+                item:SetScript("OnClick", function(s)
+                    s.onClick()
+                    menu:Hide()
+                    bar:Refresh()
+                    onChange()
+                end)
+                menuRows[used] = item
+            end
+            item:ClearAllPoints()
+            item:SetPoint("TOPLEFT", 4, y)
+            item:SetPoint("TOPRIGHT", -4, y)
+            item.text:SetText(label)
+            item.text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+            item.onClick = onClick
+            item:Show()
+            y = y - 20
+        end
+        -- "Inherit (Global)" — only while editing a raid auto-layout. Clears the
+        -- layout's preset override so it follows your global preset.
+        if IsEditingLayout() then
+            AddItem(L["Inherit (Global)"], function()
+                if DF.InheritLayoutDesignerPreset then DF:InheritLayoutDesignerPreset(kind) end
+            end)
+        end
+        for _, name in ipairs(DF:ListDesignerPresets(kind)) do
+            AddItem(name, function() DF:SetModeDesignerPreset(kind, getMode(), name) end)
+        end
+        menu:SetHeight(-y + 4)
+    end
+    ddBtn:SetScript("OnClick", function()
+        if menu:IsShown() then menu:Hide() else BuildMenu(); menu:Show() end
+    end)
+
+    -- When editing a raid auto-layout, default the NEW preset name to the
+    -- layout's name (e.g. editing "31-40" → prefill "31-40") so making a
+    -- per-layout preset is one click + Enter. nil (blank) otherwise. (Duplicate
+    -- names after its source preset, not the layout.)
+    local function EditingLayoutName()
+        if not IsEditingLayout() then return nil end  -- mode-gated (raid only)
+        local apu = DF.AutoProfilesUI
+        if apu and apu.editingProfile then
+            return apu.editingProfile.name
+        end
+        return nil
+    end
+
+    -- Action buttons
+    local newBtn = GUI:CreateButton(bar, L["New"], 48, 22, function()
+        PromptPresetName(L["Name the new preset:"], EditingLayoutName() or "", function(text)
+            local n = DF:CreateDesignerPreset(kind, text)
+            if n then
+                DF:SetModeDesignerPreset(kind, getMode(), n)
+                bar:Refresh(); onChange()
+            end
+        end)
+    end)
+    newBtn:SetPoint("LEFT", ddBtn, "RIGHT", 6, 0)
+
+    local dupBtn = GUI:CreateButton(bar, L["Duplicate"], 72, 22, function()
+        local cur = CurrentName()
+        -- Duplicate defaults to "<source> copy" (New uses the layout name, but a
+        -- duplicate is of a specific preset, so name it after the source).
+        PromptPresetName(L["Name the duplicated preset:"], cur .. " copy", function(text)
+            local n = DF:DuplicateDesignerPreset(kind, cur, text)
+            if n then
+                DF:SetModeDesignerPreset(kind, getMode(), n)
+                bar:Refresh(); onChange()
+            end
+        end)
+    end)
+    dupBtn:SetPoint("LEFT", newBtn, "RIGHT", 4, 0)
+
+    local renameBtn = GUI:CreateButton(bar, L["Rename"], 62, 22, function()
+        local cur = CurrentName()
+        if cur == DF.DEFAULT_PRESET then return end
+        PromptPresetName(L["Rename preset:"], cur, function(text)
+            DF:RenameDesignerPreset(kind, cur, text)
+            bar:Refresh(); onChange()
+        end)
+    end)
+    renameBtn:SetPoint("LEFT", dupBtn, "RIGHT", 4, 0)
+
+    local delBtn = GUI:CreateButton(bar, L["Delete"], 56, 22, function()
+        local cur = CurrentName()
+        if cur == DF.DEFAULT_PRESET then return end
+        ConfirmDeletePreset(kind, cur, function() bar:Refresh(); onChange() end)
+    end)
+    delBtn:SetPoint("LEFT", renameBtn, "RIGHT", 4, 0)
+
+    local function SetActionEnabled(btn, on)
+        if on then
+            btn:Enable()
+            btn.Text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+        else
+            btn:Disable()
+            btn.Text:SetTextColor(0.4, 0.4, 0.4)   -- greyed: Default can't be renamed/deleted
+        end
+    end
+
+    function bar:Refresh()
+        ddBtn.text:SetText(CurrentLabel())
+        -- Rename/Delete act on the resolved preset; disable for the non-editable
+        -- Default and while a layout is inheriting (you're following the global,
+        -- not sitting on a layout-specific preset).
+        local inheriting = IsEditingLayout() and DF.IsLayoutDesignerInheriting
+            and DF:IsLayoutDesignerInheriting(kind)
+        local canModify = (CurrentName() ~= DF.DEFAULT_PRESET) and not inheriting
+        SetActionEnabled(renameBtn, canModify)
+        SetActionEnabled(delBtn, canModify)
+    end
+
+    bar:Refresh()
+    return bar
 end
 
 -- Creates a button with an icon and text
@@ -6283,10 +6550,10 @@ function GUI:CreateHighlightRosterWidget(parent, getPlayersFunc, setPlayersFunc,
     leftScroll:SetScrollChild(leftContent)
     StyleScrollBar(leftScroll)
 
-    -- ========== RIGHT COLUMN: Highlighted Units ==========
+    -- ========== RIGHT COLUMN: Pinned Units ==========
     local rightHeader = container:CreateFontString(nil, "OVERLAY", "DFFontNormal")
     rightHeader:SetPoint("TOPLEFT", leftBg, "TOPRIGHT", COL_GAP, 18)
-    rightHeader:SetText(L["Highlighted Units"])
+    rightHeader:SetText(L["Pinned Units"])
     rightHeader:SetTextColor(0.7, 0.7, 0.7)
     
     local rightCount = container:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")

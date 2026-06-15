@@ -55,6 +55,9 @@ end
 
 function DF:ApplyFrameBorder(frame, db)
     if not frame or not frame.border then return end
+    -- Pinned frames carry their own border DB (a Border Override snapshot, or the
+    -- Based-on mode when inheriting) so they don't render the active mode's border.
+    if frame.dfPinnedBorderDB then db = frame.dfPinnedBorderDB end
     db = db or (DF.GetFrameDB and DF:GetFrameDB(frame))
     if not db then return end
 

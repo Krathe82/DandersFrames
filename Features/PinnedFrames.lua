@@ -47,14 +47,222 @@ end
 -- ============================================================
 
 -- Get pinned frames config for actual current mode
+-- The mode DB (party/raid) the REAL pinned frames inherit their sizing/colours
+-- from. Uses live IsInRaid(): the real pinned frames are live-group entities. The
+-- test-mode PREVIEW frames size themselves from an explicit isRaidMode instead
+-- (see ApplyPlayerTestLayout), so raid test mode never routes through here.
+local function GetPinnedModeDB()
+    return IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+end
+
 local function GetPinnedDB()
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     return db and db.pinnedFrames
+end
+
+-- Maximum pinned sets a profile may hold. Each ACTIVE (enabled) set is a live
+-- SecureGroupHeaderTemplate that re-evaluates on every roster event, so this
+-- ceiling is perf-bounded, not arbitrary; defined-but-disabled sets are dormant
+-- and cheap. Exposed on the module so the editor can gate the "Add set" button.
+-- 4 keeps the editor tab strip on one row and the active-header count sane.
+PinnedFrames.MAX_SETS = 4
+
+-- Count of sets defined in this mode's pinned config, clamped to MAX_SETS.
+local function NumSets(hlDB)
+    hlDB = hlDB or GetPinnedDB()
+    if not hlDB or not hlDB.sets then return 0 end
+    local n = #hlDB.sets
+    if n > PinnedFrames.MAX_SETS then n = PinnedFrames.MAX_SETS end
+    return n
 end
 
 -- Get the current actual mode (not cached)
 local function GetActualMode()
     return IsInRaid() and "raid" or "party"
+end
+
+-- Party-only "Show when solo" gate. When solo (not in any group) a pinned set
+-- stays HIDDEN unless its showInSoloMode is explicitly set — pinned frames
+-- highlight other group members, which don't exist solo. Raid is unaffected
+-- (being in a raid implies a group, and raid has no solo toggle by design).
+-- Test-mode previews always pass — they simulate a group so the frames can be
+-- configured. Default (nil) = hidden when solo; the checkbox opts in to showing.
+local function PinnedSoloAllowed(set)
+    if DF.testMode or DF.raidTestMode then return true end
+    if IsInGroup() then return true end
+    return set and set.showInSoloMode == true  -- opt-in to show when solo
+end
+
+-- True when instanced PvP has pinned processing disabled (the live default —
+-- see ProcessAllSets for the full rationale). Shared by ProcessAllSets
+-- (auto-population dormancy) and ComputeHiddenNames: a dormant feature must
+-- not keep filtering its (frozen, possibly stale) members out of the main
+-- frames either.
+local function PinnedPvPDormant(hlDB)
+    local inPvP = (DF.IsInArena and DF:IsInArena())
+        or (DF.IsInBattleground and DF:IsInBattleground())
+    if not inPvP then return false end
+    local disableInPvP = hlDB and hlDB.disableInPvP
+    if disableInPvP == nil then disableInPvP = true end
+    return disableInPvP
+end
+
+-- Resolve which mode's main-frame DB a pinned set inherits its baseline look
+-- from (size, and later border/background). set.matchMode is "party" / "raid";
+-- it defaults to the set's OWN mode (a party set mirrors party frames, a raid
+-- set mirrors raid frames), and a set can cross-match the opposite mode. Since a
+-- set only ever displays in its own mode, `activeDB` (the caller's resolved mode
+-- — active mode for real frames, explicit test-mode DB otherwise) IS the own
+-- mode, so an unset/legacy matchMode falls through to it.
+local function GetSetBaselineDB(set, activeDB)
+    local m = set and set.matchMode
+    if m == "party" then return DF:GetDB("party") end
+    if m == "raid"  then return DF:GetRaidDB() end
+    return activeDB  -- unset/legacy → the set's own (displayed) mode
+end
+
+-- Resolve a set's per-button frame width/height. The baseline is the main frames
+-- of the set's Match mode (db.frameWidth/Height, via GetSetBaselineDB); a set may
+-- override either dimension per-set via set.customWidth / customHeight (nil =
+-- inherit the Match value). The per-set `scale` multiplier still applies on top
+-- via the container's SetScale, so this is the unscaled base size.
+local function GetSetFrameSize(set, db)
+    db = GetSetBaselineDB(set, db)
+    local w = (set and set.customWidth) or (db and db.frameWidth) or 120
+    local h = (set and set.customHeight) or (db and db.frameHeight) or 50
+    return w, h
+end
+
+-- Grow direction is a pinned-ONLY setting: the main party/raid frames' own
+-- growDirection means *group* arrangement (labelled "Rows / Columns"), which is a
+-- different concept from how pinned buttons flow — so it is NOT inherited. Plain
+-- per-set value, default HORIZONTAL.
+local function GetSetGrowDirection(set)
+    return (set and set.growDirection) or "HORIZONTAL"
+end
+
+-- Scale DOES inherit the Match mode's frameScale (a plain multiplier, same
+-- meaning everywhere) unless the set overrides it (set.scale ~= nil).
+-- `db` (optional) names the set's displayed-mode db explicitly — pass it from
+-- mode-explicit paths (test previews) so a cross-mode preview (raid test while
+-- solo/party) doesn't fall back to the LIVE mode's frameScale via
+-- GetPinnedModeDB when matchMode is unset.
+local function GetSetScale(set, db)
+    if set and set.scale then return set.scale end
+    local b = GetSetBaselineDB(set, db or GetPinnedModeDB())
+    return (b and b.frameScale) or 1.0
+end
+
+-- Frame-border keys are all "frame…Border…" (frameShowBorder, frameBorderStyle,
+-- frameBorderColor, …); pixelPerfect is the one extra frame-level key BuildSpec
+-- reads. Used to snapshot a set's Border Override from the Based-on mode.
+local function IsFrameBorderKey(key)
+    if type(key) ~= "string" then return false end
+    if key == "pixelPerfect" then return true end
+    return key:find("^frame") ~= nil and key:find("Border") ~= nil
+end
+
+-- The DB a set's frame border renders from: the set itself when Border Override
+-- is on (a complete snapshot seeded from the Based-on mode, so edits are
+-- independent), else the Based-on mode DB (live inherit). `baselineDB` is the
+-- resolved Based-on mode DB.
+local function GetSetBorderDB(set, baselineDB)
+    if set and set.borderOverride then return set end
+    return baselineDB
+end
+
+-- Per-frame effective DB for the Hide Auras / Hide Status Icons toggles: a thin
+-- overlay on the mode `base` that forces showBuffs/showDebuffs off (hideAuras) and
+-- every `<name>IconEnabled` flag off (hideIcons), so the existing aura/icon
+-- updaters hide via their own paths. Returns nil when neither is set, so
+-- GetFrameDB falls through to the normal mode db (zero overhead when unused).
+-- Defensive / Missing-Buff are aura *indicators* (named with the IconEnabled
+-- suffix) — they belong under Hide Auras, not Hide Status Icons.
+local AURA_INDICATOR_ICON_KEYS = {
+    defensiveIconEnabled   = true,
+    missingBuffIconEnabled = true,
+}
+
+-- pairs() can't traverse the raid db proxy (WrapDB returns an EMPTY table whose
+-- reads go through __index), so enumerating GetRaidDB() yields ZERO keys and
+-- silently no-ops any key-discovery loop. Resolve to the real raid table for
+-- ENUMERATION ONLY; individual value reads should still go through the passed
+-- db so runtime auto-layout overrides keep resolving.
+local function EnumerableDB(db)
+    if db ~= nil and db == DF._raidProxy then
+        return DF._realRaidDB or db
+    end
+    return db
+end
+
+local function BuildPinnedEffDB(base, hideAuras, hideIcons)
+    if not base or not (hideAuras or hideIcons) then return nil end
+    local t = setmetatable({}, { __index = base })
+    if hideAuras then
+        t.showBuffs = false
+        t.showDebuffs = false
+        t.defensiveIconEnabled = false
+        t.missingBuffIconEnabled = false
+    end
+    if hideIcons then
+        for k in pairs(EnumerableDB(base)) do
+            if type(k) == "string" and k:find("IconEnabled", 1, true)
+               and not AURA_INDICATOR_ICON_KEYS[k] then
+                t[k] = false
+            end
+        end
+    end
+    return t
+end
+
+-- Snapshot the Based-on mode's frame border into a set so its Border Override
+-- controls start identical to the inherited look and edits never leak back to the
+-- real frames (colour tables are deep-copied). Normally only fills keys the set
+-- doesn't already have (so toggling Override off then on preserves prior edits);
+-- pass force=true to overwrite every key — used by "Reset Border to Inherited".
+function PinnedFrames:SeedSetBorderOverride(set, force)
+    if not set then return end
+    local baseDB = GetSetBaselineDB(set, GetPinnedModeDB())
+    if not baseDB then return end
+    -- Enumerate key names from the real table (the raid proxy yields nothing to
+    -- pairs); read values through baseDB so runtime overrides still resolve.
+    for key in pairs(EnumerableDB(baseDB)) do
+        if IsFrameBorderKey(key) and (force or set[key] == nil) then
+            local value = baseDB[key]
+            if type(value) == "table" then
+                set[key] = DF:DeepCopy(value)
+            else
+                set[key] = value
+            end
+        end
+    end
+end
+
+-- Shallow value compare that also handles the flat {r,g,b,a} colour tables the
+-- border keys use, so we can tell whether an override actually differs from the
+-- inherited value (drives "reset only shows when changed").
+local function BorderValEqual(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) == "table" then
+        for k, v in pairs(a) do if b[k] ~= v then return false end end
+        for k, v in pairs(b) do if a[k] ~= v then return false end end
+        return true
+    end
+    return a == b
+end
+
+-- True only when Border Override is on AND at least one border key has been
+-- changed from the inherited (Based-on) value.
+function PinnedFrames:IsBorderOverrideChanged(set)
+    if not set or not set.borderOverride then return false end
+    local baseDB = GetSetBaselineDB(set, GetPinnedModeDB())
+    if not baseDB then return false end
+    for key, val in pairs(set) do
+        if IsFrameBorderKey(key) and not BorderValEqual(val, baseDB[key]) then
+            return true
+        end
+    end
+    return false
 end
 
 -- Get a specific set's config
@@ -100,10 +308,15 @@ local function GetGroupRoster()
         for i = 1, numMembers do
             local name = GetRaidRosterInfo(i)
             if name then
-                -- Store both the full name and short name for lookup
+                -- Store both the full name and short name for lookup. Exact names
+                -- always win; a short-name ALIAS must never overwrite an existing
+                -- entry — a same-realm member's exact name IS their short name, so
+                -- a cross-realm namesake's alias would otherwise clobber it
+                -- (last-writer-wins) and misresolve lookups (e.g. flag the player
+                -- as hidden because a pinned namesake aliased their key).
                 roster[name] = name
                 local shortName = name:match("([^%-]+)") or name
-                if shortName ~= name then
+                if shortName ~= name and roster[shortName] == nil then
                     roster[shortName] = name  -- Map short name to full roster name
                 end
                 table.insert(rosterNames, name)
@@ -114,7 +327,7 @@ local function GetGroupRoster()
         local playerName = GetUnitName("player", true)  -- Returns "Name-Realm"
         roster[playerName] = playerName
         table.insert(rosterNames, playerName)
-        
+
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
@@ -122,7 +335,9 @@ local function GetGroupRoster()
                 if fullName then
                     local name = fullName:match("([^%-]+)") or fullName
                     roster[fullName] = fullName
-                    roster[name] = fullName  -- Map short name too
+                    if roster[name] == nil then
+                        roster[name] = fullName  -- Short-name alias (never clobbers an exact entry)
+                    end
                     table.insert(rosterNames, fullName)
                 end
             end
@@ -161,8 +376,10 @@ function PinnedFrames:AutoPopulateSet(set, roster)
     local changed = false
     roster = roster or GetGroupRoster()
 
-    -- Ensure manualPlayers table exists (migration for existing profiles)
+    -- Ensure player tables exist (defensive against malformed/partial profiles;
+    -- the loops below and the auto-add path index set.players directly).
     if not set.manualPlayers then set.manualPlayers = {} end
+    if not set.players then set.players = {} end
 
     local hasAnyAutoFilter = set.autoAddTanks or set.autoAddHealers or set.autoAddDPS
 
@@ -180,8 +397,9 @@ function PinnedFrames:AutoPopulateSet(set, roster)
         local fullName = GetUnitName("player", true)
         local shortName = fullName and fullName:match("([^%-]+)") or fullName
 
-        -- Auto-add player if DPS filter is on
-        if set.autoAddDPS and shortName and not existingPlayers[shortName] then
+        -- Auto-add player if DPS filter is on (unless Exclude Self — the solo
+        -- player is always self, so excludeSelf means never auto-add here).
+        if set.autoAddDPS and not set.excludeSelf and shortName and not existingPlayers[shortName] then
             table.insert(set.players, fullName)
             changed = true
         end
@@ -194,7 +412,7 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                     -- Solo player is always DAMAGER
                     local pShort = playerName:match("([^%-]+)") or playerName
                     if pShort == shortName then
-                        if not set.autoAddDPS then
+                        if not set.autoAddDPS or set.excludeSelf then
                             table.remove(set.players, i)
                             changed = true
                         end
@@ -212,6 +430,14 @@ function PinnedFrames:AutoPopulateSet(set, roster)
     -- Build name → role map for the removal pass
     local rosterRoles = {}  -- shortName -> role
     local isRaid = IsInRaid()
+
+    -- Identify the player for the Exclude Self option (gates auto-add/remove of self).
+    local selfFull = GetUnitName("player", true)
+    local selfShort = selfFull and selfFull:match("([^%-]+)") or selfFull
+    local function IsSelfName(name)
+        if not name then return false end
+        return name == selfFull or (name:match("([^%-]+)") or name) == selfShort
+    end
     for i = 1, numMembers do
         local unit = isRaid and ("raid" .. i) or (i == 1 and "player" or "party" .. (i - 1))
         local fullName = GetUnitName(unit, true)
@@ -232,6 +458,11 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                     shouldAdd = true
                 elseif set.autoAddDPS and role == "DAMAGER" then
                     shouldAdd = true
+                end
+
+                -- Exclude Self: never auto-add the player to this set.
+                if shouldAdd and set.excludeSelf and UnitIsUnit(unit, "player") then
+                    shouldAdd = false
                 end
 
                 if shouldAdd then
@@ -266,6 +497,9 @@ function PinnedFrames:AutoPopulateSet(set, roster)
                         matchesFilter = true
                     end
 
+                    -- Exclude Self: drop an auto-added self even if the role matches.
+                    if set.excludeSelf and IsSelfName(playerName) then matchesFilter = false end
+
                     if not matchesFilter then
                         table.remove(set.players, i)
                         changed = true
@@ -281,19 +515,52 @@ end
 -- Clean up offline players from a set
 function PinnedFrames:CleanOfflinePlayers(set, roster)
     if not set or set.keepOfflinePlayers then return false end
-    
+
+    -- Fix A — don't prune against a roster that isn't populated yet. On login /
+    -- zone-in (raidlogging) the group roster loads asynchronously, so for a brief
+    -- window GetNumGroupMembers() is 0 and GetGroupRoster() returns only the player.
+    -- Pruning here would wipe every other pinned member before the roster arrives
+    -- (the intermittent "I have to re-add them" report). 0 also means genuinely solo
+    -- / just-left-the-group — keep the pins for next time rather than wiping them the
+    -- instant the group disbands. Real leavers are pruned on the next update once the
+    -- roster is non-empty.
+    if GetNumGroupMembers() == 0 then return false end
+
     roster = roster or GetGroupRoster()
+    local manual = set.manualPlayers
     local changed = false
-    
+
     for i = #set.players, 1, -1 do
         local fullName = set.players[i]
-        if not IsPlayerInGroup(fullName, roster) then
+        -- Fix B — never prune a manually-added pin. Drag, the +role buttons and
+        -- "Add Offline Player" all mark the name in manualPlayers; those are
+        -- deliberate picks and must persist. keepOfflinePlayers governs only the
+        -- transient AUTO-added members (mirrors the manualPlayers guard the
+        -- auto-remove pass in AutoPopulateSet already uses).
+        if (not manual or not manual[fullName]) and not IsPlayerInGroup(fullName, roster) then
             table.remove(set.players, i)
             changed = true
         end
     end
-    
+
     return changed
+end
+
+-- Debounced entry point for the recurring event-driven path. In instanced PvP the
+-- roster / unit event stream can fire many times per frame; calling ProcessAllSets
+-- on each one re-runs the full populate + header rebuild until the per-frame budget
+-- is exhausted ("script ran too long"). Coalesce a burst into a single deferred run
+-- so that even an opt-in (disableInPvP = false) set stays within budget. One-time /
+-- explicit callers (init, reinit, mode change) still call ProcessAllSets directly
+-- for immediate effect.
+local processAllSetsPending = false
+function PinnedFrames:RequestProcessAllSets()
+    if processAllSetsPending then return end
+    processAllSetsPending = true
+    C_Timer.After(0.05, function()
+        processAllSetsPending = false
+        PinnedFrames:ProcessAllSets()
+    end)
 end
 
 -- Process all pinned sets for current mode
@@ -310,39 +577,34 @@ function PinnedFrames:ProcessAllSets()
     -- re-populates on leaving. Per-mode `disableInPvP` (nil = default true) gates
     -- it; opting back in is exposed (and throttle-protected) only where that UI
     -- exists, so the live default stays safe.
-    local inPvP = (DF.IsInArena and DF:IsInArena())
-        or (DF.IsInBattleground and DF:IsInBattleground())
-    if inPvP then
-        local disableInPvP = hlDB.disableInPvP
-        if disableInPvP == nil then disableInPvP = true end
-        if disableInPvP then
-            -- HIDE the pinned frames while dormant, don't just stop processing:
-            -- a premade's arena/BG teammates ARE the group, so the frozen
-            -- pre-PvP nameList still matches them and the frames kept showing.
-            -- Zone-in fires the roster events that reach here before the first
-            -- pull, so the out-of-combat guard normally passes; a mid-combat
-            -- arrival is picked up by the next out-of-combat call.
-            if not self.pvpHidden and not InCombatLockdown() then
-                for i = 1, 2 do
-                    local c = self.containers[i]
-                    if c then
-                        c:Hide()
-                        if c.mover then c.mover:Hide() end
-                    end
-                    if self.headers[i] then self.headers[i]:Hide() end
-                    if self.labels[i] then self.labels[i]:Hide() end
+    if PinnedPvPDormant(hlDB) then
+        -- HIDE the pinned frames while dormant, don't just stop processing:
+        -- a premade's arena/BG teammates ARE the group, so the frozen
+        -- pre-PvP nameList still matches them and the frames kept showing.
+        -- Zone-in fires the roster events that reach here before the first
+        -- pull, so the out-of-combat guard normally passes; a mid-combat
+        -- arrival is picked up by the next out-of-combat call.
+        if not self.pvpHidden and not InCombatLockdown() then
+            for i = 1, PinnedFrames.MAX_SETS do
+                local c = self.containers[i]
+                if c then
+                    c:Hide()
+                    if c.mover then c.mover:Hide() end
                 end
-                self.pvpHidden = true
+                if self.headers[i] then self.headers[i]:Hide() end
+                if self.labels[i] then self.labels[i]:Hide() end
             end
-            return false
+            self.pvpHidden = true
         end
+        return false
     end
 
     -- Back out of instanced PvP (or the user opted back in): restore each
-    -- set's visibility from its real enabled state.
+    -- set's visibility from its real enabled state (SetEnabled also applies
+    -- the solo gate).
     if self.pvpHidden and not InCombatLockdown() then
         self.pvpHidden = nil
-        for i = 1, 2 do
+        for i = 1, PinnedFrames.MAX_SETS do
             local set = hlDB.sets and hlDB.sets[i]
             if set then self:SetEnabled(i, set.enabled) end
         end
@@ -350,7 +612,7 @@ function PinnedFrames:ProcessAllSets()
 
     -- Skip processing if no sets are enabled (avoids unnecessary work)
     local anyEnabled = false
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         if hlDB.sets[i] and hlDB.sets[i].enabled then
             anyEnabled = true
             break
@@ -361,7 +623,7 @@ function PinnedFrames:ProcessAllSets()
     local roster = GetGroupRoster()
     local changed = false
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = hlDB.sets[i]
         if set then
             if self:AutoPopulateSet(set, roster) then
@@ -374,6 +636,10 @@ function PinnedFrames:ProcessAllSets()
     end
     
     if changed then
+        -- Membership just changed: drop the hidden-names memo NOW so the
+        -- header refresh below (and any main-frame rebuild later this same
+        -- frame) filters from post-mutation data.
+        self:InvalidateHiddenNames()
         self:UpdateAllHeaders()
     end
 
@@ -407,7 +673,7 @@ end
 function PinnedFrames:OnBossFramesChanged()
     if not self.initialized then return end
 
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             -- unitFrameMap and frame refresh are safe during combat (purely visual/data)
@@ -434,7 +700,7 @@ end
 -- This determines which corner the header anchors to AND the container anchors to UIParent
 -- Supports START, CENTER, and END for both frameAnchor and columnAnchor
 local function GetContainerAnchorPoint(set)
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local frameAnchor = set.frameAnchor or "START"
     local columnAnchor = set.columnAnchor or "START"
 
@@ -453,56 +719,6 @@ local function GetContainerAnchorPoint(set)
     local anchor = yPart .. xPart
     if anchor == "" then anchor = "CENTER" end
     return anchor
-end
-
--- Convert a container's saved position from one anchor to another
--- Returns new x, y offsets for the target anchor
-local function ConvertAnchorPosition(container, oldAnchor, newAnchor)
-    if oldAnchor == newAnchor then return end
-
-    -- Get the container's current screen edges
-    local left = container:GetLeft()
-    local right = container:GetRight()
-    local top = container:GetTop()
-    local bottom = container:GetBottom()
-
-    if not left or not right or not top or not bottom then return end
-
-    -- Get UIParent edges (in same coordinate space)
-    local uiLeft = UIParent:GetLeft() or 0
-    local uiRight = UIParent:GetRight() or GetScreenWidth()
-    local uiTop = UIParent:GetTop() or GetScreenHeight()
-    local uiBottom = UIParent:GetBottom() or 0
-
-    -- Calculate the position of each anchor point on the container
-    local anchorX = { LEFT = left, RIGHT = right, CENTER = (left + right) / 2 }
-    local anchorY = { TOP = top, BOTTOM = bottom, CENTER = (top + bottom) / 2 }
-
-    -- Parse anchor into x/y components
-    local function ParseAnchor(anchor)
-        if anchor == "CENTER" then return "CENTER", "CENTER" end
-        if anchor == "TOP" then return "CENTER", "TOP" end
-        if anchor == "BOTTOM" then return "CENTER", "BOTTOM" end
-        if anchor == "LEFT" then return "LEFT", "CENTER" end
-        if anchor == "RIGHT" then return "RIGHT", "CENTER" end
-        local yPart = anchor:match("^(TOP)") or anchor:match("^(BOTTOM)")
-        local xPart = anchor:match("(LEFT)$") or anchor:match("(RIGHT)$")
-        return xPart or "CENTER", yPart or "CENTER"
-    end
-
-    -- Get the screen position of the container's new anchor point
-    local newXPart, newYPart = ParseAnchor(newAnchor)
-    local containerX = anchorX[newXPart]
-    local containerY = anchorY[newYPart]
-
-    -- Get the screen position of UIParent's new anchor point
-    local uiAnchorX = { LEFT = uiLeft, RIGHT = uiRight, CENTER = (uiLeft + uiRight) / 2 }
-    local uiAnchorY = { TOP = uiTop, BOTTOM = uiBottom, CENTER = (uiTop + uiBottom) / 2 }
-    local uiX = uiAnchorX[newXPart]
-    local uiY = uiAnchorY[newYPart]
-
-    -- The offset is the difference between container anchor point and UIParent anchor point
-    return containerX - uiX, containerY - uiY
 end
 
 -- ============================================================
@@ -644,15 +860,14 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
     if not handler or not set then return end
     if InCombatLockdown() then return end
 
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     if not db then return end
 
-    local frameWidth    = db.frameWidth or 120
-    local frameHeight   = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
     local hSpacing      = set.horizontalSpacing or 2
     local vSpacing      = set.verticalSpacing or 2
     local unitsPerRow   = set.unitsPerRow or 5
-    local horizontal    = (set.growDirection == "HORIZONTAL")
+    local horizontal    = (GetSetGrowDirection(set) == "HORIZONTAL")
     local frameAnchor   = set.frameAnchor or "START"
     local columnAnchor  = set.columnAnchor or "START"
     local anchor        = GetContainerAnchorPoint(set)
@@ -661,11 +876,21 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
 
     -- Size each boss frame to the current mode. SetSize on secure frames is
     -- combat-restricted; we already bailed above on InCombatLockdown.
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
     local frames = self.bossFrames[setIndex]
     if frames then
         for i = 1, 8 do
             local f = frames[i]
             if f then
+                f.dfPinnedWidth, f.dfPinnedHeight = frameWidth, frameHeight
+                f.dfPinnedBorderDB = borderDB
+                f.dfPinnedEffDB = effDB
+                f.dfPinnedHideAuras = set.hideAuras
+                -- Per-set Aura/Text Designer preset (nil = inherit the mode's preset;
+                -- the resolver falls back to FrameMode when the stamp is nil).
+                f.dfAuraPresetOverride = set.auraDesignerPreset
+                f.dfTextPresetOverride = set.textDesignerPreset
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = IsInRaid()
             end
@@ -756,10 +981,12 @@ function PinnedFrames:CreateBossFrames(setIndex, container)
         frame:RegisterUnitEvent("UNIT_HEAL_PREDICTION", bossUnit)
 
         frame:SetScript("OnEvent", function(self, event, unit, updateInfo)
-            -- Skip work if hidden (state driver keeps us hidden when bossN
-            -- doesn't exist / isn't friendly, so events shouldn't really
-            -- fire then, but cheap to guard).
-            if not self:IsShown() then return end
+            -- Skip work if hidden. IsVisible (not IsShown): a DISABLED boss
+            -- set's container is hidden but the state driver still flips each
+            -- frame's own shown flag during encounters — IsShown would pass and
+            -- burn full aura scans on every boss UNIT_AURA for a feature the
+            -- user turned off.
+            if not self:IsVisible() then return end
 
             if event == "UNIT_HEALTH"
                     or event == "UNIT_MAXHEALTH"
@@ -938,7 +1165,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
     local pos = set.position or { point = containerAnchor, x = 0, y = 200 * (setIndex == 1 and 1 or -1) }
     -- If saved anchor doesn't match current growth anchor, convert on first layout pass
     local useAnchor = pos.point or containerAnchor
-    local initScale = set.scale or 1.0
+    local initScale = GetSetScale(set)
     container:SetScale(initScale)
     container:ClearAllPoints()
     container:SetPoint(useAnchor, UIParent, useAnchor, (pos.x or 0) / initScale, (pos.y or 0) / initScale)
@@ -1000,10 +1227,15 @@ function PinnedFrames:CreateSetFrames(setIndex)
     local startMouseX, startMouseY, startPosX, startPosY
     
     mover:SetScript("OnDragStart", function(self)
-        if set.locked then return end
+        -- Re-resolve the set EVERY drag: the closure's `set` upvalue is bound at
+        -- CreateSetFrames time, but a profile switch swaps the underlying table
+        -- without recreating the frames — stale lock state would gate the drag
+        -- and (worse) OnDragStop would save the position into the DEAD profile.
+        local liveSet = GetSetDB(setIndex)
+        if not liveSet or liveSet.locked then return end
 
         -- Get the current anchor for this set
-        local anchor = GetContainerAnchorPoint(set)
+        local anchor = GetContainerAnchorPoint(liveSet)
 
         -- Get starting mouse position in screen coordinates
         local uiScale = UIParent:GetEffectiveScale()
@@ -1012,7 +1244,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
         startMouseY = startMouseY / uiScale
 
         -- Get current container position
-        local pos = set.position or { x = 0, y = 0 }
+        local pos = liveSet.position or { x = 0, y = 0 }
         startPosX = pos.x or 0
         startPosY = pos.y or 0
 
@@ -1039,8 +1271,12 @@ function PinnedFrames:CreateSetFrames(setIndex)
         self:SetScript("OnUpdate", nil)
         if not startMouseX then return end
 
+        -- Re-resolve (see OnDragStart): write the position into the LIVE set.
+        local liveSet = GetSetDB(setIndex)
+        if not liveSet then return end
+
         -- Get the current anchor for this set
-        local anchor = GetContainerAnchorPoint(set)
+        local anchor = GetContainerAnchorPoint(liveSet)
 
         -- Get final position from mouse delta
         local uiScale = UIParent:GetEffectiveScale()
@@ -1054,7 +1290,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
         local finalY = startPosY + deltaY
 
         -- Save logical position (unscaled)
-        set.position = { point = anchor, x = finalX, y = finalY }
+        liveSet.position = { point = anchor, x = finalX, y = finalY }
 
         -- When an auto layout is active, GetSetDB() returns a table from the overlay's
         -- deep copy of _realRaidDB.pinnedFrames, so the write above goes to that copy
@@ -1256,6 +1492,92 @@ function PinnedFrames:UpdateHeaderNameList(setIndex)
             PinnedFrames:RefreshChildFrames(setIndex)
         end
     end)
+
+    -- #78: members of a "Hide from Main Frames" set must also be dropped from the
+    -- MAIN party/raid headers — rebuild them so they pick up / release the name.
+    -- (We're already past the combat early-return above.) Auto-add coincides with
+    -- GROUP_ROSTER_UPDATE which rebuilds main anyway; this covers manual add/remove.
+    if set.hideFromMainFrames and DF.RefreshMainFrameSorting then
+        self:InvalidateHiddenNames()  -- membership may have just changed
+        DF:RefreshMainFrameSorting()
+    end
+end
+
+-- #78: the set of (realm-qualified) roster names that belong to a pinned set with
+-- "Hide from Main Frames" on, in the CURRENT mode. The main party/raid nameList
+-- build (DF:BuildSortedNameList) filters these out so a pinned member doesn't also
+-- show in the main frames. Resolves stored names → actual roster names exactly like
+-- UpdateHeaderNameList, so the keys match the main members' names directly. Returns
+-- nil when nothing is hidden (cheap no-op for the common case).
+local function ComputeHiddenNames()
+    if PinnedFrames.testModeActive then return nil end  -- never hide real units in test
+    local hlDB = GetPinnedDB()
+    if not hlDB or not hlDB.sets then return nil end
+    -- Pinned processing is dormant in instanced PvP by default — its (frozen)
+    -- members must not keep filtering the main frames there.
+    if PinnedPvPDormant(hlDB) then return nil end
+    local result, roster
+    for i = 1, PinnedFrames.MAX_SETS do
+        local set = hlDB.sets[i]
+        -- PinnedSoloAllowed: a set whose container is hidden by the solo gate
+        -- must not filter either — otherwise a solo player pinned into a hiding
+        -- set (e.g. auto-add DPS) loses their MAIN frame while the pinned copy
+        -- is hidden too, leaving no frame at all.
+        if set and set.enabled and set.hideFromMainFrames and not IsBossSet(set)
+           and PinnedSoloAllowed(set)
+           and set.players and #set.players > 0 then
+            roster = roster or GetGroupRoster()
+            for _, storedName in ipairs(set.players) do
+                local rosterName = IsPlayerInGroup(storedName, roster)
+                if rosterName then
+                    result = result or {}
+                    result[rosterName] = true
+                end
+            end
+        end
+    end
+    -- The player IS hideable when pinned into a hiding set. Flag them explicitly
+    -- via the roster rather than a name match — the main PARTY builder names the
+    -- player UnitName("player") (no realm) while the pinned roster uses
+    -- GetUnitName("player", true), so a plain name-key lookup can miss them.
+    if result then
+        roster = roster or GetGroupRoster()
+        local selfRoster = IsPlayerInGroup(GetUnitName("player", true), roster)
+        if selfRoster and result[selfRoster] then
+            result.__hidePlayer = true
+        end
+    end
+    return result
+end
+
+-- Per-frame memo. A single raid sort asks for this once per group (1 + up to 8
+-- calls via BuildSortedNameList) and the party/flat paths ask twice; each compute
+-- rebuilds the whole roster (GetGroupRoster) + an IsPlayerInGroup pass. The result
+-- is stable within a frame (roster + pinned config don't change mid-frame, and
+-- pinned-set mutations run debounced in a later frame), so cache it and clear on
+-- the next tick — collapsing the per-group rescans into one without threading the
+-- result through the sort signatures.
+local hiddenNamesCache
+local hiddenNamesValid = false
+function DF:GetPinnedHiddenNames()
+    if hiddenNamesValid then return hiddenNamesCache end
+    local result = ComputeHiddenNames()
+    hiddenNamesCache = result
+    hiddenNamesValid = true
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, function() hiddenNamesValid = false; hiddenNamesCache = nil end)
+    end
+    return result
+end
+
+-- Explicit invalidation for set mutations. The next-frame expiry above is only
+-- a backstop: at low FPS the roster-throttle sort (which primes the cache) and
+-- the debounced ProcessAllSets (which mutates set.players) can land in the SAME
+-- frame, so a mutation must drop the memo immediately or the following
+-- main-frame rebuild filters from pre-mutation data.
+function PinnedFrames:InvalidateHiddenNames()
+    hiddenNamesValid = false
+    hiddenNamesCache = nil
 end
 
 -- Apply layout settings to a header
@@ -1283,27 +1605,44 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     local header = self.headers[setIndex]
     if not header then return end
     
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+    local db = GetPinnedModeDB()
     if not db then
         DF:DebugError("PINNED", "ApplyLayoutSettings: db is nil")
         return
     end
     
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
-    
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
+    -- Border DB this set renders from: its own snapshot when Border Override is on,
+    -- else the Based-on mode (live inherit). Stamped onto each child so
+    -- DF:ApplyFrameBorder uses it instead of the shared per-mode db.
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    -- Effective DB + AD flag for Hide Auras / Hide Status Icons (nil when neither).
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
+
     -- CRITICAL: Resize all child frames to match current raid/party settings
     -- This ensures frames use the correct size when switching between raid and party
     for i = 1, 40 do
         local child = header:GetAttribute("child" .. i)
         if child then
+            -- Stamp the resolved pinned size so DF:ApplyFrameLayout (which otherwise
+            -- sizes from the shared per-mode db) keeps this set's Match/Custom size.
+            child.dfPinnedWidth, child.dfPinnedHeight = frameWidth, frameHeight
+            child.dfPinnedBorderDB = borderDB
+            child.dfPinnedEffDB = effDB
+            child.dfPinnedHideAuras = set.hideAuras
+            -- Per-set Aura/Text Designer preset (nil = inherit the mode's preset).
+            child.dfAuraPresetOverride = set.auraDesignerPreset
+            child.dfTextPresetOverride = set.textDesignerPreset
             child:SetSize(frameWidth, frameHeight)
             -- Also update the isRaidFrame flag for proper DB selection in other functions
             child.isRaidFrame = IsInRaid()
+            -- Re-render the border now so border edits apply live (the per-frame
+            -- ApplyFrameLayout also picks up dfPinnedBorderDB on its next tick).
+            if DF.ApplyFrameBorder then DF:ApplyFrameBorder(child, borderDB) end
         end
     end
     
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local hSpacing = set.horizontalSpacing or 2
     local vSpacing = set.verticalSpacing or 2
     local unitsPerRow = set.unitsPerRow or 5
@@ -1365,7 +1704,7 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     -- Apply scale FIRST (before any position work)
     local container = self.containers[setIndex]
     if container then
-        container:SetScale(set.scale or 1.0)
+        container:SetScale(GetSetScale(set))
     end
     
     -- Anchor the header to the correct corner of container
@@ -1373,26 +1712,23 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
         header:ClearAllPoints()
         header:SetPoint(containerAnchorPoint, container, containerAnchorPoint, 0, 0)
 
-        -- Restore saved position — convert if anchor changed
+        -- Restore saved position. Pin the container by the anchor the user
+        -- actually dragged it to (pos.point), NOT the current growth anchor:
+        -- pos.x/pos.y were saved relative to pos.point, so applying them at a
+        -- different corner makes the frame jump on re-enable / layout refresh
+        -- (the old GetLeft()-gated conversion silently no-ops on a just-shown
+        -- frame whose layout hasn't flushed yet — the reported "disable/enable
+        -- moves it" bug). The header still anchors to the container at
+        -- containerAnchorPoint for internal grid growth; the container box is
+        -- sized to the grid, so pinning the saved corner keeps the visual
+        -- position even if the growth direction later changes. Mirrors
+        -- EnsureTestContainer so live and test frames restore identically.
         local pos = set.position
         if pos then
-            local savedAnchor = pos.point or "CENTER"
-            if savedAnchor ~= containerAnchorPoint and container:GetLeft() then
-                -- Anchor changed (user changed growth direction) — convert coordinates
-                -- ConvertAnchorPosition returns screen-space offsets (affected by scale),
-                -- so multiply by scale to convert back to logical space for storage
-                local newX, newY = ConvertAnchorPosition(container, savedAnchor, containerAnchorPoint)
-                if newX and newY then
-                    local cs = container:GetScale() or 1
-                    pos.point = containerAnchorPoint
-                    pos.x = newX * cs
-                    pos.y = newY * cs
-                end
-            end
+            local anchor = pos.point or containerAnchorPoint
             container:ClearAllPoints()
             local s = container:GetScale() or 1
-            container:SetPoint(containerAnchorPoint, UIParent, containerAnchorPoint, (pos.x or 0) / s, (pos.y or 0) / s)
-            pos.point = containerAnchorPoint
+            container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
         end
     end
     
@@ -1442,24 +1778,16 @@ function PinnedFrames:ApplyBossLayout(setIndex)
 
     -- Container anchor + scale + saved position handling.
     local anchor = GetContainerAnchorPoint(set)
-    container:SetScale(set.scale or 1.0)
+    container:SetScale(GetSetScale(set))
 
+    -- Pin by the saved drag anchor (pos.point), not the current growth anchor —
+    -- same rationale as ApplyLayoutSettings (avoids the disable/enable jump).
     local pos = set.position
     if pos then
-        local savedAnchor = pos.point or anchor
-        if savedAnchor ~= anchor and container:GetLeft() then
-            local newX, newY = ConvertAnchorPosition(container, savedAnchor, anchor)
-            if newX and newY then
-                local cs = container:GetScale() or 1
-                pos.point = anchor
-                pos.x = newX * cs
-                pos.y = newY * cs
-            end
-        end
+        local posAnchor = pos.point or anchor
         container:ClearAllPoints()
         local s = container:GetScale() or 1
-        container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
-        pos.point = anchor
+        container:SetPoint(posAnchor, UIParent, posAnchor, (pos.x or 0) / s, (pos.y or 0) / s)
     end
 
     -- Push slot coords + sizes to the secure handler. The allocator snippet
@@ -1504,9 +1832,8 @@ function PinnedFrames:ResizeContainer(setIndex)
     -- arena/roster event churn, so skip the child-count loop entirely.
     if not set.enabled then return end
 
-    local db = IsInRaid() and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local db = GetPinnedModeDB()
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
 
     if IsBossSet(set) then
         local frames = self.bossFrames[setIndex]
@@ -1524,7 +1851,7 @@ function PinnedFrames:ResizeContainer(setIndex)
             return
         end
 
-        local horizontal = set.growDirection == "HORIZONTAL"
+        local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
         local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
         local unitsPerRow = set.unitsPerRow or 5
 
@@ -1558,7 +1885,7 @@ function PinnedFrames:ResizeContainer(setIndex)
         return
     end
     
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
     local unitsPerRow = set.unitsPerRow or 5
     
@@ -1579,7 +1906,7 @@ end
 
 -- Update all headers
 function PinnedFrames:UpdateAllHeaders()
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         self:UpdateHeaderNameList(i)
     end
 end
@@ -1637,12 +1964,18 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
 
     set.enabled = enabled
 
+    -- Effective visibility = configured enabled AND the party solo gate. The
+    -- stored config (set.enabled) is unchanged; only show/hide reads `visible`,
+    -- so a solo-hidden set re-appears automatically when you join a group (the
+    -- roster handler re-runs SetEnabled on the solo↔group transition).
+    local visible = enabled and PinnedSoloAllowed(set)
+
     local container = self.containers[setIndex]
     local header = self.headers[setIndex]
     local isBoss = IsBossSet(set)
 
     if not container or (not isBoss and not header) then
-        if enabled then
+        if visible then
             self:CreateSetFrames(setIndex)
         end
         return
@@ -1656,12 +1989,12 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
 
     -- Player mode: toggle header child events
     if not isBoss and header then
-        SetChildFrameEvents(header, enabled)
+        SetChildFrameEvents(header, visible)
     end
 
     local label = self.labels[setIndex]
 
-    if enabled then
+    if visible then
         container:Show()
         if header then header:Show() end
 
@@ -1685,6 +2018,29 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
         if header then header:Hide() end
         if label then label:Hide() end
         if container.mover then container.mover:Hide() end
+
+        -- #78: a set that was hiding members from the main frames must RELEASE
+        -- them when it turns off — ComputeHiddenNames now skips this set, but
+        -- nothing else rebuilds the main headers until the next roster change,
+        -- leaving the members in neither pinned nor main frames. (Combat-safe:
+        -- RefreshMainFrameSorting defers itself via pendingSortingUpdate.)
+        if not isBoss and set.hideFromMainFrames and DF.RefreshMainFrameSorting then
+            self:InvalidateHiddenNames()
+            DF:RefreshMainFrameSorting()
+        end
+    end
+end
+
+-- Re-sync every set's show/hide state against the CURRENT profile + mode
+-- config. SetEnabled handles create/show/hide plus the party solo gate, reading
+-- each set's freshly-resolved config. Called after a profile switch
+-- (FullProfileRefresh): without it a set that was shown under the previous
+-- profile lingers on screen when the new profile has that set disabled.
+function PinnedFrames:RefreshEnabledState()
+    if not self.initialized then return end
+    for i = 1, PinnedFrames.MAX_SETS do
+        local set = GetSetDB(i)
+        if set then self:SetEnabled(i, set.enabled) end
     end
 end
 
@@ -1704,14 +2060,19 @@ function PinnedFrames:SetLocked(setIndex, locked)
     end
     
     set.locked = locked
-    
+
+    -- Effective visibility includes the solo gate — the mover is parented to
+    -- UIParent, so showing it for a solo-hidden set floats a "Drag to Move"
+    -- handle over an invisible container.
+    local visible = set.enabled and PinnedSoloAllowed(set)
+
     -- Container background/border visibility
-    container.bg:SetShown(not locked)
-    container.border:SetShown(not locked)
-    
+    container.bg:SetShown(not locked and visible)
+    container.border:SetShown(not locked and visible)
+
     -- Mover shows when unlocked (independent of label)
     if container.mover then
-        container.mover:SetShown(not locked and set.enabled)
+        container.mover:SetShown(not locked and visible)
     end
 end
 
@@ -1722,7 +2083,7 @@ function PinnedFrames:LockAllForCombat()
     local hlDB = GetPinnedDB()
     if not hlDB or not hlDB.sets then return end
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = hlDB.sets[i]
         local container = self.containers[i]
         if set and container and not set.locked then
@@ -1750,10 +2111,13 @@ function PinnedFrames:RestoreUnlockedAfterCombat()
             local set = GetSetDB(setIndex)
             local container = self.containers[setIndex]
             if set and container and not set.locked then
-                container.bg:SetShown(true)
-                container.border:SetShown(true)
+                -- Solo gate: don't restore UIParent-anchored chrome (mover) for
+                -- a set whose container is hidden when solo.
+                local visible = set.enabled and PinnedSoloAllowed(set)
+                container.bg:SetShown(visible)
+                container.border:SetShown(visible)
                 if container.mover then
-                    container.mover:SetShown(set.enabled)
+                    container.mover:SetShown(visible)
                 end
             end
         end
@@ -1835,8 +2199,10 @@ function PinnedFrames:Initialize()
 
     DF:Debug("PINNED", "Initializing pinned frames (mode=%s)", tostring(self.currentMode))
     
-    -- Create frames for both sets
-    for i = 1, 2 do
+    -- Create frames for every defined set (CreateSetFrames no-ops past the last
+    -- defined set, so iterating the cap is safe and also rebuilds correctly when
+    -- the set count changed).
+    for i = 1, PinnedFrames.MAX_SETS do
         self:CreateSetFrames(i)
     end
     
@@ -1845,14 +2211,23 @@ function PinnedFrames:Initialize()
     -- Apply layout settings immediately (no delays for combat safety)
     -- Note: ApplyLayoutSettings is also called in CreateSetFrames, but we do it
     -- again here to ensure all settings are applied after headers are fully set up
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local header = self.headers[i]
         local set = GetSetDB(i)
         if set and set.enabled and (header or IsBossSet(set)) then
             self:ApplyLayoutSettings(i)
         end
     end
-    
+
+    -- Apply the party "Show when solo" gate: CreateSetFrames above shows based on
+    -- raw enabled, so re-run SetEnabled to hide solo sets that haven't opted in.
+    -- Record the initial group state for solo<->group transition detection.
+    self.wasInGroup = IsInGroup()
+    for i = 1, PinnedFrames.MAX_SETS do
+        local set = GetSetDB(i)
+        if set then self:SetEnabled(i, set.enabled) end
+    end
+
     DF:Debug("PINNED", "Initialized pinned frames")
 end
 
@@ -1866,7 +2241,7 @@ function PinnedFrames:Reinitialize()
     end
     
     -- Clean up old frames
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         if self.bossHandlers[i] then
             self.bossHandlers[i]:Hide()
             self.bossHandlers[i] = nil
@@ -1928,9 +2303,103 @@ function PinnedFrames:Reinitialize()
     end
 end
 
+-- ============================================================
+-- DYNAMIC SETS — add / remove beyond the default two
+-- ============================================================
+
+-- A fresh set, mirroring Config's per-set defaults. Disabled by default so a
+-- newly-added set is dormant (no secure-header churn) until the user enables it.
+-- Position is staggered by index so new sets don't all land on the same spot.
+local function MakeDefaultSet(index)
+    return {
+        enabled = false,
+        frameType = "player",
+        testCount = 3,
+        name = "Pinned " .. index,
+        players = {},
+        growDirection = "HORIZONTAL",
+        unitsPerRow = 5,
+        horizontalSpacing = 2,
+        verticalSpacing = 2,
+        position = { point = "CENTER", x = 0, y = 250 - (index - 1) * 130 },
+        locked = false,
+        showLabel = false,
+        columnAnchor = "START",
+        frameAnchor = "START",
+        autoAddTanks = false,
+        autoAddHealers = false,
+        autoAddDPS = false,
+        keepOfflinePlayers = false,
+        manualPlayers = {},
+    }
+end
+
+-- Resolve a mode's pinnedFrames DB via the same accessor the editor and runtime
+-- use, so writes land on the table they read from (works for the inactive mode).
+local function ModePinnedDB(mode)
+    local md = DF.GetDB and DF:GetDB(mode)
+    return md and md.pinnedFrames
+end
+
+-- Add a new pinned set to ONE mode. Party and raid are INDEPENDENT — you can run,
+-- say, 4 raid sets and 1 party set. `mode` defaults to the active mode; the editor
+-- passes its selected mode, so adding to the inactive mode is a pure DB change that
+-- materialises on the next mode switch (Reinitialize). Returns the new index, or
+-- nil at the cap. Secure frames build out of combat (deferred otherwise).
+function PinnedFrames:AddSet(mode)
+    mode = mode or GetActualMode()
+    local pf = ModePinnedDB(mode)
+    if not pf or not pf.sets then return nil end
+    if #pf.sets >= self.MAX_SETS then return nil end
+    local newIndex = #pf.sets + 1
+    pf.sets[newIndex] = MakeDefaultSet(newIndex)
+    -- Only (re)build live frames when editing the ACTIVE mode; the inactive mode's
+    -- frames are rebuilt by Reinitialize the next time you enter that mode.
+    if mode ~= GetActualMode() then return newIndex end
+    if InCombatLockdown() then
+        self.pendingReinitialize = true
+        return newIndex
+    end
+    self:CreateSetFrames(newIndex)
+    self:ApplyLayoutSettings(newIndex)
+    local set = GetSetDB(newIndex)
+    self:SetEnabled(newIndex, set and set.enabled)
+    return newIndex
+end
+
+-- Remove a pinned set from ONE mode. Refuses the last set. `table.remove` compacts
+-- the array (nested config + designer-preset refs travel with it). For the active
+-- mode, Reinitialize rebuilds runtime frames from the compacted DB; for the
+-- inactive mode it's a pure DB change. Combat-safe (hide now, rebuild after).
+function PinnedFrames:RemoveSet(setIndex, mode)
+    mode = mode or GetActualMode()
+    local pf = ModePinnedDB(mode)
+    if not pf or not pf.sets then return false end
+    if #pf.sets <= 1 then return false end
+    if setIndex < 1 or setIndex > #pf.sets then return false end
+
+    table.remove(pf.sets, setIndex)
+
+    if mode ~= GetActualMode() then return true end  -- inactive mode: DB only
+    if InCombatLockdown() then
+        local c = self.containers[setIndex]
+        if c then
+            if c.mover then c.mover:Hide() end
+            c:Hide()
+        end
+        if self.headers[setIndex] then self.headers[setIndex]:Hide() end
+        if self.labels[setIndex] then self.labels[setIndex]:Hide() end
+        self.pendingReinitialize = true
+        return true
+    end
+
+    self:Reinitialize()
+    return true
+end
+
 -- Refresh all child frames (calls FullFrameRefresh on each)
 function PinnedFrames:RefreshAllChildFrames()
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set then
             if IsBossSet(set) then
@@ -2011,11 +2480,18 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
     end
     
     if event == "PLAYER_REGEN_ENABLED" then
+        -- Replay an ExitTestMode that was blocked by combat — the global test
+        -- flags are already off by then, so without this testModeActive would
+        -- stick true forever (killing Hide-from-Main + the solo gate).
+        if PinnedFrames.pendingExitTestMode then
+            PinnedFrames:ExitTestMode()
+        end
+
         -- Restore unlock state for sets that were unlocked before combat
         if PinnedFrames.initialized then
             PinnedFrames:RestoreUnlockedAfterCombat()
         end
-        
+
         -- Process pending reinitialization after combat
         if PinnedFrames.pendingReinitialize then
             PinnedFrames.pendingReinitialize = nil
@@ -2050,7 +2526,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
         -- Fresh pull starts with all slots free; any frames still visible
         -- (rare — e.g. we left combat mid-add) re-enter via onBossShow.
         if PinnedFrames.initialized then
-            for setIndex = 1, 2 do
+            for setIndex = 1, PinnedFrames.MAX_SETS do
                 local set = GetSetDB(setIndex)
                 if set and set.enabled and IsBossSet(set) then
                     local handler = PinnedFrames.bossHandlers[setIndex]
@@ -2114,8 +2590,23 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
             PinnedFrames:Reinitialize()
             return
         end
-        
-        PinnedFrames:ProcessAllSets()
+
+        -- Solo <-> group transition: re-apply each set's visibility so the party
+        -- "Show when solo" gate takes effect (SetEnabled reads PinnedSoloAllowed).
+        -- Only on the actual transition — not every roster change inside a group.
+        local inGroup = IsInGroup()
+        if PinnedFrames.wasInGroup == nil then PinnedFrames.wasInGroup = inGroup end
+        if inGroup ~= PinnedFrames.wasInGroup then
+            PinnedFrames.wasInGroup = inGroup
+            for i = 1, PinnedFrames.MAX_SETS do
+                local set = GetSetDB(i)
+                if set then PinnedFrames:SetEnabled(i, set.enabled) end
+            end
+        end
+
+        -- Debounced: roster events can storm (especially in instanced PvP), so
+        -- coalesce them into one deferred ProcessAllSets to stay within budget.
+        PinnedFrames:RequestProcessAllSets()
     end
 end)
 
@@ -2142,7 +2633,7 @@ function PinnedFrames:DebugPrint()
         print("    -", name)
     end
     
-    for i = 1, 2 do
+    for i = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(i)
         print(" ")
         print("  === Set " .. i .. " ===")
@@ -2447,8 +2938,7 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     end
 
     local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
     container:SetSize(frameWidth, frameHeight)
 
     -- Use the SAVED anchor point (pos.point) first — that's what the user
@@ -2458,7 +2948,7 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     -- TOPLEFT but using (x=0, y=200) that was saved for CENTER.
     local pos = set.position or {}
     local anchor = pos.point or GetContainerAnchorPoint(set)
-    local scale = set.scale or 1.0
+    local scale = GetSetScale(set, db)  -- mode-explicit: cross-mode test previews
     container:SetScale(scale)
     container:ClearAllPoints()
     container:SetPoint(
@@ -2517,7 +3007,15 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isB
             -- flipped since last Enter.
             pool[i]:SetParent(container)
             local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-            pool[i]:SetSize(db.frameWidth or 120, db.frameHeight or 50)
+            local setDB = GetSetDBForMode(setIndex, isRaidMode)
+            local fw, fh = GetSetFrameSize(setDB, db)
+            pool[i].dfPinnedWidth, pool[i].dfPinnedHeight = fw, fh
+            pool[i].dfPinnedBorderDB = GetSetBorderDB(setDB, GetSetBaselineDB(setDB, db))
+            pool[i].dfPinnedEffDB = setDB and BuildPinnedEffDB(db, setDB.hideAuras, setDB.hideIcons) or nil
+            pool[i].dfPinnedHideAuras = setDB and setDB.hideAuras
+            pool[i].dfAuraPresetOverride = setDB and setDB.auraDesignerPreset
+            pool[i].dfTextPresetOverride = setDB and setDB.textDesignerPreset
+            pool[i]:SetSize(fw, fh)
             pool[i].isRaidFrame = isRaidMode
             pool[i].isPinnedBossFrame = isBossSet or false
         end
@@ -2532,15 +3030,16 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     if not set or not container or not pool then return end
 
     local db = isRaidMode and DF:GetRaidDB() or DF:GetDB()
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local frameWidth, frameHeight = GetSetFrameSize(set, db)
+    local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
+    local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
 
     local hSpacing = set.horizontalSpacing or 2
     local vSpacing = set.verticalSpacing or 2
     local unitsPerRow = set.unitsPerRow or 5
     local frameAnchor = set.frameAnchor or "START"
     local columnAnchor = set.columnAnchor or "START"
-    local horizontal = set.growDirection == "HORIZONTAL"
+    local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
     local anchor = GetContainerAnchorPoint(set)
 
     local n = set.testCount or 3
@@ -2567,6 +3066,12 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
         local f = pool[i]
         if f then
             if i <= n then
+                f.dfPinnedWidth, f.dfPinnedHeight = frameWidth, frameHeight
+                f.dfPinnedBorderDB = borderDB
+                f.dfPinnedEffDB = effDB
+                f.dfPinnedHideAuras = set.hideAuras
+                f.dfAuraPresetOverride = set.auraDesignerPreset
+                f.dfTextPresetOverride = set.textDesignerPreset
                 f:SetSize(frameWidth, frameHeight)
                 f.isRaidFrame = isRaidMode
 
@@ -2621,9 +3126,12 @@ function PinnedFrames:EnterTestMode()
     if not self.initialized then return end
     if InCombatLockdown() then return end
 
-    self.testModeActive = true
-
     -- Pick the active test mode for sizing/data. Raid wins if both are on.
+    -- IMPORTANT: testModeActive is only set AFTER this validation — setting it
+    -- before the neither-mode early-return could leave it stuck true (e.g. an
+    -- ApplyLayoutSettings Exit+Enter cycle after the global flags went off),
+    -- which permanently disables Hide-from-Main and the solo gate (both treat
+    -- testModeActive as "previewing").
     local isRaidMode
     if DF.raidTestMode then
         isRaidMode = true
@@ -2632,9 +3140,27 @@ function PinnedFrames:EnterTestMode()
     else
         return
     end
+
+    self.testModeActive = true
     local actualModeMatches = (isRaidMode == IsInRaid())
 
-    for setIndex = 1, 2 do
+    -- Hide ALL real (live-mode) pinned frames while any test mode is active — the
+    -- test frames ARE the preview, so the real party/raid pinned must not leak
+    -- through. Without this an enabled party set's real frame shows during raid
+    -- test mode (its set index isn't in the raid test loop below, so the per-set
+    -- hide never reaches it). ExitTestMode restores them per live enabled state.
+    for setIndex = 1, PinnedFrames.MAX_SETS do
+        if self.headers[setIndex] then self.headers[setIndex]:Hide() end
+        local rc = self.containers[setIndex]
+        if rc then
+            if rc.mover then rc.mover:Hide() end
+            if rc.bg then rc.bg:Hide() end
+            if rc.border then rc.border:Hide() end
+        end
+        if self.labels[setIndex] then self.labels[setIndex]:Hide() end
+    end
+
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDBForMode(setIndex, isRaidMode)
         if set and set.enabled then
             local isBossSet = IsBossSet(set)
@@ -2698,19 +3224,31 @@ end
 -- visibility is driven by actual group membership). No secure frame
 -- manipulation needed — Test Mode never touched them.
 function PinnedFrames:ExitTestMode()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then
+        -- The global test flags may already be off (HideTestFrames runs in
+        -- combat) — if we just drop this, testModeActive sticks true and
+        -- Hide-from-Main + the solo gate stay disabled until /reload. Queue a
+        -- re-run for PLAYER_REGEN_ENABLED instead.
+        self.pendingExitTestMode = true
+        return
+    end
+    self.pendingExitTestMode = nil
     self.testModeActive = false
 
     -- Hide all test frames + test containers (both mode profiles)
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         self:HidePlayerTestFrames(setIndex)
     end
 
     -- Restore real headers for player-mode sets in the current mode (we may
     -- have hidden them when entering test mode in the same mode).
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
-        if set and not IsBossSet(set) and set.enabled and self.headers[setIndex] then
+        -- Effective visibility includes the party solo gate (mirror SetEnabled):
+        -- the mover/label are parented to UIParent, so restoring them for a
+        -- solo-hidden set would float chrome over an invisible container.
+        local visible = set and set.enabled and PinnedSoloAllowed(set)
+        if set and not IsBossSet(set) and visible and self.headers[setIndex] then
             self.headers[setIndex]:Show()
         end
         -- Restore real pinned container visuals (mover, bg, border, label)
@@ -2720,18 +3258,18 @@ function PinnedFrames:ExitTestMode()
             local realContainer = self.containers[setIndex]
             if realContainer then
                 if realContainer.mover then
-                    realContainer.mover:SetShown(set.enabled and not set.locked)
+                    realContainer.mover:SetShown(visible and not set.locked)
                 end
                 if realContainer.bg then
-                    realContainer.bg:SetShown(set.enabled and not set.locked)
+                    realContainer.bg:SetShown(visible and not set.locked)
                 end
                 if realContainer.border then
-                    realContainer.border:SetShown(set.enabled and not set.locked)
+                    realContainer.border:SetShown(visible and not set.locked)
                 end
             end
             local realLabel = self.labels[setIndex]
             if realLabel then
-                realLabel:SetShown(set.enabled and set.showLabel)
+                realLabel:SetShown(visible and set.showLabel)
             end
         end
     end
@@ -2740,7 +3278,7 @@ function PinnedFrames:ExitTestMode()
     -- cleared flags on real boss frames. Defensively clear to avoid stale
     -- dfIsTestFrame leaking from an older-session toggle.
     C_Timer.After(0.15, function()
-        for setIndex = 1, 2 do
+        for setIndex = 1, PinnedFrames.MAX_SETS do
             local frames = self.bossFrames[setIndex]
             if frames then
                 for i = 1, 8 do
@@ -2760,7 +3298,7 @@ end
 function PinnedFrames:UpdateTestFrames()
     if not self.testModeActive then return end
 
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local pool = self.testFrames[setIndex]
         if pool then
             for i = 1, #pool do
@@ -2835,6 +3373,10 @@ PinnedFrames.bossSpawnGeneration = 0
 -- Flip a frame's visibility state driver to a literal show/hide value.
 -- Literal values are NOT combat-restricted; only macro-conditional strings are.
 local function ForceBossFrameVisible(setIndex, bossIndex, show)
+    -- RegisterStateDriver is a protected attribute write; the spawn script's
+    -- C_Timer steps can land mid-combat -> ADDON_ACTION_BLOCKED. Debug-only
+    -- path, so just drop the step (the script is for out-of-combat preview).
+    if InCombatLockdown() then return end
     local frames = PinnedFrames.bossFrames[setIndex]
     if not frames then return end
     local f = frames[bossIndex]
@@ -2844,7 +3386,7 @@ end
 
 -- Restore real `[@bossN,help]show;hide` drivers on all boss-mode sets.
 local function RestoreBossFrameDrivers()
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             local frames = PinnedFrames.bossFrames[setIndex]
@@ -2867,7 +3409,7 @@ function PinnedFrames:RunBossSpawnScript(steps)
     local myGen = self.bossSpawnGeneration
 
     -- Start from a clean slate so the script's sequence is deterministic.
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             for i = 1, 8 do
@@ -2882,7 +3424,7 @@ function PinnedFrames:RunBossSpawnScript(steps)
         if t > maxT then maxT = t end
         C_Timer.After(t, function()
             if PinnedFrames.bossSpawnGeneration ~= myGen then return end
-            for setIndex = 1, 2 do
+            for setIndex = 1, PinnedFrames.MAX_SETS do
                 local set = GetSetDB(setIndex)
                 if set and set.enabled and IsBossSet(set) then
                     ForceBossFrameVisible(setIndex, bossIndex, sign == "+")
@@ -2920,7 +3462,7 @@ function PinnedFrames:SetBossSpawnTest(arg)
     end
 
     local anyBossSet = false
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             anyBossSet = true
@@ -2974,7 +3516,7 @@ function PinnedFrames:SetBossTestMode(visibleCount)
     self.bossTestCount = visibleCount
 
     local anyToggled = false
-    for setIndex = 1, 2 do
+    for setIndex = 1, PinnedFrames.MAX_SETS do
         local set = GetSetDB(setIndex)
         if set and set.enabled and IsBossSet(set) then
             local frames = self.bossFrames[setIndex]

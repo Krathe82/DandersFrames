@@ -2291,7 +2291,18 @@ DF.PartyDefaults = {
     vehicleIconY = 1,
 
     -- Pinned Frames
+    -- NOTE: scale and width/height are intentionally omitted — pinned frames
+    -- INHERIT those from the Based-on mode's main frames unless the user overrides
+    -- them per set (set.scale / customWidth / customHeight). growDirection,
+    -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
+        -- Keep pinned frames dormant in all instanced PvP (arena + battlegrounds).
+        -- The runtime gate reads the current mode's copy (arena resolves to party
+        -- config, BG to raid), so the "Disable in PvP" toggle writes both modes in
+        -- lockstep to act as one global switch — hence the key lives in each mode's
+        -- defaults. Default true: pinned is a party/raid feature and the PvP event
+        -- storm could exhaust the per-frame budget ("script ran too long").
+        disableInPvP = true,
         sets = {
             [1] = {
                 enabled = false,
@@ -2303,7 +2314,6 @@ DF.PartyDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = 200 },
                 locked = false,
                 showLabel = false,
@@ -2325,7 +2335,6 @@ DF.PartyDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = -200 },
                 locked = false,
                 showLabel = false,
@@ -3787,7 +3796,18 @@ DF.RaidDefaults = {
     vehicleIconY = 1,
 
     -- Pinned Frames
+    -- NOTE: scale and width/height are intentionally omitted — pinned frames
+    -- INHERIT those from the Based-on mode's main frames unless the user overrides
+    -- them per set (set.scale / customWidth / customHeight). growDirection,
+    -- unitsPerRow, spacing and the frame/column anchors are pinned-ONLY settings.
     pinnedFrames = {
+        -- Keep pinned frames dormant in all instanced PvP (arena + battlegrounds).
+        -- The runtime gate reads the current mode's copy (arena resolves to party
+        -- config, BG to raid), so the "Disable in PvP" toggle writes both modes in
+        -- lockstep to act as one global switch — hence the key lives in each mode's
+        -- defaults. Default true: pinned is a party/raid feature and the PvP event
+        -- storm could exhaust the per-frame budget ("script ran too long").
+        disableInPvP = true,
         sets = {
             [1] = {
                 enabled = false,
@@ -3799,7 +3819,6 @@ DF.RaidDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = 200 },
                 locked = false,
                 showLabel = false,
@@ -3821,7 +3840,6 @@ DF.RaidDefaults = {
                 unitsPerRow = 5,
                 horizontalSpacing = 2,
                 verticalSpacing = 2,
-                scale = 1.0,
                 position = { point = "CENTER", x = 0, y = -200 },
                 locked = false,
                 showLabel = false,

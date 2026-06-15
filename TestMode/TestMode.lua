@@ -1192,7 +1192,7 @@ function DF:UpdateTestFrame(frame, index, applyLayout)
     end
 
     -- Update Aura Designer test indicators
-    if db.testShowAuraDesigner and db.auraDesigner and db.auraDesigner.enabled then
+    if db.testShowAuraDesigner and DF:IsAuraDesignerEnabled(frame) then
         local ADEngine = DF.AuraDesigner and DF.AuraDesigner.Engine
         if ADEngine and ADEngine.UpdateTestFrame then
             ADEngine:UpdateTestFrame(frame)
@@ -3487,10 +3487,12 @@ function DF:UpdateTestPowerBar(frame, testData)
     end
 
     -- Compute health bar dimensions from settings (not GetWidth/GetHeight which
-    -- can return stale values before WoW layout processes anchor changes)
+    -- can return stale values before WoW layout processes anchor changes).
+    -- Prefer a pinned test frame's resolved size so a "Match Frame Width" resource
+    -- bar tracks the pinned size, not the shared per-mode db width.
     local padding = db.framePadding or 0
-    local frameWidth = db.frameWidth or 120
-    local frameHeight = db.frameHeight or 50
+    local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
+    local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
     if db.pixelPerfect and DF.PixelPerfect then
         frameWidth = DF:PixelPerfect(frameWidth)
         frameHeight = DF:PixelPerfect(frameHeight)
@@ -5933,7 +5935,7 @@ function DF:UpdateAllTestAuraDesigner()
     local function UpdateFrame(frame)
         if not frame or not frame:IsShown() then return end
         local db = DF:GetFrameDB(frame)
-        if db and db.testShowAuraDesigner and db.auraDesigner and db.auraDesigner.enabled then
+        if db and db.testShowAuraDesigner and DF:IsAuraDesignerEnabled(frame) then
             ADEngine:UpdateTestFrame(frame)
         else
             ADEngine:ClearFrame(frame)

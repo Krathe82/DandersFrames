@@ -312,14 +312,15 @@ function DF:UpdateTextDesigner(frame, hint)
         DF:Debug("TD", "UpdateTextDesigner: no db for frame.unit=%s", tostring(frame.unit))
         return
     end
-    if not db.textDesigner then
-        DF:Debug("TD", "UpdateTextDesigner: db.textDesigner missing for unit=%s", tostring(frame.unit))
+    local tdDB = DF:ResolveTextDesigner(frame)
+    if not tdDB then
+        DF:Debug("TD", "UpdateTextDesigner: no resolved textDesigner preset for unit=%s", tostring(frame.unit))
         return
     end
     DF:Debug("TD", "UpdateTextDesigner: unit=%s hint=%s enabled=%s elements=%d",
         tostring(frame.unit), tostring(hint),
-        tostring(db.textDesigner.enabled),
-        db.textDesigner.elements and #db.textDesigner.elements or -1)
+        tostring(tdDB.enabled),
+        tdDB.elements and #tdDB.elements or -1)
 
     -- Test frames: use the per-unit Test data source and gate on the test-mode
     -- toggle (db.testShowTextDesigner) rather than the live master toggle. Like
@@ -333,10 +334,10 @@ function DF:UpdateTextDesigner(frame, hint)
             return
         end
         local source = DF.TextDesigner.DataSource.Test(frame)
-        Render:UpdateFrame(frame, db.textDesigner, source, hint, true)  -- isPreview=true
+        Render:UpdateFrame(frame, tdDB, source, hint, true)  -- isPreview=true
         return
     end
 
     local source = DF.TextDesigner.DataSource.Live(frame)
-    Render:UpdateFrame(frame, db.textDesigner, source, hint)
+    Render:UpdateFrame(frame, tdDB, source, hint)
 end

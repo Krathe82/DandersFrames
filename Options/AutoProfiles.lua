@@ -75,14 +75,27 @@ local function ParsePinnedKey(key)
     return nil, nil
 end
 
--- Settings that can be overridden per pinned frame set
+-- Settings that can be overridden per pinned frame set.
+-- Decoupled from auto layouts (2026-06-07): pinned frames are a global,
+-- per-mode modular highlight. The ONLY thing a raid auto layout overrides is
+-- whether each set is shown (enabled) for that layout — everything else is
+-- global and edited on the Pinned Frames page. This keeps pinned settings out
+-- of the layout-override store entirely (no more stale pinned.N.* data).
 local PINNED_OVERRIDABLE = {
-    enabled = true, locked = true, showLabel = true,
-    growDirection = true, unitsPerRow = true, scale = true,
-    horizontalSpacing = true, verticalSpacing = true, frameAnchor = true,
-    columnAnchor = true, autoAddTanks = true, autoAddHealers = true,
-    autoAddDPS = true, keepOfflinePlayers = true, players = true,
+    enabled = true,
 }
+
+-- True unless `key` is a pinned key (pinned.N.setting) whose setting is NOT
+-- overridable. Non-pinned keys are always allowed (governed elsewhere). This is
+-- the single gate that keeps non-overridable pinned settings out of the layout
+-- override store — used by SetProfileSetting / IsSettingOverridden below.
+local function IsKeyOverridable(key)
+    local _, setting = ParsePinnedKey(key)
+    if setting then
+        return PINNED_OVERRIDABLE[setting] == true
+    end
+    return true
+end
 
 -- ============================================================
 -- OVERRIDE KEY → TAB MAPPING
@@ -2842,19 +2855,25 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     DF:Debug("LAYOUT", "EnterEditing: applied %d overrides for live preview", overrideCount)
     
     -- Refresh pinned frames to show overridden settings in live preview.
-    -- Only when actually in a raid: PinnedFrames' methods key off live IsInRaid(),
-    -- so running them while not in a raid would apply this raid layout's pinned
-    -- state to the PARTY pinned set. When not in a raid the raid pinned preview is
-    -- handled by the mode-aware test-mode pinned frames instead.
+    --   * In an actual raid: re-apply each set's enabled + layout to the LIVE
+    --     pinned frames (their methods key off live IsInRaid()).
+    --   * In raid TEST mode: the live frames stay party-mode and must not be
+    --     touched (that would apply the raid layout to the party set / leak the
+    --     party header). Instead just re-run the raid test-mode pinned frames so
+    --     they re-size to the layout's overridden frame width via their own
+    --     mode-explicit path (ApplyPlayerTestLayout reads the raid DB).
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
-        for i = 1, 2 do
+        for i = 1, DF.PinnedFrames.MAX_SETS do
             local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
             DF.PinnedFrames:SetEnabled(i, setEnabled or false)
             DF.PinnedFrames:ApplyLayoutSettings(i)
             DF.PinnedFrames:ResizeContainer(i)
             DF.PinnedFrames:UpdateHeaderNameList(i)
         end
+    elseif DF.PinnedFrames and DF.raidTestMode then
+        DF.PinnedFrames:ExitTestMode()
+        DF.PinnedFrames:EnterTestMode()
     end
 
     -- Refresh test mode frames so they display override values.
@@ -2981,7 +3000,14 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
                         overrides[key] = DeepCopyValue(currentVal)
                         autoStored = autoStored + 1
                     end
-                elseif matches and overrides[key] ~= nil then
+                elseif matches and overrides[key] ~= nil
+                    and key ~= "textDesignerPreset" and key ~= "auraDesignerPreset" then
+                    -- Designer preset refs are exempt from the equal→remove
+                    -- cleanup: SetModeDesignerPreset deliberately stamps the
+                    -- override even when the chosen name EQUALS the global's
+                    -- (explicit pin vs Inherit is presence-based). Removing it
+                    -- here silently reverted the layout to "Inherit (Global)"
+                    -- on exit.
                     overrides[key] = nil
                     autoCleaned = autoCleaned + 1
                 end
@@ -3071,12 +3097,12 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         DF:RefreshTestFramesWithLayout()
     end
     
-    -- Refresh pinned frames to show global settings again. Guarded by IsInRaid()
-    -- for the same reason as on enter-editing: while not in a raid these methods
-    -- target the PARTY pinned set, so a raid layout edit must not touch them.
+    -- Refresh pinned frames to show global settings again (mirror of EnterEditing):
+    -- live raid re-applies to the real frames; raid test mode just re-runs the test
+    -- frames so they re-size back to the global frame width.
     if DF.PinnedFrames and IsInRaid() then
         local pf = DF.db.raid and DF.db.raid.pinnedFrames
-        for i = 1, 2 do
+        for i = 1, DF.PinnedFrames.MAX_SETS do
             -- Restore enabled state first (hides containers if globally disabled)
             local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
             DF.PinnedFrames:SetEnabled(i, setEnabled or false)
@@ -3084,6 +3110,9 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
             DF.PinnedFrames:ResizeContainer(i)
             DF.PinnedFrames:UpdateHeaderNameList(i)
         end
+    elseif DF.PinnedFrames and DF.raidTestMode then
+        DF.PinnedFrames:ExitTestMode()
+        DF.PinnedFrames:EnterTestMode()
     end
     
     -- Refresh UI to hide banner and re-enable Auto Profiles tab
@@ -3214,41 +3243,8 @@ function AutoProfilesUI:CreateEditingBanner(parent)
         AutoProfilesUI:ExitEditing()
     end)
 
-    -- Reset Aura Designer button (only visible on Aura Designer page)
-    local resetADBtn = CreateFrame("Button", nil, banner, "BackdropTemplate")
-    resetADBtn:SetSize(140, 26)
-    resetADBtn:SetPoint("RIGHT", exitBtn, "LEFT", -8, 0)
-    resetADBtn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    resetADBtn:SetBackdropColor(0.12, 0.06, 0.06, 1)
-    resetADBtn:SetBackdropBorderColor(0.5, 0.15, 0.15, 1)
-
-    local resetADText = resetADBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
-    resetADText:SetPoint("CENTER")
-    resetADText:SetText(L["Reset to Global"])
-    resetADText:SetTextColor(1, 0.5, 0.5)
-
-    resetADBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropBorderColor(0.8, 0.2, 0.2, 1)
-        resetADText:SetTextColor(1, 1, 1)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText(L["Reset Aura Designer to Global"])
-        GameTooltip:AddLine(L["Removes all Aura Designer overrides from this auto layout, restoring it to match your global profile."], 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    resetADBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(0.5, 0.15, 0.15, 1)
-        resetADText:SetTextColor(1, 0.5, 0.5)
-        GameTooltip:Hide()
-    end)
-    resetADBtn:SetScript("OnClick", function()
-        StaticPopup_Show("DF_AURA_DESIGNER_RESET_GLOBAL")
-    end)
-    resetADBtn:Hide()
-    banner.resetADBtn = resetADBtn
+    -- (The per-layout "Reset to Global" Aura Designer button was retired when the
+    -- preset dropdown gained an "Inherit (Global)" entry that does the same job.)
 
     editingBanner = banner
     return banner
@@ -3259,24 +3255,21 @@ function AutoProfilesUI:UpdateEditingBanner()
 
     local info = self:GetEditingInfo()
     if info then
-        editingBanner.profileText:SetText(info.contentName .. " → \"" .. info.name .. "\"")
+        -- Use "»" (Latin-1) not "→" (U+2192): the bundled font lacks the arrow
+        -- glyph and renders it as a "?" / missing-glyph box.
+        editingBanner.profileText:SetText(info.contentName .. " » \"" .. info.name .. "\"")
 
-        -- Show contextual info text based on the current page
+        -- Show contextual info text based on the current page. Aura/Text Designer
+        -- are chosen via the preset dropdown on their pages (with an "Inherit
+        -- (Global)" entry), so point there; other pages keep the generic message.
         local GUI = DF.GUI
-        local isAuraDesignerPage = GUI and GUI.CurrentPageName == "auras_auradesigner"
-        if isAuraDesignerPage then
-            editingBanner.infoText:SetText(info.rangeText .. " · |cffff6666" .. L["Per-setting reset is not available for Aura Designer"] .. "|r")
+        local pageName = GUI and GUI.CurrentPageName
+        if pageName == "auras_auradesigner" then
+            editingBanner.infoText:SetText(info.rangeText .. " · |cffffcc66" .. L["Pick an Aura Designer preset below for this layout. 'Inherit (Global)' follows your global one."] .. "|r")
+        elseif pageName == "text_designer" then
+            editingBanner.infoText:SetText(info.rangeText .. " · |cffffcc66" .. L["Pick a Text Designer preset below for this layout. 'Inherit (Global)' follows your global one."] .. "|r")
         else
             editingBanner.infoText:SetText(info.rangeText .. " · " .. L["Only changed settings will be saved"])
-        end
-
-        -- Show/hide the Reset Aura Designer button
-        if editingBanner.resetADBtn then
-            if isAuraDesignerPage then
-                editingBanner.resetADBtn:Show()
-            else
-                editingBanner.resetADBtn:Hide()
-            end
         end
 
         editingBanner:Show()
@@ -3613,6 +3606,16 @@ end
 function AutoProfilesUI:SetProfileSetting(key, value)
     if not self.editingProfile then return false end
 
+    -- Non-overridable pinned setting (everything except `enabled` post-decouple):
+    -- never store it as a layout override. Strip any existing one and bail so the
+    -- control's plain global write is the only effect.
+    if not IsKeyOverridable(key) then
+        if self.editingProfile.overrides then
+            self.editingProfile.overrides[key] = nil
+        end
+        return false
+    end
+
     -- Ensure overrides table exists
     if not self.editingProfile.overrides then
         self.editingProfile.overrides = {}
@@ -3680,10 +3683,20 @@ end
 
 -- Check if a setting is currently overridden
 function AutoProfilesUI:IsSettingOverridden(key)
+    if not IsKeyOverridable(key) then return false end
     if not self.editingProfile or not self.editingProfile.overrides then
         return false
     end
     return self.editingProfile.overrides[key] ~= nil
+end
+
+-- Is a pinned-frame SETTING (bare name, e.g. "enabled" / "scale") overridable
+-- per auto layout? Post-decouple only `enabled` is. The pinned options page uses
+-- this to decide whether to show any override UI (star / reset / Global: text)
+-- for a control — non-overridable controls show none, making it clear they're
+-- global/independent of auto layouts.
+function AutoProfilesUI:IsPinnedSettingOverridable(setting)
+    return PINNED_OVERRIDABLE[setting] == true
 end
 
 -- Get active profile based on current content/raid size (for runtime, not editing)
@@ -3804,18 +3817,50 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
         overlay[tableName] = parent
     end
 
-    -- Pinned keys: deep-copy pinnedFrames from real table, apply overrides
+    -- Pinned keys: build a LIVE VIEW of the real pinnedFrames, not a deep copy.
+    -- Post-decouple the only pinned override is per-set `enabled`, so every other
+    -- pinned setting must read through to the live global (edits reflect
+    -- immediately, and there's nothing to go stale). Each set that has an
+    -- `enabled` override becomes a thin proxy that returns the overridden enabled
+    -- but reads every other field live from the real set; sets with no override
+    -- are the real table by reference. The whole pinnedFrames table is itself a
+    -- live view (top-level fields read through to real).
     if next(pinnedGroups) then
-        local pf = DeepCopyValue(DF._realRaidDB.pinnedFrames)
-        if type(pf) ~= "table" then pf = {} end
-        if type(pf.sets) ~= "table" then pf.sets = {} end
-        for setIdx, settings in pairs(pinnedGroups) do
-            if not pf.sets[setIdx] then pf.sets[setIdx] = {} end
-            for setting, value in pairs(settings) do
-                pf.sets[setIdx][setting] = DeepCopyValue(value)
+        local realPF = DF._realRaidDB.pinnedFrames or {}
+        local realSets = type(realPF.sets) == "table" and realPF.sets or {}
+        local viewSets = {}
+        for setIdx, realSet in pairs(realSets) do
+            local ov = pinnedGroups[setIdx]
+            if ov and ov.enabled ~= nil then
+                -- __newindex: WRITES must reach the real set, or every direct
+                -- field write from the Options page (width/height overrides,
+                -- preset refs, border seeding, label, roster, position…)
+                -- rawsets onto this throwaway view and silently reverts on the
+                -- next layout switch / reload. `enabled` itself is exempt by
+                -- construction: it is rawset on the view, so __newindex never
+                -- fires for it — the runtime override value stays view-local
+                -- while HandleRuntimeWrite persists it to override/global.
+                viewSets[setIdx] = setmetatable(
+                    { enabled = ov.enabled and true or false },
+                    {
+                        __index = realSet,
+                        __newindex = function(_, key, value)
+                            realSet[key] = value
+                        end,
+                    })
+            else
+                viewSets[setIdx] = realSet  -- live reference
             end
         end
-        overlay.pinnedFrames = pf
+        -- Top-level fields (disableInPvP, …) must equally write through to the
+        -- real pinnedFrames table; `sets` is rawset above so __newindex never
+        -- fires for it.
+        overlay.pinnedFrames = setmetatable({ sets = viewSets }, {
+            __index = realPF,
+            __newindex = function(_, key, value)
+                realPF[key] = value
+            end,
+        })
     end
 
     -- Activate the overlay (proxy reads this automatically)
@@ -3891,7 +3936,20 @@ function AutoProfilesUI:HandleRuntimeWrite(key, value)
         if pf and pf.sets and pf.sets[setIndex] then
             pf.sets[setIndex][setting] = value
         end
-        local isOverridden = DF.raidOverrides.pinnedFrames ~= nil
+        -- Post-decouple, `enabled` is the ONLY layout-overridable pinned key
+        -- (PINNED_OVERRIDABLE). Every other pinned setting reads through the
+        -- overlay view to the real table, so the value just written IS the live
+        -- effective value — the caller must apply/refresh it normally. Treating
+        -- the whole pinnedFrames overlay as "overridden" suppressed callbacks
+        -- for ALL pinned edits whenever any set had an Enable override.
+        local isOverridden = false
+        if setting == "enabled" then
+            local overlayPF = DF.raidOverrides.pinnedFrames
+            local overlaySet = overlayPF and overlayPF.sets and overlayPF.sets[setIndex]
+            -- Only sets carrying an enabled override become view PROXIES (with
+            -- a metatable); sets without one are the real table by reference.
+            isOverridden = overlaySet ~= nil and getmetatable(overlaySet) ~= nil
+        end
         DF:Debug("LAYOUT", "HandleRuntimeWrite: pinned key %s — overridden=%s, wrote to real table", key, tostring(isOverridden))
         return isOverridden
     end

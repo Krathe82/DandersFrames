@@ -1821,6 +1821,89 @@ function DF:MigrateResourceBarColorMode(modeDb)
     end
 end
 
+-- Pinned frames decouple (2026-06-07): pinned settings are no longer saved as
+-- per-raid-layout overrides — only the per-set `enabled` flag is. Strip any
+-- stale "pinned.N.<setting>" override keys (setting != enabled) left in saved
+-- auto-layout profiles by the old behaviour. Idempotent: once clean, re-running
+-- is a no-op, so it is safe to call on every load. Walks ALL DandersFrames
+-- profiles (not just the active one), since each carries its own raidAutoProfiles.
+function DF:MigratePinnedLayoutOverrides()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    local stripped = 0
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        local autoDb = profile.raidAutoProfiles
+        if type(autoDb) == "table" then
+            for _, ct in pairs(autoDb) do
+                if type(ct) == "table" and type(ct.profiles) == "table" then
+                    for _, layout in ipairs(ct.profiles) do
+                        local ov = layout.overrides
+                        if type(ov) == "table" then
+                            for key in pairs(ov) do
+                                local _, setting = key:match("^pinned%.(%d+)%.(.+)$")
+                                if setting and setting ~= "enabled" then
+                                    ov[key] = nil  -- safe: clearing current key during pairs is allowed
+                                    stripped = stripped + 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if stripped > 0 then
+        DF:Debug("LAYOUT", "MigratePinnedLayoutOverrides: stripped %d stale pinned override(s)", stripped)
+    end
+end
+
+-- Pinned frames "Match" baseline (2026-06-07): each pinned set inherits its
+-- baseline look (size, later border/background) from a mode chosen by
+-- set.matchMode ("party"/"raid"). It defaults to the set's OWN mode (a party set
+-- mirrors party frames, a raid set mirrors raid frames); the other value lets a
+-- set cross-match the opposite mode. nil already resolves to the own mode at
+-- runtime, but seed it explicitly so the Match dropdown shows a value. Also
+-- converts the short-lived "auto" value to the own mode.
+--
+-- Width/Height moved from a "Custom Size" toggle to per-key Match overrides:
+-- set.customWidth/customHeight are now the override values (nil = inherit Match).
+-- Drop the obsolete set.useCustomSize, and where it was off, clear any
+-- customWidth/Height that were only seeded for the toggle so they don't read as
+-- spurious overrides. Walks ALL profiles (party + raid pinnedFrames.sets).
+-- Idempotent.
+function DF:MigratePinnedMatchMode()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        for _, mode in ipairs({ "party", "raid" }) do
+            local modeDb = profile[mode]
+            local pf = modeDb and modeDb.pinnedFrames
+            if pf and type(pf.sets) == "table" then
+                for _, set in pairs(pf.sets) do
+                    if type(set) == "table" then
+                        if set.matchMode ~= "party" and set.matchMode ~= "raid" then
+                            set.matchMode = mode  -- default / repair → the set's own mode
+                        end
+                        if set.useCustomSize ~= nil then
+                            if set.useCustomSize ~= true then
+                                set.customWidth = nil
+                                set.customHeight = nil
+                            end
+                            set.useCustomSize = nil
+                        end
+                        -- Scale inherits from the Based-on mode unless overridden:
+                        -- a value still at the old hard default (1.0) is treated as
+                        -- "inherit" (cleared); a changed value is kept as override.
+                        if set.scale == 1.0 then set.scale = nil end
+                        -- growDirection is a plain pinned-only setting; an earlier
+                        -- build briefly cleared its HORIZONTAL default to nil, so
+                        -- restore a concrete value for the dropdown.
+                        if set.growDirection == nil then set.growDirection = "HORIZONTAL" end
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- ============================================================
 -- STATE DRIVERS FOR TEST MODE COMBAT SAFETY
 -- When test mode is active, state drivers are registered on all
@@ -3653,6 +3736,16 @@ DF._MainEventDispatcher = function(self, event, arg1)
             DF:MigrateResourceBarColorMode(DF.db.party)
             DF:MigrateResourceBarColorMode(DF.db.raid)
         end
+        -- Pinned frames decouple: strip stale pinned.N.<setting> auto-layout
+        -- overrides (everything except the per-set `enabled` flag).
+        if DF.MigratePinnedLayoutOverrides then
+            DF:MigratePinnedLayoutOverrides()
+        end
+        -- Pinned frames: seed matchMode (each set's own mode) on existing sets so
+        -- the Match baseline dropdown shows a value (nil already resolves to it).
+        if DF.MigratePinnedMatchMode then
+            DF:MigratePinnedMatchMode()
+        end
         -- Aura icons: buff/debuffBorderEnabled → ShowBorder, BorderThickness →
         -- BorderSize (Stage 5.5 Phase 2 — full toolkit for buff/debuff borders).
         if DF.MigrateAuraBorderKeys then
@@ -5184,6 +5277,15 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- migratedFromLegacy flag), so re-running on every login is a no-op
             -- once it has run. The function-exists guard is belt-and-suspenders;
             -- the Text Designer files now load in every build.
+            -- Designer Presets: move every inline auraDesigner / textDesigner
+            -- config (party/raid + each raid auto-layout override) into the
+            -- named preset library. Runs BEFORE the TD-legacy migration below so
+            -- that migration builds its elements straight into the "Party"/"Raid"
+            -- presets (its guard flag then persists on the preset). Idempotent.
+            if DF.MigrateDesignerPresets then
+                DF:MigrateDesignerPresets()
+            end
+
             if DF.MigrateTextDesignerFromLegacy then
                 DF:MigrateTextDesignerFromLegacy()
             end
@@ -5940,6 +6042,12 @@ function DF:FullProfileRefresh()
     
     -- === REFRESH PINNED FRAMES IF ACTIVE ===
     if DF.PinnedFrames and DF.PinnedFrames.initialized then
+        -- Sync each set's visibility to the NEW profile FIRST — hide sets it
+        -- disables, show/create sets it enables — so a set shown under the
+        -- previous profile doesn't linger in a stale state after the switch.
+        if DF.PinnedFrames.RefreshEnabledState then
+            DF.PinnedFrames:RefreshEnabledState()
+        end
         for setIndex = 1, 2 do
             if DF.PinnedFrames.headers[setIndex] then
                 DF.PinnedFrames:ApplyLayoutSettings(setIndex)
