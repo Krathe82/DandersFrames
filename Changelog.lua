@@ -59,6 +59,8 @@ DF.CHANGELOG_TEXT = [===[
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras**. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`. (by Krathe)
 * (Aura Designer) Indicators are torn down when the Aura Designer is disabled, and re-applied on **profile swap**. (by Krathe)
+* (Aura Designer) Aura icon/square borders from older profiles **keep their original look** after the unified-border update, instead of appearing thinner or floating in a gap. (by Krathe)
+* (Buff/Debuff) Icon borders from older profiles no longer **float in a gap** around the icon after the unified-border update — they hug the icon as before. (by Krathe)
 * (Targeted Spells) The targeted list no longer appears in **test mode** when the feature is disabled. (by Krathe)
 * (Aura Designer) Replace-mode health-bar highlight fixes — no more **flicker** on phased or out-of-range units, no **bleeding over the frame border**, and the expiring **Pulsate** option now works. (by Krathe)
 * (Test Mode) Replaced several test-mode buff/debuff preview icons that pointed at art removed in Midnight, so they no longer render blank. (by Krathe)
