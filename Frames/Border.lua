@@ -1414,6 +1414,13 @@ function Border:Apply(border, spec)
                 e:Show()
             end
         end
+        -- Thickness 0 collapses the edges to zero width/height; hide them
+        -- outright so a degenerate texture can't leave a hairline. Animation
+        -- overlays are separate frames and keep running (they're gated by the
+        -- border being shown, not by thickness).
+        if size <= 0 then
+            for _, e in ipairs(edges) do if e then e:Hide() end end
+        end
     else
         -- Texture mode: a BackdropTemplate child with the LSM border edgeFile.
         -- spec.blendMode is intentionally ignored here — see doc above.
