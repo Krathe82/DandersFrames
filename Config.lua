@@ -2200,7 +2200,7 @@ DF.PartyDefaults = {
     targetedListHideOwnCasts = false,
     targetedListHideOutOfCombat = true,
     targetedListHighlightImportant = true,
-    targetedListHighlightColor = {r = 1, g = 0.8, b = 0},
+    targetedListHighlightColor = {r = 1, g = 0.8, b = 0, a = 1},
     targetedListIconPosition = "LEFT",
     targetedListImportantOnly = false,
     targetedListInArena = true,

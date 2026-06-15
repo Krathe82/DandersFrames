@@ -4660,7 +4660,7 @@ local function TargetedList_ApplyBarContent(bar, activeRec)
             -- a calm glow — a flashing PROC here reads as broken.
             DF.Border:Apply(bar.highlightBorder, {
                 enabled = true, size = 2, inset = 0, style = "SOLID",
-                color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
+                color = { r = hc.r, g = hc.g, b = hc.b, a = hc.a or 1 },
             })
             bar.highlightFrame:Show()
             if isTest and activeRec.testIsImportant ~= nil then
@@ -5720,7 +5720,7 @@ function DF:LightweightUpdateTargetedListHighlightColor()
             -- a calm glow — a flashing PROC here reads as broken.
             DF.Border:Apply(bar.highlightBorder, {
                 enabled = true, size = 2, inset = 0, style = "SOLID",
-                color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
+                color = { r = hc.r, g = hc.g, b = hc.b, a = hc.a or 1 },
             })
         end
     end
