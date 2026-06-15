@@ -4655,10 +4655,12 @@ local function TargetedList_ApplyBarContent(bar, activeRec)
         if party and party.targetedListHighlightImportant then
             local hc = party.targetedListHighlightColor or {r=1, g=0.8, b=0}
             bar.highlightBorder = bar.highlightBorder or DF.Border:New(bar.highlightFrame)
+            -- Static solid highlight border (no animation): the Targeted List
+            -- highlight has only an enable toggle + colour, and historically was
+            -- a calm glow — a flashing PROC here reads as broken.
             DF.Border:Apply(bar.highlightBorder, {
                 enabled = true, size = 2, inset = 0, style = "SOLID",
                 color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
-                animation = { type = "PROC", color = { r = hc.r, g = hc.g, b = hc.b, a = 1 } },
             })
             bar.highlightFrame:Show()
             if isTest and activeRec.testIsImportant ~= nil then
@@ -5713,10 +5715,12 @@ function DF:LightweightUpdateTargetedListHighlightColor()
     local hc = db.targetedListHighlightColor or {r=1, g=0.8, b=0}
     for _, bar in pairs(casterToBar) do
         if bar.highlightFrame and bar.highlightFrame:IsShown() and bar.highlightBorder then
+            -- Static solid highlight border (no animation): the Targeted List
+            -- highlight has only an enable toggle + colour, and historically was
+            -- a calm glow — a flashing PROC here reads as broken.
             DF.Border:Apply(bar.highlightBorder, {
                 enabled = true, size = 2, inset = 0, style = "SOLID",
                 color = { r = hc.r, g = hc.g, b = hc.b, a = 1 },
-                animation = { type = "PROC", color = { r = hc.r, g = hc.g, b = hc.b, a = 1 } },
             })
         end
     end
