@@ -135,13 +135,14 @@ jobs:
 
           FOOTER="*${CHANNEL_UPPER} builds are available on CurseForge by selecting \"${CHANNEL_UPPER}\" in the file dropdown, or from [GitHub Releases](<https://github.com/DanderBot/DandersFrames/releases>).*"
 
-          # Split body into chunks that fit Discord's 2000 char limit
-          # Reserve space for header/footer text in first/last messages
+          # Split body into chunks that fit Discord's 2000 char limit.
+          # The footer is appended to whichever message ends up last, and we
+          # don't know which that is until the loop finishes — so reserve footer
+          # room in EVERY chunk. The first message also carries the header.
           HEADER_LEN=${#HEADER}
           FOOTER_LEN=${#FOOTER}
-          FIRST_BUDGET=$((1900 - HEADER_LEN))
-          MIDDLE_BUDGET=1900
-          LAST_BUDGET=$((1900 - FOOTER_LEN))
+          FIRST_BUDGET=$((1900 - HEADER_LEN - FOOTER_LEN))
+          MIDDLE_BUDGET=$((1900 - FOOTER_LEN))
 
           MESSAGES=()
           CURRENT=""
@@ -166,6 +167,7 @@ jobs:
           [ -n "$CURRENT" ] && MESSAGES+=("$CURRENT")
 
           TOTAL=${#MESSAGES[@]}
+          FAILED=0
           for i in "${!MESSAGES[@]}"; do
             MSG=""
             if [ "$i" -eq 0 ]; then
@@ -181,17 +183,26 @@ jobs:
             MSG=$(echo "$MSG" | sed 's/^          //')
 
             PAYLOAD=$(jq -n --arg content "$MSG" '{ content: $content }')
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            HTTP_CODE=$(curl -s -o /tmp/discord_resp -w "%{http_code}" \
               -H "Content-Type: application/json" \
               -d "$PAYLOAD" \
               "$DISCORD_WEBHOOK_URL")
-            echo "Message $((i+1))/${TOTAL}: HTTP ${HTTP_CODE}"
+            echo "Message $((i+1))/${TOTAL}: HTTP ${HTTP_CODE} (len ${#MSG})"
+            case "$HTTP_CODE" in
+              2*) ;;
+              *) echo "::error::Discord message $((i+1))/${TOTAL} failed (HTTP ${HTTP_CODE}, len ${#MSG}): $(cat /tmp/discord_resp 2>/dev/null)"; FAILED=1 ;;
+            esac
 
             # Small delay between messages to preserve ordering
             if [ "$i" -lt $((TOTAL - 1)) ]; then
               sleep 1
             fi
           done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more Discord messages failed to post — see above."
+            exit 1
+          fi
 
       - name: Notify Discord (release channel — stable only)
         if: steps.guard.outputs.skip != 'true' && success() && steps.changelog.outputs.channel == 'release'
@@ -219,9 +230,11 @@ jobs:
           HEADER_LEN=${#HEADER}
           FOOTER_LEN=${#FOOTER}
           ROLE_LEN=${#ROLE_MENTION}
-          FIRST_BUDGET=$((1900 - HEADER_LEN))
-          MIDDLE_BUDGET=$((1900 - ROLE_LEN - 1))
-          LAST_BUDGET=$((1900 - FOOTER_LEN - ROLE_LEN - 1))
+          # Every non-first message is prefixed with the role mention, and the
+          # footer lands on whichever message is last — reserve room for both in
+          # every chunk so the final message + footer can't exceed 2000.
+          FIRST_BUDGET=$((1900 - HEADER_LEN - FOOTER_LEN))
+          MIDDLE_BUDGET=$((1900 - ROLE_LEN - 1 - FOOTER_LEN))
 
           MESSAGES=()
           CURRENT=""
@@ -246,6 +259,7 @@ jobs:
           [ -n "$CURRENT" ] && MESSAGES+=("$CURRENT")
 
           TOTAL=${#MESSAGES[@]}
+          FAILED=0
           for i in "${!MESSAGES[@]}"; do
             MSG=""
             if [ "$i" -eq 0 ]; then
@@ -262,13 +276,22 @@ jobs:
             MSG=$(echo "$MSG" | sed 's/^          //')
 
             PAYLOAD=$(jq -n --arg content "$MSG" '{ content: $content }')
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            HTTP_CODE=$(curl -s -o /tmp/discord_resp -w "%{http_code}" \
               -H "Content-Type: application/json" \
               -d "$PAYLOAD" \
               "$DISCORD_WEBHOOK_URL")
-            echo "Message $((i+1))/${TOTAL}: HTTP ${HTTP_CODE}"
+            echo "Message $((i+1))/${TOTAL}: HTTP ${HTTP_CODE} (len ${#MSG})"
+            case "$HTTP_CODE" in
+              2*) ;;
+              *) echo "::error::Discord message $((i+1))/${TOTAL} failed (HTTP ${HTTP_CODE}, len ${#MSG}): $(cat /tmp/discord_resp 2>/dev/null)"; FAILED=1 ;;
+            esac
 
             if [ "$i" -lt $((TOTAL - 1)) ]; then
               sleep 1
             fi
           done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more Discord messages failed to post — see above."
+            exit 1
+          fi
