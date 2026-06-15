@@ -6814,6 +6814,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         tsNameplateOffscreen.disableOn = HideTargetedSpellOptions
+        -- Icon display knobs (NOT border settings — kept out of the Border group so
+        -- that group is purely the shared DF.Border toolkit).
+        local tsAlpha = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
+        tsAlpha.disableOn = HideTargetedSpellOptions
+        local hideSwipe = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
+        hideSwipe.disableOn = HideTargetedSpellOptions
         settingsGroup:AddWidget(GUI:CreateButton(self.child, L["Run Setup Wizard"], 160, 24, function()
             if DF.ShowTargetedSpellSetupWizard then DF:ShowTargetedSpellSetupWizard() end
         end), 34)
@@ -6890,10 +6896,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Border Group (col1)
         local borderGroup = GUI:CreateSettingsGroup(self.child, 260)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        local tsAlpha = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsAlpha.disableOn = HideTargetedSpellOptions
-        local hideSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
-        hideSwipe.disableOn = HideTargetedSpellOptions
         -- Full DF.Border toolkit (matches Personal Targeted Spell): Show Border,
         -- Size, Style/Gradient, Colour, Alpha, Inset, Blend Mode, Shadow, Animate.
         -- BuildSpec in ApplyIconSettings already reads every targetedSpell* border
@@ -7465,6 +7467,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.TogglePersonalTargetedSpells then DF:TogglePersonalTargetedSpells(db.personalTargetedSpellEnabled) end
         end), 30)
         settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Important Spells Only"], db, "personalTargetedSpellImportantOnly", PersonalTargetedUpdate), 30)
+        -- Icon display knobs (NOT border settings — kept out of the Border group so
+        -- that group is purely the shared DF.Border toolkit).
+        local ptsAlpha = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
+        ptsAlpha.disableOn = HidePersonalOptions
+        local ptsSwipe = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
+        ptsSwipe.disableOn = HidePersonalOptions
         Add(settingsGroup, nil, 1)
         
         -- ===== CONTENT TYPES GROUP (Column 2) =====
@@ -7529,14 +7537,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Targeted = spells targeting you). Skipped: offset (icon has its
         -- own positioning), classColor / roleColor (spell alert, not unit
         -- identity), colorByTime / colorByType (no aura-state context).
-        -- The Icon Alpha (personalTargetedSpellAlpha) and Cooldown Swipe
-        -- toggles stay on this group — they're not border-related.
         local borderGroup = GUI:CreateSettingsGroup(self.child, 260)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        local ptsAlpha = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsAlpha.disableOn = HidePersonalOptions
-        local ptsSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
-        ptsSwipe.disableOn = HidePersonalOptions
         GUI:CreateBorderControls(borderGroup, db, "personalTargetedSpell", {
             parent       = self.child,
             include      = { alpha = true, inset = true, blendMode = true,
