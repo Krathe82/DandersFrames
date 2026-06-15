@@ -6943,8 +6943,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         currentSection = importantSection
         
         local function HideHighlightOptions(d) return not d.targetedSpellEnabled or not d.targetedSpellHighlightImportant end
-        local highlightStyleOptions = { glow = L["Glow"], marchingAnts = L["Marching Ants"], solidBorder = L["Solid Border"], pulse = L["Pulse"], none = L["None"] }
-        
+
         local highlightGroup = GUI:CreateSettingsGroup(self.child, 260)
         highlightGroup:AddWidget(GUI:CreateHeader(self.child, L["Highlight Settings"]), 40)
         local tsHighlightImportant = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "targetedSpellHighlightImportant", function()
@@ -6952,14 +6951,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         tsHighlightImportant.disableOn = HideTargetedSpellOptions
-        local tsHighlightStyle = highlightGroup:AddWidget(GUI:CreateDropdown(self.child, L["Highlight Style"], highlightStyleOptions, db, "targetedSpellHighlightStyle", FullUpdate), 55)
-        tsHighlightStyle.disableOn = HideHighlightOptions
-        local tsHighlightColor = highlightGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "targetedSpellHighlightColor", false, FullUpdate), 35)
-        tsHighlightColor.disableOn = HideHighlightOptions
-        local tsHighlightSize = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 8, 1, db, "targetedSpellHighlightSize", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsHighlightSize.disableOn = HideHighlightOptions
-        local tsHighlightInset = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -4, 8, 1, db, "targetedSpellHighlightInset", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsHighlightInset.disableOn = HideHighlightOptions
+        -- Important Spell Border: the highlight on its own DF.Border (full toolkit),
+        -- gated by the Highlight Important Spells toggle above.
+        GUI:CreateBorderControls(highlightGroup, db, "targetedSpellImportant", {
+            parent        = self.child,
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = FullUpdate,
+            lightUpdate   = TargetedSpellLightweightUpdate,
+            lightColors   = FullUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HideHighlightOptions,
+            sizeMin = 1, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(highlightGroup, nil, 1)
         
         currentSection = nil
