@@ -2259,16 +2259,14 @@ function DF:ShowTargetedSpellSetupWizard()
                 id = "intro",
                 question = L["Targeted Spells is back"],
                 description = L["Puts an icon on the party member an enemy is about to hit, so you can react to incoming danger. It works by matching the enemy's target to your group by class, role, race, and sex."],
-                type = "single",
-                options = {
-                    { label = L["Next"], value = "next" },
-                },
+                type = "multi",
+                options = {},
                 next = "choice",
             },
             {
                 id = "choice",
                 question = L["Before you turn it on"],
-                description = L["A few things to know:\n\n- Party only — raid frames aren't supported.\n- If two members share the same class, role, race and sex, they can't be told apart and won't show an icon (you'll be warned by name).\n- This relies on Blizzard behaviour that isn't officially supported. Blizzard could change it at any time — if they do, the feature simply stops working and there's no fix. There's no guarantee it stays."],
+                description = L["A few things to know:\n\n- Party only — raid frames aren't supported.\n\n- If two members share the same class, role, race and sex, they can't be told apart and won't show an icon (you'll be warned by name).\n\n- This relies on Blizzard behaviour that isn't officially supported. Blizzard could change it at any time — if they do, the feature simply stops working and there's no fix. There's no guarantee it stays."],
                 type = "single",
                 options = {
                     { label = L["Enable Targeted Spells"], value = "enable" },
@@ -2282,6 +2280,17 @@ function DF:ShowTargetedSpellSetupWizard()
                 local pdb = DF:GetDB("party")
                 if pdb then pdb.targetedSpellEnabled = true end
                 if DF.ToggleTargetedSpells then DF:ToggleTargetedSpells(true) end
+                -- Open the settings window to the Targeted Spells page so the
+                -- user lands on the controls right after enabling. Delayed so it
+                -- runs after the wizard popup closes and the GUI can build.
+                C_Timer.After(0.1, function()
+                    if not DF.GUIFrame or not DF.GUIFrame:IsShown() then
+                        if DF.ToggleGUI then DF:ToggleGUI() end
+                    end
+                    if DF.GUI and DF.GUI.SelectTab then
+                        DF.GUI.SelectTab("indicators_targetedspells")
+                    end
+                end)
             end
         end,
         onCancel = function()
