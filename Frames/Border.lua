@@ -1430,10 +1430,18 @@ function Border:Apply(border, spec)
             border.bd:SetAllPoints(border)
         end
         local bd = border.bd
-        bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = (size > 0 and size) or 1 })
-        bd:SetBackdropBorderColor(cr, cg, cb, ca)
-        bd:Show()
-        border.activeTexture = texture
+        -- Thickness 0 = no border: hide the backdrop instead of clamping the
+        -- edge to 1px (parity with the solid/gradient path above). The
+        -- animation overlay is a separate frame and keeps running.
+        if size <= 0 then
+            bd:Hide()
+            border.activeTexture = nil
+        else
+            bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = size })
+            bd:SetBackdropBorderColor(cr, cg, cb, ca)
+            bd:Show()
+            border.activeTexture = texture
+        end
     end
 
     -- Drop shadow: solid 4-edge ring, lazy-created, parented next to the
