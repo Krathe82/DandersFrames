@@ -1564,7 +1564,10 @@ local function BuildCompositionKey()
         local u = "party" .. i
         if UnitExists(u) then
             local _, c = UnitClass(u)
-            parts[#parts + 1] = (type(c) == "string" and c or "?") .. ":" .. (UnitGroupRolesAssigned(u) or "?")
+            local role = UnitGroupRolesAssigned(u)
+            local cPart = (not issecretvalue(c) and type(c) == "string") and c or "?"
+            local rPart = (not issecretvalue(role) and type(role) == "string") and role or "?"
+            parts[#parts + 1] = cPart .. ":" .. rPart
         end
     end
     return table.concat(parts, "|")
@@ -1595,6 +1598,15 @@ local resolveGen = {}
 -- Which frame currently shows each caster's icon (for retarget cleanup).
 local casterShownFrame = {}
 
+-- Clear a caster's icon from whatever frame it was last shown on.
+local function ClearCasterShown(casterUnit)
+    local prev = casterShownFrame[casterUnit]
+    if prev then
+        DF:HideTargetedSpellIcon(prev, casterUnit)
+        casterShownFrame[casterUnit] = nil
+    end
+end
+
 -- Read the enemy target's fingerprint, gated by party membership.
 -- Returns a fingerprint table, or nil if the target isn't a party member
 -- (pets/NPCs excluded) or its class is unreadable.
@@ -1620,9 +1632,9 @@ end
 local function ResolveFingerprintTarget(casterUnit, texture, spellName, durationObject, isChannel, spellID, startTime, myGen)
     if resolveGen[casterUnit] ~= myGen then return end       -- stale resolve
     local targetFP = ReadTargetFingerprint(casterUnit)
-    if not targetFP then return end
+    if not targetFP then ClearCasterShown(casterUnit); return end   -- target left party / unreadable -> clear stale icon
     local matches = MatchFingerprint(targetFP, rosterFingerprints)
-    if #matches ~= 1 then return end                          -- ambiguous / none -> nothing
+    if #matches ~= 1 then ClearCasterShown(casterUnit); return end  -- now ambiguous / no match -> clear stale icon
     local unit = matches[1]
     local frame = GetFrameForUnit(unit)
     if not frame then return end
@@ -6232,15 +6244,15 @@ end
 function DF:InitTargetedSpells()
     local db = DF:GetDB()
 
-    -- Group-frame Targeted Spells is permanently disabled (Blizzard's
-    -- 2026-04-07 UnitIsUnit hotfix). Force the user-facing setting off
-    -- so the GUI reflects reality every load — DF.GroupTargetedSpellsAPIBlocked
-    -- is set unconditionally at the top of this file.
+    -- Raid group-frame Targeted Spells stays disabled (Blizzard's 2026-04-07
+    -- UnitIsUnit hotfix killed the relay). Force only the raid setting off so
+    -- the GUI reflects reality every load. The PARTY path is live via
+    -- fingerprinting (DF.GroupTargetedSpellsAPIBlockedParty = false).
     ForceDisableGroupTargetedSpellSettings()
 
-    -- Group-side enable path is no longer reachable — only events for
-    -- the personal display are registered (handled by
-    -- UpdateTargetedSpellEventRegistration below).
+    -- Cast events register for whatever is live (party fingerprint group
+    -- display, personal display, and/or the Targeted List), handled by
+    -- UpdateTargetedSpellEventRegistration below.
 
     -- Apply nameplate offscreen setting if enabled
     if db.targetedSpellNameplateOffscreen then
