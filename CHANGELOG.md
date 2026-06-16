@@ -16,6 +16,7 @@
 ### Improvements
 
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+* (Targeted Spells) The party and personal targeted-spell icons now use the **full border toolkit** — style, colour, alpha, inset, blend mode, shadow and animation — the same controls as the rest of the addon, and the important-spell highlight is now its **own border** you can style separately. Existing highlight settings carry over. (by Krathe)
 
 ### Bug Fixes
 
@@ -29,6 +30,8 @@
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
+* (Borders) A border set to thickness **0** now hides cleanly across every style, while any border animation keeps running. (by Krathe)
+* (Borders) Fixed a doubled glow that could appear on the **PROC** border animation when it re-triggered; the PROC start-flash is now an opt-in option. (by Krathe)
 
 ## [4.4.1]
 
