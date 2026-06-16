@@ -1584,7 +1584,16 @@ end
 function PinnedFrames:ApplyLayoutSettings(setIndex)
     local set = GetSetDB(setIndex)
     if not set then return end
-    if InCombatLockdown() then return end
+    -- Layout changes touch secure header attributes (point/xOffset/size/anchor),
+    -- which are combat-restricted. Defer to PLAYER_REGEN_ENABLED instead of silently
+    -- dropping the change — otherwise a Direction/spacing/size tweak made mid-combat
+    -- (e.g. between pulls in a follower dungeon) never reaches the live header until
+    -- the next settings poke or a /reload. Mirrors FlatRaidFrames.pendingLayoutUpdate.
+    if InCombatLockdown() then
+        self.pendingLayoutUpdate = self.pendingLayoutUpdate or {}
+        self.pendingLayoutUpdate[setIndex] = true
+        return
+    end
 
     -- Refresh Test Mode frames regardless of frame type. Cheapest correct
     -- approach: full Exit+Enter cycle, same as the test count slider uses.
@@ -1672,6 +1681,22 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
             yOff = -vSpacing  -- Negative to grow down
         end
         xOff = 0
+    end
+
+    -- CRITICAL: clear every child's anchor points BEFORE we change the layout
+    -- attributes below. Each SetAttribute("point"/"columnAnchorPoint"/…) fires
+    -- SecureGroupHeader_OnAttributeChanged, which (while the header is visible)
+    -- synchronously runs SecureGroupHeader_Update — and that function re-anchors
+    -- displayed children with SetPoint WITHOUT ClearAllPoints-ing them first
+    -- (confirmed in Blizzard_RestrictedAddOnEnvironment/SecureGroupHeaders.lua).
+    -- So when the growth point flips (Horizontal LEFT -> Vertical TOP) each child
+    -- keeps its stale anchor AND gains the new one, cascading diagonally (the
+    -- "staircase"); a /reload only hides it by rebuilding the frames. Clearing the
+    -- points first means every re-layout SetPoint lands on a clean child. Mirrors
+    -- DF:UpdateRaidHeaderLayoutAttributes (Frames/Headers.lua).
+    for i = 1, 40 do
+        local child = header:GetAttribute("child" .. i)
+        if child then child:ClearAllPoints() end
     end
 
     header:SetAttribute("point", point)
@@ -2520,6 +2545,16 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
                 PinnedFrames:SetEnabled(setIndex, enabled)
             end
             PinnedFrames.pendingVisibilityUpdate = nil
+        end
+
+        -- Replay layout changes (Direction/spacing/size/anchor) that were attempted
+        -- in combat. Skipped harmlessly when pendingReinitialize already ran above
+        -- (it returns early and re-applies every set's layout via ProcessAllSets).
+        if PinnedFrames.pendingLayoutUpdate then
+            for idx in pairs(PinnedFrames.pendingLayoutUpdate) do
+                PinnedFrames:ApplyLayoutSettings(idx)
+            end
+            PinnedFrames.pendingLayoutUpdate = nil
         end
 
         -- Reset slot allocator + reapply layout now that we're out of combat.
