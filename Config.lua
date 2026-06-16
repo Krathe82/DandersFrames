@@ -1434,6 +1434,8 @@ DF.PartyDefaults = {
     permanentMoverWidth = 15,
     pixelPerfect = true,
     snapToGrid = true,
+    pinnedSnapToGrid = false,
+    pinnedHideMover = false,
     hideDragOverlay = false,
 
     -- Group Labels
@@ -3030,6 +3032,8 @@ DF.RaidDefaults = {
     permanentMoverWidth = 15,
     pixelPerfect = true,
     snapToGrid = true,
+    pinnedSnapToGrid = false,
+    pinnedHideMover = false,
     hideDragOverlay = false,
 
     -- Group Labels
