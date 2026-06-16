@@ -3465,69 +3465,21 @@ function DF:UpdateTestPowerBar(frame, testData)
     
     -- Power bar should already exist from Frames/Create.lua
     if not frame.dfPowerBar then return end
-    
+
+    -- Shared geometry/appearance (size incl. border inset, anchor, frame level,
+    -- background, border) — identical to the live DF:ApplyResourceBarLayout, so the
+    -- live and test renders can never drift.
+    DF:LayoutResourceBar(frame, db)
+
     local bar = frame.dfPowerBar
-    local powerHeight = db.resourceBarHeight or 4
-    local powerAnchor = db.resourceBarAnchor or "BOTTOM"
-    
-    -- Position power bar (floating style - anchored to a point, not spanning frame)
-    bar:ClearAllPoints()
 
-    local orientation = db.resourceBarOrientation or "HORIZONTAL"
-    bar:SetOrientation(orientation)
-    bar:SetReverseFill(db.resourceBarReverseFill or false)
-
-    local isVertical = (orientation == "VERTICAL")
-    local length = db.resourceBarWidth or 50
-    local thickness = db.resourceBarHeight or 4
-
-    if db.pixelPerfect and DF.PixelPerfect then
-        length = DF:PixelPerfect(length)
-        thickness = DF:PixelPerfect(thickness)
-    end
-
-    -- Compute health bar dimensions from settings (not GetWidth/GetHeight which
-    -- can return stale values before WoW layout processes anchor changes).
-    -- Prefer a pinned test frame's resolved size so a "Match Frame Width" resource
-    -- bar tracks the pinned size, not the shared per-mode db width.
-    local padding = db.framePadding or 0
-    local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
-    local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
-    if db.pixelPerfect and DF.PixelPerfect then
-        frameWidth = DF:PixelPerfect(frameWidth)
-        frameHeight = DF:PixelPerfect(frameHeight)
-        padding = DF:PixelPerfect(padding)
-    end
-    local healthBarWidth = frameWidth - (2 * padding)
-    local healthBarHeight = frameHeight - (2 * padding)
-
-    if isVertical then
-        bar:SetWidth(thickness)
-        bar:SetHeight(length)
-        if db.resourceBarMatchWidth then
-            if healthBarHeight > 1 then
-                bar:SetHeight(healthBarHeight)
-            end
-        end
-    else
-        bar:SetWidth(length)
-        bar:SetHeight(thickness)
-        if db.resourceBarMatchWidth then
-            if healthBarWidth > 1 then
-                bar:SetWidth(healthBarWidth)
-            end
-        end
-    end
-
-    local offsetX = db.resourceBarX or 0
-    local offsetY = db.resourceBarY or 0
-    bar:SetPoint(powerAnchor, frame, powerAnchor, offsetX, offsetY)
-    
-    -- Set value
+    -- Value (mock — there's no real unit to query).
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(testData.powerPercent or 0.8)
-    
-    -- Set color based on role using customizable power colors
+
+    -- Fill colour: mirror DF:GetResourceBarColor's mode resolution (Power / Class /
+    -- Custom) using the mock unit's testData (reads resourceBarColorMode so the
+    -- preview reflects a "Class" pick from the Color Mode dropdown).
     local powerToken
     if testData.role == "HEALER" then
         powerToken = "MANA"
@@ -3536,11 +3488,6 @@ function DF:UpdateTestPowerBar(frame, testData)
     else
         powerToken = "ENERGY"
     end
-
-    -- Mirror DF:GetResourceBarColor's mode resolution (Power / Class / Custom),
-    -- but using the mock unit's testData since there's no real unit to query.
-    -- Reads resourceBarColorMode (not just the legacy resourceBarClassColor
-    -- boolean) so the preview reflects a "Class" pick from the Color Mode dropdown.
     local mode = db.resourceBarColorMode or (db.resourceBarClassColor and "CLASS" or "POWER_TYPE")
     local classColor = mode == "CLASS" and testData.class and DF:GetClassColor(testData.class)
     if mode == "CUSTOM" then
@@ -3552,32 +3499,7 @@ function DF:UpdateTestPowerBar(frame, testData)
         local powerColor = DF:GetPowerColor(powerToken)
         bar:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b, 1)
     end
-    
-    -- Background visibility and color
-    if bar.bg then
-        if db.resourceBarBackgroundEnabled ~= false then
-            bar.bg:Show()
-            local bgC = db.resourceBarBackgroundColor or {r = 0.1, g = 0.1, b = 0.1, a = 0.8}
-            bar.bg:SetColorTexture(bgC.r, bgC.g, bgC.b, bgC.a or 0.8)
-        else
-            bar.bg:Hide()
-        end
-    end
-    
-    -- Frame level - relative to main frame, not health bar
-    local frameLevelOffset = db.resourceBarFrameLevel or 2
-    bar:SetFrameLevel(frame:GetFrameLevel() + frameLevelOffset)
-    
-    -- Border via unified DF.Border backend (Stage 4.2). ctx.frame is the
-    -- test unit frame (carries dfIsTestFrame + index + isRaidFrame) so
-    -- Class / Role resolvers pull test class/role from GetTestUnitData.
-    if bar.border then
-        bar.border:SetFrameLevel(bar:GetFrameLevel() + 1)
-        DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "resourceBar", {
-            frame = frame,
-        }))
-    end
-    
+
     -- Apply dead / health-based / OOR alpha
     local alpha = 1.0
     if frame.dfTestDeadFadeAlphas and frame.dfTestDeadFadeAlphas.power then
