@@ -2446,6 +2446,7 @@ eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 eventFrame:RegisterEvent("UNIT_TARGETABLE_CHANGED")
 eventFrame:RegisterEvent("UNIT_FACTION")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
     if event == "ADDON_LOADED" then
@@ -2555,6 +2556,37 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
         return
     end
     
+    if event == "PLAYER_ENTERING_WORLD" then
+        -- Re-apply pinned visibility on zone-in. The roster events that normally
+        -- drive the show path (SetEnabled) fire as you're added to the BG / arena
+        -- raid — often BEFORE the instance, its frames and roster names are ready,
+        -- and frequently in combat (where Reinitialize defers). Nothing re-drove
+        -- them once the instance settled, so pinned sets stayed hidden until a
+        -- manual disable/enable. PLAYER_ENTERING_WORLD is the "instance loaded"
+        -- trigger that was missing.
+        if PinnedFrames.initialized then
+            if InCombatLockdown() then
+                -- Drained on PLAYER_REGEN_ENABLED above (Reinitialize + ProcessAllSets).
+                PinnedFrames.pendingReinitialize = true
+            else
+                local actualMode = GetActualMode()
+                if PinnedFrames.currentMode and actualMode ~= PinnedFrames.currentMode then
+                    PinnedFrames:Reinitialize()
+                    PinnedFrames:ProcessAllSets()
+                else
+                    -- Re-assert each set's visibility (the show path) + re-populate
+                    -- now that the instance has settled. Debounced, combat-safe.
+                    for i = 1, PinnedFrames.MAX_SETS do
+                        local set = GetSetDB(i)
+                        if set then PinnedFrames:SetEnabled(i, set.enabled) end
+                    end
+                    PinnedFrames:RequestProcessAllSets()
+                end
+            end
+        end
+        return
+    end
+
     if event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
         if PinnedFrames.initialized then
             PinnedFrames:OnBossFramesChanged()
