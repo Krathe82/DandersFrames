@@ -29,6 +29,7 @@ DF.CHANGELOG_TEXT = [===[
 * (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
+* (Buff/Debuff) **Show Buffs / Show Debuffs** toggles now apply live without a `/reload` — already-shown auras hide or reappear immediately instead of lingering until the unit's next aura change. (by Krathe)
 * (Raid Frames) Fixed missing frames for players who are still loading in, such as battleground backfills joining mid-match. (by Krathe)
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
