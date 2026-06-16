@@ -16,6 +16,7 @@
 ### Improvements
 
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+* (Out of Range) The out-of-range text fade is now a single **Text Alpha** control that dims the whole Text Designer overlay together, replacing the old per-element Name/Health alpha sliders that no longer did anything once the Text Designer took over text rendering. (by Krathe)
 
 ### Bug Fixes
 
