@@ -292,6 +292,10 @@ function DF:SetProfile(name)
         DF:MigrateDesignerPresets()
     end
 
+    if DF.MigrateTargetedSpellImportantBorder then
+        DF:MigrateTargetedSpellImportantBorder()
+    end
+
     if DF.MigrateTextDesignerFromLegacy then
         DF:MigrateTextDesignerFromLegacy()
     end
@@ -305,9 +309,6 @@ function DF:SetProfile(name)
     -- Appearance-preserving border migration (per-profile guarded, no-op once run).
     if DF.MigrateBorderInsetFold then
         DF:MigrateBorderInsetFold()
-    end
-    if DF.MigrateTargetedSpellImportantBorder then
-        DF:MigrateTargetedSpellImportantBorder()
     end
 
     -- Apply the profile — runtime state is already clear so the proxy reads

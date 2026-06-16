@@ -3509,6 +3509,40 @@ local function ZeroBuffDebuffBorderInset(profile)
     end
 end
 
+-- One-shot per-profile, two independently-guarded steps so a profile already
+-- through step 1 still receives step 2. Both steps are value-idempotent.
+function DF:MigrateBorderInsetFold()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" then
+            -- Step 1: AD icon/square fold (preset libraries + inline configs).
+            if not profile._borderInsetFoldV1 then
+                local seen = {}
+                -- Canonical store when Designer Presets exist (nil-guarded so this
+                -- stays correct where they don't).
+                local lib = profile.auraDesignerPresets
+                if type(lib) == "table" then
+                    for _, presetCfg in pairs(lib) do
+                        FoldAuraDesignerConfig(presetCfg, seen)
+                    end
+                end
+                if type(profile.party) == "table" then
+                    FoldAuraDesignerConfig(profile.party.auraDesigner, seen)
+                end
+                if type(profile.raid) == "table" then
+                    FoldAuraDesignerConfig(profile.raid.auraDesigner, seen)
+                end
+                profile._borderInsetFoldV1 = true
+            end
+            -- Step 2: zero buff/debuff border inset (mode-level + raid overrides).
+            if not profile._buffDebuffInsetZeroV1 then
+                ZeroBuffDebuffBorderInset(profile)
+                profile._buffDebuffInsetZeroV1 = true
+            end
+        end
+    end
+end
+
 -- One-time: carry the old bespoke important-spell highlight settings
 -- (targetedSpellHighlightStyle/Color/Size/Inset) into the new Important Spell
 -- Border key set (targetedSpellImportantBorder*), which is a second DF.Border
@@ -3561,40 +3595,6 @@ function DF:MigrateTargetedSpellImportantBorder()
                     if type(m) == "table" then mapHighlight(m, "personalTargetedSpell") end
                 end
                 profile._personalTsImportantBorderV1 = true
-            end
-        end
-    end
-end
-
--- One-shot per-profile, two independently-guarded steps so a profile already
--- through step 1 still receives step 2. Both steps are value-idempotent.
-function DF:MigrateBorderInsetFold()
-    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
-    for _, profile in pairs(DandersFramesDB_v2.profiles) do
-        if type(profile) == "table" then
-            -- Step 1: AD icon/square fold (preset libraries + inline configs).
-            if not profile._borderInsetFoldV1 then
-                local seen = {}
-                -- Canonical store when Designer Presets exist (nil-guarded so this
-                -- stays correct where they don't).
-                local lib = profile.auraDesignerPresets
-                if type(lib) == "table" then
-                    for _, presetCfg in pairs(lib) do
-                        FoldAuraDesignerConfig(presetCfg, seen)
-                    end
-                end
-                if type(profile.party) == "table" then
-                    FoldAuraDesignerConfig(profile.party.auraDesigner, seen)
-                end
-                if type(profile.raid) == "table" then
-                    FoldAuraDesignerConfig(profile.raid.auraDesigner, seen)
-                end
-                profile._borderInsetFoldV1 = true
-            end
-            -- Step 2: zero buff/debuff border inset (mode-level + raid overrides).
-            if not profile._buffDebuffInsetZeroV1 then
-                ZeroBuffDebuffBorderInset(profile)
-                profile._buffDebuffInsetZeroV1 = true
             end
         end
     end
@@ -5343,6 +5343,12 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 DF:MigrateDesignerPresets()
             end
 
+            -- Carry old important-spell highlight settings into the new
+            -- Important Spell Border key set (per-profile guarded, no-op once run).
+            if DF.MigrateTargetedSpellImportantBorder then
+                DF:MigrateTargetedSpellImportantBorder()
+            end
+
             if DF.MigrateTextDesignerFromLegacy then
                 DF:MigrateTextDesignerFromLegacy()
             end
@@ -5359,12 +5365,6 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- run); independent of Designer Presets (preset walk is nil-guarded).
             if DF.MigrateBorderInsetFold then
                 DF:MigrateBorderInsetFold()
-            end
-
-            -- Carry old important-spell highlight settings into the new
-            -- Important Spell Border key set (per-profile guarded, no-op once run).
-            if DF.MigrateTargetedSpellImportantBorder then
-                DF:MigrateTargetedSpellImportantBorder()
             end
 
             -- CRITICAL: Update power bars now that unit data is available
