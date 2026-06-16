@@ -3520,22 +3520,26 @@ function DF:MigrateTargetedSpellImportantBorder()
     local styleToAnim = { glow = "PROC", marchingAnts = "DF_DASH", pulse = "DF_PULSATE",
                           solidBorder = "NONE", none = "NONE" }
     -- Copy a feature's old <prefix>Highlight* keys into its new
-    -- <prefix>ImportantBorder* set when the new key is still nil. Value-idempotent;
-    -- shared by the group (targetedSpell) and personal (personalTargetedSpell) sets.
+    -- <prefix>ImportantBorder* set. Gated ONLY by the per-profile _…V1 flag in the
+    -- caller (so it runs exactly once); do NOT also guard on the new key being nil —
+    -- the ADDON_LOADED default-merge fills the new …ImportantBorder* keys before this
+    -- runs, so a nil-guard would never fire and the old highlight settings would be
+    -- lost. At first run the user can't have set the new keys yet, so overwriting the
+    -- just-merged defaults with their old highlight values is exactly the intent.
+    -- Mirrors MigrateBorderInsetFold. Shared by the group (targetedSpell) and personal
+    -- (personalTargetedSpell) sets.
     local function mapHighlight(m, p)
-        if m[p.."HighlightColor"] ~= nil and m[p.."ImportantBorderColor"] == nil then
+        if m[p.."HighlightColor"] ~= nil then
             m[p.."ImportantBorderColor"] = m[p.."HighlightColor"]
-            if m[p.."ImportantBorderAnimationColor"] == nil then
-                m[p.."ImportantBorderAnimationColor"] = m[p.."HighlightColor"]
-            end
+            m[p.."ImportantBorderAnimationColor"] = m[p.."HighlightColor"]
         end
-        if m[p.."HighlightSize"] ~= nil and m[p.."ImportantBorderSize"] == nil then
+        if m[p.."HighlightSize"] ~= nil then
             m[p.."ImportantBorderSize"] = m[p.."HighlightSize"]
         end
-        if m[p.."HighlightInset"] ~= nil and m[p.."ImportantBorderInset"] == nil then
+        if m[p.."HighlightInset"] ~= nil then
             m[p.."ImportantBorderInset"] = m[p.."HighlightInset"]
         end
-        if m[p.."HighlightStyle"] ~= nil and m[p.."ImportantBorderAnimationType"] == nil then
+        if m[p.."HighlightStyle"] ~= nil then
             m[p.."ImportantBorderAnimationType"] = styleToAnim[m[p.."HighlightStyle"]] or "PROC"
         end
     end
