@@ -1051,27 +1051,27 @@ function Border:StartAnimation(border, spec)
                 -- other effects' Frequency control (cycles per second).
                 local duration = (anim.frequency and anim.frequency > 0)
                     and (1 / anim.frequency) or 1
+                -- startAnim = false: DF.Border uses PROC as a CONTINUOUS border
+                -- animation, not a one-shot proc trigger. The start animation
+                -- begins large and shrinks to the border, and it re-fires on
+                -- every re-Apply (e.g. test-mode toggles, relayouts) — when the
+                -- prior start animation hasn't fully torn down you get two glows
+                -- at two sizes (one inset, one further out). Starting straight in
+                -- the loop state gives a clean, stable glow with no flash-in.
                 LCG.ProcGlow_Start(target, {
                     color     = color,
                     duration  = duration,
-                    startAnim = true,
+                    startAnim = false,
                     key       = key,
                 })
             end
         end
 
-        -- ALWAYS defer the glow start to the next frame so it reads the
-        -- animRect's size AFTER the layout pass settles. Starting immediately
-        -- on a non-zero width is unsafe: when the frame is resized this same
-        -- frame (e.g. a test-mode toggle re-render, or any re-layout), the
-        -- width read is stale/unresolved and LCG sizes the glow to it — the
-        -- "renders huge" case the deferral was added for. The earlier
-        -- `width > 0 → start now` fast-path only caught a width of exactly 0,
-        -- so on alternate re-renders it intermittently fired against a stale
-        -- size and the glow rendered too large every other toggle. One frame
-        -- of latency is imperceptible and the start token guards against a
-        -- superseded/stopped start.
-        C_Timer.After(0, startGlow)
+        if (border.animRect:GetWidth() or 0) > 0 then
+            startGlow()
+        else
+            C_Timer.After(0, startGlow)
+        end
         border.activeAnimation = anim.type
         return
     end
