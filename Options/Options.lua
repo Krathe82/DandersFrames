@@ -6814,12 +6814,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         tsNameplateOffscreen.disableOn = HideTargetedSpellOptions
-        -- Icon display knobs (NOT border settings — kept out of the Border group so
-        -- that group is purely the shared DF.Border toolkit).
-        local tsAlpha = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsAlpha.disableOn = HideTargetedSpellOptions
-        local hideSwipe = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
-        hideSwipe.disableOn = HideTargetedSpellOptions
         settingsGroup:AddWidget(GUI:CreateButton(self.child, L["Run Setup Wizard"], 160, 24, function()
             if DF.ShowTargetedSpellSetupWizard then DF:ShowTargetedSpellSetupWizard() end
         end), 34)
@@ -6878,6 +6872,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         tsIconSize.disableOn = HideTargetedSpellOptions
         local tsScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 4.0, 0.1, db, "targetedSpellScale", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
         tsScale.disableOn = HideTargetedSpellOptions
+        local tsAlpha = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
+        tsAlpha.disableOn = HideTargetedSpellOptions
         local tsSpacing = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 10, 1, db, "targetedSpellSpacing", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
         tsSpacing.disableOn = HideTargetedSpellOptions
         local tsMaxIcons = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Icons"], 1, 10, 1, db, "targetedSpellMaxIcons", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
@@ -6921,6 +6917,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         showDur.disableOn = HideTargetedSpellOptions
+        -- The cooldown swipe is the radial cooldown sweep on the icon (independent
+        -- of the numeric duration text), so it's gated only on the feature itself.
+        local hideSwipe = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
+        hideSwipe.disableOn = HideTargetedSpellOptions
         local tsDurFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "targetedSpellDurationFont", FullUpdate), 55)
         tsDurFont.disableOn = HideTargetedDurationOptions
         local tsDurScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "targetedSpellDurationScale", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
@@ -7467,12 +7467,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.TogglePersonalTargetedSpells then DF:TogglePersonalTargetedSpells(db.personalTargetedSpellEnabled) end
         end), 30)
         settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Important Spells Only"], db, "personalTargetedSpellImportantOnly", PersonalTargetedUpdate), 30)
-        -- Icon display knobs (NOT border settings — kept out of the Border group so
-        -- that group is purely the shared DF.Border toolkit).
-        local ptsAlpha = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsAlpha.disableOn = HidePersonalOptions
-        local ptsSwipe = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
-        ptsSwipe.disableOn = HidePersonalOptions
         Add(settingsGroup, nil, 1)
         
         -- ===== CONTENT TYPES GROUP (Column 2) =====
@@ -7511,6 +7505,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         ptsSize.disableOn = HidePersonalOptions
         local ptsScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "personalTargetedSpellScale", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
         ptsScale.disableOn = HidePersonalOptions
+        local ptsAlpha = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
+        ptsAlpha.disableOn = HidePersonalOptions
         local ptsSpacing = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 20, 1, db, "personalTargetedSpellSpacing", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
         ptsSpacing.disableOn = HidePersonalOptions
         local ptsMaxIcons = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Icons"], 1, 10, 1, db, "personalTargetedSpellMaxIcons", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
@@ -7560,6 +7556,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             PersonalTargetedUpdate()
         end), 30)
         ptsDuration.disableOn = HidePersonalOptions
+        -- The cooldown swipe is the radial cooldown sweep on the icon (independent
+        -- of the numeric duration text), so it's gated only on the feature itself.
+        local ptsSwipe = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
+        ptsSwipe.disableOn = HidePersonalOptions
         local ptsDurFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "personalTargetedSpellDurationFont", PersonalTargetedUpdate), 55)
         ptsDurFont.disableOn = HidePersonalDurationOptions
         local ptsDurScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, db, "personalTargetedSpellDurationScale", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
