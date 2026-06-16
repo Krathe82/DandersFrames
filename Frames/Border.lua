@@ -887,14 +887,6 @@ function Border:StopAnimation(border)
         -- field from the pre-rename revision and is checked for users
         -- mid-upgrade who might still have a glow running on the old frame.)
         local anchor = border.anchorTo or border
-        if DF.debugEnabled then
-            local ag = anchor and anchor["_ProcGlowDFBorder"]
-            local rg = border.animRect and border.animRect["_ProcGlowDFBorder"]
-            if ag or rg then
-                print(("|cff00aaff[PROC STOP]|r t=%.2f border=%s anchorGlow=%s animRect=%s animRectGlow=%s")
-                    :format(GetTime(), tostring(border), tostring(ag), tostring(border.animRect), tostring(rg)))
-            end
-        end
         local function stopAll(t)
             -- Reset a reused ProcGlow frame's textures BEFORE releasing it.
             -- LCG's pool resetter only hides the frame + clears the reference;
@@ -1063,16 +1055,6 @@ function Border:StartAnimation(border, spec)
             if border._lcgStartToken ~= token then return end
             local target = border.animRect
             if not target then return end
-            if DF.debugEnabled and anim.type == "PROC" then
-                local existing = target["_ProcGlowDFBorder"]
-                print(("|cffff8800[PROC START]|r t=%.2f border=%s target=%s existing=%s procStart=%s")
-                    :format(GetTime(), tostring(border), tostring(target), tostring(existing), tostring(anim.procStart)))
-                if existing then
-                    print(("   |cffff8800reusing glow|r ProcStart.shown=%s ProcLoop.shown=%s")
-                        :format(tostring(existing.ProcStart and existing.ProcStart:IsShown()),
-                                tostring(existing.ProcLoop and existing.ProcLoop:IsShown())))
-                end
-            end
             if anim.type == "PULSATE" then
                 -- PixelGlow `border` arg: false → no outer mask. anim.mask = true
                 -- restores the backing card for users who want that look.
