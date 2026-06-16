@@ -1367,6 +1367,16 @@ end
 function DF:SnapToGrid(x, y)
     -- Grid settings are party-wide; edge-snap container depends on mode.
     local db = DF:GetDB()
+
+    -- Pinned uses a POINT anchor (x/y is the first frame's position, not a centred
+    -- box), so the centre+edge-snapping model below would mis-place it. Snap the
+    -- coordinate itself to the nearest grid line.
+    if DF.positionPanelMode == "pinned" then
+        local gridSize = db.gridSize or 20
+        return math.floor((x / gridSize) + 0.5) * gridSize,
+               math.floor((y / gridSize) + 0.5) * gridSize
+    end
+
     local container
     if DF.positionPanelMode == "raid" then
         container = DF.raidContainer
@@ -1374,13 +1384,6 @@ function DF:SnapToGrid(x, y)
         container = DF.personalTargetedSpellsMover or DF.container
     elseif DF.positionPanelMode == "targetedList" then
         container = DF.targetedListMoverFrame or DF.container
-    elseif DF.positionPanelMode == "pinned" then
-        local pf = DF.PinnedFrames
-        local i = DF.positionPanelPinnedSet or 1
-        container = pf and (
-            (pf.testModeActive and pf.testContainers and pf.testContainers[i])
-            or (pf.containers and pf.containers[i])
-        ) or DF.container
     else
         container = DF.container
     end

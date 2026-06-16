@@ -1442,16 +1442,19 @@ function PinnedFrames:CreateSetFrames(setIndex)
         -- Save logical position (unscaled)
         liveSet.position = { point = anchor, x = finalX, y = finalY }
 
-        -- When an auto layout is active, GetSetDB() returns a table from the overlay's
-        -- deep copy of _realRaidDB.pinnedFrames, so the write above goes to that copy
-        -- rather than the real DB. Position is intentionally not auto-layout-overridable,
-        -- so always write it through to _realRaidDB so it survives overlay rebuilds.
-        local realSet = DF._realRaidDB
-            and DF._realRaidDB.pinnedFrames
-            and DF._realRaidDB.pinnedFrames.sets
-            and DF._realRaidDB.pinnedFrames.sets[setIndex]
-        if realSet then
-            realSet.position = { point = anchor, x = finalX, y = finalY }
+        -- RAID ONLY: when an auto layout is active, GetSetDB() returns a deep copy
+        -- of _realRaidDB.pinnedFrames, so the write above goes to that throwaway copy
+        -- — mirror through to the real raid DB so it survives overlay rebuilds. Party
+        -- sets ARE the real table (liveSet), and _realRaidDB.sets[setIndex] is the
+        -- RAID set, so mirroring in party mode would corrupt the raid set's position.
+        if IsInRaid() then
+            local realSet = DF._realRaidDB
+                and DF._realRaidDB.pinnedFrames
+                and DF._realRaidDB.pinnedFrames.sets
+                and DF._realRaidDB.pinnedFrames.sets[setIndex]
+            if realSet then
+                realSet.position = { point = anchor, x = finalX, y = finalY }
+            end
         end
 
         PositionPinnedContainer(container, liveSet, liveSet.position, dragW, dragH)
@@ -2131,8 +2134,15 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
     local label = self.labels[setIndex]
 
     if visible then
-        container:Show()
-        if header then header:Show() end
+        -- During test mode the live frames are deliberately hidden (the preview
+        -- owns the screen). Update layout data but DON'T show live chrome, or the
+        -- real frame leaks under the preview; ExitTestMode shows it on the way out.
+        local inTest = self.testModeActive
+
+        if not inTest then
+            container:Show()
+            if header then header:Show() end
+        end
 
         if isBoss then
             self:ApplyBossLayout(setIndex)
@@ -2143,12 +2153,17 @@ function PinnedFrames:SetEnabled(setIndex, enabled)
         end
 
         self:UpdateLabel(setIndex)
-        if label then label:SetShown(set.showLabel) end
-        -- A set that becomes visible while globally unlocked gets its drag chrome.
-        if self.moversShown then
-            if container.mover then container.mover:SetShown(true) end
-            if container.bg then container.bg:SetShown(true) end
-            if container.border then container.border:SetShown(true) end
+        if not inTest then
+            if label then label:SetShown(set.showLabel) end
+            -- A set that becomes visible while globally unlocked gets its drag chrome.
+            if self.moversShown then
+                if container.mover then container.mover:SetShown(true) end
+                if container.bg then container.bg:SetShown(true) end
+                if container.border then container.border:SetShown(true) end
+            end
+            -- Re-assert Hide-Mover alpha + active highlight on the freshly-shown handle.
+            self:ApplyMoverOverlayAlpha()
+            self:RefreshMoverActiveStates()
         end
 
         self:RefreshChildFrames(setIndex)
@@ -2198,6 +2213,14 @@ function PinnedFrames:SetMoversShown(shown)
         return
     end
 
+    -- An explicit lock cancels any combat-deferred/remembered unlock intent, so a
+    -- post-combat restore can't re-show handles the user just locked. (LockAllForCombat
+    -- re-sets moversShownBeforeCombat AFTER calling this, so its own hide is unaffected.)
+    if not shown then
+        self.pendingMoversShown = nil
+        self.moversShownBeforeCombat = nil
+    end
+
     self.moversShown = shown and true or false
 
     if not self.initialized then return end
@@ -2236,12 +2259,14 @@ end
 function PinnedFrames:LockAllForCombat()
     if not self.initialized then return end
 
-    self.moversShownBeforeCombat = self.moversShown
-    if self.moversShown then
-        -- SetMoversShown(false) hides every set's chrome; safe in combat.
+    local was = self.moversShown
+    if was then
+        -- SetMoversShown(false) hides every set's chrome (safe in combat) and clears
+        -- the restore intent; we set it AFTER so the post-combat restore can fire.
         self:SetMoversShown(false)
         DF:Debug("PINNED", "Pinned movers hidden for combat")
     end
+    self.moversShownBeforeCombat = was
 end
 
 -- Restore the pre-combat unlock state (or apply an unlock requested during combat).
@@ -2598,6 +2623,18 @@ function PinnedFrames:RemoveSet(setIndex, mode)
     if setIndex < 1 or setIndex > #pf.sets then return false end
 
     table.remove(pf.sets, setIndex)
+
+    -- The raid position mirror writes to DF._realRaidDB.pinnedFrames.sets[i] BY
+    -- INDEX; with an active auto-layout overlay, pf.sets is a separate deep copy,
+    -- so compact the real raid array too or the later sets' mirrored positions
+    -- desync after a remove. (When no overlay is active rsets == pf.sets and it's
+    -- already compacted — the identity guard avoids a double-remove.)
+    if mode == "raid" then
+        local rsets = DF._realRaidDB and DF._realRaidDB.pinnedFrames and DF._realRaidDB.pinnedFrames.sets
+        if rsets and rsets ~= pf.sets and rsets[setIndex] then
+            table.remove(rsets, setIndex)
+        end
+    end
 
     if mode ~= GetActualMode() then return true end  -- inactive mode: DB only
     if InCombatLockdown() then

@@ -5987,7 +5987,7 @@ function DF:FullProfileRefresh()
         
         -- Pinned frames
         if DF.PinnedFrames and DF.PinnedFrames.initialized and DF.PinnedFrames.headers then
-            for setIndex = 1, 2 do
+            for setIndex = 1, (DF.PinnedFrames.MAX_SETS or 4) do
                 local header = DF.PinnedFrames.headers[setIndex]
                 if header then
                     for i = 1, 40 do
@@ -6048,7 +6048,7 @@ function DF:FullProfileRefresh()
         if DF.PinnedFrames.RefreshEnabledState then
             DF.PinnedFrames:RefreshEnabledState()
         end
-        for setIndex = 1, 2 do
+        for setIndex = 1, (DF.PinnedFrames.MAX_SETS or 4) do
             if DF.PinnedFrames.headers[setIndex] then
                 DF.PinnedFrames:ApplyLayoutSettings(setIndex)
                 DF.PinnedFrames:ResizeContainer(setIndex)
