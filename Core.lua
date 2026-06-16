@@ -4020,7 +4020,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
         -- Force updated Direct mode filter defaults (v4.0.9b):
         -- Buffs: Raid In Combat + Big Defensive + External Defensive (no Player)
-        -- Debuffs: Show All off, Raid + Crowd Control + Important on
+        -- Debuffs: Show All off, Raid + Crowd Control on
         for _, mode in ipairs({"party", "raid"}) do
             local modeDb = DF.db[mode]
             if modeDb and not modeDb._directFilterDefaultsV2 then
@@ -4032,7 +4032,6 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 modeDb.directDebuffShowAll = false
                 modeDb.directDebuffFilterRaid = true
                 modeDb.directDebuffFilterCrowdControl = true
-                modeDb.directDebuffFilterImportant = true
                 modeDb._directFilterDefaultsV2 = true
             end
         end
@@ -4048,7 +4047,6 @@ DF._MainEventDispatcher = function(self, event, arg1)
                         profile[mode].directDebuffShowAll = false
                         profile[mode].directDebuffFilterRaid = true
                         profile[mode].directDebuffFilterCrowdControl = true
-                        profile[mode].directDebuffFilterImportant = true
                         profile[mode]._directFilterDefaultsV2 = true
                     end
                 end
