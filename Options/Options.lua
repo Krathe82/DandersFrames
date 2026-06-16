@@ -772,12 +772,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local oorBorder = oorGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Alpha"], 0.0, 1.0, 0.05, db, "oorBorderAlpha", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
         oorBorder.hideOn = HideOOROptions
 
-        local oorName = oorGroup:AddWidget(GUI:CreateSlider(self.child, L["Name Text Alpha"], 0.0, 1.0, 0.05, db, "oorNameTextAlpha", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
-        oorName.hideOn = HideOOROptions
-        
-        local oorHealthText = oorGroup:AddWidget(GUI:CreateSlider(self.child, L["Health Text Alpha"], 0.0, 1.0, 0.05, db, "oorHealthTextAlpha", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
-        oorHealthText.hideOn = HideOOROptions
-        
+        -- Unified Text Alpha: the Text Designer now renders all unit text, so a
+        -- single OOR alpha dims every TD text element (name/health/power/custom)
+        -- out of range — replacing the old per-element Name/Health text alphas.
+        local oorText = oorGroup:AddWidget(GUI:CreateSlider(self.child, L["Text Alpha"], 0.0, 1.0, 0.05, db, "oorTextAlpha", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
+        oorText.hideOn = HideOOROptions
+
         local oorAuras = oorGroup:AddWidget(GUI:CreateSlider(self.child, L["Auras Alpha"], 0.0, 1.0, 0.05, db, "oorAurasAlpha", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
         oorAuras.hideOn = HideOOROptions
         

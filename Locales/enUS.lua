@@ -1064,6 +1064,7 @@ L["Name Anchor"] = true
 L["Name Color"] = true
 L["Name Text"] = true
 L["Name Text Alpha"] = true
+L["Text Alpha"] = true
 L["Name X Offset"] = true
 L["Name Y Offset"] = true
 L["Newest First"] = true

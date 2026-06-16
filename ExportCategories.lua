@@ -1108,6 +1108,7 @@ DF.ExportCategories = {
         "oorPowerBarAlpha",
         "oorAurasAlpha",
         "oorNameTextAlpha",
+        "oorTextAlpha",
         "oorIconsAlpha",
         "oorDispelOverlayAlpha",
         "oorDefensiveIconAlpha",
