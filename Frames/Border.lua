@@ -896,6 +896,21 @@ function Border:StopAnimation(border)
             end
         end
         local function stopAll(t)
+            -- Reset a reused ProcGlow frame's textures BEFORE releasing it.
+            -- LCG's pool resetter only hides the frame + clears the reference;
+            -- it leaves the ProcStart (big start-flash) / ProcLoop (small loop)
+            -- texture visibility intact. So a frame re-acquired from the pool
+            -- could come back with BOTH textures showing — the double glow
+            -- (one inset, one further out) seen on alternate re-applies. Stop
+            -- the animation groups and clear both textures so the next Acquire
+            -- (and its OnShow) starts from a clean state.
+            local pg = t and t["_ProcGlow" .. key]
+            if pg then
+                if pg.ProcStartAnim then pg.ProcStartAnim:Stop() end
+                if pg.ProcLoopAnim  then pg.ProcLoopAnim:Stop()  end
+                if pg.ProcStart then pg.ProcStart:SetAlpha(0); pg.ProcStart:Hide() end
+                if pg.ProcLoop  then pg.ProcLoop:SetAlpha(0);  pg.ProcLoop:Hide()  end
+            end
             if LCG.PixelGlow_Stop    then LCG.PixelGlow_Stop(t, key)    end
             if LCG.AutoCastGlow_Stop then LCG.AutoCastGlow_Stop(t, key) end
             if LCG.ButtonGlow_Stop   then LCG.ButtonGlow_Stop(t)        end
