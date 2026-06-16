@@ -50,6 +50,13 @@ end
 -- any mover switches the mode; the panel then re-reads from the
 -- descriptor's db fields and nudge operations write back to them.
 
+-- Resolve the pinned set the panel is currently targeting (current live mode,
+-- auto-layout-overlay aware — same table the runtime and drag handler use).
+local function ResolvePinnedSet()
+    if not (DF.PinnedFrames and DF.PinnedFrames.GetSetForPosition) then return nil end
+    return DF.PinnedFrames:GetSetForPosition(DF.positionPanelPinnedSet or 1)
+end
+
 local POSITION_MODES = {
     party = {
         title = "Party Position",
@@ -106,11 +113,81 @@ local POSITION_MODES = {
         end,
         useAccentColor = "accent",
     },
+    pinned = {
+        -- Title + accent track the targeted set's name and mode, e.g.
+        -- "NPC (Raid) - Position" in raid orange.
+        title = function()
+            local i = DF.positionPanelPinnedSet or 1
+            local pf = DF.PinnedFrames
+            local label = pf and pf.GetPositionPanelLabel and pf:GetPositionPanelLabel(i)
+            return (label or ("Pinned " .. i)) .. " - Position"
+        end,
+        -- Pinned X/Y live NESTED in set.position = {point, x, y}, unlike the flat
+        -- db fields the other modes use. Return a thin proxy so the shared panel
+        -- code (which does db[xField] / db[yField]) keeps working unchanged: x/y
+        -- map to the set's position, and every other key (snapToGrid, gridSize,
+        -- hideDragOverlay…) falls through to the party db where those live.
+        getDB = function()
+            local set = ResolvePinnedSet()
+            local partyDB = DF:GetDB()
+            if not set then return partyDB end
+            set.position = set.position or { point = "CENTER", x = 0, y = 0 }
+            local pos = set.position
+            return setmetatable({}, {
+                __index = function(_, k)
+                    if k == "x" then return pos.x
+                    elseif k == "y" then return pos.y
+                    else return partyDB[k] end
+                end,
+                __newindex = function(_, k, v)
+                    if k == "x" then pos.x = v
+                    elseif k == "y" then pos.y = v
+                    else partyDB[k] = v end
+                end,
+            })
+        end,
+        xField = "x",
+        yField = "y",
+        apply = function()
+            if DF.PinnedFrames and DF.PinnedFrames.ApplySetPosition then
+                DF.PinnedFrames:ApplySetPosition(DF.positionPanelPinnedSet or 1)
+            end
+        end,
+        -- Raid orange when the targeted set is a raid set, party accent otherwise.
+        useAccentColor = function()
+            return (DF.PinnedFrames and DF.PinnedFrames.IsPositionTargetRaid
+                and DF.PinnedFrames:IsPositionTargetRaid()) and "raid" or "accent"
+        end,
+    },
 }
 
 -- Accessor helper. Defaults to party mode if something's off.
 local function GetPositionMode()
     return POSITION_MODES[DF.positionPanelMode] or POSITION_MODES.party
+end
+
+-- Whether snap-to-grid is on for the CURRENTLY targeted panel mode. Mirrors the
+-- panel checkbox: pinned uses its own flag, every other mode the shared one.
+local function SnapEnabledForPanel()
+    local db = DF:GetDB()
+    if not db then return false end
+    if DF.positionPanelMode == "pinned" then return db.pinnedSnapToGrid and true or false end
+    return db.snapToGrid and true or false
+end
+
+-- Show or hide the grid overlay to match the active mode's snap state. Called on
+-- panel mode switches so the grid follows pinned-vs-main snap. Only acts while the
+-- panel is open (unlocked); locking hides the grid via Lock*Frames.
+local function SyncGridToPanelMode()
+    if not DF.gridFrame then return end
+    if not (DF.positionPanel and DF.positionPanel:IsShown()) then return end
+    if SnapEnabledForPanel() then
+        DF.gridFrame:Show()
+        if DF.gridFrame.RefreshLines then DF.gridFrame.RefreshLines() end
+    else
+        DF.gridFrame:Hide()
+        DF:HideSnapPreview()
+    end
 end
 
 -- Exposed so the movers (personal targeted spells, targeted list)
@@ -121,6 +198,11 @@ function DF:SetPositionPanelMode(mode)
     if DF.positionPanel then
         if DF.positionPanel.UpdateTheme then DF.positionPanel:UpdateTheme() end
         DF:UpdatePositionPanel()
+    end
+    SyncGridToPanelMode()
+    -- Highlight whichever pinned handle the panel now drives (or clear them).
+    if DF.PinnedFrames and DF.PinnedFrames.RefreshMoverActiveStates then
+        DF.PinnedFrames:RefreshMoverActiveStates()
     end
 end
 
@@ -1292,6 +1374,13 @@ function DF:SnapToGrid(x, y)
         container = DF.personalTargetedSpellsMover or DF.container
     elseif DF.positionPanelMode == "targetedList" then
         container = DF.targetedListMoverFrame or DF.container
+    elseif DF.positionPanelMode == "pinned" then
+        local pf = DF.PinnedFrames
+        local i = DF.positionPanelPinnedSet or 1
+        container = pf and (
+            (pf.testModeActive and pf.testContainers and pf.testContainers[i])
+            or (pf.containers and pf.containers[i])
+        ) or DF.container
     else
         container = DF.container
     end
@@ -1369,7 +1458,9 @@ function DF:CreatePositionPanel()
     -- else shares the party accent.
     local function GetAccentColor()
         local mode = GetPositionMode()
-        if mode.useAccentColor == "raid" then return C_RAID end
+        local accent = mode.useAccentColor
+        if type(accent) == "function" then accent = accent() end
+        if accent == "raid" then return C_RAID end
         return C_ACCENT
     end
 
@@ -1385,6 +1476,24 @@ function DF:CreatePositionPanel()
     local function LockCurrentFrames()
         if DF.positionPanelMode == "raid" then
             DF:LockRaidFrames()
+        elseif DF.positionPanelMode == "pinned" then
+            -- Pinned rides the global lock, so its Lock button locks EVERYTHING
+            -- that's currently unlocked — not just the live mode. (You can unlock
+            -- raid frames while solo to preview a raid set; locking from the pinned
+            -- panel must then close the raid unlock too, or it's left orphaned.)
+            local lockedAny = false
+            local rdb = DF.GetRaidDB and DF:GetRaidDB()
+            if rdb and not rdb.raidLocked then DF:LockRaidFrames(); lockedAny = true end
+            local pdb = DF:GetDB()
+            if pdb and not pdb.locked then DF:LockFrames(); lockedAny = true end
+            if not lockedAny then
+                -- Nothing flagged unlocked (e.g. test-mode-only) — fall back to live mode.
+                if DF.PinnedFrames and DF.PinnedFrames.currentMode == "raid" then
+                    DF:LockRaidFrames()
+                else
+                    DF:LockFrames()
+                end
+            end
         else
             DF:LockFrames()
         end
@@ -1436,9 +1545,12 @@ function DF:CreatePositionPanel()
                 elem:UpdateThemeColor(c)
             end
         end
-        -- Update title text based on mode (read from descriptor)
+        -- Update title text based on mode (read from descriptor; a descriptor may
+        -- supply a function for a dynamic title, e.g. the pinned set number).
         if panel.title then
-            panel.title:SetText(GetPositionMode().title or "Position")
+            local t = GetPositionMode().title
+            if type(t) == "function" then t = t() end
+            panel.title:SetText(t or "Position")
         end
     end
     panel.UpdateTheme = UpdateTheme
@@ -1734,9 +1846,16 @@ function DF:CreatePositionPanel()
     snapLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     
     snapCheck:SetScript("OnClick", function(self)
-        local db = GetPositionDB()
-        db.snapToGrid = self:GetChecked()
-        if db.snapToGrid then
+        local checked = self:GetChecked()
+        -- Pinned snap is its own party-db flag (independent of the main-frame snap,
+        -- default off); other modes use the shared snapToGrid.
+        if DF.positionPanelMode == "pinned" then
+            local pdb = DF:GetDB()
+            if pdb then pdb.pinnedSnapToGrid = checked end
+        else
+            GetPositionDB().snapToGrid = checked
+        end
+        if checked then
             if DF.gridFrame.RefreshLines then
                 DF.gridFrame:Show()
                 DF.gridFrame.RefreshLines()
@@ -1775,10 +1894,21 @@ function DF:CreatePositionPanel()
     hideOverlayLabel:SetPoint("LEFT", hideOverlayCheck, "RIGHT", 8, 0)
     hideOverlayLabel:SetText("Hide Drag Overlay")
     hideOverlayLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    panel.hideOverlayLabel = hideOverlayLabel
 
     hideOverlayCheck:SetScript("OnClick", function(self)
-        DF.hideDragOverlay = self:GetChecked()
-        -- Store on the party db (grid / overlay settings are party-wide)
+        local checked = self:GetChecked()
+        -- Pinned uses its own flag (independent of the main-frame drag overlay);
+        -- every other mode shares the party-wide hideDragOverlay.
+        if DF.positionPanelMode == "pinned" then
+            local pdb = DF:GetDB()
+            if pdb then pdb.pinnedHideMover = checked end
+            if DF.PinnedFrames and DF.PinnedFrames.ApplyMoverOverlayAlpha then
+                DF.PinnedFrames:ApplyMoverOverlayAlpha()
+            end
+            return
+        end
+        DF.hideDragOverlay = checked
         local partyDB = DF:GetDB()
         if partyDB then partyDB.hideDragOverlay = DF.hideDragOverlay end
         -- Apply alpha to whichever mover matches the current mode.
@@ -1951,11 +2081,26 @@ function DF:UpdatePositionPanel()
     -- read from the party db regardless of panel mode. Personal and
     -- Targeted List share the party profile's grid config.
     local partyDB = DF:GetDB()
-    DF.positionPanel.snapCheck:SetChecked(partyDB.snapToGrid)
+    -- Pinned mode shows its own snap flag (default off); other modes the shared one.
+    if DF.positionPanelMode == "pinned" then
+        DF.positionPanel.snapCheck:SetChecked(partyDB.pinnedSnapToGrid or false)
+    else
+        DF.positionPanel.snapCheck:SetChecked(partyDB.snapToGrid)
+    end
     DF.positionPanel.gridSlider:SetValue(partyDB.gridSize or 20)
     DF.positionPanel.gridInput:SetText(tostring(partyDB.gridSize or 20))
     if DF.positionPanel.hideOverlayCheck then
-        DF.positionPanel.hideOverlayCheck:SetChecked(partyDB.hideDragOverlay or false)
+        if DF.positionPanelMode == "pinned" then
+            DF.positionPanel.hideOverlayCheck:SetChecked(partyDB.pinnedHideMover or false)
+        else
+            DF.positionPanel.hideOverlayCheck:SetChecked(partyDB.hideDragOverlay or false)
+        end
+    end
+    -- Pinned sets have a small handle rather than a full drag overlay box, so the
+    -- toggle reads "Hide Mover" there.
+    if DF.positionPanel.hideOverlayLabel then
+        DF.positionPanel.hideOverlayLabel:SetText(
+            DF.positionPanelMode == "pinned" and "Hide Mover" or "Hide Drag Overlay")
     end
 
     -- Update position override indicator if editing profile
@@ -2031,9 +2176,10 @@ function DF:NudgePosition(dx, dy)
 end
 
 function DF:CenterFrames()
-    -- Personal / targetedList: simple reset to 0,0 since these don't
-    -- have growth geometry to account for.
-    if DF.positionPanelMode == "personal" or DF.positionPanelMode == "targetedList" then
+    -- Personal / targetedList / pinned: simple reset to 0,0 since these don't
+    -- have main-frame growth geometry to account for.
+    if DF.positionPanelMode == "personal" or DF.positionPanelMode == "targetedList"
+        or DF.positionPanelMode == "pinned" then
         local mode = GetPositionMode()
         local db = mode.getDB()
         if db then
@@ -2293,7 +2439,14 @@ function DF:UnlockFrames()
     if db.targetedListEnabled and DF.ShowTargetedListMover then
         DF:ShowTargetedListMover()
     end
-    
+
+    -- Pinned frames ride the global lock: show their drag chrome too. No mode
+    -- gate — SetMoversShown shows the right handles (live movers for the current
+    -- mode, or the test movers when test mode is previewing either mode).
+    if DF.PinnedFrames and DF.PinnedFrames.SetMoversShown then
+        DF.PinnedFrames:SetMoversShown(true)
+    end
+
     -- Always refresh grid state from db when unlocking
     if DF.gridFrame then
         if db.snapToGrid then
@@ -2361,7 +2514,12 @@ function DF:LockFrames()
     if DF.HideTargetedListMover then
         DF:HideTargetedListMover()
     end
-    
+
+    -- Hide pinned drag chrome (lock always hides, regardless of mode).
+    if DF.PinnedFrames and DF.PinnedFrames.SetMoversShown then
+        DF.PinnedFrames:SetMoversShown(false)
+    end
+
     -- Stop any OnUpdate for snap preview
     DF.moverFrame:SetScript("OnUpdate", nil)
     

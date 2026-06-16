@@ -951,7 +951,14 @@ function DF:UnlockRaidFrames()
 
     -- Enable raid test mode using the proper function
     DF:ShowRaidTestFrames()
-    
+
+    -- Pinned frames ride the global lock: show their drag chrome too. No mode
+    -- gate — SetMoversShown shows the right handles (live movers for the current
+    -- mode, or the test movers when test mode is previewing either mode).
+    if DF.PinnedFrames and DF.PinnedFrames.SetMoversShown then
+        DF.PinnedFrames:SetMoversShown(true)
+    end
+
     -- Show position panel (shared with party) and update its values from db
     if DF.positionPanel then
         DF:UpdatePositionPanel()
@@ -1008,7 +1015,12 @@ function DF:LockRaidFrames()
     if DF.positionPanel then
         DF.positionPanel:Hide()
     end
-    
+
+    -- Hide pinned drag chrome (lock always hides, regardless of mode).
+    if DF.PinnedFrames and DF.PinnedFrames.SetMoversShown then
+        DF.PinnedFrames:SetMoversShown(false)
+    end
+
     -- Only disable raid test mode if it was not already active before the last unlock.
     -- Preserves the user's test mode state across the lock/unlock cycle.
     if not DF.raidTestModeBeforeUnlock then

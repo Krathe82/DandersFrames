@@ -2799,7 +2799,7 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     -- we capture ALL overridable settings, even ones that are nil due to missing migration.
     -- If a key is nil, backfill a default so both the snapshot and set are consistent.
     local PINNED_DEFAULTS = {
-        enabled = false, locked = false, showLabel = false,
+        enabled = false, showLabel = false,
         growDirection = "HORIZONTAL", unitsPerRow = 5, scale = 1.0,
         horizontalSpacing = 2, verticalSpacing = 2,
         frameAnchor = "START", columnAnchor = "START",

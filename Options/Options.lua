@@ -2141,7 +2141,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = false end
                 if set.columnAnchor == nil then set.columnAnchor = "START" end
                 if set.frameAnchor == nil then set.frameAnchor = "START" end
-                if set.locked == nil then set.locked = false end
+                -- set.locked retired (global lock only); strip the dead field.
+                set.locked = nil
                 if set.showLabel == nil then set.showLabel = false end
                 if set.players == nil then set.players = {} end
                 if set.manualPlayers == nil then set.manualPlayers = {} end
@@ -2737,8 +2738,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             container.Refresh = function()
                 cb:SetChecked(GetCurrentSet()[dbKey])
                 -- Optional disabled state: when container.enabledWhen() is false the
-                -- checkbox is greyed and can't be toggled (e.g. Show Label is moot
-                -- until Lock Position is on, since the drag label shows instead).
+                -- checkbox is greyed and can't be toggled (used where one toggle is
+                -- only meaningful while another option is in a particular state).
                 if container.enabledWhen then
                     if container.enabledWhen() then
                         cb:Enable()
@@ -3309,7 +3310,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         settingsGroup:AddWidget(pinnedLayoutNote, pinnedLayoutNote.layoutHeight or 44)
 
-        -- SetEnabled / SetLocked / SetShowLabel internally use GetSetDB → IsInRaid(),
+        -- SetEnabled / SetShowLabel internally use GetSetDB → IsInRaid(),
         -- so calling them while editing the inactive mode would mutate the active
         -- mode's state. Only call them when the selected mode matches the live mode;
         -- otherwise the DB write from the checkbox itself is enough and the preview
@@ -3337,19 +3338,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             RefreshTestModeIfActive()
             RefreshTabs()  -- update the on/off pip on this set's tab
         end), 28)
-        -- Forward ref so Lock Position can re-grey Show Label when toggled.
-        local showLabelCheck
-        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Lock Position"], "locked", function()
-            if not DF.PinnedFrames then return end
-            if IsEditingActiveMode() then
-                DF.PinnedFrames:SetLocked(activeHighlightTab, GetCurrentSet().locked)
-            end
-            DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
-            RefreshTestModeIfActive()
-            -- Show Label only matters while locked (otherwise the drag label shows).
-            if showLabelCheck and showLabelCheck.Refresh then showLabelCheck.Refresh() end
-        end), 28)
-        showLabelCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
+        -- Pinned frames now lock/unlock together with the main frames (global
+        -- lock), so there is no per-set Lock Position toggle. Show Label is always
+        -- editable; the "Drag to Move" handle only appears while globally unlocked.
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
                 DF.PinnedFrames:SetShowLabel(activeHighlightTab, GetCurrentSet().showLabel)
@@ -3357,10 +3349,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
         end), 28)
-        -- Grey out Show Label while unlocked — the "Drag to Move" label shows then,
-        -- not the set's label, so the toggle has no visible effect.
-        showLabelCheck.enabledWhen = function() return GetCurrentSet().locked == true end
-        if showLabelCheck.Refresh then showLabelCheck.Refresh() end
 
         -- Party-only: show this pinned set while solo (off by default — pinned
         -- frames highlight other group members). Raid implies a group, so hide it
