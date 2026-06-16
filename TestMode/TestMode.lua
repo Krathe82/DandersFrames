@@ -4832,6 +4832,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = false
         db.testShowExternalDef = false
         db.testShowTargetedList = false
+        db.testShowTargetedSpell = false
+        db.testShowPersonalTargeted = false
         db.testShowBossDebuffs = false
         db.testShowStatusIcons = true
     elseif preset == "COMBAT" then
@@ -4843,6 +4845,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = false
         db.testShowExternalDef = false
         db.testShowTargetedList = false
+        db.testShowTargetedSpell = false
+        db.testShowPersonalTargeted = false
         db.testShowBossDebuffs = true
         db.testShowStatusIcons = true
     elseif preset == "HEALER" then
@@ -4854,6 +4858,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = true
         db.testShowExternalDef = true
         db.testShowTargetedList = true
+        db.testShowTargetedSpell = true
+        db.testShowPersonalTargeted = true
         db.testShowBossDebuffs = true
         db.testShowStatusIcons = true
     elseif preset == "FULL" then
@@ -4865,6 +4871,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = true
         db.testShowExternalDef = true
         db.testShowTargetedList = true
+        db.testShowTargetedSpell = true
+        db.testShowPersonalTargeted = true
         db.testShowStatusIcons = true
     end
     
@@ -5762,9 +5770,9 @@ function DF:UpdateAllTestTargetedSpell()
         if not frame then return end
         local db = DF:GetFrameDB(frame)
 
-        -- Auto-show the preview whenever the feature is enabled (matches the
-        -- personal-display test behaviour); raid frames keep it force-disabled.
-        if db.targetedSpellEnabled then
+        -- Show the preview when the feature is enabled AND the test-panel
+        -- Targeted Spells toggle is on; raid frames keep it force-disabled.
+        if db.targetedSpellEnabled and db.testShowTargetedSpell ~= false then
             DF:UpdateTestTargetedSpell(frame, testData)
         else
             -- Hide all icons and their highlights (new multi-icon system)
@@ -5796,7 +5804,7 @@ function DF:UpdateAllTestTargetedSpell()
         
         -- Update personal targeted spells display in test mode
         local db = DF:GetDB()
-        if db.personalTargetedSpellEnabled and DF.ShowTestPersonalTargetedSpells then
+        if db.personalTargetedSpellEnabled and db.testShowPersonalTargeted ~= false and DF.ShowTestPersonalTargetedSpells then
             DF:ShowTestPersonalTargetedSpells()
         elseif DF.HideTestPersonalTargetedSpells then
             DF:HideTestPersonalTargetedSpells()
@@ -5822,7 +5830,7 @@ function DF:UpdateAllTestTargetedSpell()
         
         -- Also show personal targeted spells in raid test mode
         local db = DF:GetDB()
-        if db.personalTargetedSpellEnabled and DF.ShowTestPersonalTargetedSpells then
+        if db.personalTargetedSpellEnabled and db.testShowPersonalTargeted ~= false and DF.ShowTestPersonalTargetedSpells then
             DF:ShowTestPersonalTargetedSpells()
         elseif DF.HideTestPersonalTargetedSpells then
             DF:HideTestPersonalTargetedSpells()
@@ -6669,6 +6677,14 @@ function DF:CreateTestPanel()
     panel.animTargetedListCheck = secIndicators:AddCheckbox("Animate Targeted List", "testAnimateTargetedList", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedList() end
     end)
+    -- The (new fingerprint) Targeted Spells icons + the Personal Targeted display.
+    -- UpdateAllTestTargetedSpell drives BOTH previews, so both share it.
+    panel.showTargetedSpellCheck = secIndicators:AddCheckbox("Targeted Spells", "testShowTargetedSpell", function()
+        if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
+    end)
+    panel.showPersonalTargetedCheck = secIndicators:AddCheckbox("Personal Targeted", "testShowPersonalTargeted", function()
+        if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
+    end)
     -- One unified "Icons" toggle for the whole status/role/leader icon set in test
     -- mode (was split into "Status / Ready" + "Role / Leader"). Keyed on
     -- testShowStatusIcons; the role/leader render gate reads the same key.
@@ -6828,6 +6844,8 @@ function DF:CreateTestPanel()
         self.showExternalDefCheck:SetChecked(db.testShowExternalDef)
         self.showTargetedListCheck:SetChecked(db.testShowTargetedList)
         self.animTargetedListCheck:SetChecked(db.testAnimateTargetedList)
+        self.showTargetedSpellCheck:SetChecked(db.testShowTargetedSpell ~= false)
+        self.showPersonalTargetedCheck:SetChecked(db.testShowPersonalTargeted ~= false)
         self.showStatusIconsCheck:SetChecked(db.testShowStatusIcons ~= false)
         self.showSelectionCheck:SetChecked(db.testShowSelection)
         self.showAggroCheck:SetChecked(db.testShowAggro)
