@@ -29,6 +29,7 @@
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
+* (Personal Targeted Spells) The personal targeted-spell display now honours your **raid** and **party** settings separately — disabling it on the raid tab no longer leaves it showing in raid (the whole feature was reading the party settings, ignoring raid's enable / size / position / border). (by Krathe)
 
 ## [4.4.1]
 
