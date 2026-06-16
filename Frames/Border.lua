@@ -1060,11 +1060,18 @@ function Border:StartAnimation(border, spec)
             end
         end
 
-        if (border.animRect:GetWidth() or 0) > 0 then
-            startGlow()
-        else
-            C_Timer.After(0, startGlow)
-        end
+        -- ALWAYS defer the glow start to the next frame so it reads the
+        -- animRect's size AFTER the layout pass settles. Starting immediately
+        -- on a non-zero width is unsafe: when the frame is resized this same
+        -- frame (e.g. a test-mode toggle re-render, or any re-layout), the
+        -- width read is stale/unresolved and LCG sizes the glow to it — the
+        -- "renders huge" case the deferral was added for. The earlier
+        -- `width > 0 → start now` fast-path only caught a width of exactly 0,
+        -- so on alternate re-renders it intermittently fired against a stale
+        -- size and the glow rendered too large every other toggle. One frame
+        -- of latency is imperceptible and the start token guards against a
+        -- superseded/stopped start.
+        C_Timer.After(0, startGlow)
         border.activeAnimation = anim.type
         return
     end
