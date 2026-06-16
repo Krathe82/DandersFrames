@@ -3879,6 +3879,13 @@ function GUI:CreateAnimationControls(group, dbTable, animPrefix, opts)
         dbTable, aKey("Mask"), fullUpdate), 30)
     w.animationMask.hideOn = hideUnless(pulsateOnly)
 
+    -- PROC only: opt in to the one-shot "proc start" flash (off by default —
+    -- see ProcGlow_Start in Frames/Border.lua for why it's not on for a
+    -- continuous border animation).
+    w.animationProcStart = group:AddWidget(GUI:CreateCheckbox(parent, L["Proc Start Flash"],
+        dbTable, aKey("ProcStart"), fullUpdate), 30)
+    w.animationProcStart.hideOn = hideUnless({ PROC = 1 })
+
     w.animationSidesAxis = group:AddWidget(GUI:CreateDropdown(parent, L["Sides Axis"],
         { HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"] },
         dbTable, aKey("SidesAxis"), fullUpdate), 55)

@@ -245,6 +245,11 @@ function Border:BuildSpec(dbTable, prefix, ctx)
             mask         = dbTable[k("BorderAnimationMask")],
             sidesAxis    = dbTable[k("BorderAnimationSidesAxis")],
             cornerLength = dbTable[k("BorderAnimationCornerLength")],
+            -- PROC only: play the one-shot "proc start" flash on each start.
+            -- Opt-in (default off) because PROC is used here as a CONTINUOUS
+            -- border animation that re-applies often; the flash is a one-shot
+            -- effect and re-fires/doubles on rapid re-apply when enabled.
+            procStart    = dbTable[k("BorderAnimationProcStart")],
         }
     end
     -- Icon consumers (ctx.iconMode) frame the art with an OUTWARD band — the
@@ -955,6 +960,7 @@ local function animSpecHash(anim)
         tostring(anim.inset),     tostring(anim.offsetX), tostring(anim.offsetY),
         tostring(anim.mask),
         tostring(anim.sidesAxis), tostring(anim.cornerLength),
+        tostring(anim.procStart),
         tostring(cr), tostring(cg), tostring(cb), tostring(ca),
     }, "|")
 end
@@ -1051,17 +1057,17 @@ function Border:StartAnimation(border, spec)
                 -- other effects' Frequency control (cycles per second).
                 local duration = (anim.frequency and anim.frequency > 0)
                     and (1 / anim.frequency) or 1
-                -- startAnim = false: DF.Border uses PROC as a CONTINUOUS border
-                -- animation, not a one-shot proc trigger. The start animation
-                -- begins large and shrinks to the border, and it re-fires on
-                -- every re-Apply (e.g. test-mode toggles, relayouts) — when the
-                -- prior start animation hasn't fully torn down you get two glows
-                -- at two sizes (one inset, one further out). Starting straight in
-                -- the loop state gives a clean, stable glow with no flash-in.
+                -- The one-shot "proc start" flash is OPT-IN (anim.procStart).
+                -- Default off: PROC is used here as a CONTINUOUS border animation
+                -- that re-applies often, and the flash (begins large, shrinks to
+                -- the border) re-fires on every re-apply — on rapid re-toggle the
+                -- big start texture lingers alongside the loop, rendering two
+                -- glows at two sizes. With it on, normal single-cast use plays it
+                -- cleanly; only rapid re-toggling can double it.
                 LCG.ProcGlow_Start(target, {
                     color     = color,
                     duration  = duration,
-                    startAnim = false,
+                    startAnim = anim.procStart and true or false,
                     key       = key,
                 })
             end
