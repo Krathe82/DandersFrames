@@ -2141,6 +2141,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = false end
                 if set.columnAnchor == nil then set.columnAnchor = "START" end
                 if set.frameAnchor == nil then set.frameAnchor = "START" end
+                -- CENTER anchor was dropped (never truly centred the frames; it
+                -- rendered as START). Normalise so the dropdown has a valid value.
+                if set.columnAnchor == "CENTER" then set.columnAnchor = "START" end
+                if set.frameAnchor == "CENTER" then set.frameAnchor = "START" end
                 -- set.locked retired (global lock only); strip the dead field.
                 set.locked = nil
                 if set.showLabel == nil then set.showLabel = false end
@@ -3736,10 +3740,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local directionOptions = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
 
-        local frameAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
+        -- CENTER intentionally omitted: it isn't truly implemented for pinned
+        -- frames (frames grow START-style; only the anchor/label shift). START/END
+        -- only for now; a real centred layout can be added later.
+        local frameAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
 
-        local columnAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
+        local columnAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
 
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
