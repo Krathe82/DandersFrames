@@ -804,6 +804,39 @@ local function GetContainerAnchorPoint(set)
     return anchor
 end
 
+-- A WoW anchor name as fractional offsets from a frame's centre, in frame-size
+-- units (LEFT=-0.5, RIGHT=+0.5, TOP=+0.5, BOTTOM=-0.5; centre axes = 0).
+local function AnchorFractions(point)
+    local fx = (point:find("LEFT") and -0.5) or (point:find("RIGHT") and 0.5) or 0
+    local fy = (point:find("TOP") and 0.5) or (point:find("BOTTOM") and -0.5) or 0
+    return fx, fy
+end
+
+-- Position a pinned container so its FIRST FRAME lands at a screen spot that is
+-- INDEPENDENT of the container's size (frame count). Frames grow from the
+-- container's GROWTH corner (GetContainerAnchorPoint), so we anchor THAT corner
+-- to the screen — not the container's saved-point corner. The saved `point`
+-- stays the screen reference (so coords keep their meaning; nothing jumps), and a
+-- half-frame offset reproduces where a point-anchored single frame sits — so a
+-- default set doesn't move, yet test (sized to testCount) and live (sized to the
+-- visible count) now place the first frame identically. Dragged sets, whose point
+-- already equals the growth corner, get a zero offset and render unchanged.
+-- frameW/frameH are the set's per-frame size in container-local units.
+local function PositionPinnedContainer(container, set, pos, frameW, frameH)
+    if not container then return end
+    local growth = GetContainerAnchorPoint(set)
+    local ref = (pos and pos.point) or growth
+    local gfx, gfy = AnchorFractions(growth)
+    local rfx, rfy = AnchorFractions(ref)
+    local s = container:GetScale() or 1
+    -- pos.x/y are screen-space (÷scale → container units); the frame offset is
+    -- already in container-local units, so it is NOT divided by scale.
+    local x = ((pos and pos.x) or 0) / s + (gfx - rfx) * (frameW or 0)
+    local y = ((pos and pos.y) or 0) / s + (gfy - rfy) * (frameH or 0)
+    container:ClearAllPoints()
+    container:SetPoint(growth, UIParent, ref, x, y)
+end
+
 -- ============================================================
 -- FRAME CREATION
 -- ============================================================
@@ -1234,7 +1267,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
     
     local set = GetSetDB(setIndex)
     if not set then return end
-    
+
     local modeSuffix = IsInRaid() and "Raid" or "Party"
     
     -- Create container (movable anchor frame)
@@ -1243,15 +1276,14 @@ function PinnedFrames:CreateSetFrames(setIndex)
     container:SetFrameStrata("MEDIUM")
     container:SetClampedToScreen(true)
     
-    -- Position from saved settings — use growth-direction anchor
+    -- Position from saved settings, pinning the growth corner so size never shifts
+    -- the first frame (see PositionPinnedContainer).
     local containerAnchor = GetContainerAnchorPoint(set)
     local pos = set.position or { point = containerAnchor, x = 0, y = 200 * (setIndex == 1 and 1 or -1) }
-    -- If saved anchor doesn't match current growth anchor, convert on first layout pass
-    local useAnchor = pos.point or containerAnchor
     local initScale = GetSetScale(set)
     container:SetScale(initScale)
-    container:ClearAllPoints()
-    container:SetPoint(useAnchor, UIParent, useAnchor, (pos.x or 0) / initScale, (pos.y or 0) / initScale)
+    local initW, initH = GetSetFrameSize(set, GetPinnedModeDB())
+    PositionPinnedContainer(container, set, pos, initW, initH)
     
     -- Make draggable when unlocked
     container:SetMovable(true)
@@ -1318,9 +1350,10 @@ function PinnedFrames:CreateSetFrames(setIndex)
         end
     end)
 
-    -- Track starting mouse and container position
-    local startMouseX, startMouseY, startPosX, startPosY
-    
+    -- Track starting mouse and container position (+ the drag's anchor reference
+    -- and frame size, captured once so OnUpdate/OnDragStop stay consistent).
+    local startMouseX, startMouseY, startPosX, startPosY, dragRef, dragW, dragH
+
     mover:SetScript("OnDragStart", function(self)
         -- Re-resolve the set EVERY drag: the closure's `set` upvalue is bound at
         -- CreateSetFrames time, but a profile switch swaps the underlying table
@@ -1337,8 +1370,10 @@ function PinnedFrames:CreateSetFrames(setIndex)
             DF:SetPositionPanelMode("pinned")
         end
 
-        -- Get the current anchor for this set
-        local anchor = GetContainerAnchorPoint(liveSet)
+        -- Keep the set's existing anchor reference (pos.point) so coords stay in
+        -- the same space; PositionPinnedContainer pins the growth corner from it.
+        dragRef = (liveSet.position and liveSet.position.point) or GetContainerAnchorPoint(liveSet)
+        dragW, dragH = GetSetFrameSize(liveSet, GetPinnedModeDB())
 
         -- Get starting mouse position in screen coordinates
         local uiScale = UIParent:GetEffectiveScale()
@@ -1369,12 +1404,9 @@ function PinnedFrames:CreateSetFrames(setIndex)
                 newX, newY = DF:SnapToGrid(newX, newY)
             end
 
-            -- Divide by scale for SetPoint — WoW multiplies offsets by frame scale internally
-            local s = container:GetScale() or 1
-            container:ClearAllPoints()
-            container:SetPoint(anchor, UIParent, anchor, newX / s, newY / s)
             -- Track the live drag in the DB + panel so the X/Y readouts update.
-            liveSet.position = { point = anchor, x = newX, y = newY }
+            liveSet.position = { point = dragRef, x = newX, y = newY }
+            PositionPinnedContainer(container, liveSet, liveSet.position, dragW, dragH)
             if DF.UpdatePositionPanel then DF:UpdatePositionPanel() end
         end)
     end)
@@ -1387,8 +1419,8 @@ function PinnedFrames:CreateSetFrames(setIndex)
         local liveSet = GetSetDB(setIndex)
         if not liveSet then return end
 
-        -- Get the current anchor for this set
-        local anchor = GetContainerAnchorPoint(liveSet)
+        -- Keep the captured anchor reference (pos.point) from drag start.
+        local anchor = dragRef or GetContainerAnchorPoint(liveSet)
 
         -- Get final position from mouse delta
         local uiScale = UIParent:GetEffectiveScale()
@@ -1422,10 +1454,7 @@ function PinnedFrames:CreateSetFrames(setIndex)
             realSet.position = { point = anchor, x = finalX, y = finalY }
         end
 
-        -- Divide by scale for SetPoint
-        local s = container:GetScale() or 1
-        container:ClearAllPoints()
-        container:SetPoint(anchor, UIParent, anchor, finalX / s, finalY / s)
+        PositionPinnedContainer(container, liveSet, liveSet.position, dragW, dragH)
 
         if DF.UpdatePositionPanel then DF:UpdatePositionPanel() end
 
@@ -1832,23 +1861,13 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
         header:ClearAllPoints()
         header:SetPoint(containerAnchorPoint, container, containerAnchorPoint, 0, 0)
 
-        -- Restore saved position. Pin the container by the anchor the user
-        -- actually dragged it to (pos.point), NOT the current growth anchor:
-        -- pos.x/pos.y were saved relative to pos.point, so applying them at a
-        -- different corner makes the frame jump on re-enable / layout refresh
-        -- (the old GetLeft()-gated conversion silently no-ops on a just-shown
-        -- frame whose layout hasn't flushed yet — the reported "disable/enable
-        -- moves it" bug). The header still anchors to the container at
-        -- containerAnchorPoint for internal grid growth; the container box is
-        -- sized to the grid, so pinning the saved corner keeps the visual
-        -- position even if the growth direction later changes. Mirrors
-        -- EnsureTestContainer so live and test frames restore identically.
+        -- Restore saved position via the shared helper: it pins the GROWTH corner
+        -- (so the grid size never shifts the first frame — live and test agree)
+        -- while keeping pos.point as the screen reference (so coords keep their
+        -- meaning and a default set doesn't jump). Mirrors EnsureTestContainer.
         local pos = set.position
         if pos then
-            local anchor = pos.point or containerAnchorPoint
-            container:ClearAllPoints()
-            local s = container:GetScale() or 1
-            container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
+            PositionPinnedContainer(container, set, pos, frameWidth, frameHeight)
         end
     end
     
@@ -1896,18 +1915,15 @@ function PinnedFrames:ApplyBossLayout(setIndex)
     if not set or not container then return end
     if InCombatLockdown() then return end
 
-    -- Container anchor + scale + saved position handling.
-    local anchor = GetContainerAnchorPoint(set)
+    -- Container scale + saved position handling.
     container:SetScale(GetSetScale(set))
 
-    -- Pin by the saved drag anchor (pos.point), not the current growth anchor —
-    -- same rationale as ApplyLayoutSettings (avoids the disable/enable jump).
+    -- Pin the growth corner (size-invariant) with pos.point as the screen
+    -- reference — same as ApplyLayoutSettings (see PositionPinnedContainer).
     local pos = set.position
     if pos then
-        local posAnchor = pos.point or anchor
-        container:ClearAllPoints()
-        local s = container:GetScale() or 1
-        container:SetPoint(posAnchor, UIParent, posAnchor, (pos.x or 0) / s, (pos.y or 0) / s)
+        local bw, bh = GetSetFrameSize(set, GetPinnedModeDB())
+        PositionPinnedContainer(container, set, pos, bw, bh)
     end
 
     -- Push slot coords + sizes to the secure handler. The allocator snippet
@@ -2311,27 +2327,26 @@ function PinnedFrames:ApplySetPosition(setIndex)
     local pos = set.position
     if not pos then return end
 
-    local anchor = pos.point or GetContainerAnchorPoint(set)
+    local raid = PositionTargetIsRaid(self)
+    local db = raid and DF:GetRaidDB() or DF:GetDB()
+    local w, h = GetSetFrameSize(set, db)
 
     -- Move the container the user currently sees: the TEST container in test mode
     -- (live containers are hidden then), otherwise the LIVE container. The mover +
-    -- label are anchored to the container, so they follow.
+    -- label are anchored to the container, so they follow. PositionPinnedContainer
+    -- pins the growth corner (size-invariant) using pos.point as the screen ref.
     local container = self.testModeActive and self.testContainers[setIndex]
         or self.containers[setIndex]
-    if container then
-        local s = container:GetScale() or 1
-        container:ClearAllPoints()
-        container:SetPoint(anchor, UIParent, anchor, (pos.x or 0) / s, (pos.y or 0) / s)
-    end
+    PositionPinnedContainer(container, set, pos, w, h)
 
     -- Mirror RAID-set positions to _realRaidDB so they survive auto-layout overlay
     -- rebuilds. Party sets have no overlays (GetSetDB returns the real table).
-    if PositionTargetIsRaid(self) then
+    if raid then
         local realSet = DF._realRaidDB and DF._realRaidDB.pinnedFrames
             and DF._realRaidDB.pinnedFrames.sets and DF._realRaidDB.pinnedFrames.sets[setIndex]
         if realSet then
             realSet.position = realSet.position or {}
-            realSet.position.point = anchor
+            realSet.position.point = pos.point or GetContainerAnchorPoint(set)
             realSet.position.x = pos.x
             realSet.position.y = pos.y
         end
@@ -3095,7 +3110,7 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
         end
     end)
 
-    local startMouseX, startMouseY, startPosX, startPosY
+    local startMouseX, startMouseY, startPosX, startPosY, dragRef, dragW, dragH
 
     mover:SetScript("OnDragStart", function(self)
         local currentSet = self.dfSet
@@ -3105,7 +3120,11 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
             DF.positionPanelPinnedSet = self.dfSetIndex
             DF:SetPositionPanelMode("pinned")
         end
-        local dragAnchor = GetContainerAnchorPoint(currentSet)
+        -- Keep the set's existing anchor reference + capture frame size, so the
+        -- helper pins the growth corner consistently (matches the live mover).
+        dragRef = (currentSet.position and currentSet.position.point) or GetContainerAnchorPoint(currentSet)
+        local ddb = self.dfIsRaidMode and DF:GetRaidDB() or DF:GetDB()
+        dragW, dragH = GetSetFrameSize(currentSet, ddb)
         local uiScale = UIParent:GetEffectiveScale()
         startMouseX, startMouseY = GetCursorPosition()
         startMouseX = startMouseX / uiScale
@@ -3125,11 +3144,9 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
             if sdb and sdb.pinnedSnapToGrid and DF.SnapToGrid then
                 newX, newY = DF:SnapToGrid(newX, newY)
             end
-            local s = container:GetScale() or 1
-            container:ClearAllPoints()
-            container:SetPoint(dragAnchor, UIParent, dragAnchor, newX / s, newY / s)
             -- Track the live drag in the DB + panel so the X/Y readouts update.
-            currentSet.position = { point = dragAnchor, x = newX, y = newY }
+            currentSet.position = { point = dragRef, x = newX, y = newY }
+            PositionPinnedContainer(container, currentSet, currentSet.position, dragW, dragH)
             if DF.UpdatePositionPanel then DF:UpdatePositionPanel() end
         end)
     end)
@@ -3139,7 +3156,7 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
         if not startMouseX then return end
         local currentSet = self.dfSet
         if not currentSet then return end
-        local dragAnchor = GetContainerAnchorPoint(currentSet)
+        local anchor = dragRef or GetContainerAnchorPoint(currentSet)
         local uiScale = UIParent:GetEffectiveScale()
         local mx, my = GetCursorPosition()
         mx = mx / uiScale
@@ -3151,10 +3168,8 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
         if sdb and sdb.pinnedSnapToGrid and DF.SnapToGrid then
             finalX, finalY = DF:SnapToGrid(finalX, finalY)
         end
-        currentSet.position = { point = dragAnchor, x = finalX, y = finalY }
-        local s = container:GetScale() or 1
-        container:ClearAllPoints()
-        container:SetPoint(dragAnchor, UIParent, dragAnchor, finalX / s, finalY / s)
+        currentSet.position = { point = anchor, x = finalX, y = finalY }
+        PositionPinnedContainer(container, currentSet, currentSet.position, dragW, dragH)
 
         -- Persist raid-set drags through to _realRaidDB (survives overlay rebuilds;
         -- position is never overlay-overridable). Party sets need no mirror.
@@ -3162,7 +3177,7 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
             local realSet = DF._realRaidDB and DF._realRaidDB.pinnedFrames
                 and DF._realRaidDB.pinnedFrames.sets and DF._realRaidDB.pinnedFrames.sets[self.dfSetIndex]
             if realSet then
-                realSet.position = { point = dragAnchor, x = finalX, y = finalY }
+                realSet.position = { point = anchor, x = finalX, y = finalY }
             end
         end
 
@@ -3194,20 +3209,13 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     local frameWidth, frameHeight = GetSetFrameSize(set, db)
     container:SetSize(frameWidth, frameHeight)
 
-    -- Use the SAVED anchor point (pos.point) first — that's what the user
-    -- dragged the set to. Only fall back to GetContainerAnchorPoint (derived
-    -- from grow-direction settings) if the set has never been positioned.
-    -- Mismatching these puts the container off-screen: e.g. anchoring at
-    -- TOPLEFT but using (x=0, y=200) that was saved for CENTER.
+    -- Position identically to the live path (PositionPinnedContainer): pin the
+    -- growth corner so the testCount-sized preview lands where the real (visible-
+    -- count-sized) frames will, with pos.point as the screen reference.
     local pos = set.position or {}
-    local anchor = pos.point or GetContainerAnchorPoint(set)
     local scale = GetSetScale(set, db)  -- mode-explicit: cross-mode test previews
     container:SetScale(scale)
-    container:ClearAllPoints()
-    container:SetPoint(
-        anchor, UIParent, anchor,
-        (pos.x or 0) / scale, (pos.y or 0) / scale
-    )
+    PositionPinnedContainer(container, set, pos, frameWidth, frameHeight)
     container:Show()
 
     AttachTestMover(container, set, isRaidMode, setIndex)
@@ -3510,6 +3518,14 @@ function PinnedFrames:ExitTestMode()
         if set then
             local realContainer = self.containers[setIndex]
             if realContainer then
+                -- Re-apply the saved position: it may have changed during test mode
+                -- (e.g. the user dragged the test frame). The live container was last
+                -- placed at create/layout time, so without this it keeps the stale
+                -- spot until a /reload re-creates it.
+                if set.position then
+                    local cw, ch = GetSetFrameSize(set, GetPinnedModeDB())
+                    PositionPinnedContainer(realContainer, set, set.position, cw, ch)
+                end
                 if realContainer.mover then
                     realContainer.mover:SetShown(visible and self.moversShown)
                 end
