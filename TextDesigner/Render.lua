@@ -282,8 +282,11 @@ function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
     -- element at once — while the unit is out of range. SetAlphaFromBoolean is
     -- secret-safe (dfInRange may be a secret boolean on non-healer specs in
     -- Midnight). When oorEnabled is off, the frame-level OOR fade cascades to
-    -- the overlay as a child, so leave it at full alpha here.
-    if not isPreview and frame.unit and frame._tdOverlay then
+    -- the overlay as a child, so leave it at full alpha here. Test frames are
+    -- included (dfIsTestFrame): TestMode sets frame.dfInRange from the test OOR
+    -- state, so the preview shows the same fade. The Options mock preview
+    -- (isPreview but not a test frame) is skipped — it has no range state.
+    if (not isPreview or frame.dfIsTestFrame) and frame.unit and frame._tdOverlay then
         local fdb = DF:GetFrameDB(frame)
         local ov = frame._tdOverlay
         if fdb and fdb.oorEnabled then
