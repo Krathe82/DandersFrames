@@ -33,6 +33,8 @@ DF.CHANGELOG_TEXT = [===[
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
+* (Pinned & Raid Frames) Fixed frames cascading into a diagonal "staircase" when switching their grow direction between Horizontal and Vertical — the layout now re-flows cleanly without a `/reload`. Pinned layout changes (direction, spacing, size) made during combat are also applied when combat ends, instead of being dropped until the next change. (by Krathe)
+* (Test Mode) Fixed pinned-frame preview issues — frames past the fourth showing blank, the resource bar overflowing the frame border, and the AFK timer not counting up. (by Krathe)
 
 ## [4.4.1]
 
