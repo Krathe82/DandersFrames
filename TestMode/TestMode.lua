@@ -274,9 +274,13 @@ function DF:GetTestUnitData(index, isRaid, isBoss)
         return result
     end
     
-    -- Party test data (original logic)
-    local data = DF.TestData.units[index + 1]
-    if not data then return nil end
+    -- Party test data. DF.TestData.units holds the 5 real-party scenarios (a party
+    -- maxes at 5). Main party frames are 0-based (index 0-4 -> units[1-5]); pinned
+    -- PLAYER frames are 1-based, so a raw index+1 lookup overruns the table by one and
+    -- blanks the last frame. Wrap into the table so every party-mode frame maps to a
+    -- distinct scenario instead of nil. (Counts are capped at 5 at the call sites.)
+    local units = DF.TestData.units
+    local data = units[(index % #units) + 1]
     
     local result = {
         index = index,  -- Include index for test mode features
@@ -368,7 +372,7 @@ function DF:StartTestAnimation()
         -- both player-mode and boss-mode pinned sets). Lightweight.
         if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive
             and DF.PinnedFrames:IsTestModeActive() then
-            for setIndex = 1, 2 do
+            for setIndex = 1, (DF.PinnedFrames.MAX_SETS or 4) do
                 local pool = DF.PinnedFrames.testFrames[setIndex]
                 if pool then
                     for i = 1, #pool do
@@ -1704,7 +1708,7 @@ function DF:UpdateTestStatusIcons(frame, testData)
             if showTimer and testAFKStartTimes[frameKey] then
                 local elapsed = math.floor(GetTime() - testAFKStartTimes[frameKey])
                 local timerStr = FormatTestAFKTime(elapsed)
-                
+
                 if db.afkIconShowText then
                     -- Text mode: show "AFK 1:23"
                     statusText = statusText .. " " .. timerStr

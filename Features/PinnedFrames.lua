@@ -3027,8 +3027,9 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isB
     local container = self.testContainers[setIndex]
     if not container then return end
     if count < 1 then count = 1 end
-    -- Boss mode caps at 8 (WoW API limit); player mode caps at 40 (max raid)
-    local cap = isBossSet and 8 or 40
+    -- Boss mode caps at 8 (WoW API limit); raid player sets at 40 (max raid);
+    -- party player sets at 5 (a party can't exceed 5).
+    local cap = isBossSet and 8 or (isRaidMode and 40 or 5)
     if count > cap then count = cap end
 
     self.testFrames[setIndex] = self.testFrames[setIndex] or {}
@@ -3078,8 +3079,10 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     local anchor = GetContainerAnchorPoint(set)
 
     local n = set.testCount or 3
+    -- Boss: 8 (WoW limit); raid player: 40 (max raid); party player: 5 (party max).
+    local maxN = IsBossSet(set) and 8 or (isRaidMode and 40 or 5)
     if n < 1 then n = 1 end
-    if n > 40 then n = 40 end
+    if n > maxN then n = maxN end
 
     -- Size container to fit N frames in the set's layout (mirrors
     -- ResizeContainer for real pinned sets). Frames anchor inside at the
@@ -3200,7 +3203,7 @@ function PinnedFrames:EnterTestMode()
         if set and set.enabled then
             local isBossSet = IsBossSet(set)
             local n = set.testCount or 3
-            local cap = isBossSet and 8 or 40
+            local cap = isBossSet and 8 or (isRaidMode and 40 or 5)
             if n < 1 then n = 1 end
             if n > cap then n = cap end
 

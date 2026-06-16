@@ -1215,6 +1215,30 @@ afkTickerFrame:SetScript("OnUpdate", function(self, elapsed)
             end
         end
     end
+
+    -- Pinned test frames live in their own per-set pools (not testPartyFrames/
+    -- testRaidFrames), so the loops above never reach them — without this their AFK
+    -- countdown freezes while the main party/raid test frames tick. Mirror the same
+    -- pass: index by the frame's own dfTestIndex + mode, render via UpdateTestStatusIcons.
+    if DF.PinnedFrames and DF.PinnedFrames.IsTestModeActive and DF.PinnedFrames:IsTestModeActive() then
+        local pools = DF.PinnedFrames.testFrames
+        if pools then
+            for setIndex = 1, (DF.PinnedFrames.MAX_SETS or 4) do
+                local pool = pools[setIndex]
+                if pool then
+                    for i = 1, #pool do
+                        local frame = pool[i]
+                        if frame and frame.dfTestIndex and frame.afkIcon and frame.afkIcon:IsShown() then
+                            local testData = DF:GetTestUnitData(frame.dfTestIndex, frame.isRaidFrame, frame.isPinnedBossFrame)
+                            if testData and testData.isAFK then
+                                DF:UpdateTestStatusIcons(frame, testData)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 end)
 
 -- ============================================================

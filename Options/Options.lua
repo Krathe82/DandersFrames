@@ -3575,9 +3575,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         )
 
         -- Test Count slider: how many test frames show when Test Mode is
-        -- active. Boss mode: 1–8 (hard WoW limit). Player mode: 1–10
-        -- (covers typical pinned set sizes; range kept modest since pinned
-        -- sets rarely need more than that for layout verification).
+        -- active. Boss mode: 1–8 (hard WoW limit). Party player sets: 1–5
+        -- (a party can't exceed 5). Raid player sets: 1–10 (covers typical
+        -- pinned set sizes; range kept modest for layout verification).
         local function OnTestCountChanged()
             if not DF.PinnedFrames then return end
             if DF.PinnedFrames.IsTestModeActive and DF.PinnedFrames:IsTestModeActive() then
@@ -3585,7 +3585,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 DF.PinnedFrames:EnterTestMode()
             end
         end
-        local testMax = IsCurrentBossMode() and 8 or 10
+        local testMax = IsCurrentBossMode() and 8 or (GUI.SelectedMode == "raid" and 10 or 5)
         frameTypeGroup:AddWidget(
             CreateRefreshableSlider(self.child, L["Test Count"], 1, testMax, 1, "testCount", OnTestCountChanged),
             55
@@ -5831,7 +5831,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
         local showBuffsCb = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Buffs"], db, "showBuffs", function()
             self:RefreshStates()
-            DF:UpdateAllFrames()
+            -- Re-scan auras on visible frames (not just layout): the show/hide gate
+            -- lives in the UNIT_AURA-driven UpdateAuras path, so UpdateAllFrames alone
+            -- (layout-only) leaves already-shown auras until the next aura event. Use
+            -- the same refresh the Max Buffs slider uses.
+            DF:RefreshAllVisibleFrames()
         end), 30)
         -- Re-sync checked state when value changes externally (e.g. AD banner click)
         showBuffsCb.refreshContent = function(self)
@@ -6040,7 +6044,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
         settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Debuffs"], db, "showDebuffs", function()
             self:RefreshStates()
-            DF:UpdateAllFrames()
+            -- See Show Buffs above: re-scan auras on visible frames so a static
+            -- debuff hides/shows immediately instead of waiting for the next aura event.
+            DF:RefreshAllVisibleFrames()
         end), 30)
         local dispelHighlight = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Dispellable"], db, "dispellableHighlight", nil), 30)
         dispelHighlight.disableOn = function(d) return not d.showDebuffs end
