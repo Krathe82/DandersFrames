@@ -33,6 +33,7 @@
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
 * (Aura Filters) Removed the "Important Spells" buff and debuff filter, which Blizzard removed from the game.
 * (Click Casting) Fixed Target Unit and the unit menu not working when bound to a keyboard key or an extra mouse button since the 12.0.7 patch — now fixed on both DandersFrames and Blizzard's default unit frames (left and right click were unaffected). Technique credit to Ellesmere (EllesmereUI).
+* (Buff/Debuff) **Show Buffs / Show Debuffs** toggles now apply live without a `/reload` — already-shown auras hide or reappear immediately instead of lingering until the unit's next aura change. (by Krathe)
 
 ## [4.4.1]
 

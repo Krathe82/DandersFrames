@@ -5823,7 +5823,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
         local showBuffsCb = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Buffs"], db, "showBuffs", function()
             self:RefreshStates()
-            DF:UpdateAllFrames()
+            -- Re-scan auras on visible frames (not just layout): the show/hide gate
+            -- lives in the UNIT_AURA-driven UpdateAuras path, so UpdateAllFrames alone
+            -- (layout-only) leaves already-shown auras until the next aura event. Use
+            -- the same refresh the Max Buffs slider uses.
+            DF:RefreshAllVisibleFrames()
         end), 30)
         -- Re-sync checked state when value changes externally (e.g. AD banner click)
         showBuffsCb.refreshContent = function(self)
@@ -6032,7 +6036,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
         settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Debuffs"], db, "showDebuffs", function()
             self:RefreshStates()
-            DF:UpdateAllFrames()
+            -- See Show Buffs above: re-scan auras on visible frames so a static
+            -- debuff hides/shows immediately instead of waiting for the next aura event.
+            DF:RefreshAllVisibleFrames()
         end), 30)
         local dispelHighlight = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Dispellable"], db, "dispellableHighlight", nil), 30)
         dispelHighlight.disableOn = function(d) return not d.showDebuffs end
