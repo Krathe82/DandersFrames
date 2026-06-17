@@ -207,6 +207,16 @@ local function updateOne(frame, elem, source, globalDefaults, enabledById)
             fs:SetTextColor(color.r, color.g, color.b, (app.color and app.color.a) or 1)
         end
     end
+    -- Aura Designer "Name Text"/"Health Text" colour override wins over the
+    -- resolved/class colour while an aura is active. Stamp the category so
+    -- SetAuraColorOverride can find this FontString; honour any standing
+    -- override so it survives this re-render.
+    local cat = CONTENT_HINTS[elem.contentType]
+    fs._tdCategory = cat
+    local ov = cat and frame._tdAuraColor and frame._tdAuraColor[cat]
+    if ov then
+        fs:SetTextColor(ov.r, ov.g, ov.b, ov.a or 1)
+    end
     local text = getResolver():Resolve(elem, source)
     fs:SetText(getMS().SafeText(text))
     fs:Show()
@@ -340,4 +350,35 @@ function DF:UpdateTextDesigner(frame, hint)
 
     local source = DF.TextDesigner.DataSource.Live(frame)
     Render:UpdateFrame(frame, tdDB, source, hint)
+end
+
+-- ============================================================
+-- AURA DESIGNER COLOUR OVERRIDE
+-- AD's "Name Text" / "Health Text" indicators recolour the unit's text on aura
+-- presence. The legacy frame.nameText/healthText are retired (IsLegacyTextHidden
+-- == true), so AD drives the colour of the TD-owned FontStrings instead, per
+-- category ("name" / "health"). The override is stored on the frame and honoured
+-- by updateOne, so it survives TD's own re-renders; SetAuraColorOverride also
+-- recolours the live FontStrings immediately (and on each expiring-ticker tick).
+-- ============================================================
+
+function Render:SetAuraColorOverride(frame, category, color)
+    if not frame or not category or not color then return end
+    frame._tdAuraColor = frame._tdAuraColor or {}
+    frame._tdAuraColor[category] = color
+    if frame._tdFontStrings then
+        for _, fs in pairs(frame._tdFontStrings) do
+            if fs._tdCategory == category then
+                fs:SetTextColor(color.r, color.g, color.b, color.a or 1)
+            end
+        end
+    end
+end
+
+function Render:ClearAuraColorOverride(frame, category)
+    if not frame or not category then return end
+    if not (frame._tdAuraColor and frame._tdAuraColor[category] ~= nil) then return end
+    frame._tdAuraColor[category] = nil
+    -- Re-render this category so TD reapplies its normal / class colour.
+    DF:UpdateTextDesigner(frame, category)
 end
