@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-15T14:30:23Z"
+DF.BUILD_DATE = "2026-06-17T09:55:15Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -20,6 +20,8 @@ DF.CHANGELOG_TEXT = [===[
 ### Improvements
 
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+* (Click Casting) The binding editor no longer shows the Advanced options section for Target Unit and Context Menu binds — those settings don't apply to those actions.
+* Refreshed the DandersFrames addon icon.
 
 ### Bug Fixes
 
@@ -33,6 +35,8 @@ DF.CHANGELOG_TEXT = [===[
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
+* (Aura Filters) Removed the "Important Spells" buff and debuff filter, which Blizzard removed from the game.
+* (Click Casting) Fixed Target Unit and the unit menu not working when bound to a keyboard key or an extra mouse button since the 12.0.7 patch — now fixed on both DandersFrames and Blizzard's default unit frames (left and right click were unaffected). Technique credit to Ellesmere (EllesmereUI).
 
 ## [4.4.1]
 
