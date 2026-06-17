@@ -31,6 +31,7 @@
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
 * (Raid Frames) Fixed missing frames for players who are still loading in, such as battleground backfills joining mid-match. (by Krathe)
+* (Aura Designer) The **Name Text** and **Health Text** indicators (recolour the unit's name/health text on aura presence) work again now that the Text Designer owns that text — they recolour the Text Designer's name/health elements, including the expiring colour fade. (by Krathe)
 * (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
 * (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
 * (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)

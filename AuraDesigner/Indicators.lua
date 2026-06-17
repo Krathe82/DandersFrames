@@ -1774,72 +1774,74 @@ end
 -- NAME TEXT COLOR
 -- ============================================================
 
+-- Shared driver for the "Name Text" / "Health Text" AD indicators. The legacy
+-- frame.nameText/healthText are retired (DF:IsLegacyTextHidden == true), so the
+-- visible text is the Text Designer's own FontStrings. We recolour those via the
+-- TD override channel (per category "name"/"health"), which survives TD's own
+-- re-renders. keyField is a per-frame slot holding a stable expiring-ticker key.
+local function ApplyDesignerTextColor(frame, config, auraData, category, keyField)
+    local Render = DF.TextDesigner and DF.TextDesigner.Render
+    if not Render then return end
+
+    local color = config.color
+    if not color then return end
+    local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
+
+    local expiringEnabled = config.expiringEnabled
+    if expiringEnabled == nil then expiringEnabled = false end
+
+    if expiringEnabled then
+        local ec = config.expiringColor or { r = 1, g = 0.2, b = 0.2 }
+        local oc = { r = r, g = g, b = b }
+        -- Stable per-(frame,category) proxy registered with the expiring ticker.
+        -- The engine calls element:IsShown() each tick (and drops the entry when
+        -- false) plus Show/Hide/SetAlpha for show-when-missing, so this must be a
+        -- real frame, not a plain table. Kept shown; the colour is driven through
+        -- SetAuraColorOverride in applyResult/applyManual, not on this proxy.
+        local key = frame[keyField]
+        if not key then
+            key = CreateFrame("Frame", nil, UIParent)
+            frame[keyField] = key
+        end
+        RegisterExpiring(key, {
+            unit = frame.unit,
+            auraInstanceID = auraData and auraData.auraInstanceID,
+            threshold = config.expiringThreshold or 30,
+            duration = auraData and auraData.duration,
+            expirationTime = auraData and auraData.expirationTime,
+            colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
+            thresholdMode = config.expiringThresholdMode,
+            color = ec, originalColor = oc,
+            -- Drive the TD override each tick (TD does not re-render per tick).
+            applyResult = function(_, result)
+                Render:SetAuraColorOverride(frame, category, result)
+            end,
+            applyManual = function(_, isExp, entry)
+                Render:SetAuraColorOverride(frame, category, isExp and entry.color or entry.originalColor)
+            end,
+        })
+    else
+        if frame[keyField] then UnregisterExpiring(frame[keyField]) end
+        Render:SetAuraColorOverride(frame, category, { r = r, g = g, b = b, a = 1 })
+    end
+end
+
+local function RevertDesignerTextColor(frame, category, keyField)
+    if not frame then return end
+    if frame[keyField] then UnregisterExpiring(frame[keyField]) end
+    local Render = DF.TextDesigner and DF.TextDesigner.Render
+    if Render then Render:ClearAuraColorOverride(frame, category) end
+end
+
 function Indicators:ApplyNameText(frame, config, auraData)
     local state = EnsureFrameState(frame)
     if state.nametext then return end
     state.nametext = true
-
-    local nameText = frame.nameText
-    if not nameText then return end
-
-    -- Save original color on first use
-    if not state.savedNameColor then
-        local r, g, b, a = nameText:GetTextColor()
-        state.savedNameColor = { r = r, g = g, b = b, a = a }
-    end
-
-    local color = config.color
-    if color then
-        local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
-        nameText:SetTextColor(r, g, b, 1)
-
-        -- ========================================
-        -- EXPIRING: register with shared ticker
-        -- ========================================
-        local expiringEnabled = config.expiringEnabled
-        if expiringEnabled == nil then expiringEnabled = false end
-        if expiringEnabled then
-            local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
-            local oc = {r = r, g = g, b = b}
-            RegisterExpiring(nameText, {
-                unit = frame.unit,
-                auraInstanceID = auraData and auraData.auraInstanceID,
-                threshold = config.expiringThreshold or 30,
-                duration = auraData and auraData.duration,
-                expirationTime = auraData and auraData.expirationTime,
-                colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
-            thresholdMode = config.expiringThresholdMode,
-                color = ec, originalColor = oc,
-                applyResult = function(el, result, entry)
-                    el:SetTextColor(result.r, result.g, result.b, result.a or 1)
-                end,
-                applyManual = function(el, isExp, entry)
-                    if isExp then
-                        local c = entry.color
-                        el:SetTextColor(c.r or 1, c.g or 0.2, c.b or 0.2, 1)
-                    else
-                        local c = entry.originalColor
-                        el:SetTextColor(c.r, c.g, c.b, 1)
-                    end
-                end,
-            })
-        else
-            UnregisterExpiring(nameText)
-        end
-    end
+    ApplyDesignerTextColor(frame, config, auraData, "name", "_tdNameColorKey")
 end
 
 function Indicators:RevertNameText(frame)
-    local state = frame and frame.dfAD
-    if not state or not state.savedNameColor then return end
-
-    local nameText = frame.nameText
-    if not nameText then return end
-
-    UnregisterExpiring(nameText)
-    local c = state.savedNameColor
-    nameText:SetTextColor(c.r, c.g, c.b, c.a)
-    state.savedNameColor = nil  -- Re-capture next time
+    RevertDesignerTextColor(frame, "name", "_tdNameColorKey")
 end
 
 -- ============================================================
@@ -1850,68 +1852,11 @@ function Indicators:ApplyHealthText(frame, config, auraData)
     local state = EnsureFrameState(frame)
     if state.healthtext then return end
     state.healthtext = true
-
-    local healthText = frame.healthText
-    if not healthText then return end
-
-    -- Save original color on first use
-    if not state.savedHealthTextColor then
-        local r, g, b, a = healthText:GetTextColor()
-        state.savedHealthTextColor = { r = r, g = g, b = b, a = a }
-    end
-
-    local color = config.color
-    if color then
-        local r, g, b = color[1] or color.r or 1, color[2] or color.g or 1, color[3] or color.b or 1
-        healthText:SetTextColor(r, g, b, 1)
-
-        -- ========================================
-        -- EXPIRING: register with shared ticker
-        -- ========================================
-        local expiringEnabled = config.expiringEnabled
-        if expiringEnabled == nil then expiringEnabled = false end
-        if expiringEnabled then
-            local ec = config.expiringColor or {r = 1, g = 0.2, b = 0.2}
-            local oc = {r = r, g = g, b = b}
-            RegisterExpiring(healthText, {
-                unit = frame.unit,
-                auraInstanceID = auraData and auraData.auraInstanceID,
-                threshold = config.expiringThreshold or 30,
-                duration = auraData and auraData.duration,
-                expirationTime = auraData and auraData.expirationTime,
-                colorCurve = BuildExpiringColorCurve(config.expiringThreshold or 30, ec, oc, config.expiringThresholdMode),
-            thresholdMode = config.expiringThresholdMode,
-                color = ec, originalColor = oc,
-                applyResult = function(el, result, entry)
-                    el:SetTextColor(result.r, result.g, result.b, result.a or 1)
-                end,
-                applyManual = function(el, isExp, entry)
-                    if isExp then
-                        local c = entry.color
-                        el:SetTextColor(c.r or 1, c.g or 0.2, c.b or 0.2, 1)
-                    else
-                        local c = entry.originalColor
-                        el:SetTextColor(c.r, c.g, c.b, 1)
-                    end
-                end,
-            })
-        else
-            UnregisterExpiring(healthText)
-        end
-    end
+    ApplyDesignerTextColor(frame, config, auraData, "health", "_tdHealthColorKey")
 end
 
 function Indicators:RevertHealthText(frame)
-    local state = frame and frame.dfAD
-    if not state or not state.savedHealthTextColor then return end
-
-    local healthText = frame.healthText
-    if not healthText then return end
-
-    UnregisterExpiring(healthText)
-    local c = state.savedHealthTextColor
-    healthText:SetTextColor(c.r, c.g, c.b, c.a)
-    state.savedHealthTextColor = nil
+    RevertDesignerTextColor(frame, "health", "_tdHealthColorKey")
 end
 
 -- ============================================================
