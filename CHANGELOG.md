@@ -42,6 +42,7 @@
 * (Test Mode) Fixed pinned-frame preview issues — frames past the fourth showing blank, the resource bar overflowing the frame border, and the AFK timer not counting up. (by Krathe)
 * (Borders) A border set to thickness **0** now hides cleanly across every style, while any border animation keeps running. (by Krathe)
 * (Borders) Fixed a doubled glow that could appear on the **PROC** border animation when it re-triggered; the PROC start-flash is now an opt-in option. (by Krathe)
+* (Personal Targeted Spells) The personal targeted-spell display now honours your **raid** and **party** settings separately — disabling it on the raid tab no longer leaves it showing in raid (the whole feature was reading the party settings, ignoring raid's enable / size / position / border). (by Krathe)
 
 ## [4.4.1]
 

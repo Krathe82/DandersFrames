@@ -203,6 +203,14 @@ local function ShouldShowPersonalTargetedSpells(db)
     return true  -- Default to showing
 end
 
+-- Personal Targeted Spells is a player-screen overlay with per-mode settings, so
+-- resolve the ACTIVE mode's DB (raid while in a raid, else party). Without this the
+-- whole personal path read DF:GetDB() (party) and ignored the raid toggle/size/pos.
+-- The group-frame and Targeted List paths stay party-resolved by design.
+local function GetPersonalDB()
+    return IsInRaid() and DF:GetRaidDB() or DF:GetDB()
+end
+
 -- Check if a unit is valid for targeted spell tracking
 -- We ONLY track nameplate units - boss/arena/target/focus all have nameplates too
 -- so tracking them separately would cause duplicates
@@ -1290,7 +1298,7 @@ local function ProcessCastInternal(casterUnit, isChannel)
     end
 
     -- Create personal display icon (always, for every cast - use SetAlphaFromBoolean for visibility)
-    if ShouldShowPersonalTargetedSpells(db) then
+    if ShouldShowPersonalTargetedSpells(GetPersonalDB()) then
         -- Always show icon, let SetAlphaFromBoolean control visibility based on targeting
         DF:ShowPersonalTargetedSpellIcon(casterUnit, casterUnit, spellID, texture, durationObject, isChannel, startTime)
     end
@@ -1396,7 +1404,7 @@ local function HandleTargetChange(casterUnit)
     -- Check if this caster has an active cast we're tracking (by unit token)
     if not activeCasters[casterUnit] then return end
     
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
 
     -- Group-frame visibility update removed: see ProcessCastInternal note.
     -- We only update the personal display now (which uses "player" comparisons,
@@ -1471,8 +1479,8 @@ local function HandleCastStop(casterUnit, wasInterrupted)
     end)
     
     -- Also hide personal targeted spell icon for this caster
-    if db.personalTargetedSpellEnabled then
-        if wasInterrupted and db.personalTargetedSpellShowInterrupted then
+    if GetPersonalDB().personalTargetedSpellEnabled then
+        if wasInterrupted and GetPersonalDB().personalTargetedSpellShowInterrupted then
             -- Will show interrupted animation then hide
             DF:HidePersonalTargetedSpellIcon(casterUnit, false)
         else
@@ -1856,7 +1864,7 @@ end
 
 -- Calculate mover size based on settings
 local function GetPersonalMoverSize()
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local iconSize = db.personalTargetedSpellSize or 40
     local scale = db.personalTargetedSpellScale or 1.0
     local maxIcons = db.personalTargetedSpellMaxIcons or 5
@@ -1884,7 +1892,7 @@ end
 -- anchors to the container's CENTER) ends up in the right place, with the full
 -- block symmetrically centred on the saved (x, y).
 local function GetPersonalContainerPoint(x, y)
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local iconSize = db.personalTargetedSpellSize or 40
     local scale = db.personalTargetedSpellScale or 1.0
     local maxIcons = db.personalTargetedSpellMaxIcons or 5
@@ -1913,7 +1921,7 @@ end
 local function CreatePersonalContainer()
     if personalContainer then return personalContainer end
 
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local x = db.personalTargetedSpellX or 0
     local y = db.personalTargetedSpellY or -150
 
@@ -2060,7 +2068,7 @@ local function CreatePersonalIcon(index)
         -- Handle interrupted animation (needs to run every frame for smooth animation)
         if self.isInterrupted then
             self.interruptTimer = (self.interruptTimer or 0) + elapsed
-            local db = DF:GetDB()
+            local db = GetPersonalDB()
             local duration = db.personalTargetedSpellInterruptedDuration or 0.5
             
             if self.interruptTimer >= duration then
@@ -2232,7 +2240,7 @@ end
 
 -- Position personal icons
 local function PositionPersonalIcons()
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     if not personalContainer then return end
     
     local iconSize = db.personalTargetedSpellSize or 40
@@ -2310,7 +2318,7 @@ end
 
 -- Show a personal targeted spell icon
 function DF:ShowPersonalTargetedSpellIcon(casterUnit, casterKey, spellID, texture, durationObject, isChannel, startTime)
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     if not db.personalTargetedSpellEnabled then return end
     
     CreatePersonalContainer()
@@ -2388,7 +2396,7 @@ function DF:HidePersonalTargetedSpellIcon(casterKey, immediate, fromTimer)
     local icon = personalIcons[iconIndex]
     if not icon then return end
     
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     
     -- If already showing interrupt animation, only hide if timer completed (fromTimer=true)
     -- This prevents UNIT_SPELLCAST_STOP from hiding the icon during interrupt animation
@@ -2463,7 +2471,7 @@ end
 
 -- Update personal display position from settings
 function DF:UpdatePersonalTargetedSpellsPosition()
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local x = db.personalTargetedSpellX or 0
     local y = db.personalTargetedSpellY or -150
     local iconAlpha = db.personalTargetedSpellAlpha or 1.0
@@ -2540,7 +2548,7 @@ function DF:CreatePersonalTargetedSpellsMover()
         end
         self:StartMoving()
 
-        local db = DF:GetDB()
+        local db = GetPersonalDB()
         self:SetScript("OnUpdate", function()
             -- Update icons to follow mover during drag
             local screenWidth, screenHeight = GetScreenWidth(), GetScreenHeight()
@@ -2572,7 +2580,7 @@ function DF:CreatePersonalTargetedSpellsMover()
         local x = centerX - screenWidth / 2
         local y = centerY - screenHeight / 2
         
-        local db = DF:GetDB()
+        local db = GetPersonalDB()
         if db.snapToGrid and DF.gridFrame and DF.gridFrame:IsShown() then
             x, y = DF:SnapToGrid(x, y)
         end
@@ -2603,7 +2611,7 @@ function DF:ShowPersonalTargetedSpellsMover()
         DF:CreatePersonalTargetedSpellsMover()
     end
     
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local x = db.personalTargetedSpellX or 0
     local y = db.personalTargetedSpellY or -150
     
@@ -2626,7 +2634,7 @@ end
 
 -- Test mode support for personal targeted spells
 function DF:ShowTestPersonalTargetedSpells()
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     if not db.personalTargetedSpellEnabled then return end
     
     CreatePersonalContainer()
@@ -2736,7 +2744,7 @@ end
 -- Update test personal targeted spells (called when settings change)
 function DF:UpdateTestPersonalTargetedSpells()
     -- Update if mover is shown OR if in test mode with personal enabled
-    local db = DF:GetDB()
+    local db = GetPersonalDB()
     local moverShown = DF.personalTargetedSpellsMover and DF.personalTargetedSpellsMover:IsShown()
     -- Show personal targeted spells in test mode if personal is enabled (don't require testShowTargetedSpell)
     local inTestMode = (DF.testMode or DF.raidTestMode) and db.personalTargetedSpellEnabled
@@ -5751,7 +5759,7 @@ function DF:InitTargetedSpells()
     -- only manages the container/icons; the events that drive cast tracking
     -- are registered separately so personal display can run even when the
     -- group-frame feature is off or API-blocked.
-    if db.personalTargetedSpellEnabled then
+    if GetPersonalDB().personalTargetedSpellEnabled then
         DF:TogglePersonalTargetedSpells(true)
     end
 
