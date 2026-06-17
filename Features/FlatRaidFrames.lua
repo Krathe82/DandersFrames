@@ -684,10 +684,24 @@ function FlatRaidFrames:ApplyLayoutSettings(skipRefresh)
         xOff = 0
     end
     
+    -- CRITICAL: clear every child's anchor points BEFORE changing the layout
+    -- attributes below. Each SetAttribute("point"/"columnAnchorPoint"/…) fires
+    -- SecureGroupHeader_Update while the header is visible, and that function
+    -- re-anchors displayed children with SetPoint WITHOUT ClearAllPoints-ing them
+    -- first (Blizzard_RestrictedAddOnEnvironment/SecureGroupHeaders.lua). So flipping
+    -- the growth point (Horizontal LEFT -> Vertical TOP) leaves each child anchored by
+    -- both points, cascading diagonally (the "staircase"). Clearing first means every
+    -- re-layout SetPoint lands clean. Mirrors DF:UpdateRaidHeaderLayoutAttributes /
+    -- PinnedFrames:ApplyLayoutSettings.
+    for i = 1, 40 do
+        local child = header:GetAttribute("child" .. i)
+        if child then child:ClearAllPoints() end
+    end
+
     header:SetAttribute("point", point)
     header:SetAttribute("xOffset", xOff)
     header:SetAttribute("yOffset", yOff)
-    
+
     -- Column anchor point
     local colAnchorPoint, colSpacing
     if horizontal then

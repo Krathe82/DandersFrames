@@ -3567,9 +3567,9 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         )
 
         -- Test Count slider: how many test frames show when Test Mode is
-        -- active. Boss mode: 1–8 (hard WoW limit). Player mode: 1–10
-        -- (covers typical pinned set sizes; range kept modest since pinned
-        -- sets rarely need more than that for layout verification).
+        -- active. Boss mode: 1–8 (hard WoW limit). Party player sets: 1–5
+        -- (a party can't exceed 5). Raid player sets: 1–10 (covers typical
+        -- pinned set sizes; range kept modest for layout verification).
         local function OnTestCountChanged()
             if not DF.PinnedFrames then return end
             if DF.PinnedFrames.IsTestModeActive and DF.PinnedFrames:IsTestModeActive() then
@@ -3577,7 +3577,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 DF.PinnedFrames:EnterTestMode()
             end
         end
-        local testMax = IsCurrentBossMode() and 8 or 10
+        local testMax = IsCurrentBossMode() and 8 or (GUI.SelectedMode == "raid" and 10 or 5)
         frameTypeGroup:AddWidget(
             CreateRefreshableSlider(self.child, L["Test Count"], 1, testMax, 1, "testCount", OnTestCountChanged),
             55

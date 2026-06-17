@@ -1736,7 +1736,16 @@ end
 function PinnedFrames:ApplyLayoutSettings(setIndex)
     local set = GetSetDB(setIndex)
     if not set then return end
-    if InCombatLockdown() then return end
+    -- Layout changes touch secure header attributes (point/xOffset/size/anchor),
+    -- which are combat-restricted. Defer to PLAYER_REGEN_ENABLED instead of silently
+    -- dropping the change — otherwise a Direction/spacing/size tweak made mid-combat
+    -- (e.g. between pulls in a follower dungeon) never reaches the live header until
+    -- the next settings poke or a /reload. Mirrors FlatRaidFrames.pendingLayoutUpdate.
+    if InCombatLockdown() then
+        self.pendingLayoutUpdate = self.pendingLayoutUpdate or {}
+        self.pendingLayoutUpdate[setIndex] = true
+        return
+    end
 
     -- Refresh Test Mode frames regardless of frame type. Cheapest correct
     -- approach: full Exit+Enter cycle, same as the test count slider uses.
@@ -1824,6 +1833,22 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
             yOff = -vSpacing  -- Negative to grow down
         end
         xOff = 0
+    end
+
+    -- CRITICAL: clear every child's anchor points BEFORE we change the layout
+    -- attributes below. Each SetAttribute("point"/"columnAnchorPoint"/…) fires
+    -- SecureGroupHeader_OnAttributeChanged, which (while the header is visible)
+    -- synchronously runs SecureGroupHeader_Update — and that function re-anchors
+    -- displayed children with SetPoint WITHOUT ClearAllPoints-ing them first
+    -- (confirmed in Blizzard_RestrictedAddOnEnvironment/SecureGroupHeaders.lua).
+    -- So when the growth point flips (Horizontal LEFT -> Vertical TOP) each child
+    -- keeps its stale anchor AND gains the new one, cascading diagonally (the
+    -- "staircase"); a /reload only hides it by rebuilding the frames. Clearing the
+    -- points first means every re-layout SetPoint lands on a clean child. Mirrors
+    -- DF:UpdateRaidHeaderLayoutAttributes (Frames/Headers.lua).
+    for i = 1, 40 do
+        local child = header:GetAttribute("child" .. i)
+        if child then child:ClearAllPoints() end
     end
 
     header:SetAttribute("point", point)
@@ -2779,6 +2804,16 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, ...)
             PinnedFrames.pendingVisibilityUpdate = nil
         end
 
+        -- Replay layout changes (Direction/spacing/size/anchor) that were attempted
+        -- in combat. Skipped harmlessly when pendingReinitialize already ran above
+        -- (it returns early and re-applies every set's layout via ProcessAllSets).
+        if PinnedFrames.pendingLayoutUpdate then
+            for idx in pairs(PinnedFrames.pendingLayoutUpdate) do
+                PinnedFrames:ApplyLayoutSettings(idx)
+            end
+            PinnedFrames.pendingLayoutUpdate = nil
+        end
+
         -- Reset slot allocator + reapply layout now that we're out of combat.
         -- Fresh pull starts with all slots free; any frames still visible
         -- (rare — e.g. we left combat mid-add) re-enter via onBossShow.
@@ -3322,8 +3357,9 @@ function PinnedFrames:EnsurePlayerTestFramePool(setIndex, count, isRaidMode, isB
     local container = self.testContainers[setIndex]
     if not container then return end
     if count < 1 then count = 1 end
-    -- Boss mode caps at 8 (WoW API limit); player mode caps at 40 (max raid)
-    local cap = isBossSet and 8 or 40
+    -- Boss mode caps at 8 (WoW API limit); raid player sets at 40 (max raid);
+    -- party player sets at 5 (a party can't exceed 5).
+    local cap = isBossSet and 8 or (isRaidMode and 40 or 5)
     if count > cap then count = cap end
 
     self.testFrames[setIndex] = self.testFrames[setIndex] or {}
@@ -3373,8 +3409,10 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     local anchor = GetContainerAnchorPoint(set)
 
     local n = set.testCount or 3
+    -- Boss: 8 (WoW limit); raid player: 40 (max raid); party player: 5 (party max).
+    local maxN = IsBossSet(set) and 8 or (isRaidMode and 40 or 5)
     if n < 1 then n = 1 end
-    if n > 40 then n = 40 end
+    if n > maxN then n = maxN end
 
     -- Size container to fit N frames in the set's layout (mirrors
     -- ResizeContainer for real pinned sets). Frames anchor inside at the
@@ -3495,7 +3533,7 @@ function PinnedFrames:EnterTestMode()
         if set and set.enabled then
             local isBossSet = IsBossSet(set)
             local n = set.testCount or 3
-            local cap = isBossSet and 8 or 40
+            local cap = isBossSet and 8 or (isRaidMode and 40 or 5)
             if n < 1 then n = 1 end
             if n > cap then n = cap end
 

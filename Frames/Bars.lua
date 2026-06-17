@@ -67,154 +67,133 @@ function DF:ShouldShowResourceBar(unit, db)
     return true
 end
 
+-- Shared resource-bar GEOMETRY + appearance: texture, orientation/fill, size
+-- (incl. the border inset), anchor, frame level, background, and border. Both the
+-- live layout (DF:ApplyResourceBarLayout) and the test render (DF:UpdateTestPowerBar)
+-- call this so the two can never drift. The caller does the enabled/role checks and
+-- sets the bar VALUE + fill COLOUR (live UnitPower vs test mock) — the only per-caller
+-- part. Assumes the bar should be shown.
+function DF:LayoutResourceBar(frame, db)
+    local bar = frame and frame.dfPowerBar
+    if not bar then return end
+
+    bar:Show()
+    bar:ClearAllPoints()
+
+    -- Fill texture (configurable; defaults to the DF house texture)
+    DF:SafeSetStatusBarTexture(bar, db.resourceBarTexture or "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist")
+
+    -- Orientation & Fill Direction
+    bar:SetOrientation(db.resourceBarOrientation or "HORIZONTAL")
+    bar:SetReverseFill(db.resourceBarReverseFill)
+
+    local isVertical = (db.resourceBarOrientation == "VERTICAL")
+    local length = db.resourceBarWidth or 50
+    local thickness = db.resourceBarHeight or 4
+    local ppLength = db.pixelPerfect and DF:PixelPerfect(length) or length
+    local ppThickness = db.pixelPerfect and DF:PixelPerfect(thickness) or thickness
+
+    -- Compute health bar dimensions from settings instead of GetWidth/GetHeight
+    -- which can return stale values before WoW's layout engine processes anchor changes.
+    -- Prefer a pinned set's resolved size (Match baseline + Width/Height override) so a
+    -- "Match Frame Width" resource bar tracks the pinned frame, not the shared per-mode
+    -- db width. Main frames have no stamp and use the mode db.
+    local padding = db.framePadding or 0
+    local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
+    local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
+    if db.pixelPerfect and DF.PixelPerfect then
+        frameWidth = DF:PixelPerfect(frameWidth)
+        frameHeight = DF:PixelPerfect(frameHeight)
+        padding = DF:PixelPerfect(padding)
+    end
+    local healthBarWidth = frameWidth - (2 * padding)
+    local healthBarHeight = frameHeight - (2 * padding)
+
+    -- Account for frame border inset (matches other bar calculations)
+    local borderInset = 0
+    if db.frameShowBorder ~= false then
+        borderInset = db.frameBorderSize or 1
+    end
+    -- When Pixel Perfect is on, borderInset must be snapped to a whole screen pixel
+    -- before being subtracted from healthBarWidth — otherwise barW is fractional and
+    -- WoW rounds it differently per frame, producing a 1px gap alternating left/right.
+    local bInset = db.pixelPerfect and DF:PixelPerfect(borderInset) or borderInset
+
+    if isVertical then
+        -- SWAP: "Width" applies to Height (Length), "Height" applies to Width (Thickness)
+        bar:SetWidth(ppThickness)
+        bar:SetHeight(ppLength)
+        if db.resourceBarMatchWidth and healthBarHeight > 1 then
+            bar:SetHeight(healthBarHeight - bInset * 2)
+        end
+    else
+        bar:SetWidth(ppLength)
+        bar:SetHeight(ppThickness)
+        if db.resourceBarMatchWidth and healthBarWidth > 1 then
+            bar:SetWidth(healthBarWidth - bInset * 2)
+        end
+    end
+
+    local anchor = db.resourceBarAnchor or "CENTER"
+    bar:SetPoint(anchor, frame, anchor, db.resourceBarX or 0, db.resourceBarY or 0)
+
+    -- Frame level - relative to the main frame. Default 2 puts it below the frame
+    -- border (at +10); values above 10 render above it.
+    local frameLevelOffset = db.resourceBarFrameLevel or 2
+    bar:SetFrameLevel(frame:GetFrameLevel() + frameLevelOffset)
+    if bar.border then
+        bar.border:SetFrameLevel(bar:GetFrameLevel() + 1)
+    end
+
+    -- Background visibility and color
+    if bar.bg then
+        if db.resourceBarBackgroundEnabled ~= false then  -- Default to enabled
+            bar.bg:Show()
+            local bgC = db.resourceBarBackgroundColor or {r = 0.1, g = 0.1, b = 0.1, a = 0.8}
+            bar.bg:SetColorTexture(bgC.r, bgC.g, bgC.b, bgC.a or 0.8)
+        else
+            bar.bg:Hide()
+        end
+    end
+
+    -- Border via unified DF.Border backend (Stage 4.2). ctx.unit / ctx.frame let the
+    -- Class / Role colour resolvers fire on live and test frames alike (test frames
+    -- resolve via ctx.frame's dfIsTestFrame).
+    if bar.border then
+        DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "resourceBar", {
+            unit  = frame.unit,
+            frame = frame,
+        }))
+    end
+end
+
 function DF:ApplyResourceBarLayout(frame)
     if not frame then return end
-    
+
     -- Use raid DB for raid frames, party DB for party frames
     local db = DF:GetFrameDB(frame)
-    
+
     -- The power bar is created in Frames/Create.lua
     if not frame.dfPowerBar then return end
-    
     local bar = frame.dfPowerBar
-    
-    -- Check if resource bar should be shown
-    if not db.resourceBarEnabled then
-        bar:Hide()
-        return
-    end
-    
-    -- Need unit for role check
-    if not frame.unit then
-        bar:Hide()
-        return
-    end
 
-    -- Check role-based filtering
-    if not DF:ShouldShowResourceBar(frame.unit, db) then
-        bar:Hide()
-        return
-    end
+    -- Enabled + unit + role gates
+    if not db.resourceBarEnabled then bar:Hide() return end
+    if not frame.unit then bar:Hide() return end
+    if not DF:ShouldShowResourceBar(frame.unit, db) then bar:Hide() return end
 
-    -- Bar is visible - apply layout
-    do
-        bar:Show()
-        bar:ClearAllPoints()
+    -- Shared geometry/appearance (size, anchor, level, background, border).
+    DF:LayoutResourceBar(frame, db)
 
-        -- Fill texture (configurable; defaults to the DF house texture)
-        DF:SafeSetStatusBarTexture(bar, db.resourceBarTexture or "Interface\\AddOns\\DandersFrames\\Media\\DF_Minimalist")
-
-        -- Orientation & Fill Direction
-        bar:SetOrientation(db.resourceBarOrientation or "HORIZONTAL")
-        bar:SetReverseFill(db.resourceBarReverseFill)
-
-        local isVertical = (db.resourceBarOrientation == "VERTICAL")
-        local length = db.resourceBarWidth or 50
-        local thickness = db.resourceBarHeight or 4
-
-        -- Apply pixel-perfect adjustments
-        local ppLength = db.pixelPerfect and DF:PixelPerfect(length) or length
-        local ppThickness = db.pixelPerfect and DF:PixelPerfect(thickness) or thickness
-
-        -- Compute health bar dimensions from settings instead of GetWidth/GetHeight
-        -- which can return stale values before WoW's layout engine processes anchor changes
-        local padding = db.framePadding or 0
-        -- Prefer a pinned set's resolved size (Match baseline + Width/Height override) so a
-        -- "Match Frame Width" resource bar tracks the pinned frame, not the shared
-        -- per-mode db width. Main frames have no stamp and use the mode db.
-        local frameWidth = frame.dfPinnedWidth or db.frameWidth or 120
-        local frameHeight = frame.dfPinnedHeight or db.frameHeight or 50
-        if db.pixelPerfect and DF.PixelPerfect then
-            frameWidth = DF:PixelPerfect(frameWidth)
-            frameHeight = DF:PixelPerfect(frameHeight)
-            padding = DF:PixelPerfect(padding)
-        end
-        local healthBarWidth = frameWidth - (2 * padding)
-        local healthBarHeight = frameHeight - (2 * padding)
-
-        -- Account for frame border inset (matches other bar calculations)
-        local borderInset = 0
-        if db.frameShowBorder ~= false then
-            borderInset = db.frameBorderSize or 1
-        end
-
-        if isVertical then
-            -- SWAP: "Width" Value applies to Height (Length), "Height" value applies to Width (Thickness)
-            bar:SetWidth(ppThickness)
-            bar:SetHeight(ppLength)
-        else
-            -- NORMAL: "Width" Value applies to Width, "Height" value applies to Height
-            bar:SetWidth(ppLength)
-            bar:SetHeight(ppThickness)
-        end
-
-        -- When Pixel Perfect is on, borderInset must be snapped to a whole screen pixel
-        -- before being subtracted from healthBarWidth. Without this, barW is a fractional
-        -- screen-pixel value and WoW rounds it differently per frame depending on screen
-        -- position, producing a 1-pixel gap alternating left/right. Snapping borderInset
-        -- guarantees (FW - barW) = 2*(P+K) screen pixels (always even), so centering
-        -- always lands on a clean pixel boundary regardless of frame width parity.
-        local bInset = db.pixelPerfect and DF:PixelPerfect(borderInset) or borderInset
-
-        if isVertical then
-            if db.resourceBarMatchWidth then
-                if healthBarHeight > 1 then
-                    bar:SetHeight(healthBarHeight - bInset * 2)
-                end
-            end
-        else
-            if db.resourceBarMatchWidth then
-                if healthBarWidth > 1 then
-                    bar:SetWidth(healthBarWidth - bInset * 2)
-                end
-            end
-        end
-
-        local anchor = db.resourceBarAnchor or "CENTER"
-        bar:SetPoint(anchor, frame, anchor, db.resourceBarX or 0, db.resourceBarY or 0)
-        
-        -- Frame level - relative to the main frame, not health bar
-        -- Default of 2 puts it below the frame border (which is at +10)
-        -- Values above 10 will render above the frame border
-        local frameLevelOffset = db.resourceBarFrameLevel or 2
-        bar:SetFrameLevel(frame:GetFrameLevel() + frameLevelOffset)
-        
-        -- Border frame level needs to be above the bar itself
-        if bar.border then
-            bar.border:SetFrameLevel(bar:GetFrameLevel() + 1)
-        end
-        
-        -- Background visibility and color
-        if bar.bg then
-            if db.resourceBarBackgroundEnabled ~= false then  -- Default to enabled
-                bar.bg:Show()
-                local bgC = db.resourceBarBackgroundColor or {r = 0.1, g = 0.1, b = 0.1, a = 0.8}
-                bar.bg:SetColorTexture(bgC.r, bgC.g, bgC.b, bgC.a or 0.8)
-            else
-                bar.bg:Hide()
-            end
-        end
-        
-        -- Border via unified DF.Border backend (Stage 4.2). BuildSpec reads
-        -- canonical resourceBar*Border* keys; ctx.unit / ctx.frame let the
-        -- Class / Role colour resolvers fire on live and test frames alike.
-        if bar.border then
-            DF.Border:Apply(bar.border, DF.Border:BuildSpec(db, "resourceBar", {
-                unit  = frame.unit,
-                frame = frame,
-            }))
-        end
-
-        -- Set power value and color immediately so the bar doesn't appear white
-        local unit = frame.unit
-        if unit and UnitExists(unit) then
-            local power = UnitPower(unit)
-            local maxPower = UnitPowerMax(unit)
-            bar:SetMinMaxValues(0, maxPower)
-            bar:SetValue(power)
-            local cr, cg, cb = DF:GetResourceBarColor(unit, db)
-            bar:SetStatusBarColor(cr, cg, cb, 1)
-        end
+    -- Live value + fill colour (the only part the test path does differently).
+    local unit = frame.unit
+    if unit and UnitExists(unit) then
+        local power = UnitPower(unit)
+        local maxPower = UnitPowerMax(unit)
+        bar:SetMinMaxValues(0, maxPower)
+        bar:SetValue(power)
+        local cr, cg, cb = DF:GetResourceBarColor(unit, db)
+        bar:SetStatusBarColor(cr, cg, cb, 1)
     end
 end
 

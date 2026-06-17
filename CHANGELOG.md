@@ -36,6 +36,8 @@
 * (Click Casting) Fixed Target Unit and the unit menu not working when bound to a keyboard key or an extra mouse button since the 12.0.7 patch — now fixed on both DandersFrames and Blizzard's default unit frames (left and right click were unaffected). Technique credit to Ellesmere (EllesmereUI).
 * (Buff/Debuff) **Show Buffs / Show Debuffs** toggles now apply live without a `/reload` — already-shown auras hide or reappear immediately instead of lingering until the unit's next aura change. (by Krathe)
 * (Pinned Frames) Pinned frames now reappear when you zone into a battleground or arena, instead of staying hidden until a `/reload`. (by Krathe)
+* (Pinned & Raid Frames) Fixed frames cascading into a diagonal "staircase" when switching their grow direction between Horizontal and Vertical — the layout now re-flows cleanly without a `/reload`. Pinned layout changes (direction, spacing, size) made during combat are also applied when combat ends, instead of being dropped until the next change. (by Krathe)
+* (Test Mode) Fixed pinned-frame preview issues — frames past the fourth showing blank, the resource bar overflowing the frame border, and the AFK timer not counting up. (by Krathe)
 
 ## [4.4.1]
 
