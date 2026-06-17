@@ -3509,6 +3509,25 @@ local function ZeroBuffDebuffBorderInset(profile)
     end
 end
 
+-- Fold the legacy per-element OOR name-text alpha into the unified oorTextAlpha.
+-- The Text Designer now renders all unit text, so a single OOR "Text Alpha" dims
+-- every TD element out of range. Carry the user's old name-text value only when
+-- they changed it from the prior default (1); default-config users get the new
+-- oorTextAlpha default instead. Per-profile guarded so later oorTextAlpha edits stick.
+function DF:MigrateOORTextAlpha()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" and not profile._oorTextAlphaV1 then
+            for _, modeKey in ipairs({ "party", "raid" }) do
+                local m = profile[modeKey]
+                if type(m) == "table" and m.oorNameTextAlpha ~= nil and m.oorNameTextAlpha ~= 1 then
+                    m.oorTextAlpha = m.oorNameTextAlpha
+                end
+            end
+            profile._oorTextAlphaV1 = true
+        end
+    end
+end
 -- One-shot per-profile, two independently-guarded steps so a profile already
 -- through step 1 still receives step 2. Both steps are value-idempotent.
 function DF:MigrateBorderInsetFold()
@@ -5300,6 +5319,12 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- run); independent of Designer Presets (preset walk is nil-guarded).
             if DF.MigrateBorderInsetFold then
                 DF:MigrateBorderInsetFold()
+            end
+
+            -- Fold the legacy OOR name-text alpha into the unified oorTextAlpha
+            -- (Text Designer now renders all text). Per-profile guarded.
+            if DF.MigrateOORTextAlpha then
+                DF:MigrateOORTextAlpha()
             end
 
             -- CRITICAL: Update power bars now that unit data is available

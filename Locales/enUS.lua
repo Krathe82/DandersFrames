@@ -1490,6 +1490,7 @@ L["Test mode disabled."] = true
 L["Test mode enabled."] = true
 L["Test mode ended — entering combat."] = true
 L["Text"] = true
+L["Text Alpha"] = true
 L["Text Color"] = true
 L["Text Colors:"] = true
 L["Text Designer"] = true

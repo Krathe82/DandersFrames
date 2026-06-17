@@ -276,6 +276,34 @@ function Render:UpdateFrame(frame, tdDB, source, hint, isPreview)
             end
         end
     end
+
+    -- Out-of-range fade (element-specific OOR mode). TD now owns the unit's
+    -- text, so the unified OOR "Text Alpha" dims the whole TD overlay — every
+    -- element at once — while the unit is out of range. SetAlphaFromBoolean is
+    -- secret-safe (dfInRange may be a secret boolean on non-healer specs in
+    -- Midnight). When oorEnabled is off, the frame-level OOR fade cascades to
+    -- the overlay as a child, so leave it at full alpha here. Test frames are
+    -- included (dfIsTestFrame): TestMode sets frame.dfInRange from the test OOR
+    -- state, so the preview shows the same fade. The Options mock preview
+    -- (isPreview but not a test frame) is skipped — it has no range state.
+    if (not isPreview or frame.dfIsTestFrame) and frame.unit and frame._tdOverlay then
+        local fdb = DF:GetFrameDB(frame)
+        local ov = frame._tdOverlay
+        if fdb and fdb.oorEnabled then
+            local inRange = frame.dfInRange
+            if not (issecretvalue and issecretvalue(inRange)) and inRange == nil then
+                inRange = true
+            end
+            local oorAlpha = fdb.oorTextAlpha or 0.55
+            if ov.SetAlphaFromBoolean then
+                ov:SetAlphaFromBoolean(inRange, 1, oorAlpha)
+            else
+                ov:SetAlpha(inRange and 1 or oorAlpha)
+            end
+        else
+            ov:SetAlpha(1)
+        end
+    end
 end
 
 -- Tears down all FontStrings on a frame (mode switch, profile change).
