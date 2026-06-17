@@ -2593,9 +2593,16 @@ function CC:ApplyBindingsToFrameUnified(frame, skipKeyboardUpdate)
     local isDandersFrame = frame.dfIsDandersFrame == true
     local isBlizzardFrame = frame.dfIsBlizzardFrame == true
     -- 12.0.7 gate workaround applies to frames whose clicks run through Blizzard's
-    -- gated SecureUnitButton_OnClick: our own frames and Blizzard's. Third-party
-    -- frames keep their existing path (they use their own/ungated click handler).
-    local useProxy = isDandersFrame or isBlizzardFrame
+    -- gated SecureUnitButton_OnClick. Our own frames and Blizzard's always qualify.
+    -- Third-party unit frames (other unit-frame addons) built on
+    -- SecureUnitButtonTemplate hit the same gate, so extend the proxy to them too --
+    -- but only when the frame exposes a "unit" attribute, because the proxy resolves
+    -- the target via useparent-unit (it reads the parent frame's unit at click time).
+    -- Frames with no usable unit attribute keep the existing @mouseover fallback path.
+    local tpUnit = (not isDandersFrame) and (not isBlizzardFrame)
+        and frame.GetAttribute and frame:GetAttribute("unit")
+    local thirdPartyHasUnit = type(tpUnit) == "string" and tpUnit ~= ""
+    local useProxy = isDandersFrame or isBlizzardFrame or thirdPartyHasUnit
 
     for keyString, data in pairs(self.unifiedMacroMap) do
         local binding = data.templateBinding
