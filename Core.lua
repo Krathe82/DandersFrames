@@ -3583,8 +3583,12 @@ function DF:MigrateTargetedSpellImportantBorder()
     -- (personalTargetedSpell) sets.
     local function mapHighlight(m, p)
         if m[p.."HighlightColor"] ~= nil then
-            m[p.."ImportantBorderColor"] = m[p.."HighlightColor"]
-            m[p.."ImportantBorderAnimationColor"] = m[p.."HighlightColor"]
+            -- Copy into independent tables: the color picker mutates color
+            -- tables in place, so sharing one reference would link the static
+            -- and animation colors (editing one would change the other).
+            local c = m[p.."HighlightColor"]
+            m[p.."ImportantBorderColor"] = { r = c.r, g = c.g, b = c.b, a = c.a }
+            m[p.."ImportantBorderAnimationColor"] = { r = c.r, g = c.g, b = c.b, a = c.a }
         end
         if m[p.."HighlightSize"] ~= nil then
             m[p.."ImportantBorderSize"] = m[p.."HighlightSize"]
