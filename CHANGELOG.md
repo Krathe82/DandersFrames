@@ -25,23 +25,18 @@
 ### Bug Fixes
 
 * (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
-* (Arena) Fixed teammates who load in late sometimes staying missing from your frames for the whole round, and the frame order breaking after a reload mid-match. (by Krathe)
-* (Arena) Fixed your frames staying hidden after a reload during a match. (by Krathe)
+* (Arena) Fixed teammates who load in late sometimes staying missing for the whole round, the frame order breaking after a mid-match reload, and frames staying hidden after a reload during a match. (by Krathe)
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
 * (Missing Buff) The missing-buff icon no longer flags a **cross-faction group member in the open world** as needing a buff you can't actually cast on them — it only appears where the buff is castable (e.g. inside instances). (by Krathe)
 * (Defensive Icon) The defensive cooldown icon and its border now render **above auras** and stay co-planar with the icon. (by Krathe)
 * (Role Icons) **Show Tank / Healer / DPS** toggles now apply live without a `/reload`, and are properly decoupled from the Hide-in-Combat gate. (by Krathe)
 * (Raid Frames) Fixed missing frames for players who are still loading in, such as battleground backfills joining mid-match. (by Krathe)
 * (Aura Designer) The **Name Text** and **Health Text** indicators (recolour the unit's name/health text on aura presence) work again now that the Text Designer owns that text — they recolour the Text Designer's name/health elements, including the expiring colour fade. (by Krathe)
-* (Aura Designer) Text-only icons no longer draw a leftover border (static or expiring). (by Krathe)
-* (Aura Designer) Aura icon and square borders from older profiles keep their original look after the border rework, instead of appearing thinner or floating in a gap. (by Krathe)
-* (Buff/Debuff) Icon borders from older profiles no longer float in a gap after the border rework — they hug the icon as before. (by Krathe)
 * (Aura Filters) Removed the "Important Spells" buff and debuff filter, which Blizzard removed from the game.
 * (Click Casting) Fixed Target Unit and the unit menu not working when bound to a keyboard key or an extra mouse button since the 12.0.7 patch — now fixed on both DandersFrames and Blizzard's default unit frames (left and right click were unaffected). Technique credit to Ellesmere (EllesmereUI).
 * (Buff/Debuff) **Show Buffs / Show Debuffs** toggles now apply live without a `/reload` — already-shown auras hide or reappear immediately instead of lingering until the unit's next aura change. (by Krathe)
 * (Pinned Frames) Pinned frames now reappear when you zone into a battleground or arena, instead of staying hidden until a `/reload`. (by Krathe)
 * (Pinned & Raid Frames) Fixed frames cascading into a diagonal "staircase" when switching their grow direction between Horizontal and Vertical — the layout now re-flows cleanly without a `/reload`. Pinned layout changes (direction, spacing, size) made during combat are also applied when combat ends, instead of being dropped until the next change. (by Krathe)
-* (Test Mode) Fixed pinned-frame preview issues — frames past the fourth showing blank, the resource bar overflowing the frame border, and the AFK timer not counting up. (by Krathe)
 * (Borders) A border set to thickness **0** now hides cleanly across every style, while any border animation keeps running. (by Krathe)
 * (Borders) Fixed a doubled glow that could appear on the **PROC** border animation when it re-triggered; the PROC start-flash is now an opt-in option. (by Krathe)
 * (Personal Targeted Spells) The personal targeted-spell display now honours your **raid** and **party** settings separately — disabling it on the raid tab no longer leaves it showing in raid (the whole feature was reading the party settings, ignoring raid's enable / size / position / border). (by Krathe)
