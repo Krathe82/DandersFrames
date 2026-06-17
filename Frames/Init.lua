@@ -172,6 +172,41 @@ function DF:UpdateRaidLayout()
     return DF:UpdateRaidGroupedLayout()
 end
 
+-- Effective raid group display order: db.raidGroupDisplayOrder, with the
+-- player's group moved first when "My Group First" is on. Mirrors the builder in
+-- Headers.lua's UpdateRaidGroupOrderAttributes (which orders the group headers
+-- via secure attributes) so the unit-frame positioner agrees with the headers.
+function DF:GetEffectiveRaidGroupOrder(db)
+    db = db or DF:GetRaidDB()
+    local displayOrder = db.raidGroupDisplayOrder
+    if type(displayOrder) ~= "table" or #displayOrder ~= 8 then
+        displayOrder = {1, 2, 3, 4, 5, 6, 7, 8}
+    end
+    local effectiveOrder = {}
+    if db.raidPlayerGroupFirst and DF.cachedPlayerGroup then
+        effectiveOrder[1] = DF.cachedPlayerGroup
+        for _, g in ipairs(displayOrder) do
+            if g ~= DF.cachedPlayerGroup then effectiveOrder[#effectiveOrder + 1] = g end
+        end
+    else
+        for _, g in ipairs(displayOrder) do effectiveOrder[#effectiveOrder + 1] = g end
+    end
+    return effectiveOrder
+end
+
+-- Sort a list of active group numbers in place by effective display order, so
+-- the group-slot positioner (which derives a group's slot from its index within
+-- this list) honours Group Display Order / My Group First. Falls back to raw
+-- group number for any group not present in the effective order.
+function DF:SortActiveGroupListByDisplayOrder(activeGroupList, db)
+    local effectiveOrder = DF:GetEffectiveRaidGroupOrder(db)
+    local rank = {}
+    for pos, g in ipairs(effectiveOrder) do rank[g] = pos end
+    table.sort(activeGroupList, function(a, b)
+        return (rank[a] or a) < (rank[b] or b)
+    end)
+end
+
 -- Group-based raid layout positioning
 function DF:UpdateRaidGroupedLayout()
     local db = DF:GetRaidDB()
@@ -245,8 +280,8 @@ function DF:UpdateRaidGroupedLayout()
                 end
             end
         end
-        table.sort(activeGroupList)
-        
+        DF:SortActiveGroupListByDisplayOrder(activeGroupList, db)
+
         -- Set container size
         local totalWidth, totalHeight = SecureSort:CalculateRaidGroupContainerSize(#activeGroupList, lp)
         DF.raidContainer:SetSize(totalWidth, totalHeight)
@@ -344,9 +379,13 @@ function DF:UpdateRaidGroupedLayout()
         end
     end
     
-    -- Sort activeGroupList by group number
-    table.sort(activeGroupList)
-    
+    -- Order activeGroupList by effective display order (Group Display Order /
+    -- My Group First). PositionRaidFrameToGroupSlot derives each group's slot
+    -- from its index within this list, so a raw group-number sort here pinned
+    -- the frames to default order while the headers/labels already moved — the
+    -- Group Display Order / My Group First desync.
+    DF:SortActiveGroupListByDisplayOrder(activeGroupList, db)
+
     -- Recalculate posInGroup now that we know actual counts
     -- PERFORMANCE FIX: Reuse table
     wipe(reusableGroupCurrentPos)

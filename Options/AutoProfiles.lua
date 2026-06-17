@@ -3926,6 +3926,12 @@ end
 -- Returns true if the key is overridden (caller should skip frame refresh).
 function AutoProfilesUI:HandleRuntimeWrite(key, value)
     if not key then return false end
+    -- While EDITING a layout, the write must flow to the normal setter +
+    -- SetProfileSetting so it persists into the layout's override (and previews
+    -- live). Runtime protection is only for non-editing runtime changes —
+    -- otherwise it steals the edit and it's lost on reload (e.g. My Group First).
+    -- Mirrors the WrapDB __newindex guard, which also bows out when IsEditing().
+    if self:IsEditing() then return false end
     if not self.activeRuntimeProfile or not DF.raidOverrides then return false end
 
     -- Check if this key (or its parent) is covered by the overlay
