@@ -6512,7 +6512,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             lightColors  = function() DF:LightweightUpdateMissingBuffBorderColor() end,
             refreshStates = function() self:RefreshStates() end,
             hideWhen     = function(d) return not d.missingBuffIconEnabled end,
-            sizeMin = 1, sizeMax = 6, sizeStep = 1,
+            sizeMin = 0, sizeMax = 6, sizeStep = 1,  -- 0 = animation-only (no solid edge)
         })
         borderGroup.hideOn = HideMissingBuffOptions
         Add(borderGroup, nil, 1)
@@ -6865,6 +6865,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         tsIconSize.disableOn = HideTargetedSpellOptions
         local tsScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 4.0, 0.1, db, "targetedSpellScale", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
         tsScale.disableOn = HideTargetedSpellOptions
+        local tsAlpha = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
+        tsAlpha.disableOn = HideTargetedSpellOptions
         local tsSpacing = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 10, 1, db, "targetedSpellSpacing", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
         tsSpacing.disableOn = HideTargetedSpellOptions
         local tsMaxIcons = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Icons"], 1, 10, 1, db, "targetedSpellMaxIcons", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
@@ -6883,19 +6885,21 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Border Group (col1)
         local borderGroup = GUI:CreateSettingsGroup(self.child, 260)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        local tsAlpha = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "targetedSpellAlpha", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsAlpha.disableOn = HideTargetedSpellOptions
-        local hideSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
-        hideSwipe.disableOn = HideTargetedSpellOptions
-        local tsShowBorder = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Border"], db, "targetedSpellShowBorder", function()
-            self:RefreshStates()
-            FullUpdate()
-        end), 30)
-        tsShowBorder.disableOn = HideTargetedSpellOptions
-        local tsBorderSize = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Size"], 0, 8, 1, db, "targetedSpellBorderSize", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsBorderSize.disableOn = HideBorderOptions
-        local tsColor = borderGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Border Color"], db, "targetedSpellBorderColor", false, FullUpdate), 35)
-        tsColor.disableOn = HideBorderOptions
+        -- Full DF.Border toolkit (matches Personal Targeted Spell): Show Border,
+        -- Size, Style/Gradient, Colour, Alpha, Inset, Blend Mode, Shadow, Animate.
+        -- BuildSpec in ApplyIconSettings already reads every targetedSpell* border
+        -- key, so these controls light up the whole engine.
+        GUI:CreateBorderControls(borderGroup, db, "targetedSpell", {
+            parent        = self.child,
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = FullUpdate,
+            lightUpdate   = TargetedSpellLightweightUpdate,
+            lightColors   = FullUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HideTargetedSpellOptions,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(borderGroup, nil, 1)
         
         -- Duration Group (col2)
@@ -6906,6 +6910,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         showDur.disableOn = HideTargetedSpellOptions
+        -- The cooldown swipe is the radial cooldown sweep on the icon (independent
+        -- of the numeric duration text), so it's gated only on the feature itself.
+        local hideSwipe = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Cooldown Swipe"], db, "targetedSpellHideSwipe", FullUpdate), 30)
+        hideSwipe.disableOn = HideTargetedSpellOptions
         local tsDurFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "targetedSpellDurationFont", FullUpdate), 55)
         tsDurFont.disableOn = HideTargetedDurationOptions
         local tsDurScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "targetedSpellDurationScale", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
@@ -6930,8 +6938,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         currentSection = importantSection
         
         local function HideHighlightOptions(d) return not d.targetedSpellEnabled or not d.targetedSpellHighlightImportant end
-        local highlightStyleOptions = { glow = L["Glow"], marchingAnts = L["Marching Ants"], solidBorder = L["Solid Border"], pulse = L["Pulse"], none = L["None"] }
-        
+
         local highlightGroup = GUI:CreateSettingsGroup(self.child, 260)
         highlightGroup:AddWidget(GUI:CreateHeader(self.child, L["Highlight Settings"]), 40)
         local tsHighlightImportant = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "targetedSpellHighlightImportant", function()
@@ -6939,14 +6946,20 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             FullUpdate()
         end), 30)
         tsHighlightImportant.disableOn = HideTargetedSpellOptions
-        local tsHighlightStyle = highlightGroup:AddWidget(GUI:CreateDropdown(self.child, L["Highlight Style"], highlightStyleOptions, db, "targetedSpellHighlightStyle", FullUpdate), 55)
-        tsHighlightStyle.disableOn = HideHighlightOptions
-        local tsHighlightColor = highlightGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "targetedSpellHighlightColor", false, FullUpdate), 35)
-        tsHighlightColor.disableOn = HideHighlightOptions
-        local tsHighlightSize = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 8, 1, db, "targetedSpellHighlightSize", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsHighlightSize.disableOn = HideHighlightOptions
-        local tsHighlightInset = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -4, 8, 1, db, "targetedSpellHighlightInset", FullUpdate, TargetedSpellLightweightUpdate, true), 55)
-        tsHighlightInset.disableOn = HideHighlightOptions
+        -- Important Spell Border: the highlight on its own DF.Border (full toolkit),
+        -- gated by the Highlight Important Spells toggle above.
+        GUI:CreateBorderControls(highlightGroup, db, "targetedSpellImportant", {
+            parent        = self.child,
+            noShowToggle  = true,  -- the Highlight Important Spells checkbox is the gate
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = FullUpdate,
+            lightUpdate   = TargetedSpellLightweightUpdate,
+            lightColors   = FullUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HideHighlightOptions,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(highlightGroup, nil, 1)
         
         currentSection = nil
@@ -7238,13 +7251,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end), 30)
             tlHighlight.disableOn = HideTLOptions
             local function HideHighlightOptions(d) return not d.targetedListEnabled or not d.targetedListHighlightImportant end
-            local tlHighlightColor = colorGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "targetedListHighlightColor", false, TargetedListUpdate, function() if DF.LightweightUpdateTargetedListHighlightColor then DF:LightweightUpdateTargetedListHighlightColor() end end, true), 35)
+            local tlHighlightColor = colorGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "targetedListHighlightColor", true, TargetedListUpdate, function() if DF.LightweightUpdateTargetedListHighlightColor then DF:LightweightUpdateTargetedListHighlightColor() end end, true), 35)
             tlHighlightColor.disableOn = HideHighlightOptions
             local tlResetColors = colorGroup:AddWidget(GUI:CreateButton(self.child, L["Reset Colors to Default"], 200, 24, function()
                 db.targetedListInterruptibleColor = {r = 1, g = 0.494, b = 0.137, a = 1}
                 db.targetedListUninterruptibleColor = {r = 0.8, g = 0.302, b = 0.302, a = 1}
                 db.targetedListSelfTargetColor = {r = 0.02, g = 0.776, b = 0.4, a = 0.2}
-                db.targetedListHighlightColor = {r = 1, g = 0.8, b = 0}
+                db.targetedListHighlightColor = {r = 1, g = 0.8, b = 0, a = 1}
                 db.targetedListBorderColor = {r = 0.18, g = 0.18, b = 0.18, a = 1}
                 -- Refresh color swatches
                 if tlInterColor.UpdateSwatch then tlInterColor:UpdateSwatch() end
@@ -7485,6 +7498,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         ptsSize.disableOn = HidePersonalOptions
         local ptsScale = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.05, db, "personalTargetedSpellScale", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
         ptsScale.disableOn = HidePersonalOptions
+        local ptsAlpha = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
+        ptsAlpha.disableOn = HidePersonalOptions
         local ptsSpacing = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 20, 1, db, "personalTargetedSpellSpacing", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
         ptsSpacing.disableOn = HidePersonalOptions
         local ptsMaxIcons = sizeGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Icons"], 1, 10, 1, db, "personalTargetedSpellMaxIcons", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
@@ -7511,14 +7526,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Targeted = spells targeting you). Skipped: offset (icon has its
         -- own positioning), classColor / roleColor (spell alert, not unit
         -- identity), colorByTime / colorByType (no aura-state context).
-        -- The Icon Alpha (personalTargetedSpellAlpha) and Cooldown Swipe
-        -- toggles stay on this group — they're not border-related.
         local borderGroup = GUI:CreateSettingsGroup(self.child, 260)
         borderGroup:AddWidget(GUI:CreateHeader(self.child, L["Border"]), 40)
-        local ptsAlpha = borderGroup:AddWidget(GUI:CreateSlider(self.child, L["Alpha"], 0.0, 1.0, 0.05, db, "personalTargetedSpellAlpha", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsAlpha.disableOn = HidePersonalOptions
-        local ptsSwipe = borderGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
-        ptsSwipe.disableOn = HidePersonalOptions
         GUI:CreateBorderControls(borderGroup, db, "personalTargetedSpell", {
             parent       = self.child,
             include      = { alpha = true, inset = true, blendMode = true,
@@ -7528,7 +7537,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             lightColors  = PersonalTargetedUpdate,
             refreshStates = function() self:RefreshStates() end,
             hideWhen     = function(d) return not d.personalTargetedSpellEnabled end,
-            sizeMin = 1, sizeMax = 5, sizeStep = 1,
+            sizeMin = 0, sizeMax = 5, sizeStep = 1,  -- 0 = animation-only (no solid edge)
         })
         AddToSection(borderGroup, nil, 1)
         
@@ -7540,6 +7549,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             PersonalTargetedUpdate()
         end), 30)
         ptsDuration.disableOn = HidePersonalOptions
+        -- The cooldown swipe is the radial cooldown sweep on the icon (independent
+        -- of the numeric duration text), so it's gated only on the feature itself.
+        local ptsSwipe = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Cooldown Swipe"], db, "personalTargetedSpellShowSwipe", PersonalTargetedUpdate), 30)
+        ptsSwipe.disableOn = HidePersonalOptions
         local ptsDurFont = durationGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Font"], db, "personalTargetedSpellDurationFont", PersonalTargetedUpdate), 55)
         ptsDurFont.disableOn = HidePersonalDurationOptions
         local ptsDurScale = durationGroup:AddWidget(GUI:CreateSlider(self.child, L["Scale"], 0.5, 2.0, 0.1, db, "personalTargetedSpellDurationScale", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
@@ -7563,20 +7576,29 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local highlightSection = Add(GUI:CreateCollapsibleSection(self.child, L["Important Spells"], true), 36, "both")
         currentSection = highlightSection
         
-        local personalHighlightStyleOptions = { glow = L["Glow"], marchingAnts = L["Marching Ants"], solidBorder = L["Solid Border"], pulse = L["Pulse"], none = L["None"] }
-        
+        local function HidePersonalHighlightOptions(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
+
         local highlightGroup = GUI:CreateSettingsGroup(self.child, 260)
         highlightGroup:AddWidget(GUI:CreateHeader(self.child, L["Highlight Settings"]), 40)
-        local ptsHighlight = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "personalTargetedSpellHighlightImportant", PersonalTargetedUpdate), 30)
+        local ptsHighlight = highlightGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Important Spells"], db, "personalTargetedSpellHighlightImportant", function()
+            self:RefreshStates()
+            PersonalTargetedUpdate()
+        end), 30)
         ptsHighlight.disableOn = HidePersonalOptions
-        local ptsHighlightStyle = highlightGroup:AddWidget(GUI:CreateDropdown(self.child, L["Highlight Style"], personalHighlightStyleOptions, db, "personalTargetedSpellHighlightStyle", PersonalTargetedUpdate), 55)
-        ptsHighlightStyle.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightColor = highlightGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Highlight Color"], db, "personalTargetedSpellHighlightColor", false, PersonalTargetedUpdate), 35)
-        ptsHighlightColor.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightSize = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Thickness"], 1, 6, 1, db, "personalTargetedSpellHighlightSize", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsHighlightSize.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
-        local ptsHighlightInset = highlightGroup:AddWidget(GUI:CreateSlider(self.child, L["Border Inset"], -4, 8, 1, db, "personalTargetedSpellHighlightInset", PersonalTargetedUpdate, PersonalTargetedUpdate, true), 55)
-        ptsHighlightInset.disableOn = function(d) return not d.personalTargetedSpellEnabled or not d.personalTargetedSpellHighlightImportant end
+        -- Important Spell Border: the highlight on its own DF.Border (full toolkit),
+        -- gated by the Highlight Important Spells toggle above.
+        GUI:CreateBorderControls(highlightGroup, db, "personalTargetedSpellImportant", {
+            parent        = self.child,
+            noShowToggle  = true,  -- the Highlight Important Spells checkbox is the gate
+            include       = { alpha = true, inset = true, blendMode = true,
+                              gradient = true, shadow = true, animate = true },
+            fullUpdate    = PersonalTargetedUpdate,
+            lightUpdate   = PersonalTargetedUpdate,
+            lightColors   = PersonalTargetedUpdate,
+            refreshStates = function() self:RefreshStates() end,
+            hideWhen      = HidePersonalHighlightOptions,
+            sizeMin = 0, sizeMax = 8, sizeStep = 1,
+        })
         AddToSection(highlightGroup, nil, 1)
         
         currentSection = nil

@@ -89,352 +89,6 @@ local MAX_HISTORY = 50
 local eventFrame = CreateFrame("Frame")
 eventFrame:Hide()
 
--- ============================================================
--- HIGHLIGHT STYLE ANIMATIONS
--- ============================================================
-
--- Animation settings for marching ants
-local ANIM_SPEED = 40
-local DASH_LENGTH = 4
-local GAP_LENGTH = 4
-local PATTERN_LENGTH = DASH_LENGTH + GAP_LENGTH
-
--- Global animator for marching ants and pulse on targeted spell icons
-local TargetedSpellAnimator = CreateFrame("Frame")
-TargetedSpellAnimator.elapsed = 0
-TargetedSpellAnimator.frames = {}
-TargetedSpellAnimator.pulseFrames = {}
-TargetedSpellAnimator.hasWork = false  -- Track whether any frames are registered
-
-local function TargetedSpellAnimator_OnUpdate(self, elapsed)
-    -- PERF TEST: Skip animations if disabled
-    if DF.PerfTest and not DF.PerfTest.enableAnimations then return end
-    
-    -- Marching ants animation
-    self.elapsed = self.elapsed + elapsed
-    local offset = (self.elapsed * ANIM_SPEED) % PATTERN_LENGTH
-    for highlightFrame in pairs(self.frames) do
-        if highlightFrame:IsShown() and highlightFrame.animBorder then
-            DF:UpdateTargetedSpellAnimatedBorder(highlightFrame, offset)
-        end
-    end
-    
-    -- Pulse animation (animates border texture alpha, not frame alpha)
-    for highlightFrame in pairs(self.pulseFrames) do
-        if highlightFrame:IsShown() and highlightFrame.pulseState and highlightFrame.glowBorder then
-            local state = highlightFrame.pulseState
-            state.elapsed = state.elapsed + elapsed
-            
-            -- Calculate current alpha based on time
-            local progress = state.elapsed / state.duration
-            if progress >= 1 then
-                -- Reverse direction
-                state.direction = -state.direction
-                state.elapsed = 0
-                progress = 0
-            end
-            
-            -- Smooth interpolation (smoothstep)
-            local smoothProgress = progress * progress * (3 - 2 * progress)
-            
-            local alpha
-            if state.direction == 1 then
-                alpha = state.minAlpha + (state.maxAlpha - state.minAlpha) * smoothProgress
-            else
-                alpha = state.maxAlpha - (state.maxAlpha - state.minAlpha) * smoothProgress
-            end
-            
-            -- Apply alpha to border textures
-            local border = highlightFrame.glowBorder
-            local r = highlightFrame.pulseR or 1
-            local g = highlightFrame.pulseG or 0.8
-            local b = highlightFrame.pulseB or 0
-            
-            if border.top then border.top:SetColorTexture(r, g, b, alpha * 0.8) end
-            if border.bottom then border.bottom:SetColorTexture(r, g, b, alpha * 0.8) end
-            if border.left then border.left:SetColorTexture(r, g, b, alpha * 0.8) end
-            if border.right then border.right:SetColorTexture(r, g, b, alpha * 0.8) end
-        end
-    end
-end
-
--- Check if animator has any work to do and enable/disable accordingly
-local function TargetedSpellAnimator_UpdateState()
-    local hasWork = next(TargetedSpellAnimator.frames) or next(TargetedSpellAnimator.pulseFrames)
-    if hasWork and not TargetedSpellAnimator.hasWork then
-        TargetedSpellAnimator.hasWork = true
-        TargetedSpellAnimator:SetScript("OnUpdate", TargetedSpellAnimator_OnUpdate)
-    elseif not hasWork and TargetedSpellAnimator.hasWork then
-        TargetedSpellAnimator.hasWork = false
-        TargetedSpellAnimator:SetScript("OnUpdate", nil)
-    end
-end
-
--- Export for test mode access
-DF.TargetedSpellAnimator = TargetedSpellAnimator
-
--- Create dashes for one edge of the animated border
-local function CreateEdgeDashes(parent, count)
-    local dashes = {}
-    for i = 1, count do
-        local dash = parent:CreateTexture(nil, "OVERLAY")
-        dash:SetColorTexture(1, 1, 1, 1)
-        dash:Hide()
-        dashes[i] = dash
-    end
-    return dashes
-end
-
--- Initialize animated border on a highlight frame
-local function InitAnimatedBorder(highlightFrame)
-    if highlightFrame.animBorder then return highlightFrame.animBorder end
-    highlightFrame.animBorder = {
-        topDashes = CreateEdgeDashes(highlightFrame, 15),
-        bottomDashes = CreateEdgeDashes(highlightFrame, 15),
-        leftDashes = CreateEdgeDashes(highlightFrame, 15),
-        rightDashes = CreateEdgeDashes(highlightFrame, 15),
-    }
-    return highlightFrame.animBorder
-end
-DF.InitAnimatedBorder = InitAnimatedBorder
-
--- Update animated border with current offset
-function DF:UpdateTargetedSpellAnimatedBorder(highlightFrame, offset)
-    local border = highlightFrame.animBorder
-    if not border then return end
-    local thick = highlightFrame.animThickness or 2
-    local r, g, b, a = highlightFrame.animR or 1, highlightFrame.animG or 0.8, highlightFrame.animB or 0, highlightFrame.animA or 1
-    local frameWidth, frameHeight = highlightFrame:GetWidth(), highlightFrame:GetHeight()
-    if frameWidth <= 0 or frameHeight <= 0 then return end
-
-    local function DrawHorizontalEdge(dashes, isTop, edgeOffset)
-        local numDashes = math.ceil(frameWidth / PATTERN_LENGTH) + 2
-        for i, dash in ipairs(dashes) do dash:Hide() end
-        local startPos = -(edgeOffset % PATTERN_LENGTH)
-        for i = 1, numDashes do
-            local dashStart = startPos + (i - 1) * PATTERN_LENGTH
-            local dashEnd = dashStart + DASH_LENGTH
-            local visStart, visEnd = math.max(0, dashStart), math.min(frameWidth, dashEnd)
-            if visEnd > visStart and dashes[i] then
-                local dash = dashes[i]
-                dash:ClearAllPoints()
-                dash:SetSize(visEnd - visStart, thick)
-                if isTop then
-                    dash:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", visStart, 0)
-                else
-                    dash:SetPoint("BOTTOMLEFT", highlightFrame, "BOTTOMLEFT", visStart, 0)
-                end
-                dash:SetColorTexture(r, g, b, a)
-                dash:Show()
-            end
-        end
-    end
-
-    local function DrawVerticalEdge(dashes, isRight, edgeOffset)
-        local numDashes = math.ceil(frameHeight / PATTERN_LENGTH) + 2
-        for i, dash in ipairs(dashes) do dash:Hide() end
-        local startPos = -(edgeOffset % PATTERN_LENGTH)
-        for i = 1, numDashes do
-            local dashStart = startPos + (i - 1) * PATTERN_LENGTH
-            local dashEnd = dashStart + DASH_LENGTH
-            local visStart, visEnd = math.max(0, dashStart), math.min(frameHeight, dashEnd)
-            if visEnd > visStart and dashes[i] then
-                local dash = dashes[i]
-                dash:ClearAllPoints()
-                dash:SetSize(thick, visEnd - visStart)
-                if isRight then
-                    dash:SetPoint("TOPRIGHT", highlightFrame, "TOPRIGHT", 0, -visStart)
-                else
-                    dash:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", 0, -visStart)
-                end
-                dash:SetColorTexture(r, g, b, a)
-                dash:Show()
-            end
-        end
-    end
-
-    -- Counter-clockwise marching ants
-    DrawHorizontalEdge(border.bottomDashes, false, offset)
-    DrawVerticalEdge(border.leftDashes, false, frameWidth + offset)
-    DrawHorizontalEdge(border.topDashes, true, frameWidth + frameHeight - offset)
-    DrawVerticalEdge(border.rightDashes, true, (2 * frameWidth) + frameHeight - offset)
-end
-
--- Hide animated border
-local function HideAnimatedBorder(highlightFrame)
-    if not highlightFrame.animBorder then return end
-    for _, dashes in pairs(highlightFrame.animBorder) do
-        for _, dash in ipairs(dashes) do dash:Hide() end
-    end
-end
-DF.HideAnimatedBorder = HideAnimatedBorder
-
--- Create solid border (4 edge textures)
-local function InitSolidBorder(highlightFrame)
-    if highlightFrame.solidBorder then return highlightFrame.solidBorder end
-    highlightFrame.solidBorder = {
-        top = highlightFrame:CreateTexture(nil, "BORDER"),
-        bottom = highlightFrame:CreateTexture(nil, "BORDER"),
-        left = highlightFrame:CreateTexture(nil, "BORDER"),
-        right = highlightFrame:CreateTexture(nil, "BORDER"),
-    }
-    return highlightFrame.solidBorder
-end
-DF.InitSolidBorder = InitSolidBorder
-
--- Update solid border
-local function UpdateSolidBorder(highlightFrame, thickness, r, g, b, a)
-    local border = highlightFrame.solidBorder
-    if not border then return end
-    
-    border.top:ClearAllPoints()
-    border.top:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", 0, 0)
-    border.top:SetPoint("TOPRIGHT", highlightFrame, "TOPRIGHT", 0, 0)
-    border.top:SetHeight(thickness)
-    border.top:SetColorTexture(r, g, b, a)
-    border.top:SetBlendMode("BLEND")
-    border.top:Show()
-    
-    border.bottom:ClearAllPoints()
-    border.bottom:SetPoint("BOTTOMLEFT", highlightFrame, "BOTTOMLEFT", 0, 0)
-    border.bottom:SetPoint("BOTTOMRIGHT", highlightFrame, "BOTTOMRIGHT", 0, 0)
-    border.bottom:SetHeight(thickness)
-    border.bottom:SetColorTexture(r, g, b, a)
-    border.bottom:SetBlendMode("BLEND")
-    border.bottom:Show()
-    
-    border.left:ClearAllPoints()
-    border.left:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", 0, -thickness)
-    border.left:SetPoint("BOTTOMLEFT", highlightFrame, "BOTTOMLEFT", 0, thickness)
-    border.left:SetWidth(thickness)
-    border.left:SetColorTexture(r, g, b, a)
-    border.left:SetBlendMode("BLEND")
-    border.left:Show()
-    
-    border.right:ClearAllPoints()
-    border.right:SetPoint("TOPRIGHT", highlightFrame, "TOPRIGHT", 0, -thickness)
-    border.right:SetPoint("BOTTOMRIGHT", highlightFrame, "BOTTOMRIGHT", 0, thickness)
-    border.right:SetWidth(thickness)
-    border.right:SetColorTexture(r, g, b, a)
-    border.right:SetBlendMode("BLEND")
-    border.right:Show()
-end
-DF.UpdateSolidBorder = UpdateSolidBorder
-
--- Hide solid border
-local function HideSolidBorder(highlightFrame)
-    if not highlightFrame or not highlightFrame.solidBorder then return end
-    highlightFrame.solidBorder.top:Hide()
-    highlightFrame.solidBorder.bottom:Hide()
-    highlightFrame.solidBorder.left:Hide()
-    highlightFrame.solidBorder.right:Hide()
-end
-DF.HideSolidBorder = HideSolidBorder
-
--- Create glow border (4 edge textures with ADD blend mode for glow effect)
-local function InitGlowBorder(highlightFrame)
-    if highlightFrame.glowBorder then return highlightFrame.glowBorder end
-    highlightFrame.glowBorder = {
-        top = highlightFrame:CreateTexture(nil, "OVERLAY"),
-        bottom = highlightFrame:CreateTexture(nil, "OVERLAY"),
-        left = highlightFrame:CreateTexture(nil, "OVERLAY"),
-        right = highlightFrame:CreateTexture(nil, "OVERLAY"),
-    }
-    -- Set ADD blend mode for glow effect
-    for _, tex in pairs(highlightFrame.glowBorder) do
-        tex:SetBlendMode("ADD")
-    end
-    return highlightFrame.glowBorder
-end
-DF.InitGlowBorder = InitGlowBorder
-
--- Update glow border
-local function UpdateGlowBorder(highlightFrame, thickness, r, g, b, a)
-    local border = highlightFrame.glowBorder
-    if not border then return end
-    
-    border.top:ClearAllPoints()
-    border.top:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", 0, 0)
-    border.top:SetPoint("TOPRIGHT", highlightFrame, "TOPRIGHT", 0, 0)
-    border.top:SetHeight(thickness)
-    border.top:SetColorTexture(r, g, b, a)
-    border.top:SetBlendMode("ADD")
-    border.top:Show()
-    
-    border.bottom:ClearAllPoints()
-    border.bottom:SetPoint("BOTTOMLEFT", highlightFrame, "BOTTOMLEFT", 0, 0)
-    border.bottom:SetPoint("BOTTOMRIGHT", highlightFrame, "BOTTOMRIGHT", 0, 0)
-    border.bottom:SetHeight(thickness)
-    border.bottom:SetColorTexture(r, g, b, a)
-    border.bottom:SetBlendMode("ADD")
-    border.bottom:Show()
-    
-    border.left:ClearAllPoints()
-    border.left:SetPoint("TOPLEFT", highlightFrame, "TOPLEFT", 0, -thickness)
-    border.left:SetPoint("BOTTOMLEFT", highlightFrame, "BOTTOMLEFT", 0, thickness)
-    border.left:SetWidth(thickness)
-    border.left:SetColorTexture(r, g, b, a)
-    border.left:SetBlendMode("ADD")
-    border.left:Show()
-    
-    border.right:ClearAllPoints()
-    border.right:SetPoint("TOPRIGHT", highlightFrame, "TOPRIGHT", 0, -thickness)
-    border.right:SetPoint("BOTTOMRIGHT", highlightFrame, "BOTTOMRIGHT", 0, thickness)
-    border.right:SetWidth(thickness)
-    border.right:SetColorTexture(r, g, b, a)
-    border.right:SetBlendMode("ADD")
-    border.right:Show()
-end
-DF.UpdateGlowBorder = UpdateGlowBorder
-
--- Hide glow border
-local function HideGlowBorder(highlightFrame)
-    if not highlightFrame or not highlightFrame.glowBorder then return end
-    highlightFrame.glowBorder.top:Hide()
-    highlightFrame.glowBorder.bottom:Hide()
-    highlightFrame.glowBorder.left:Hide()
-    highlightFrame.glowBorder.right:Hide()
-end
-DF.HideGlowBorder = HideGlowBorder
-
--- Create pulse animation group - animates border texture alpha, not frame alpha
--- This prevents the animation from overriding SetAlphaFromBoolean on the frame
-local function InitPulseAnimation(highlightFrame)
-    if highlightFrame.pulseAnim then return highlightFrame.pulseAnim end
-    
-    -- Store pulse state on the frame
-    highlightFrame.pulseState = {
-        elapsed = 0,
-        minAlpha = 0.3,
-        maxAlpha = 1.0,
-        duration = 0.5,
-        direction = 1,  -- 1 = fading in, -1 = fading out
-    }
-    
-    -- Create a dummy animation group that we use to track if pulsing is active
-    local ag = {}
-    ag.isPlaying = false
-    ag.Play = function(self)
-        self.isPlaying = true
-        highlightFrame.pulseState.elapsed = 0
-        highlightFrame.pulseState.direction = 1
-        -- Register with animator
-        TargetedSpellAnimator.pulseFrames[highlightFrame] = true
-        TargetedSpellAnimator_UpdateState()
-    end
-    ag.Stop = function(self)
-        self.isPlaying = false
-        TargetedSpellAnimator.pulseFrames[highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-    end
-    ag.IsPlaying = function(self)
-        return self.isPlaying
-    end
-    
-    highlightFrame.pulseAnim = ag
-    return ag
-end
-DF.InitPulseAnimation = InitPulseAnimation
 
 
 
@@ -631,39 +285,11 @@ local function CreateSingleIcon(parent, index)
     iconFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     container.iconFrame = iconFrame
     
-    -- Icon border - 4 edge textures (consistent with defensive/missing buff icons)
+    -- Icon border via the unified DF.Border backend (iconMode). The per-update
+    -- ApplyIconSettings drives BuildSpec + Apply; here we just allocate it.
     local defBorderSize = 2
-    local borderLeft = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderLeft:SetPoint("TOPLEFT", 0, 0)
-    borderLeft:SetPoint("BOTTOMLEFT", 0, 0)
-    borderLeft:SetWidth(defBorderSize)
-    borderLeft:SetColorTexture(1, 0.3, 0, 1)
-    container.borderLeft = borderLeft
-    iconFrame.borderLeft = borderLeft
-    
-    local borderRight = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderRight:SetPoint("TOPRIGHT", 0, 0)
-    borderRight:SetPoint("BOTTOMRIGHT", 0, 0)
-    borderRight:SetWidth(defBorderSize)
-    borderRight:SetColorTexture(1, 0.3, 0, 1)
-    container.borderRight = borderRight
-    iconFrame.borderRight = borderRight
-    
-    local borderTop = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderTop:SetPoint("TOPLEFT", defBorderSize, 0)
-    borderTop:SetPoint("TOPRIGHT", -defBorderSize, 0)
-    borderTop:SetHeight(defBorderSize)
-    borderTop:SetColorTexture(1, 0.3, 0, 1)
-    container.borderTop = borderTop
-    iconFrame.borderTop = borderTop
-    
-    local borderBottom = iconFrame:CreateTexture(nil, "BACKGROUND")
-    borderBottom:SetPoint("BOTTOMLEFT", defBorderSize, 0)
-    borderBottom:SetPoint("BOTTOMRIGHT", -defBorderSize, 0)
-    borderBottom:SetHeight(defBorderSize)
-    borderBottom:SetColorTexture(1, 0.3, 0, 1)
-    container.borderBottom = borderBottom
-    iconFrame.borderBottom = borderBottom
+    iconFrame.border = DF.Border:New(iconFrame)
+    container.border = iconFrame.border
     
     -- Important spell highlight frame - use a frame so we can SetAlphaFromBoolean
     -- Set frame level ABOVE iconFrame so it renders on top when inset
@@ -677,7 +303,11 @@ local function CreateSingleIcon(parent, index)
     container.highlightFrame = highlightFrame
     
     iconFrame.highlightFrame = highlightFrame
-    
+    -- DF.Border overlay for the important-spell highlight (Stage 2). highlightFrame
+    -- stays the secret-safe alpha gate; this DF.Border child draws the highlight.
+    container.highlightBorder = DF.Border:New(highlightFrame)
+    iconFrame.highlightBorder = container.highlightBorder
+
     -- Icon texture - positioned with inset for border, with TexCoord cropping
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("TOPLEFT", defBorderSize, -defBorderSize)
@@ -996,10 +626,9 @@ local function ApplyIconSettings(icon, db, spellID)
     local durationColor = db.targetedSpellDurationColor or {r = 1, g = 1, b = 1}
     local alpha = db.targetedSpellAlpha or 1.0
     local highlightImportant = db.targetedSpellHighlightImportant ~= false
-    local highlightStyle = db.targetedSpellHighlightStyle or "glow"
-    local highlightColor = db.targetedSpellHighlightColor or {r = 1, g = 0.8, b = 0}
-    local highlightSize = db.targetedSpellHighlightSize or 3
-    local highlightInset = db.targetedSpellHighlightInset or 0
+    -- Important-spell highlight now reads the targetedSpellImportant* border keys
+    -- directly via BuildSpec (see the highlight block below); the old
+    -- targetedSpellHighlightStyle/Color/Size/Inset locals are retired here.
     local importantOnly = db.targetedSpellImportantOnly
     if durationOutline == "NONE" then durationOutline = "" end
     
@@ -1026,132 +655,53 @@ local function ApplyIconSettings(icon, db, spellID)
     
     -- Important spell highlight
     if icon.highlightFrame then
-        -- Calculate position with inset (negative inset = larger, positive = smaller/inward)
-        local offset = borderSize + highlightSize - highlightInset
-        
-        -- Position the highlight frame
+        -- Important Spell Border: a second DF.Border (full toolkit via BuildSpec),
+        -- shown on important spells, gated by the Highlight-Important toggle + the
+        -- secret-safe isImportant alpha. Positioned just outside the base border;
+        -- sized/inset from the targetedSpellImportantBorder* keys.
+        -- Frame offset is inset-INDEPENDENT: it just clears the base border + the
+        -- highlight band. The Border Inset is owned by the engine (BuildSpec sets
+        -- spec.inset), which nudges the band symmetrically on all four edges, so it
+        -- stays centred as the slider moves. (The old `- hlInset` double-applied it.)
+        local hlSize  = db.targetedSpellImportantBorderSize or 3
+        local offset  = borderSize + hlSize
         icon.highlightFrame:ClearAllPoints()
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
-        
-        -- Hide all highlight styles first
-        HideAnimatedBorder(icon.highlightFrame)
-        HideSolidBorder(icon.highlightFrame)
-        HideGlowBorder(icon.highlightFrame)
-        if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-        TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-        
-        if highlightImportant and spellID and highlightStyle ~= "none" then
+        if highlightImportant and spellID and icon.highlightBorder then
             local isImportant = C_Spell.IsSpellImportant(spellID)
-            
-            if highlightStyle == "glow" then
-                -- Glow effect using edge borders with ADD blend mode
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "marchingAnts" then
-                -- Animated marching ants border
-                InitAnimatedBorder(icon.highlightFrame)
-                icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                icon.highlightFrame.animR = highlightColor.r
-                icon.highlightFrame.animG = highlightColor.g
-                icon.highlightFrame.animB = highlightColor.b
-                icon.highlightFrame.animA = 1
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                TargetedSpellAnimator_UpdateState()
-                
-            elseif highlightStyle == "solidBorder" then
-                -- Solid colored border (4 edge textures, no fill)
-                InitSolidBorder(icon.highlightFrame)
-                UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "pulse" then
-                -- Pulsing glow using edge borders with ADD blend
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                InitPulseAnimation(icon.highlightFrame)
-                -- Store color for pulse animation to use
-                icon.highlightFrame.pulseR = highlightColor.r
-                icon.highlightFrame.pulseG = highlightColor.g
-                icon.highlightFrame.pulseB = highlightColor.b
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                icon.highlightFrame.pulseAnim:Play()
-            end
+            local spec = DF.Border:BuildSpec(db, "targetedSpellImportant", { iconMode = true })
+            spec.enabled = true
+            DF.Border:Apply(icon.highlightBorder, spec)
+            icon.highlightFrame:Show()
+            icon.highlightFrame:SetAlphaFromBoolean(isImportant)
         else
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             icon.highlightFrame:Hide()
         end
     end
-    
-    -- Border
-    -- Border - 4 edge textures (consistent with defensive/missing buff icons)
-    if showBorder then
-        if icon.borderLeft then
-            icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderLeft:SetWidth(borderSize)
-            icon.borderLeft:Show()
-        end
-        if icon.borderRight then
-            icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderRight:SetWidth(borderSize)
-            icon.borderRight:Show()
-        end
-        if icon.borderTop then
-            icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderTop:SetHeight(borderSize)
-            icon.borderTop:ClearAllPoints()
-            icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-            icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-            icon.borderTop:Show()
-        end
-        if icon.borderBottom then
-            icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-            icon.borderBottom:SetHeight(borderSize)
-            icon.borderBottom:ClearAllPoints()
-            icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-            icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-            icon.borderBottom:Show()
-        end
-        
-        -- Adjust icon texture position for border
+
+    -- Border via the unified DF.Border backend (iconMode) — parity with Personal
+    -- Targeted Spell / Targeted List. BuildSpec reads the targetedSpell* keys;
+    -- spec.size carries the (pixel-perfect-adjusted) thickness, and the art +
+    -- cooldown inset by that thickness when the border is shown.
+    if icon.border then
+        local spec = DF.Border:BuildSpec(db, "targetedSpell", { iconMode = true })
+        spec.enabled = showBorder
+        spec.size = borderSize
+        DF.Border:Apply(icon.border, spec)
+    end
+    do
+        local ai = showBorder and borderSize or 0
         if icon.icon then
             icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
+            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
         end
-        
-        -- Adjust cooldown to match icon texture
         if icon.cooldown then
             icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-        end
-    else
-        -- Hide all border edges
-        if icon.borderLeft then icon.borderLeft:Hide() end
-        if icon.borderRight then icon.borderRight:Hide() end
-        if icon.borderTop then icon.borderTop:Hide() end
-        if icon.borderBottom then icon.borderBottom:Hide() end
-        
-        -- Full size icon when no border
-        if icon.icon then
-            icon.icon:ClearAllPoints()
-            icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-        end
-        
-        -- Adjust cooldown to match
-        if icon.cooldown then
-            icon.cooldown:ClearAllPoints()
-            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
+            icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+            icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
         end
     end
     
@@ -1336,14 +886,7 @@ function DF:HideTargetedSpellIcon(frame, casterKey, skipInterruptAnim)
         end
         if icon.highlightFrame then
             icon.highlightFrame:Hide()
-            -- Clean up animator reference
-            TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-            TargetedSpellAnimator_UpdateState()
-            HideAnimatedBorder(icon.highlightFrame)
-            HideSolidBorder(icon.highlightFrame)
-            if icon.highlightFrame.pulseAnim then
-                icon.highlightFrame.pulseAnim:Stop()
-            end
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
         end
         if icon.icon then
             icon.icon:SetDesaturated(false)
@@ -1386,14 +929,7 @@ function DF:HideAllTargetedSpells(frame)
             end
             if icon.highlightFrame then
                 icon.highlightFrame:Hide()
-                -- Clean up animator reference
-                TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                TargetedSpellAnimator_UpdateState()
-                HideAnimatedBorder(icon.highlightFrame)
-                HideSolidBorder(icon.highlightFrame)
-                if icon.highlightFrame.pulseAnim then
-                    icon.highlightFrame.pulseAnim:Stop()
-                end
+                if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             end
             if icon.icon then
                 icon.icon:SetDesaturated(false)
@@ -2435,7 +1971,9 @@ local function CreatePersonalIcon(index)
     highlightFrame:EnableMouse(false)
     highlightFrame:SetHitRectInsets(10000, 10000, 10000, 10000)
     icon.highlightFrame = highlightFrame
-    
+    -- DF.Border overlay for the important-spell highlight (Stage 2).
+    icon.highlightBorder = DF.Border:New(highlightFrame)
+
     -- Icon texture - positioned with default 2px inset so it lines up
     -- with the border at creation time. ApplyPersonalIconSettings
     -- recomputes the inset from the db's BorderSize on every render
@@ -2577,10 +2115,9 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
     local durationY = db.personalTargetedSpellDurationY or 0
     local durationColor = db.personalTargetedSpellDurationColor or {r = 1, g = 1, b = 1}
     local highlightImportant = db.personalTargetedSpellHighlightImportant ~= false
-    local highlightStyle = db.personalTargetedSpellHighlightStyle or "glow"
-    local highlightColor = db.personalTargetedSpellHighlightColor or {r = 1, g = 0.8, b = 0}
-    local highlightSize = db.personalTargetedSpellHighlightSize or 3
-    local highlightInset = db.personalTargetedSpellHighlightInset or 0
+    -- Important-spell highlight reads the personalTargetedSpellImportant* border keys
+    -- directly via BuildSpec (see the highlight block below); the old
+    -- personalTargetedSpellHighlightStyle/Color/Size/Inset locals are retired here.
     local importantOnly = db.personalTargetedSpellImportantOnly
     
     if durationOutline == "NONE" then durationOutline = "" end
@@ -2602,68 +2139,25 @@ local function ApplyPersonalIconSettings(icon, db, spellID)
         end
     end
     
-    -- Important spell highlight
+    -- Important Spell Border: a second DF.Border (full toolkit via BuildSpec),
+    -- shown on important spells, gated by the Highlight-Important toggle + the
+    -- secret-safe isImportant alpha. Frame offset is inset-INDEPENDENT — the
+    -- engine's spec.inset owns the inset symmetrically (keeps it centred).
     if icon.highlightFrame then
-        -- Calculate position with inset (negative inset = larger, positive = smaller/inward)
-        local offset = borderSize + highlightSize - highlightInset
-        
-        -- Position the highlight frame
+        local hlSize  = db.personalTargetedSpellImportantBorderSize or 3
+        local offset  = borderSize + hlSize
         icon.highlightFrame:ClearAllPoints()
         icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
         icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
-        
-        -- Hide all highlight styles first
-        HideAnimatedBorder(icon.highlightFrame)
-        HideSolidBorder(icon.highlightFrame)
-        HideGlowBorder(icon.highlightFrame)
-        if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-        TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-        
-        if highlightImportant and spellID and highlightStyle ~= "none" then
+        if highlightImportant and spellID and icon.highlightBorder then
             local isImportant = C_Spell.IsSpellImportant(spellID)
-            
-            if highlightStyle == "glow" then
-                -- Glow effect using edge borders with ADD blend mode
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "marchingAnts" then
-                -- Animated marching ants border
-                InitAnimatedBorder(icon.highlightFrame)
-                icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                icon.highlightFrame.animR = highlightColor.r
-                icon.highlightFrame.animG = highlightColor.g
-                icon.highlightFrame.animB = highlightColor.b
-                icon.highlightFrame.animA = 1
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                TargetedSpellAnimator_UpdateState()
-                
-            elseif highlightStyle == "solidBorder" then
-                -- Solid colored border (4 edge textures, no fill)
-                InitSolidBorder(icon.highlightFrame)
-                UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                
-            elseif highlightStyle == "pulse" then
-                -- Pulsing glow using edge borders with ADD blend
-                InitGlowBorder(icon.highlightFrame)
-                UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                InitPulseAnimation(icon.highlightFrame)
-                -- Store color for pulse animation to use
-                icon.highlightFrame.pulseR = highlightColor.r
-                icon.highlightFrame.pulseG = highlightColor.g
-                icon.highlightFrame.pulseB = highlightColor.b
-                icon.highlightFrame:Show()
-                icon.highlightFrame:SetAlphaFromBoolean(isImportant)
-                icon.highlightFrame.pulseAnim:Play()
-            end
+            local spec = DF.Border:BuildSpec(db, "personalTargetedSpellImportant", { iconMode = true })
+            spec.enabled = true
+            DF.Border:Apply(icon.highlightBorder, spec)
+            icon.highlightFrame:Show()
+            icon.highlightFrame:SetAlphaFromBoolean(isImportant)
         else
+            if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             icon.highlightFrame:Hide()
         end
     end
@@ -2920,14 +2414,7 @@ function DF:HidePersonalTargetedSpellIcon(casterKey, immediate, fromTimer)
     icon:Hide()
     if icon.highlightFrame then
         icon.highlightFrame:Hide()
-        -- Clean up animator reference
-        TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-        TargetedSpellAnimator_UpdateState()
-        HideAnimatedBorder(icon.highlightFrame)
-        HideSolidBorder(icon.highlightFrame)
-        if icon.highlightFrame.pulseAnim then
-            icon.highlightFrame.pulseAnim:Stop()
-        end
+        if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
     end
     icon.interruptOverlay:Hide()
     if icon.icon then
@@ -2959,14 +2446,7 @@ function DF:HideAllPersonalTargetedSpells()
             icon:Hide()
             if icon.highlightFrame then
                 icon.highlightFrame:Hide()
-                -- Clean up animator reference
-                TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                TargetedSpellAnimator_UpdateState()
-                HideAnimatedBorder(icon.highlightFrame)
-                HideSolidBorder(icon.highlightFrame)
-                if icon.highlightFrame.pulseAnim then
-                    icon.highlightFrame.pulseAnim:Stop()
-                end
+                if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
             end
             icon.interruptOverlay:Hide()
             if icon.icon then
@@ -5159,10 +4639,14 @@ local function TargetedList_ApplyBarContent(bar, activeRec)
     if bar.highlightFrame then
         if party and party.targetedListHighlightImportant then
             local hc = party.targetedListHighlightColor or {r=1, g=0.8, b=0}
-            if DF.InitGlowBorder then DF.InitGlowBorder(bar.highlightFrame) end
-            if DF.UpdateGlowBorder then
-                DF.UpdateGlowBorder(bar.highlightFrame, 2, hc.r, hc.g, hc.b, 0.8)
-            end
+            bar.highlightBorder = bar.highlightBorder or DF.Border:New(bar.highlightFrame)
+            -- Static solid highlight border (no animation): the Targeted List
+            -- highlight has only an enable toggle + colour, and historically was
+            -- a calm glow — a flashing PROC here reads as broken.
+            DF.Border:Apply(bar.highlightBorder, {
+                enabled = true, size = 2, inset = 0, style = "SOLID",
+                color = { r = hc.r, g = hc.g, b = hc.b, a = hc.a or 1 },
+            })
             bar.highlightFrame:Show()
             if isTest and activeRec.testIsImportant ~= nil then
                 -- Clean bool — use SetShown directly
@@ -6215,10 +5699,14 @@ function DF:LightweightUpdateTargetedListHighlightColor()
     if not db then return end
     local hc = db.targetedListHighlightColor or {r=1, g=0.8, b=0}
     for _, bar in pairs(casterToBar) do
-        if bar.highlightFrame and bar.highlightFrame:IsShown() then
-            if DF.UpdateGlowBorder then
-                DF.UpdateGlowBorder(bar.highlightFrame, 2, hc.r, hc.g, hc.b, 0.8)
-            end
+        if bar.highlightFrame and bar.highlightFrame:IsShown() and bar.highlightBorder then
+            -- Static solid highlight border (no animation): the Targeted List
+            -- highlight has only an enable toggle + colour, and historically was
+            -- a calm glow — a flashing PROC here reads as broken.
+            DF.Border:Apply(bar.highlightBorder, {
+                enabled = true, size = 2, inset = 0, style = "SOLID",
+                color = { r = hc.r, g = hc.g, b = hc.b, a = hc.a or 1 },
+            })
         end
     end
 end

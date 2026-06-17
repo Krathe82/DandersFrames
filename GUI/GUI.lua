@@ -3879,6 +3879,13 @@ function GUI:CreateAnimationControls(group, dbTable, animPrefix, opts)
         dbTable, aKey("Mask"), fullUpdate), 30)
     w.animationMask.hideOn = hideUnless(pulsateOnly)
 
+    -- PROC only: opt in to the one-shot "proc start" flash (off by default —
+    -- see ProcGlow_Start in Frames/Border.lua for why it's not on for a
+    -- continuous border animation).
+    w.animationProcStart = group:AddWidget(GUI:CreateCheckbox(parent, L["Proc Start Flash"],
+        dbTable, aKey("ProcStart"), fullUpdate), 30)
+    w.animationProcStart.hideOn = hideUnless({ PROC = 1 })
+
     w.animationSidesAxis = group:AddWidget(GUI:CreateDropdown(parent, L["Sides Axis"],
         { HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"] },
         dbTable, aKey("SidesAxis"), fullUpdate), 55)
@@ -3924,11 +3931,18 @@ function GUI:CreateBorderControls(group, dbTable, prefix, opts)
 
     local w = {}
 
-    w.show = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], dbTable, showKey, function()
-        if refreshStates then refreshStates() end
-        fullUpdate()
-    end), 30)
-    w.show.hideOn = hideShow
+    -- opts.noShowToggle: suppress the built-in "Show Border" checkbox for
+    -- consumers that gate the whole border on an external toggle (e.g. the
+    -- Targeted Spells "Highlight Important Spells" master). With the checkbox
+    -- gone, showKey stays nil so hideOff() reduces to hideShow() — the toolkit
+    -- shows/hides purely on the external hideWhen.
+    if not opts.noShowToggle then
+        w.show = group:AddWidget(GUI:CreateCheckbox(parent, L["Show Border"], dbTable, showKey, function()
+            if refreshStates then refreshStates() end
+            fullUpdate()
+        end), 30)
+        w.show.hideOn = hideShow
+    end
 
     -- Slider label reads "Border Thickness" (more meaningful than "Size") but
     -- the underlying db key stays `<prefix>BorderSize` and spec.size in the

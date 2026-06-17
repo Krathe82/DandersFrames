@@ -20,6 +20,7 @@
 * (Click Casting) The binding editor no longer shows the Advanced options section for Target Unit and Context Menu binds — those settings don't apply to those actions.
 * Refreshed the DandersFrames addon icon.
 * (Out of Range) The out-of-range text fade is now a single **Text Alpha** control that dims the whole Text Designer overlay together, replacing the old per-element Name/Health alpha sliders that no longer did anything once the Text Designer took over text rendering. (by Krathe)
+* (Targeted Spells) The party and personal targeted-spell icons now use the **full border toolkit** — style, colour, alpha, inset, blend mode, shadow and animation — the same controls as the rest of the addon, and the important-spell highlight is now its **own border** you can style separately. Existing highlight settings carry over. (by Krathe)
 
 ### Bug Fixes
 
@@ -39,6 +40,8 @@
 * (Pinned Frames) Pinned frames now reappear when you zone into a battleground or arena, instead of staying hidden until a `/reload`. (by Krathe)
 * (Pinned & Raid Frames) Fixed frames cascading into a diagonal "staircase" when switching their grow direction between Horizontal and Vertical — the layout now re-flows cleanly without a `/reload`. Pinned layout changes (direction, spacing, size) made during combat are also applied when combat ends, instead of being dropped until the next change. (by Krathe)
 * (Test Mode) Fixed pinned-frame preview issues — frames past the fourth showing blank, the resource bar overflowing the frame border, and the AFK timer not counting up. (by Krathe)
+* (Borders) A border set to thickness **0** now hides cleanly across every style, while any border animation keeps running. (by Krathe)
+* (Borders) Fixed a doubled glow that could appear on the **PROC** border animation when it re-triggered; the PROC start-flash is now an opt-in option. (by Krathe)
 
 ## [4.4.1]
 

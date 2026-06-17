@@ -3562,6 +3562,63 @@ function DF:MigrateBorderInsetFold()
     end
 end
 
+-- One-time: carry the old bespoke important-spell highlight settings
+-- (targetedSpellHighlightStyle/Color/Size/Inset) into the new Important Spell
+-- Border key set (targetedSpellImportantBorder*), which is a second DF.Border
+-- gated by the Highlight-Important toggle. Defaults already match the old
+-- defaults, so untouched profiles need nothing; this only preserves customised
+-- highlights. Per-profile guarded. Style maps onto a DF.Border animation type.
+function DF:MigrateTargetedSpellImportantBorder()
+    if not DandersFramesDB_v2 or not DandersFramesDB_v2.profiles then return end
+    local styleToAnim = { glow = "PROC", marchingAnts = "DF_DASH", pulse = "DF_PULSATE",
+                          solidBorder = "NONE", none = "NONE" }
+    -- Copy a feature's old <prefix>Highlight* keys into its new
+    -- <prefix>ImportantBorder* set. Gated ONLY by the per-profile _…V1 flag in the
+    -- caller (so it runs exactly once); do NOT also guard on the new key being nil —
+    -- the ADDON_LOADED default-merge fills the new …ImportantBorder* keys before this
+    -- runs, so a nil-guard would never fire and the old highlight settings would be
+    -- lost. At first run the user can't have set the new keys yet, so overwriting the
+    -- just-merged defaults with their old highlight values is exactly the intent.
+    -- Mirrors MigrateBorderInsetFold. Shared by the group (targetedSpell) and personal
+    -- (personalTargetedSpell) sets.
+    local function mapHighlight(m, p)
+        if m[p.."HighlightColor"] ~= nil then
+            m[p.."ImportantBorderColor"] = m[p.."HighlightColor"]
+            m[p.."ImportantBorderAnimationColor"] = m[p.."HighlightColor"]
+        end
+        if m[p.."HighlightSize"] ~= nil then
+            m[p.."ImportantBorderSize"] = m[p.."HighlightSize"]
+        end
+        if m[p.."HighlightInset"] ~= nil then
+            m[p.."ImportantBorderInset"] = m[p.."HighlightInset"]
+        end
+        if m[p.."HighlightStyle"] ~= nil then
+            m[p.."ImportantBorderAnimationType"] = styleToAnim[m[p.."HighlightStyle"]] or "PROC"
+        end
+    end
+    for _, profile in pairs(DandersFramesDB_v2.profiles) do
+        if type(profile) == "table" then
+            -- Group/party Targeted Spells. Guarded independently from personal so a
+            -- profile already through this step still receives the personal one.
+            if not profile._tsImportantBorderV1 then
+                for _, modeKey in ipairs({ "party", "raid" }) do
+                    local m = profile[modeKey]
+                    if type(m) == "table" then mapHighlight(m, "targetedSpell") end
+                end
+                profile._tsImportantBorderV1 = true
+            end
+            -- Personal Targeted Spell.
+            if not profile._personalTsImportantBorderV1 then
+                for _, modeKey in ipairs({ "party", "raid" }) do
+                    local m = profile[modeKey]
+                    if type(m) == "table" then mapHighlight(m, "personalTargetedSpell") end
+                end
+                profile._personalTsImportantBorderV1 = true
+            end
+        end
+    end
+end
+
 -- The handler body is stored on DF as _MainEventDispatcher so the profiler
 -- can swap it for an instrumented version at runtime. The frame's actual
 -- script is a thin trampoline that calls through DF — re-binding takes
@@ -5301,6 +5358,12 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- presets (its guard flag then persists on the preset). Idempotent.
             if DF.MigrateDesignerPresets then
                 DF:MigrateDesignerPresets()
+            end
+
+            -- Carry old important-spell highlight settings into the new
+            -- Important Spell Border key set (per-profile guarded, no-op once run).
+            if DF.MigrateTargetedSpellImportantBorder then
+                DF:MigrateTargetedSpellImportantBorder()
             end
 
             if DF.MigrateTextDesignerFromLegacy then

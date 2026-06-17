@@ -292,6 +292,10 @@ function DF:SetProfile(name)
         DF:MigrateDesignerPresets()
     end
 
+    if DF.MigrateTargetedSpellImportantBorder then
+        DF:MigrateTargetedSpellImportantBorder()
+    end
+
     if DF.MigrateTextDesignerFromLegacy then
         DF:MigrateTextDesignerFromLegacy()
     end

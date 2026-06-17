@@ -245,6 +245,11 @@ function Border:BuildSpec(dbTable, prefix, ctx)
             mask         = dbTable[k("BorderAnimationMask")],
             sidesAxis    = dbTable[k("BorderAnimationSidesAxis")],
             cornerLength = dbTable[k("BorderAnimationCornerLength")],
+            -- PROC only: play the one-shot "proc start" flash on each start.
+            -- Opt-in (default off) because PROC is used here as a CONTINUOUS
+            -- border animation that re-applies often; the flash is a one-shot
+            -- effect and re-fires/doubles on rapid re-apply when enabled.
+            procStart    = dbTable[k("BorderAnimationProcStart")],
         }
     end
     -- Icon consumers (ctx.iconMode) frame the art with an OUTWARD band — the
@@ -883,6 +888,21 @@ function Border:StopAnimation(border)
         -- mid-upgrade who might still have a glow running on the old frame.)
         local anchor = border.anchorTo or border
         local function stopAll(t)
+            -- Reset a reused ProcGlow frame's textures BEFORE releasing it.
+            -- LCG's pool resetter only hides the frame + clears the reference;
+            -- it leaves the ProcStart (big start-flash) / ProcLoop (small loop)
+            -- texture visibility intact. So a frame re-acquired from the pool
+            -- could come back with BOTH textures showing — the double glow
+            -- (one inset, one further out) seen on alternate re-applies. Stop
+            -- the animation groups and clear both textures so the next Acquire
+            -- (and its OnShow) starts from a clean state.
+            local pg = t and t["_ProcGlow" .. key]
+            if pg then
+                if pg.ProcStartAnim then pg.ProcStartAnim:Stop() end
+                if pg.ProcLoopAnim  then pg.ProcLoopAnim:Stop()  end
+                if pg.ProcStart then pg.ProcStart:SetAlpha(0); pg.ProcStart:Hide() end
+                if pg.ProcLoop  then pg.ProcLoop:SetAlpha(0);  pg.ProcLoop:Hide()  end
+            end
             if LCG.PixelGlow_Stop    then LCG.PixelGlow_Stop(t, key)    end
             if LCG.AutoCastGlow_Stop then LCG.AutoCastGlow_Stop(t, key) end
             if LCG.ButtonGlow_Stop   then LCG.ButtonGlow_Stop(t)        end
@@ -955,6 +975,7 @@ local function animSpecHash(anim)
         tostring(anim.inset),     tostring(anim.offsetX), tostring(anim.offsetY),
         tostring(anim.mask),
         tostring(anim.sidesAxis), tostring(anim.cornerLength),
+        tostring(anim.procStart),
         tostring(cr), tostring(cg), tostring(cb), tostring(ca),
     }, "|")
 end
@@ -1051,10 +1072,17 @@ function Border:StartAnimation(border, spec)
                 -- other effects' Frequency control (cycles per second).
                 local duration = (anim.frequency and anim.frequency > 0)
                     and (1 / anim.frequency) or 1
+                -- The one-shot "proc start" flash is OPT-IN (anim.procStart).
+                -- Default off: PROC is used here as a CONTINUOUS border animation
+                -- that re-applies often, and the flash (begins large, shrinks to
+                -- the border) re-fires on every re-apply — on rapid re-toggle the
+                -- big start texture lingers alongside the loop, rendering two
+                -- glows at two sizes. With it on, normal single-cast use plays it
+                -- cleanly; only rapid re-toggling can double it.
                 LCG.ProcGlow_Start(target, {
                     color     = color,
                     duration  = duration,
-                    startAnim = true,
+                    startAnim = anim.procStart and true or false,
                     key       = key,
                 })
             end
@@ -1414,6 +1442,13 @@ function Border:Apply(border, spec)
                 e:Show()
             end
         end
+        -- Thickness 0 collapses the edges to zero width/height; hide them
+        -- outright so a degenerate texture can't leave a hairline. Animation
+        -- overlays are separate frames and keep running (they're gated by the
+        -- border being shown, not by thickness).
+        if size <= 0 then
+            for _, e in ipairs(edges) do if e then e:Hide() end end
+        end
     else
         -- Texture mode: a BackdropTemplate child with the LSM border edgeFile.
         -- spec.blendMode is intentionally ignored here — see doc above.
@@ -1423,10 +1458,18 @@ function Border:Apply(border, spec)
             border.bd:SetAllPoints(border)
         end
         local bd = border.bd
-        bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = (size > 0 and size) or 1 })
-        bd:SetBackdropBorderColor(cr, cg, cb, ca)
-        bd:Show()
-        border.activeTexture = texture
+        -- Thickness 0 = no border: hide the backdrop instead of clamping the
+        -- edge to 1px (parity with the solid/gradient path above). The
+        -- animation overlay is a separate frame and keeps running.
+        if size <= 0 then
+            bd:Hide()
+            border.activeTexture = nil
+        else
+            bd:SetBackdrop({ edgeFile = edgeFile, edgeSize = size })
+            bd:SetBackdropBorderColor(cr, cg, cb, ca)
+            bd:Show()
+            border.activeTexture = texture
+        end
     end
 
     -- Drop shadow: solid 4-edge ring, lazy-created, parented next to the

@@ -1824,6 +1824,7 @@ L["Animation Offset X"] = true
 L["Animation Offset Y"] = true
 L["Animations run per-border and may impact FPS in larger raids. Use sparingly on high-priority alerts."] = true
 L["Pulsate Backing Frame"] = true
+L["Proc Start Flash"] = true
 L["Proc"] = true
 L["Animation Length"] = true
 L["Animation Particles"] = true

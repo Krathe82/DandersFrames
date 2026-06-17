@@ -4758,6 +4758,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = false
         db.testShowExternalDef = false
         db.testShowTargetedList = false
+        db.testShowTargetedSpell = false
+        db.testShowPersonalTargeted = false
         db.testShowBossDebuffs = false
         db.testShowStatusIcons = true
     elseif preset == "COMBAT" then
@@ -4769,6 +4771,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = false
         db.testShowExternalDef = false
         db.testShowTargetedList = false
+        db.testShowTargetedSpell = false
+        db.testShowPersonalTargeted = false
         db.testShowBossDebuffs = true
         db.testShowStatusIcons = true
     elseif preset == "HEALER" then
@@ -4780,6 +4784,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = true
         db.testShowExternalDef = true
         db.testShowTargetedList = true
+        db.testShowTargetedSpell = true
+        db.testShowPersonalTargeted = true
         db.testShowBossDebuffs = true
         db.testShowStatusIcons = true
     elseif preset == "FULL" then
@@ -4791,6 +4797,8 @@ function DF:ApplyTestPreset(preset)
         db.testShowMissingBuff = true
         db.testShowExternalDef = true
         db.testShowTargetedList = true
+        db.testShowTargetedSpell = true
+        db.testShowPersonalTargeted = true
         db.testShowStatusIcons = true
     end
     
@@ -5423,11 +5431,7 @@ function DF:UpdateTestTargetedSpell(frame, testData)
         local spacing = db.targetedSpellSpacing or 2
         local frameLevel = db.targetedSpellFrameLevel or 0
         local highlightImportant = db.targetedSpellHighlightImportant ~= false
-        local highlightStyle = db.targetedSpellHighlightStyle or "glow"
-        local highlightColor = db.targetedSpellHighlightColor or {r = 1, g = 0.8, b = 0}
-        local highlightSize = db.targetedSpellHighlightSize or 3
-        local highlightInset = db.targetedSpellHighlightInset or 0
-        
+
         if durationOutline == "NONE" then durationOutline = "" end
         
         -- Apply pixel perfect
@@ -5542,139 +5546,59 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 end
             end
             
-            -- Apply important spell highlight (show on important spells, including interrupted ones)
+            -- Apply important spell highlight (show on important spells, including
+            -- interrupted ones). Mirrors live ApplyIconSettings: the highlight is
+            -- its own DF.Border (full toolkit via BuildSpec on the
+            -- targetedSpellImportant* keys), gated by the Highlight Important
+            -- Spells master toggle. Overlay lazily allocated.
             if icon.highlightFrame then
-                -- Calculate position with inset
-                local offset = borderSize + highlightSize - highlightInset
-                
-                -- Hide all styles first - always do this
                 if icon.highlight then icon.highlight:Hide() end
-                if DF.HideSolidBorder then DF.HideSolidBorder(icon.highlightFrame) end
-                if DF.HideGlowBorder then DF.HideGlowBorder(icon.highlightFrame) end
-                if DF.HideAnimatedBorder then DF.HideAnimatedBorder(icon.highlightFrame) end
-                if icon.highlightFrame.pulseAnim then icon.highlightFrame.pulseAnim:Stop() end
-                -- Remove from animator
-                if DF.TargetedSpellAnimator then
-                    DF.TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                end
-                
-                -- Only show if highlighting is enabled, spell is important, and style is not "none"
-                local shouldShowHighlight = highlightImportant and spell.isImportant and highlightStyle and highlightStyle ~= "none"
-                
-                if shouldShowHighlight then
+                icon.highlightBorder = icon.highlightBorder or DF.Border:New(icon.highlightFrame)
+                if highlightImportant and spell.isImportant then
+                    -- Inset owned by the engine (BuildSpec spec.inset); frame
+                    -- offset is inset-independent so the band stays centred.
+                    local hlSize  = db.targetedSpellImportantBorderSize or 3
+                    local offset  = borderSize + hlSize
                     icon.highlightFrame:ClearAllPoints()
                     icon.highlightFrame:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", -offset, offset)
                     icon.highlightFrame:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", offset, -offset)
                     icon.highlightFrame:SetAlpha(1)
                     icon.highlightFrame:Show()
-                    
-                    -- Apply style using edge-based borders
-                    if highlightStyle == "glow" then
-                        -- Glow border with ADD blend mode
-                        if DF.InitGlowBorder and DF.UpdateGlowBorder then
-                            DF.InitGlowBorder(icon.highlightFrame)
-                            DF.UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                        end
-                    elseif highlightStyle == "pulse" then
-                        -- Pulsing glow with animation
-                        if DF.InitGlowBorder and DF.UpdateGlowBorder and DF.InitPulseAnimation then
-                            DF.InitGlowBorder(icon.highlightFrame)
-                            DF.UpdateGlowBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 0.8)
-                            DF.InitPulseAnimation(icon.highlightFrame)
-                            -- Store color for pulse animation to use
-                            icon.highlightFrame.pulseR = highlightColor.r
-                            icon.highlightFrame.pulseG = highlightColor.g
-                            icon.highlightFrame.pulseB = highlightColor.b
-                            if icon.highlightFrame.pulseAnim then
-                                icon.highlightFrame.pulseAnim:Play()
-                            end
-                        end
-                    elseif highlightStyle == "marchingAnts" then
-                        -- Animated marching ants border
-                        if DF.InitAnimatedBorder and DF.TargetedSpellAnimator then
-                            DF.InitAnimatedBorder(icon.highlightFrame)
-                            icon.highlightFrame.animThickness = math.max(1, highlightSize)
-                            icon.highlightFrame.animR = highlightColor.r
-                            icon.highlightFrame.animG = highlightColor.g
-                            icon.highlightFrame.animB = highlightColor.b
-                            icon.highlightFrame.animA = 1
-                            DF.TargetedSpellAnimator.frames[icon.highlightFrame] = true
-                        end
-                    elseif highlightStyle == "solidBorder" then
-                        -- Solid border
-                        if DF.InitSolidBorder and DF.UpdateSolidBorder then
-                            DF.InitSolidBorder(icon.highlightFrame)
-                            DF.UpdateSolidBorder(icon.highlightFrame, highlightSize, highlightColor.r, highlightColor.g, highlightColor.b, 1)
-                        end
-                    end
+                    local spec = DF.Border:BuildSpec(db, "targetedSpellImportant", { iconMode = true })
+                    spec.enabled = true
+                    DF.Border:Apply(icon.highlightBorder, spec)
                 else
+                    DF.Border:Apply(icon.highlightBorder, { enabled = false })
                     icon.highlightFrame:Hide()
                 end
             end
             
-            -- Apply border settings - 4 edge textures (consistent with live code)
-            if showBorder then
-                if icon.borderLeft then
-                    icon.borderLeft:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderLeft:SetWidth(borderSize)
-                    icon.borderLeft:Show()
-                end
-                if icon.borderRight then
-                    icon.borderRight:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderRight:SetWidth(borderSize)
-                    icon.borderRight:Show()
-                end
-                if icon.borderTop then
-                    icon.borderTop:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderTop:SetHeight(borderSize)
-                    icon.borderTop:ClearAllPoints()
-                    icon.borderTop:SetPoint("TOPLEFT", borderSize, 0)
-                    icon.borderTop:SetPoint("TOPRIGHT", -borderSize, 0)
-                    icon.borderTop:Show()
-                end
-                if icon.borderBottom then
-                    icon.borderBottom:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, 1)
-                    icon.borderBottom:SetHeight(borderSize)
-                    icon.borderBottom:ClearAllPoints()
-                    icon.borderBottom:SetPoint("BOTTOMLEFT", borderSize, 0)
-                    icon.borderBottom:SetPoint("BOTTOMRIGHT", -borderSize, 0)
-                    icon.borderBottom:Show()
-                end
-                
-                -- Adjust icon texture position for border
+            -- Border via the unified DF.Border backend (iconMode), mirroring live
+            -- ApplyIconSettings. The live create path replaced the old 4 edge
+            -- textures with a DF.Border, so test mode must render the same way.
+            icon.border = icon.border or DF.Border:New(icon.iconFrame)
+            local bspec = DF.Border:BuildSpec(db, "targetedSpell", { iconMode = true })
+            bspec.enabled = showBorder
+            bspec.size = borderSize
+            DF.Border:Apply(icon.border, bspec)
+            do
+                local ai = showBorder and borderSize or 0
                 if icon.icon then
                     icon.icon:ClearAllPoints()
-                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
+                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
                 end
-                
-                -- Adjust cooldown to match
                 if icon.cooldown then
                     icon.cooldown:ClearAllPoints()
-                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", borderSize, -borderSize)
-                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -borderSize, borderSize)
-                end
-            else
-                -- Hide all border edges
-                if icon.borderLeft then icon.borderLeft:Hide() end
-                if icon.borderRight then icon.borderRight:Hide() end
-                if icon.borderTop then icon.borderTop:Hide() end
-                if icon.borderBottom then icon.borderBottom:Hide() end
-                
-                -- Full size icon when no border
-                if icon.icon then
-                    icon.icon:ClearAllPoints()
-                    icon.icon:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-                    icon.icon:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
-                end
-                
-                -- Adjust cooldown to match
-                if icon.cooldown then
-                    icon.cooldown:ClearAllPoints()
-                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", 0, 0)
-                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", 0, 0)
+                    icon.cooldown:SetPoint("TOPLEFT", icon.iconFrame, "TOPLEFT", ai, -ai)
+                    icon.cooldown:SetPoint("BOTTOMRIGHT", icon.iconFrame, "BOTTOMRIGHT", -ai, ai)
                 end
             end
+            -- Hide any legacy edge textures left on a pooled icon.
+            if icon.borderLeft then icon.borderLeft:Hide() end
+            if icon.borderRight then icon.borderRight:Hide() end
+            if icon.borderTop then icon.borderTop:Hide() end
+            if icon.borderBottom then icon.borderBottom:Hide() end
             
             icon:SetAlpha(alpha)
             icon:Show()
@@ -5772,9 +5696,9 @@ function DF:UpdateAllTestTargetedSpell()
         if not frame then return end
         local db = DF:GetFrameDB(frame)
 
-        -- Auto-show the preview whenever the feature is enabled (matches the
-        -- personal-display test behaviour); raid frames keep it force-disabled.
-        if db.targetedSpellEnabled then
+        -- Show the preview when the feature is enabled AND the test-panel
+        -- Targeted Spells toggle is on; raid frames keep it force-disabled.
+        if db.targetedSpellEnabled and db.testShowTargetedSpell ~= false then
             DF:UpdateTestTargetedSpell(frame, testData)
         else
             -- Hide all icons and their highlights (new multi-icon system)
@@ -5784,14 +5708,7 @@ function DF:UpdateAllTestTargetedSpell()
                     -- Also hide pinned frame if it exists
                     if icon.highlightFrame then
                         icon.highlightFrame:Hide()
-                        -- Stop any animations
-                        if icon.highlightFrame.pulseAnim and icon.highlightFrame.pulseAnim:IsPlaying() then
-                            icon.highlightFrame.pulseAnim:Stop()
-                        end
-                        -- Unregister from animator
-                        if DF.TargetedSpellAnimator then
-                            DF.TargetedSpellAnimator.frames[icon.highlightFrame] = nil
-                        end
+                        if icon.highlightBorder then DF.Border:Apply(icon.highlightBorder, { enabled = false }) end
                     end
                 end
             end
@@ -5813,7 +5730,7 @@ function DF:UpdateAllTestTargetedSpell()
         
         -- Update personal targeted spells display in test mode
         local db = DF:GetDB()
-        if db.personalTargetedSpellEnabled and DF.ShowTestPersonalTargetedSpells then
+        if db.personalTargetedSpellEnabled and db.testShowPersonalTargeted ~= false and DF.ShowTestPersonalTargetedSpells then
             DF:ShowTestPersonalTargetedSpells()
         elseif DF.HideTestPersonalTargetedSpells then
             DF:HideTestPersonalTargetedSpells()
@@ -5839,7 +5756,7 @@ function DF:UpdateAllTestTargetedSpell()
         
         -- Also show personal targeted spells in raid test mode
         local db = DF:GetDB()
-        if db.personalTargetedSpellEnabled and DF.ShowTestPersonalTargetedSpells then
+        if db.personalTargetedSpellEnabled and db.testShowPersonalTargeted ~= false and DF.ShowTestPersonalTargetedSpells then
             DF:ShowTestPersonalTargetedSpells()
         elseif DF.HideTestPersonalTargetedSpells then
             DF:HideTestPersonalTargetedSpells()
@@ -6686,6 +6603,14 @@ function DF:CreateTestPanel()
     panel.animTargetedListCheck = secIndicators:AddCheckbox("Animate Targeted List", "testAnimateTargetedList", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedList() end
     end)
+    -- The (new fingerprint) Targeted Spells icons + the Personal Targeted display.
+    -- UpdateAllTestTargetedSpell drives BOTH previews, so both share it.
+    panel.showTargetedSpellCheck = secIndicators:AddCheckbox("Targeted Spells", "testShowTargetedSpell", function()
+        if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
+    end)
+    panel.showPersonalTargetedCheck = secIndicators:AddCheckbox("Personal Targeted", "testShowPersonalTargeted", function()
+        if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
+    end)
     -- One unified "Icons" toggle for the whole status/role/leader icon set in test
     -- mode (was split into "Status / Ready" + "Role / Leader"). Keyed on
     -- testShowStatusIcons; the role/leader render gate reads the same key.
@@ -6845,6 +6770,8 @@ function DF:CreateTestPanel()
         self.showExternalDefCheck:SetChecked(db.testShowExternalDef)
         self.showTargetedListCheck:SetChecked(db.testShowTargetedList)
         self.animTargetedListCheck:SetChecked(db.testAnimateTargetedList)
+        self.showTargetedSpellCheck:SetChecked(db.testShowTargetedSpell ~= false)
+        self.showPersonalTargetedCheck:SetChecked(db.testShowPersonalTargeted ~= false)
         self.showStatusIconsCheck:SetChecked(db.testShowStatusIcons ~= false)
         self.showSelectionCheck:SetChecked(db.testShowSelection)
         self.showAggroCheck:SetChecked(db.testShowAggro)
