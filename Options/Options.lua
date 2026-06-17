@@ -2107,7 +2107,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         growDirection = "HORIZONTAL", unitsPerRow = 5,
                         horizontalSpacing = 2, verticalSpacing = 2, scale = 1.0,
                         position = { point = "CENTER", x = 0, y = 200 },
-                        locked = false, showLabel = false,
+                        showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
                         keepOfflinePlayers = false,
                     },
@@ -2116,7 +2116,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                         growDirection = "HORIZONTAL", unitsPerRow = 5,
                         horizontalSpacing = 2, verticalSpacing = 2, scale = 1.0,
                         position = { point = "CENTER", x = 0, y = -200 },
-                        locked = false, showLabel = false,
+                        showLabel = false,
                         autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
                         keepOfflinePlayers = false,
                     },
@@ -2141,7 +2141,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 if set.keepOfflinePlayers == nil then set.keepOfflinePlayers = false end
                 if set.columnAnchor == nil then set.columnAnchor = "START" end
                 if set.frameAnchor == nil then set.frameAnchor = "START" end
-                if set.locked == nil then set.locked = false end
+                -- CENTER anchor was dropped (never truly centred the frames; it
+                -- rendered as START). Normalise so the dropdown has a valid value.
+                if set.columnAnchor == "CENTER" then set.columnAnchor = "START" end
+                if set.frameAnchor == "CENTER" then set.frameAnchor = "START" end
+                -- set.locked retired (global lock only); strip the dead field.
+                set.locked = nil
                 if set.showLabel == nil then set.showLabel = false end
                 if set.players == nil then set.players = {} end
                 if set.manualPlayers == nil then set.manualPlayers = {} end
@@ -2737,8 +2742,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             container.Refresh = function()
                 cb:SetChecked(GetCurrentSet()[dbKey])
                 -- Optional disabled state: when container.enabledWhen() is false the
-                -- checkbox is greyed and can't be toggled (e.g. Show Label is moot
-                -- until Lock Position is on, since the drag label shows instead).
+                -- checkbox is greyed and can't be toggled (used where one toggle is
+                -- only meaningful while another option is in a particular state).
                 if container.enabledWhen then
                     if container.enabledWhen() then
                         cb:Enable()
@@ -3309,7 +3314,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         settingsGroup:AddWidget(pinnedLayoutNote, pinnedLayoutNote.layoutHeight or 44)
 
-        -- SetEnabled / SetLocked / SetShowLabel internally use GetSetDB → IsInRaid(),
+        -- SetEnabled / SetShowLabel internally use GetSetDB → IsInRaid(),
         -- so calling them while editing the inactive mode would mutate the active
         -- mode's state. Only call them when the selected mode matches the live mode;
         -- otherwise the DB write from the checkbox itself is enough and the preview
@@ -3337,19 +3342,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             RefreshTestModeIfActive()
             RefreshTabs()  -- update the on/off pip on this set's tab
         end), 28)
-        -- Forward ref so Lock Position can re-grey Show Label when toggled.
-        local showLabelCheck
-        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Lock Position"], "locked", function()
-            if not DF.PinnedFrames then return end
-            if IsEditingActiveMode() then
-                DF.PinnedFrames:SetLocked(activeHighlightTab, GetCurrentSet().locked)
-            end
-            DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
-            RefreshTestModeIfActive()
-            -- Show Label only matters while locked (otherwise the drag label shows).
-            if showLabelCheck and showLabelCheck.Refresh then showLabelCheck.Refresh() end
-        end), 28)
-        showLabelCheck = settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
+        -- Pinned frames now lock/unlock together with the main frames (global
+        -- lock), so there is no per-set Lock Position toggle. Show Label is always
+        -- editable; the "Drag to Move" handle only appears while globally unlocked.
+        settingsGroup:AddWidget(CreateRefreshableCheckbox(self.child, L["Show Label"], "showLabel", function()
             if not DF.PinnedFrames then return end
             if IsEditingActiveMode() then
                 DF.PinnedFrames:SetShowLabel(activeHighlightTab, GetCurrentSet().showLabel)
@@ -3357,10 +3353,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF.PinnedFrames:UpdatePreviewSet(activeHighlightTab)
             RefreshTestModeIfActive()
         end), 28)
-        -- Grey out Show Label while unlocked — the "Drag to Move" label shows then,
-        -- not the set's label, so the toggle has no visible effect.
-        showLabelCheck.enabledWhen = function() return GetCurrentSet().locked == true end
-        if showLabelCheck.Refresh then showLabelCheck.Refresh() end
 
         -- Party-only: show this pinned set while solo (off by default — pinned
         -- frames highlight other group members). Raid implies a group, so hide it
@@ -3748,10 +3740,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local directionOptions = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Direction"], directionOptions, "growDirection", UpdateHighlightLayout), 55)
 
-        local frameAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
+        -- CENTER intentionally omitted: it isn't truly implemented for pinned
+        -- frames (frames grow START-style; only the anchor/label shift). START/END
+        -- only for now; a real centred layout can be added later.
+        local frameAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
 
-        local columnAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
+        local columnAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
 
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)

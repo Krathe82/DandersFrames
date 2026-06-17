@@ -2798,13 +2798,12 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     -- IMPORTANT: Iterate PINNED_OVERRIDABLE keys rather than set keys to ensure
     -- we capture ALL overridable settings, even ones that are nil due to missing migration.
     -- If a key is nil, backfill a default so both the snapshot and set are consistent.
+    -- Only `enabled` is overridable (PINNED_OVERRIDABLE = {enabled}), and the loop
+    -- below reads PINNED_DEFAULTS only for the keys it iterates — so this table needs
+    -- just `enabled`. (It previously listed ~13 dead keys, incl. a keepOfflinePlayers
+    -- default that contradicted the real Config/Options default.)
     local PINNED_DEFAULTS = {
-        enabled = false, locked = false, showLabel = false,
-        growDirection = "HORIZONTAL", unitsPerRow = 5, scale = 1.0,
-        horizontalSpacing = 2, verticalSpacing = 2,
-        frameAnchor = "START", columnAnchor = "START",
-        autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
-        keepOfflinePlayers = true, players = {},
+        enabled = false,
     }
     local pinnedFrames = DF._realRaidDB and DF._realRaidDB.pinnedFrames
     if pinnedFrames and pinnedFrames.sets then

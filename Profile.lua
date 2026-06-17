@@ -547,12 +547,12 @@ function DF:ExportProfile(categories, frameTypes, profileName)
             exportData.auraBlacklist = DF:DeepCopy(DF.db.auraBlacklist)
         end
         -- Designer preset libraries: travel with their own categories (the
-        -- mode tables only carry preset NAME refs). autoLayout also pulls both
-        -- in — layout overrides may reference presets by name.
-        if (categorySet.auraDesigner or categorySet.autoLayout) and DF.db.auraDesignerPresets then
+        -- mode tables only carry preset NAME refs). autoLayout AND pinnedFrames
+        -- also pull both in — their overrides/sets reference presets by name.
+        if (categorySet.auraDesigner or categorySet.autoLayout or categorySet.pinnedFrames) and DF.db.auraDesignerPresets then
             exportData.auraDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.auraDesignerPresets))
         end
-        if (categorySet.text or categorySet.autoLayout) and DF.db.textDesignerPresets then
+        if (categorySet.text or categorySet.autoLayout or categorySet.pinnedFrames) and DF.db.textDesignerPresets then
             exportData.textDesignerPresets = StripInternalKeys(DF:DeepCopy(DF.db.textDesignerPresets))
         end
     end

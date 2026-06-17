@@ -455,8 +455,10 @@ function DF:ImportDesignerPresets(importData, categories)
         wanted = {}
         for _, cat in ipairs(categories) do wanted[cat] = true end
     end
-    local importAura = (not wanted) or wanted.auraDesigner or wanted.autoLayout
-    local importText = (not wanted) or wanted.text or wanted.autoLayout
+    -- Pinned sets reference designer presets too, so a pinnedFrames-only import/
+    -- export must carry the libraries or a set ends up pointing at a missing preset.
+    local importAura = (not wanted) or wanted.auraDesigner or wanted.autoLayout or wanted.pinnedFrames
+    local importText = (not wanted) or wanted.text or wanted.autoLayout or wanted.pinnedFrames
 
     local function mergeLib(libKey, src)
         if type(src) ~= "table" then return end
@@ -559,7 +561,7 @@ end
 local function RestampPinnedPresets()
     local pf = DF.PinnedFrames
     if pf and pf.initialized then
-        for i = 1, 2 do
+        for i = 1, (pf.MAX_SETS or 4) do
             if pf.ApplyLayoutSettings then pf:ApplyLayoutSettings(i) end
         end
     end
