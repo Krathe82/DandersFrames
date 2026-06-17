@@ -21,6 +21,7 @@
 
 ### Bug Fixes
 
+* (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
 * (Arena) Fixed teammates who load in late sometimes staying missing from your frames for the whole round, and the frame order breaking after a reload mid-match. (by Krathe)
 * (Arena) Fixed your frames staying hidden after a reload during a match. (by Krathe)
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
