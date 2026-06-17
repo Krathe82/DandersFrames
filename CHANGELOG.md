@@ -16,6 +16,7 @@
 ### Improvements
 
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
+* (Click Casting) The binding editor no longer shows the Advanced options section for Target Unit and Context Menu binds — those settings don't apply to those actions.
 
 ### Bug Fixes
 
