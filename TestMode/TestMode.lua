@@ -1438,37 +1438,18 @@ local function ShowTestIconAsText(icon, text, showText, db, prefix)
                 local font = db.statusIconFont or "Fonts\\FRIZQT__.TTF"
                 local fontSize = db.statusIconFontSize or 12
                 local outline = db.statusIconFontOutline or "OUTLINE"
-                
-                -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips
-                -- the shadow and returns the SetFont flag ("NONE" -> "" — SetFont rejects "NONE").
-                local flag = DF:OutlineFlag(outline)
-                local actualOutline = (flag == "NONE") and "" or flag
 
-                -- Get font path from SharedMedia if available
-                local fontPath = font
-                if DF.GetFont then
-                    fontPath = DF:GetFont(font) or font
-                end
+                -- Route through SafeSetFont (font-family path) so the shadow renders
+                -- on 12.0.7. SetFontObject resets vertex colour — capture + restore.
+                local cr, cg, cb, ca = icon.text:GetTextColor()
+                DF:SafeSetFont(icon.text, font, fontSize, outline)
 
-                icon.text:SetFont(fontPath, fontSize, actualOutline)
-
-                -- Apply shadow if needed
-                if DF:OutlineHasShadow(outline) then
-                    local shadowX = db.fontShadowOffsetX or 1
-                    local shadowY = db.fontShadowOffsetY or -1
-                    local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-                    icon.text:SetShadowOffset(shadowX, shadowY)
-                    icon.text:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
+                -- Apply text color if prefix is provided (else keep captured colour)
+                local textColor = prefix and db[prefix .. "TextColor"]
+                if textColor then
+                    icon.text:SetTextColor(textColor.r or 1, textColor.g or 1, textColor.b or 1, 1)
                 else
-                    icon.text:SetShadowOffset(0, 0)
-                end
-                
-                -- Apply text color if prefix is provided
-                if prefix then
-                    local textColor = db[prefix .. "TextColor"]
-                    if textColor then
-                        icon.text:SetTextColor(textColor.r or 1, textColor.g or 1, textColor.b or 1, 1)
-                    end
+                    icon.text:SetTextColor(cr, cg, cb, ca)
                 end
             end
             

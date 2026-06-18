@@ -1953,8 +1953,8 @@ end
 -- (during combat reload, fonts may not be fully available at ADDON_LOADED)
 
 local function RefreshFrameFonts(frame, db)
-    if not frame then return end
-    
+    if not frame or not db then return end
+
     -- Name text
     if frame.nameText then
         local nameFont = db.nameFont or "Fonts\\FRIZQT__.TTF"
@@ -1982,6 +1982,10 @@ local function RefreshFrameFonts(frame, db)
         DF:SafeSetFont(frame.statusText, statusFont, statusFontSize, statusOutline)
     end
 end
+
+-- Exposed so the pinned-frame pool (Features/PinnedFrames.lua) can re-font itself
+-- on a global font/shadow change — RefreshAllFonts' iterators don't reach it.
+DF.RefreshFrameFonts = RefreshFrameFonts
 
 function DF:RefreshAllFonts()
     local partyDb = DF:GetDB()
@@ -2066,4 +2070,8 @@ function DF:RefreshAllFonts()
             end
         end
     end
+
+    -- Pinned frames keep their own pool (live boss/header + non-secure test pool)
+    -- which none of the iterators above reach.
+    if DF.RefreshPinnedFonts then DF:RefreshPinnedFonts() end
 end

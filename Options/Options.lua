@@ -1998,6 +1998,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             DF:UpdateAllFrames()
             if GUI.SelectedMode == "raid" and DF.UpdateRaidLayout then DF:UpdateRaidLayout() end
             if DF.ApplyPetSettings then DF:ApplyPetSettings() end
+            -- UpdateAllFrames doesn't reach the pinned pool — re-font it too.
+            if DF.RefreshPinnedFonts then DF:RefreshPinnedFonts() end
+            -- Re-render the Text Designer overlay (the visible text) so its shadow
+            -- updates on pinned + live frames too.
+            if DF.TextDesigner and DF.TextDesigner.Preview and DF.TextDesigner.Preview.RefreshLiveFrames then
+                DF.TextDesigner.Preview:RefreshLiveFrames()
+            end
         end
         
         local function LightweightShadowUpdate()

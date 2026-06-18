@@ -518,85 +518,21 @@ end
 
 -- Update only font shadows on all text elements
 function DF:LightweightUpdateFontShadows()
-    local mode = DF.GUI and DF.GUI.SelectedMode or "party"
-    local db = DF.db[mode]
-    if not db then return end
-    
-    local shadowX = db.fontShadowOffsetX or 1
-    local shadowY = db.fontShadowOffsetY or -1
-    local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-    
-    -- Check which elements use SHADOW outline
-    local nameShadow = (db.nameTextOutline == "SHADOW")
-    local healthShadow = (db.healthTextOutline == "SHADOW")
-    local statusShadow = (db.statusTextOutline == "SHADOW")
-    
-    local function UpdateShadows(frame)
-        if not frame then return end
-        
-        -- Update name text shadow
-        if frame.nameText then
-            if nameShadow then
-                frame.nameText:SetShadowOffset(shadowX, shadowY)
-                frame.nameText:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-            end
-        end
-        
-        -- Update health text shadow
-        if frame.healthText then
-            if healthShadow then
-                frame.healthText:SetShadowOffset(shadowX, shadowY)
-                frame.healthText:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-            end
-        end
-        
-        -- Update status text shadow
-        if frame.statusText then
-            if statusShadow then
-                frame.statusText:SetShadowOffset(shadowX, shadowY)
-                frame.statusText:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-            end
-        end
-        
-        -- Update buff/debuff duration and stack shadows
-        if frame.buffIcons then
-            local buffShadow = (db.buffDurationOutline == "SHADOW") or (db.buffStackOutline == "SHADOW")
-            if buffShadow then
-                for _, icon in ipairs(frame.buffIcons) do
-                    if icon then
-                        if icon.duration and (db.buffDurationOutline == "SHADOW") then
-                            icon.duration:SetShadowOffset(shadowX, shadowY)
-                            icon.duration:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-                        end
-                        if icon.count and (db.buffStackOutline == "SHADOW") then
-                            icon.count:SetShadowOffset(shadowX, shadowY)
-                            icon.count:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-                        end
-                    end
-                end
-            end
-        end
-        
-        if frame.debuffIcons then
-            local debuffShadow = (db.debuffDurationOutline == "SHADOW") or (db.debuffStackOutline == "SHADOW")
-            if debuffShadow then
-                for _, icon in ipairs(frame.debuffIcons) do
-                    if icon then
-                        if icon.duration and (db.debuffDurationOutline == "SHADOW") then
-                            icon.duration:SetShadowOffset(shadowX, shadowY)
-                            icon.duration:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-                        end
-                        if icon.count and (db.debuffStackOutline == "SHADOW") then
-                            icon.count:SetShadowOffset(shadowX, shadowY)
-                            icon.count:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-                        end
-                    end
-                end
-            end
-        end
+    -- 12.0.7: fontstring-level SetShadowOffset/SetShadowColor no longer render —
+    -- a font's drop shadow now lives on its font-family per-alphabet font objects.
+    -- The old per-frame fontstring poke was a silent no-op, so update the already
+    -- built font families in place instead (live preview, no full font rebuild).
+    if DF.RefreshFontFamilyShadows then DF:RefreshFontFamilyShadows() end
+    -- A font-object shadow change doesn't repaint already-rendered fontstrings —
+    -- only continuously-ticked test frames pick it up on their own. Re-apply fonts
+    -- so live + pinned frames repaint too.
+    -- Legacy name/health/status text (used when the Text Designer is off):
+    if DF.RefreshAllFonts then DF:RefreshAllFonts() end
+    -- The Text Designer renders the visible text on its own overlay, which the
+    -- above doesn't touch; re-render it so its shadow repaints on live + pinned.
+    if DF.TextDesigner and DF.TextDesigner.Preview and DF.TextDesigner.Preview.RefreshLiveFrames then
+        DF.TextDesigner.Preview:RefreshLiveFrames()
     end
-    
-    IterateFramesInMode(mode, UpdateShadows)
 end
 
 -- Update only aura icon sizes

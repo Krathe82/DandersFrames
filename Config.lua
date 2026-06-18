@@ -421,8 +421,36 @@ local function GetOrCreateFontFamily(fontPath, outline, useShadow)
         fontFamilies[key] = globalName
         return globalName
     end
-    
+
     return nil
+end
+
+-- 12.0.7: a font's drop shadow lives on its font-family per-alphabet font
+-- objects, not the fontstring (fontstring-level SetShadow* is a silent no-op).
+-- Update the already-built families' shadow in place so the Shadow X/Y/Color
+-- sliders preview live, without a full ClearFontCache + frame rebuild.
+function DF:RefreshFontFamilyShadows()
+    if not CreateFontFamily then return end
+    local db = (DF.GetDB and DF:GetDB())
+        or (DF.db and DF.db[(DF.GUI and DF.GUI.SelectedMode) or "party"])
+    local shadowX = (db and db.fontShadowOffsetX) or 1
+    local shadowY = (db and db.fontShadowOffsetY) or -1
+    local sc = (db and db.fontShadowColor) or {r = 0, g = 0, b = 0, a = 1}
+    for key, globalName in pairs(fontFamilies) do
+        -- Only families built with a shadow (cache-key suffix "|shadow") carry one.
+        if key:sub(-7) == "|shadow" then
+            local fam = _G[globalName]
+            if fam and fam.GetFontObjectForAlphabet then
+                for _, alphabet in ipairs(alphabets) do
+                    local fontObj = fam:GetFontObjectForAlphabet(alphabet)
+                    if fontObj then
+                        fontObj:SetShadowOffset(shadowX, shadowY)
+                        fontObj:SetShadowColor(sc.r or 0, sc.g or 0, sc.b or 0, sc.a or 1)
+                    end
+                end
+            end
+        end
+    end
 end
 
 function DF:GetTextureList(includeSolid)
@@ -741,25 +769,13 @@ function DF:SafeSetFont(fontString, fontNameOrPath, fontSize, outline)
                 end
             end)
 
-            -- Apply shadow directly to fontString (font family shadow is on the font object,
-            -- but we need to apply to each fontString for proper settings)
-            if useShadow then
-                local db
-                if DF.GetDB then
-                    db = DF:GetDB()
-                elseif DF.db then
-                    local mode = (DF.GUI and DF.GUI.SelectedMode) or "party"
-                    db = DF.db[mode]
-                end
-                local shadowX = db and db.fontShadowOffsetX or 1
-                local shadowY = db and db.fontShadowOffsetY or -1
-                local shadowColor = db and db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-                fontString:SetShadowOffset(shadowX, shadowY)
-                fontString:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-            else
-                fontString:SetShadowOffset(0, 0)
-            end
-
+            -- IMPORTANT (12.0.7): the drop shadow lives on the font-family's
+            -- per-alphabet font objects (set in GetOrCreateFontFamily). Do NOT also
+            -- set a fontstring-level shadow here: once a fontstring carries its own
+            -- shadow it stops inheriting the font object's, and fontstring-level
+            -- SetShadow* no longer renders on 12.0.7 — so the net result is NO shadow
+            -- (this is what hid the AFK timer / status-icon shadows). Leaving the
+            -- fontstring untouched lets it inherit the font object's shadow.
             return true
         end
     end
