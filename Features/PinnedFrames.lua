@@ -2769,6 +2769,50 @@ function PinnedFrames:RefreshTextDesigner()
     end
 end
 
+-- Re-apply name/health/status fonts on every shown pinned frame (live OR test),
+-- so a global font / shadow change repaints them. The main RefreshAllFonts
+-- iterators don't reach the pinned pool — and pinned test frames live in their
+-- own non-secure pool, not the secure headers. Mirrors RefreshTextDesigner's
+-- traversal. Each call is guarded (GetFrameDB may be nil; RefreshFrameFonts
+-- bails on a nil db) so it can't error on a half-built frame during login.
+function PinnedFrames:RefreshFonts()
+    if not DF.RefreshFrameFonts then return end
+    local function refont(f)
+        if f and f:IsShown() then
+            DF.RefreshFrameFonts(f, DF:GetFrameDB(f))
+        end
+    end
+
+    if self.testModeActive then
+        for setIndex = 1, PinnedFrames.MAX_SETS do
+            local pool = self.testFrames[setIndex]
+            if pool then
+                for i = 1, #pool do refont(pool[i]) end
+            end
+        end
+        return
+    end
+
+    for setIndex = 1, PinnedFrames.MAX_SETS do
+        local set = GetSetDB(setIndex)
+        if set then
+            if IsBossSet(set) then
+                local frames = self.bossFrames[setIndex]
+                if frames then
+                    for i = 1, 8 do refont(frames[i]) end
+                end
+            else
+                local header = self.headers[setIndex]
+                if header then
+                    for i = 1, 40 do refont(header:GetAttribute("child" .. i)) end
+                end
+            end
+        end
+    end
+end
+
+DF.RefreshPinnedFonts = function() PinnedFrames:RefreshFonts() end
+
 -- ============================================================
 -- EVENT HANDLING
 -- All initialization must happen synchronously during ADDON_LOADED

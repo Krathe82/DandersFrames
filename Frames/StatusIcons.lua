@@ -207,23 +207,18 @@ function DF:ApplyTimerTextSettings(icon, db, prefix)
     local font    = db[prefix .. "TimerFont"]     or db.statusIconFont or "Fonts\\FRIZQT__.TTF"
     local size    = db[prefix .. "TimerFontSize"] or ((db.statusIconFontSize or 12) - 2)
     local outline = db[prefix .. "TimerOutline"]  or db.statusIconFontOutline or "OUTLINE"
-    -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips the
-    -- shadow and returns the SetFont flag ("NONE" -> "" since SetFont rejects it).
-    local flag = DF:OutlineFlag(outline)
-    local actualOutline = (flag == "NONE") and "" or flag
-    local fontPath = (DF.GetFont and (DF:GetFont(font) or font)) or font
-    t:SetFont(fontPath, size, actualOutline)
-
-    if DF:OutlineHasShadow(outline) then
-        local sc = db.fontShadowColor or { r = 0, g = 0, b = 0, a = 1 }
-        t:SetShadowOffset(db.fontShadowOffsetX or 1, db.fontShadowOffsetY or -1)
-        t:SetShadowColor(sc.r or 0, sc.g or 0, sc.b or 0, sc.a or 1)
-    else
-        t:SetShadowOffset(0, 0)
-    end
+    -- Font + shadow via SafeSetFont (font-family path). Fontstring-level
+    -- SetShadowColor/Offset is a silent no-op on 12.0.7, so the shadow must ride
+    -- the font object. SetFontObject resets vertex colour — capture + restore it.
+    local cr, cg, cb, ca = t:GetTextColor()
+    DF:SafeSetFont(t, font, size, outline)
 
     local c = db[prefix .. "TimerColor"] or db[prefix .. "TextColor"]
-    if c then t:SetTextColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1) end
+    if c then
+        t:SetTextColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1)
+    else
+        t:SetTextColor(cr, cg, cb, ca)
+    end
 
     -- LEFT-justify the timer instead of centring it. CENTRE justify — even inside
     -- a fixed-width box — re-measures the text's INK box each tick, and a narrow
@@ -233,11 +228,36 @@ function DF:ApplyTimerTextSettings(icon, db, prefix)
     -- char count, see FormatAFKTime), so the string width never changes either —
     -- it stays put across the 9:59 -> 10:00 boundary too. Anchor the left edge
     -- ~half a typical MM:SS left of centre so it reads centred under the icon.
-    local nudge = size * 1.2  -- ~half the width of a 5-char MM:SS timer
-    t:SetWidth(size * 6)
     t:SetJustifyH("LEFT")
+    -- Centre the timer under the icon. SafeSetFont renders via SetTextScale (the
+    -- font family is fixed at BASE_FONT_SIZE), and that scale pivots about the
+    -- fontstring BOX's centre — so a box wider than the text pushes it off to the
+    -- side once scaled. Size the box to the rendered width and anchor its centre
+    -- under the icon, so the text scales about its own centre and stays put.
+    --
+    -- Measure a fixed representative sample, NOT the live string: on pinned frames
+    -- this runs before the timer text is set, so measuring the current (empty or
+    -- transitional) text cached a too-narrow box and the timer truncated/jittered.
+    -- Pick the sample by the current string's LENGTH so the box also fits the
+    -- HH:MM:SS format once the timer passes an hour. Re-measure only when the font,
+    -- size, or format (sample) changes — so it never re-measures per tick.
+    local cur = t:GetText() or ""
+    local sample = (#cur >= 8) and "00:00:00" or "00:00"
+    if t._dfTimerSize ~= size or t._dfTimerFont ~= font or t._dfTimerSample ~= sample then
+        t:SetText(sample)
+        local w = t:GetStringWidth() or 0
+        t:SetText(cur)
+        if w > 0 then
+            t._dfTimerWidth = w
+            t._dfTimerSize = size
+            t._dfTimerFont = font
+            t._dfTimerSample = sample
+        end
+    end
+    local w = t._dfTimerWidth or (size * 2.4)
+    t:SetWidth(w)
     t:ClearAllPoints()
-    t:SetPoint("TOPLEFT", icon, "BOTTOM", (db[prefix .. "TimerX"] or 0) - nudge, db[prefix .. "TimerY"] or -1)
+    t:SetPoint("TOPLEFT", icon, "BOTTOM", (db[prefix .. "TimerX"] or 0) - w / 2, db[prefix .. "TimerY"] or -1)
 end
 
 -- ============================================================
@@ -287,40 +307,25 @@ local function ApplyIconSettings(icon, db, prefix)
         icon:SetFrameLevel(icon:GetParent():GetParent():GetFrameLevel() + frameLevel)
     end
     
-    -- Apply status icon font settings to text
+    -- Apply status icon font settings to text. Route through SafeSetFont so the
+    -- shadow lands on the font-family's per-alphabet font objects — 12.0.7 no
+    -- longer renders fontstring-level SetShadowColor/Offset (it's a silent no-op).
     if icon.text then
         local font = db.statusIconFont or "Fonts\\FRIZQT__.TTF"
         local fontSize = db.statusIconFontSize or 12
         local outline = db.statusIconFontOutline or "OUTLINE"
-        
-        -- outline may be a composed "SHADOW;<flag>" value; OutlineFlag strips
-        -- the shadow and returns the SetFont flag ("NONE" -> "" — SetFont rejects "NONE").
-        local flag = DF:OutlineFlag(outline)
-        local actualOutline = (flag == "NONE") and "" or flag
 
-        -- Get font path from SharedMedia if available
-        local fontPath = font
-        if DF.GetFont then
-            fontPath = DF:GetFont(font) or font
-        end
+        -- SafeSetFont swaps the font object, which resets vertex colour to white;
+        -- capture the current colour so non-overridden icons keep their tint.
+        local cr, cg, cb, ca = icon.text:GetTextColor()
+        DF:SafeSetFont(icon.text, font, fontSize, outline)
 
-        icon.text:SetFont(fontPath, fontSize, actualOutline)
-
-        -- Apply shadow if needed
-        if DF:OutlineHasShadow(outline) then
-            local shadowX = db.fontShadowOffsetX or 1
-            local shadowY = db.fontShadowOffsetY or -1
-            local shadowColor = db.fontShadowColor or {r = 0, g = 0, b = 0, a = 1}
-            icon.text:SetShadowOffset(shadowX, shadowY)
-            icon.text:SetShadowColor(shadowColor.r or 0, shadowColor.g or 0, shadowColor.b or 0, shadowColor.a or 1)
-        else
-            icon.text:SetShadowOffset(0, 0)
-        end
-        
-        -- Apply text color from settings
+        -- Apply text color from settings (falls back to the captured colour).
         local textColor = db[prefix .. "TextColor"]
         if textColor then
             icon.text:SetTextColor(textColor.r or 1, textColor.g or 1, textColor.b or 1, 1)
+        else
+            icon.text:SetTextColor(cr, cg, cb, ca)
         end
     end
     

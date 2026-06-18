@@ -24,6 +24,7 @@
 
 ### Bug Fixes
 
+* (Status Icons) The drop shadow shows again on the **AFK timer** and **all status-icon text**. A 12.0.7 font change stopped the old fontstring-level shadow from rendering, so status-icon and timer text lost their shadow while the rest of your text kept it; they now apply the shadow through the font itself like everything else. The global **Shadow X / Y / Color** sliders also preview live again while dragging — on live, pinned, and test frames — instead of only after a reload. (by Krathe)
 * (Pinned Frames) Text Designer elements now update on pinned frames right away when you add or edit them, instead of only showing up after toggling test mode.
 * (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
 * (Arena) Fixed teammates who load in late sometimes staying missing for the whole round, the frame order breaking after a mid-match reload, and frames staying hidden after a reload during a match. (by Krathe)
