@@ -327,6 +327,30 @@ function DF:PixelPerfectSizeAndScaleForBorder(size, iconScale, borderThickness)
     return ppFinalSize, 1.0, ppBorder
 end
 
+-- Nudge an already-anchored, SINGLE-point frame onto the physical pixel grid by
+-- shifting its anchor offset by the sub-pixel remainder (<=0.5px). A 1px DF.Border
+-- on a fractionally-positioned frame straddles two physical rows so a side drops;
+-- this lands all four edges on the grid. Anchor/offset-agnostic and BOUNDED — it
+-- can never move the frame more than half a pixel from where it was placed, so it
+-- cannot mis-position. No-op unless pp is true, the frame has exactly one anchor
+-- point, and it's laid out — so call it AFTER positioning, on a path that re-runs
+-- post-layout (e.g. an icon's per-update placement), not at one-time creation.
+function DF:SnapPointToPixelGrid(frame, pp)
+    if not pp or not frame or not frame.GetNumPoints or frame:GetNumPoints() ~= 1 then return end
+    local point, relTo, relPoint, x, y = frame:GetPoint(1)
+    if not x or not y then return end
+    local eff = frame:GetEffectiveScale()
+    local l, b = frame:GetLeft(), frame:GetBottom()
+    local _, physH = GetPhysicalScreenSize()
+    if not (l and b and eff and eff > 0 and physH and physH > 0) then return end
+    local ppu = eff * physH / 768  -- physical pixels per UI unit
+    local dx = (math.floor(l * ppu + 0.5) - l * ppu) / ppu
+    local dy = (math.floor(b * ppu + 0.5) - b * ppu) / ppu
+    if dx ~= 0 or dy ~= 0 then
+        frame:SetPoint(point, relTo, relPoint, x + dx, y + dy)
+    end
+end
+
 -- Pixel-perfect SetSize helper
 -- Only applies pixel snapping if pixelPerfect is enabled in the given db
 -- Skips SetSize for secure header children during combat

@@ -1758,7 +1758,8 @@ function DF:ApplyAuraLayout(frame, auraType)
             
             icon:ClearAllPoints()
             icon:SetPoint(anchor, frame, anchor, x, y)
-            
+            DF:SnapPointToPixelGrid(icon, (DF:GetFrameDB(frame) or {}).pixelPerfect)
+
             -- Use SetMouseClickEnabled(false) to allow tooltips while passing clicks through
             -- This is Cell's approach for click-casting compatibility with tooltips
             if not InCombatLockdown() then

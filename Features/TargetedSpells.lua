@@ -600,6 +600,7 @@ local function PositionIcons(frame)
                 
                 icon:ClearAllPoints()
                 icon:SetPoint(anchor, frame, anchor, x + offsetX, y + offsetY)
+                DF:SnapPointToPixelGrid(icon, (DF:GetFrameDB(frame) or {}).pixelPerfect)
                 icon:SetSize(scaledSize, scaledSize)
                 
                 -- Set frame level
@@ -2305,6 +2306,7 @@ local function PositionPersonalIcons()
                 
                 icon:ClearAllPoints()
                 icon:SetPoint("CENTER", personalContainer, "CENTER", offsetX, offsetY)
+                DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
                 icon:SetSize(scaledSize, scaledSize)
                 icon.iconFrame:SetAllPoints(icon)
                 

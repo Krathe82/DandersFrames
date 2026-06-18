@@ -746,9 +746,10 @@ function DF:LightweightUpdateIconPosition(iconType)
             icon:SetScale(scale)
             icon:ClearAllPoints()
             icon:SetPoint(anchor, frame, anchor, x, y)
+            DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
         end
     end
-    
+
     IterateFramesInMode(mode, UpdateIcon)
 end
 
@@ -865,6 +866,7 @@ function DF:LightweightUpdateAuraPosition(auraType)
                 icon:SetAlpha(alpha)
                 icon:ClearAllPoints()
                 icon:SetPoint(anchor, frame, anchor, x, y)
+                DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
             end
         end
     end
@@ -1294,6 +1296,7 @@ function DF:LightweightUpdateDefensiveIcons()
         icon:SetScale(scale)
         icon:ClearAllPoints()
         icon:SetPoint(anchor, frame, anchor, x, y)
+        DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
 
         ApplyVisuals(icon)
 
@@ -1337,6 +1340,7 @@ function DF:LightweightUpdateMissingBuff()
             frame.missingBuffFrame:SetScale(scale)
             frame.missingBuffFrame:ClearAllPoints()
             frame.missingBuffFrame:SetPoint(anchor, frame, anchor, x, y)
+            DF:SnapPointToPixelGrid(frame.missingBuffFrame, db.pixelPerfect)
             
             -- Border via unified DF.Border backend (Stage 4.1). BuildSpec
             -- reads canonical missingBuffIcon* keys; we override size with
