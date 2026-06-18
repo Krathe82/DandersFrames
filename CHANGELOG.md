@@ -15,6 +15,7 @@
 
 ### Improvements
 
+* (Targeted Spells) Tuned the default look of the important-spell **Highlight** for both party and personal targeted spells — a thinner dashed border with a softer alpha, plus refreshed spacing/offset defaults. Only affects new profiles; existing setups are unchanged.
 * (Pinned Frames) Pinned frames now **lock and unlock together with your main frames** — there's no separate per-set Lock Position toggle any more. Unlock your party or raid frames and the pinned sets for that mode show their drag handles too; lock again and they all settle. Each set's handle also opens the same **fine position panel** as the party/raid frames (precise X/Y nudge, centre, reset), so you can place a pinned set to the pixel. (by Krathe)
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
 * (Click Casting) The binding editor no longer shows the Advanced options section for Target Unit and Context Menu binds — those settings don't apply to those actions.
