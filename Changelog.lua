@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-18T12:09:50Z"
+DF.BUILD_DATE = "2026-06-18T21:38:00Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -19,6 +19,7 @@ DF.CHANGELOG_TEXT = [===[
 
 ### Improvements
 
+* (Targeted Spells) Tuned the default look of the important-spell **Highlight** for both party and personal targeted spells — a thinner dashed border with a softer alpha, plus refreshed spacing/offset defaults. Only affects new profiles; existing setups are unchanged.
 * (Pinned Frames) Pinned frames now **lock and unlock together with your main frames** — there's no separate per-set Lock Position toggle any more. Unlock your party or raid frames and the pinned sets for that mode show their drag handles too; lock again and they all settle. Each set's handle also opens the same **fine position panel** as the party/raid frames (precise X/Y nudge, centre, reset), so you can place a pinned set to the pixel. (by Krathe)
 * (Pinned Frames) Pinned frame settings are now **global per party/raid mode** and no longer saved into auto layouts — a raid auto layout only controls whether each pinned set is **shown** for that layout. This removes the stale/blank pinned data and editor mismatches that came from pinned settings being stored per-layout, and pinned edits now take effect live. (by Krathe)
 * (Click Casting) The binding editor no longer shows the Advanced options section for Target Unit and Context Menu binds — those settings don't apply to those actions.
@@ -28,6 +29,10 @@ DF.CHANGELOG_TEXT = [===[
 
 ### Bug Fixes
 
+* (Status Icons) The drop shadow shows again on the **AFK timer** and **all status-icon text**. A 12.0.7 font change stopped the old fontstring-level shadow from rendering, so status-icon and timer text lost their shadow while the rest of your text kept it; they now apply the shadow through the font itself like everything else. The global **Shadow X / Y / Color** sliders also preview live again while dragging — on live, pinned, and test frames — instead of only after a reload. (by Krathe)
+* (Borders) Animated borders (dashed / marching-ants and the other motion effects) no longer freeze after a frame hides and re-shows, or an aura icon is recycled from the pool — they kept their "already running" marker even though the underlying animation had stopped, so they sat static until a setting was nudged to force a restart. (by Krathe)
+* (Borders) Fixed pixel-perfect borders dropping a side, switching sides when an icon moved, or looking thicker than their set size. Icon/frame edges are now snapped to the physical pixel grid, so a 1px border lands cleanly on a single row of pixels instead of straddling two. Also fixes a small icon-to-border gap that showed on freshly-added Aura Designer indicators in the preview. (by Krathe)
+* (Targeted Spells) The on-frame targeted-spell duration timers now count down in Test Mode instead of sitting on a frozen value, so you can preview the look while configuring them. (by Krathe)
 * (Pinned Frames) Text Designer elements now update on pinned frames right away when you add or edit them, instead of only showing up after toggling test mode.
 * (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
 * (Arena) Fixed teammates who load in late sometimes staying missing for the whole round, the frame order breaking after a mid-match reload, and frames staying hidden after a reload during a match. (by Krathe)
