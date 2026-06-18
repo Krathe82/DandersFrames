@@ -24,6 +24,7 @@
 
 ### Bug Fixes
 
+* (Borders) Animated borders (dashed / marching-ants and the other motion effects) no longer freeze after a frame hides and re-shows, or an aura icon is recycled from the pool — they kept their "already running" marker even though the underlying animation had stopped, so they sat static until a setting was nudged to force a restart. (by Krathe)
 * (Pinned Frames) Text Designer elements now update on pinned frames right away when you add or edit them, instead of only showing up after toggling test mode.
 * (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
 * (Arena) Fixed teammates who load in late sometimes staying missing for the whole round, the frame order breaking after a mid-match reload, and frames staying hidden after a reload during a match. (by Krathe)
