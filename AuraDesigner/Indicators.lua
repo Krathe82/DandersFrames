@@ -155,6 +155,19 @@ local function AdjustOffsetForBorder(anchor, offsetX, offsetY, borderSize, borde
     return offsetX, offsetY
 end
 
+-- Anchor a frame, then (pixel-perfect only) snap it onto the physical pixel grid
+-- so a 1px DF.Border on it doesn't straddle two physical rows and drop a side.
+-- The SetPoint offset is a pure translation, so we shift the frame by the
+-- sub-pixel remainder of its left/bottom edges (<=0.5px). Anchor-agnostic; the
+-- frame's SIZE must already be whole pixels (snapped in the Configure step). A
+-- no-op when pp is off or the geometry isn't laid out yet — so it MUST be called
+-- after the frame is positioned (in Update*, not Configure*).
+local function AnchorPixelSnapped(child, anchor, relTo, offsetX, offsetY, pp)
+    child:ClearAllPoints()
+    child:SetPoint(anchor, relTo, anchor, offsetX, offsetY)
+    DF:SnapPointToPixelGrid(child, pp)  -- shared primitive in Frames/Core.lua
+end
+
 -- ============================================================
 -- EXPIRING — thin AD-side adapters over the shared DF.Expiring engine
 -- (engine: registry + ~3 FPS ticker + colour curve live in Frames/Expiring.lua).
@@ -1073,6 +1086,10 @@ local function ApplyBorderToOverlay(ch, frame, config, auraData)
     -- fresh import) map via BuildBorderTypeSpec; migrated configs build the
     -- canonical spec directly.  Both produce the same DF.Border spec shape.
     local spec = config.style and BuildBorderTypeSpec(config) or DF.Border:BuildSpec(config, "")
+    -- AD config has no pixelPerfect key of its own; inherit the frame's so the
+    -- border thickness snaps. (This border SetAllPoints the frame, which is already
+    -- pixel-aligned, so no position snap is needed here.)
+    spec.pixelPerfect = (DF:GetFrameDB(frame) or {}).pixelPerfect
     if not spec.color then spec.color = { r = 0, g = 0, b = 0, a = 1 } end
     if spec.enabled == nil then spec.enabled = true end
     if spec.enabled == false then
@@ -1988,6 +2005,19 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     -- Size (clamp to 8 minimum; old configs may have sizes below the current slider floor)
     local size = math.max(8, config.size or (defaults and defaults.iconSize) or 24)
     local scale = config.scale or (defaults and defaults.iconScale) or 1.0
+    -- Pixel-perfect: fold the user scale INTO the size and snap to whole physical
+    -- pixels (resetting scale to 1.0) so the 1px DF.Border edges land on the pixel
+    -- grid. A fractionally-sized icon put its top/bottom (or left/right) edges on
+    -- different sub-pixel phases, which dropped, thickened, or side-switched a 1px
+    -- border. Mirrors the defensive icon (bug 951). Stash the pre-fold user scale
+    -- so the position offset below can be re-scaled to match.
+    local fdb = DF:GetFrameDB(frame)
+    if fdb and fdb.pixelPerfect and DF.PixelPerfectSizeAndScaleForBorder then
+        icon.dfAD_userScale = scale
+        size, scale = DF:PixelPerfectSizeAndScaleForBorder(size, scale, config.BorderSize or 1)
+    else
+        icon.dfAD_userScale = nil
+    end
     icon:SetSize(size, size)
     icon:SetScale(scale)
 
@@ -2057,10 +2087,23 @@ function Indicators:ConfigureIcon(frame, config, defaults, auraName, priority)
     -- against the icon edge; positive Inset opens a gap; negative pulls it in.
     -- The cached values feed the spec below; the expiring path recomputes the
     -- same way so the two stay consistent.
+    -- Pixel-perfect: snap the thickness up front so the icon's texture inset (which
+    -- uses borderThickness) matches the snapped border DF.Border:Apply renders.
+    -- Otherwise inset (raw) and border (snapped) differ by a sub-pixel amount —
+    -- invisible on live frames but magnified into a visible art/border gap in the
+    -- scaled AD preview.
+    if fdb and fdb.pixelPerfect and DF.PixelPerfect then
+        borderThickness = DF:PixelPerfect(borderThickness)
+    end
     adBorder.dfADIconSize  = borderThickness
     adBorder.dfADIconInset = -borderInset
 
     local spec = DF.Border:BuildSpec(config, "")
+    -- The per-aura AD config has no pixelPerfect key of its own, so inherit the
+    -- frame's. Without it the border-thickness snap AND the corner pixel-snap in
+    -- Border:Apply never run on AD borders, leaving the 1px edges to straddle
+    -- physical rows — which drops a side (any side, depending on the icon's x/y).
+    spec.pixelPerfect = fdb and fdb.pixelPerfect
     spec.enabled = borderEnabled and not hideIcon
     spec.size    = adBorder.dfADIconSize
     spec.inset   = adBorder.dfADIconInset
@@ -2376,6 +2419,11 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
     local anchor = config.anchor or "TOPLEFT"
     local offsetX = config.offsetX or 0
     local offsetY = config.offsetY or 0
+    -- Pixel-perfect folded the icon scale into its size (scale -> 1.0); the offset
+    -- was authored in the pre-fold scaled space, so re-scale it to match (no-op at
+    -- the default scale 1.0). Keeps the icon in the same spot with PP on/off. (#951)
+    local us = icon.dfAD_userScale
+    if us then offsetX = offsetX * us; offsetY = offsetY * us end
     -- Position is the user's offset only.  We deliberately do NOT shift the
     -- icon by the border inset any more — the band is a constant-width ring
     -- whose Inset slider expands it outward, and tying the icon's position to
@@ -2391,8 +2439,12 @@ function Indicators:UpdateIcon(frame, config, auraData, defaults, auraName, prio
         icon.dfAD_posAnchor, icon.dfAD_posX, icon.dfAD_posY = anchor, offsetX, offsetY
         local b = icon.dfAD_basePos or {}; icon.dfAD_basePos = b
         b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
-        icon:ClearAllPoints()
-        icon:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+        -- Pixel-perfect: snap the icon onto the grid so its 1px border doesn't
+        -- drop a side (the border SetAllPoints the icon, so it follows). Runs only
+        -- on a position change, so it doesn't fight the expiring Bounce translation.
+        -- NOTE: if the unit FRAME itself moves, the icon rides along and can drift
+        -- <=0.5px off-grid until its next position change.
+        AnchorPixelSnapped(icon, anchor, frame, offsetX, offsetY, (DF:GetFrameDB(frame) or {}).pixelPerfect)
     end
 
     -- Read stored config flags from ConfigureIcon
@@ -2820,10 +2872,19 @@ end
 -- ============================================================
 function Indicators:ConfigureSquare(frame, config, defaults, auraName, priority)
     local sq = GetOrCreateADSquare(frame, auraName)
+    local fdb = DF:GetFrameDB(frame)
 
     -- Size & scale (fall back to global defaults, same as icon)
     local size = config.size or (defaults and defaults.iconSize) or 24
     local scale = config.scale or (defaults and defaults.iconScale) or 1.0
+    -- Pixel-perfect: fold scale into size + snap to whole pixels (see ConfigureIcon);
+    -- stash the user scale so UpdateSquare can re-scale the layout offset to match.
+    if fdb and fdb.pixelPerfect and DF.PixelPerfectSizeAndScaleForBorder then
+        sq.dfAD_userScale = scale
+        size, scale = DF:PixelPerfectSizeAndScaleForBorder(size, scale, config.BorderSize or 1)
+    else
+        sq.dfAD_userScale = nil
+    end
     sq:SetSize(size, size)
     sq:SetScale(scale)
 
@@ -2866,12 +2927,22 @@ function Indicators:ConfigureSquare(frame, config, defaults, auraName, priority)
     if borderEnabled == nil then borderEnabled = true end
     local borderThickness = config.BorderSize  or config.borderThickness or 1
     local borderInset     = config.BorderInset or config.borderInset     or 0
+    -- Pixel-perfect: snap thickness so the fill inset matches the snapped border
+    -- (see ConfigureIcon) — else a sub-pixel art/border gap shows in the preview.
+    if fdb and fdb.pixelPerfect and DF.PixelPerfect then
+        borderThickness = DF:PixelPerfect(borderThickness)
+    end
 
     local adBorder = GetOrCreateADSquareBorder(sq)
     adBorder.dfADIconSize  = borderThickness
     adBorder.dfADIconInset = -borderInset
 
     local spec = DF.Border:BuildSpec(config, "")
+    -- The per-aura AD config has no pixelPerfect key of its own, so inherit the
+    -- frame's. Without it the border-thickness snap AND the corner pixel-snap in
+    -- Border:Apply never run on AD borders, leaving the 1px edges to straddle
+    -- physical rows — which drops a side (any side, depending on the icon's x/y).
+    spec.pixelPerfect = fdb and fdb.pixelPerfect
     spec.enabled = borderEnabled and not hideIcon
     spec.size    = adBorder.dfADIconSize
     spec.inset   = adBorder.dfADIconInset
@@ -3158,6 +3229,10 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
     local anchor = config.anchor or "TOPLEFT"
     local offsetX = config.offsetX or 0
     local offsetY = config.offsetY or 0
+    -- Pixel-perfect folds the square's scale into its size; re-scale the offset to
+    -- match (no-op at scale 1.0). See UpdateIcon.
+    local us = sq.dfAD_userScale
+    if us then offsetX = offsetX * us; offsetY = offsetY * us end
     -- Only re-anchor when the position changed (see UpdateIcon) so the preview's
     -- per-frame refresh doesn't fight an active Bounce Translation.
     if sq:GetNumPoints() == 0 or sq.dfAD_posAnchor ~= anchor
@@ -3165,8 +3240,7 @@ function Indicators:UpdateSquare(frame, config, auraData, defaults, auraName, pr
         sq.dfAD_posAnchor, sq.dfAD_posX, sq.dfAD_posY = anchor, offsetX, offsetY
         local b = sq.dfAD_basePos or {}; sq.dfAD_basePos = b
         b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
-        sq:ClearAllPoints()
-        sq:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+        AnchorPixelSnapped(sq, anchor, frame, offsetX, offsetY, (DF:GetFrameDB(frame) or {}).pixelPerfect)
     end
 
     -- Read stored config flags from ConfigureSquare
@@ -3708,6 +3782,14 @@ function Indicators:ConfigureBar(frame, config, defaults, auraName, priority)
     local height = config.height or 6
     if matchW then width = frame:GetWidth() end
     if matchH then height = frame:GetHeight() end
+    -- Pixel-perfect: snap the bar's dimensions to whole physical pixels so its 1px
+    -- border edges don't straddle two rows. (The bar has no per-indicator scale to
+    -- fold, so a plain snap is enough; the position snap is in UpdateBar.)
+    local fdb = DF:GetFrameDB(frame)
+    if fdb and fdb.pixelPerfect then
+        width  = DF:PixelPerfect(width)
+        height = DF:PixelPerfect(height)
+    end
     bar:SetSize(width, height)
 
     local barAlpha = config.alpha or 1.0
@@ -3870,9 +3952,15 @@ function Indicators:ConfigureBar(frame, config, defaults, auraName, priority)
     if borderEnabled == nil then borderEnabled = true end
     local borderThickness = config.BorderSize  or config.borderThickness or 1
     local borderInset     = config.BorderInset or config.borderInset     or 0
+    -- Pixel-perfect: snap thickness so spec.size and spec.inset (which both use it)
+    -- match the snapped border the render produces (consistency, see ConfigureIcon).
+    if fdb and fdb.pixelPerfect and DF.PixelPerfect then
+        borderThickness = DF:PixelPerfect(borderThickness)
+    end
 
     local adBorder = GetOrCreateADBarBorder(bar)
     local spec = DF.Border:BuildSpec(config, "")
+    spec.pixelPerfect = fdb and fdb.pixelPerfect  -- AD config has no key of its own; inherit the frame's
     spec.enabled = borderEnabled
     spec.size    = borderThickness
     spec.inset   = -(borderInset + borderThickness)
@@ -4044,8 +4132,7 @@ function Indicators:UpdateBar(frame, config, auraData, defaults, auraName, prior
         bar.dfAD_posAnchor, bar.dfAD_posX, bar.dfAD_posY = anchor, offsetX, offsetY
         local b = bar.dfAD_basePos or {}; bar.dfAD_basePos = b
         b.point, b.rel, b.relPoint, b.x, b.y = anchor, frame, anchor, offsetX, offsetY
-        bar:ClearAllPoints()
-        bar:SetPoint(anchor, frame, anchor, offsetX, offsetY)
+        AnchorPixelSnapped(bar, anchor, frame, offsetX, offsetY, (DF:GetFrameDB(frame) or {}).pixelPerfect)
     end
 
     -- ========================================

@@ -912,6 +912,7 @@ function DF:UpdateMissingBuffIcon(frame, forceUpdate)
         frame.missingBuffFrame:SetScale(scale)
         frame.missingBuffFrame:ClearAllPoints()
         frame.missingBuffFrame:SetPoint(anchor, frame, anchor, x, y)
+        DF:SnapPointToPixelGrid(frame.missingBuffFrame, db.pixelPerfect)
         
         -- Apply frame level (controls layering within strata)
         local frameLevel = db.missingBuffIconFrameLevel or 0
@@ -1108,6 +1109,7 @@ function DF:UpdateDefensiveBar(frame)
                     icon:SetScale(scale)
                     icon:ClearAllPoints()
                     icon:SetPoint(anchor, frame, anchor, layoutBaseX + offsetX, layoutBaseY + offsetY)
+                    DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
 
                     -- Frame level
                     local frameLevel = db.defensiveIconFrameLevel or 0
@@ -1139,6 +1141,7 @@ function DF:UpdateDefensiveBar(frame)
                     local y = layoutBaseY - (row * (iconSize + layoutSpacing)) + centerOffset
                     icon:ClearAllPoints()
                     icon:SetPoint(anchor, frame, anchor, x, y)
+                    DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
                 end
             else
                 -- Horizontal stacking (centered), vertical row growth
@@ -1154,6 +1157,7 @@ function DF:UpdateDefensiveBar(frame)
                     local y = layoutBaseY + (row * secY)
                     icon:ClearAllPoints()
                     icon:SetPoint(anchor, frame, anchor, x, y)
+                    DF:SnapPointToPixelGrid(icon, db.pixelPerfect)
                 end
             end
         end
