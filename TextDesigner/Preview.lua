@@ -70,17 +70,12 @@ function Preview:RefreshLiveFrames()
             end
         end
     end
-    if DF.UpdateTextDesigner and DF.PinnedFrames and DF.PinnedFrames.bossFrames then
-        for _, frames in pairs(DF.PinnedFrames.bossFrames) do
-            if type(frames) == "table" then
-                for i = 1, 8 do
-                    local pinned = frames[i]
-                    if pinned and pinned.unit then
-                        DF:UpdateTextDesigner(pinned, "all")
-                    end
-                end
-            end
-        end
+    -- Pinned frames come in two kinds — boss-type sets (bossFrames) and
+    -- player-type sets (secure-header children). RefreshTextDesigner walks both;
+    -- the old inline loop here only reached boss sets, so player pinned groups
+    -- never picked up TD element edits until a full rebuild (e.g. test-mode toggle).
+    if DF.PinnedFrames and DF.PinnedFrames.RefreshTextDesigner then
+        DF.PinnedFrames:RefreshTextDesigner()
     end
 end
 

@@ -2712,6 +2712,63 @@ function PinnedFrames:RefreshAllChildFrames()
     end
 end
 
+-- Re-render Text Designer text on every shown pinned frame, live OR test.
+-- TD-only (UpdateTextDesigner, not the heavier FullFrameRefresh / UpdateTestFrame)
+-- so it stays cheap on the Text Designer editor's throttled live-edit path (e.g.
+-- colour-picker drag). Boss sets live in bossFrames[setIndex]; player sets live
+-- as secure-header children. While test mode is active the live frames are hidden
+-- (the non-secure test pool owns the screen), so the test branch picks those up —
+-- pinned test frames carry a fake .unit + dfIsTestFrame, so UpdateTextDesigner
+-- self-sources Test data. Called from the TD editor's live refresh, which
+-- otherwise only reached boss sets (live) and the main test pools (never pinned).
+function PinnedFrames:RefreshTextDesigner()
+    if not DF.UpdateTextDesigner then return end
+
+    -- Test mode: refresh the non-secure pinned test pool (live frames are hidden).
+    if self.testModeActive then
+        for setIndex = 1, PinnedFrames.MAX_SETS do
+            local pool = self.testFrames[setIndex]
+            if pool then
+                for i = 1, #pool do
+                    local f = pool[i]
+                    if f and f:IsShown() and f.unit then
+                        DF:UpdateTextDesigner(f, "all")
+                    end
+                end
+            end
+        end
+        return
+    end
+
+    -- Live frames (out of test mode).
+    for setIndex = 1, PinnedFrames.MAX_SETS do
+        local set = GetSetDB(setIndex)
+        if set then
+            if IsBossSet(set) then
+                local frames = self.bossFrames[setIndex]
+                if frames then
+                    for i = 1, 8 do
+                        local f = frames[i]
+                        if f and f:IsShown() and f.unit then
+                            DF:UpdateTextDesigner(f, "all")
+                        end
+                    end
+                end
+            else
+                local header = self.headers[setIndex]
+                if header then
+                    for i = 1, 40 do
+                        local child = header:GetAttribute("child" .. i)
+                        if child and child:IsShown() and child.unit then
+                            DF:UpdateTextDesigner(child, "all")
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- ============================================================
 -- EVENT HANDLING
 -- All initialization must happen synchronously during ADDON_LOADED
