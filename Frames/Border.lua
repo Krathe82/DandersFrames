@@ -980,6 +980,11 @@ local function animSpecHash(anim)
     }, "|")
 end
 
+-- OnUpdate-driver effects: those whose motion is driven by border.animDriver's
+-- OnUpdate (as opposed to LCG glows or the static shape modes). The dedupe in
+-- StartAnimation verifies the driver is actually live for these before no-opping.
+local DRIVER_ANIMS = { DF_DASH = true, WIPE = true, RIPPLE = true, SEGMENT_REVEAL = true, DF_PULSATE = true }
+
 function Border:StartAnimation(border, spec)
     if not border or not spec or not spec.animation then
         self:StopAnimation(border); return
@@ -995,7 +1000,20 @@ function Border:StartAnimation(border, spec)
     -- transition (or any genuine spec change) still goes through the full
     -- restart path below.
     local newHash = animSpecHash(anim)
-    if border._animHash == newHash then return end
+    -- No-op when the same spec is already running — BUT only if the effect is
+    -- genuinely still live. For OnUpdate-driver effects the hash can stay stamped
+    -- while the driver has stopped (e.g. an AD border re-applied across a
+    -- hide/show or pooled-icon cycle), and trusting the hash alone then leaves the
+    -- animation frozen until a real spec change forces a restart (the "move the
+    -- frequency slider off 1 and back" symptom). When the driver is dead, fall
+    -- through and restart instead of no-opping.
+    if border._animHash == newHash then
+        local d = border.animDriver
+        if not DRIVER_ANIMS[border.activeAnimation]
+           or (d and d:IsShown() and d:GetScript("OnUpdate")) then
+            return
+        end
+    end
 
     -- DF_PULSATE retune-in-place: the spec changed, but if a DF Pulsate is
     -- already running on this border, NEVER tear it down — just update its
