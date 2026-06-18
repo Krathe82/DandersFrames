@@ -5508,13 +5508,19 @@ function DF:UpdateTestTargetedSpell(frame, testData)
                 if icon.durationText then
                     icon.durationText:Hide()
                 end
+                icon.dfTestTimer = nil  -- interrupted icons don't count down
             else
                 -- Normal spell display
                 icon.icon:SetDesaturated(false)
-                
+
                 if icon.interruptOverlay then
                     icon.interruptOverlay:Hide()
                 end
+
+                -- Animate the preview timer: the container OnUpdate loops this
+                -- fake countdown (live timers use a durationObject test lacks).
+                icon.durationColor = durationColor
+                icon.dfTestTimer = { duration = 3, offset = i * 0.5 }
                 
                 -- Cooldown on icon
                 if icon.cooldown then

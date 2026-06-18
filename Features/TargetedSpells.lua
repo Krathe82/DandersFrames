@@ -379,6 +379,30 @@ local function CreateSingleIcon(parent, index)
     -- OnUpdate for cleanup checking and duration text
     local durationThrottle = 0
     container:SetScript("OnUpdate", function(self, elapsed)
+        -- Test mode: live timers come from durationObject (a secret aura value)
+        -- which test icons don't have, so drive a looping fake countdown here so
+        -- the preview animates instead of sitting static.
+        if self.dfTestTimer and (DF.testMode or DF.raidTestMode) then
+            local t = self.dfTestTimer
+            local cyc = (GetTime() + (t.offset or 0)) % t.duration
+            -- Re-arm the cooldown swipe whenever the cycle wraps, so it loops.
+            if self.cooldown and (not t.last or cyc < t.last) then
+                self.cooldown:SetCooldown(GetTime() - cyc, t.duration)
+            end
+            t.last = cyc
+            durationThrottle = durationThrottle + elapsed
+            if durationThrottle >= 0.1 then
+                durationThrottle = 0
+                if self.durationText and self.durationText:IsShown() then
+                    self.durationText:SetFormattedText("%.1f", t.duration - cyc)
+                    if self.durationColor then
+                        self.durationText:SetTextColor(self.durationColor.r, self.durationColor.g, self.durationColor.b, 1)
+                    end
+                end
+            end
+            return
+        end
+
         -- Skip if not active (alpha is controlled by SetAlphaFromBoolean, can't read it)
         if not self.isActive then return end
         
