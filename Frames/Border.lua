@@ -25,6 +25,9 @@ local addonName, DF = ...
 
 local CreateFrame = CreateFrame
 local ipairs = ipairs
+-- Midnight-safe: test a colour channel for secretness before feeding it to
+-- CreateColor()/SetGradient (which reject secret values).
+local issecretvalue = issecretvalue or function() return false end
 
 DF.Border = DF.Border or {}
 local Border = DF.Border
@@ -83,9 +86,17 @@ function Border:New(parent, opts)
             -- both cheaper and safe for secret-tinted colours (CreateColor on a
             -- secret value taints execution).
             if not self._solidOnly and CreateColor then
-                local solid = CreateColor(r, g, b, a)
+                -- Reset any leftover gradient before the solid SetColorTexture.
+                -- Use the real colour when non-secret (so a Blizzard pipeline that
+                -- leaves the gradient in place still shows the right colour), but
+                -- fall back to white when ANY channel is SECRET — CreateColor on a
+                -- secret makes SetGradient throw "bad argument" (the expiring path
+                -- passes secret colours in combat). SetColorTexture below paints
+                -- the real, secret-safe colour either way.
+                local clear = (issecretvalue(r) or issecretvalue(g) or issecretvalue(b) or issecretvalue(a))
+                    and CreateColor(1, 1, 1, 1) or CreateColor(r, g, b, a)
                 for _, e in ipairs(edges) do
-                    if e.SetGradient then e:SetGradient("HORIZONTAL", solid, solid) end
+                    if e.SetGradient then e:SetGradient("HORIZONTAL", clear, clear) end
                 end
             end
             for _, e in ipairs(edges) do
@@ -1431,9 +1442,18 @@ function Border:Apply(border, spec)
             -- nothing to clear — skip it so the edges carry no gradient and a
             -- later bare-SetColorTexture recolour stays clean and secret-safe.
             if not border._solidOnly and CreateColor then
-                local solid = CreateColor(cr, cg, cb, ca)
+                -- Reset any leftover gradient before the solid SetColorTexture.
+                -- Use the real colour when non-secret (so a Blizzard pipeline that
+                -- leaves the gradient in place stays correct), but fall back to
+                -- white when ANY channel is SECRET — on the expiring path in combat
+                -- the colour curve resolves through the aura's secret Duration
+                -- object, and CreateColor on a secret makes SetGradient throw "bad
+                -- argument #2". SetColorTexture below paints the real, secret-safe
+                -- colour either way.
+                local clear = (issecretvalue(cr) or issecretvalue(cg) or issecretvalue(cb) or issecretvalue(ca))
+                    and CreateColor(1, 1, 1, 1) or CreateColor(cr, cg, cb, ca)
                 for _, e in ipairs(edges) do
-                    if e.SetGradient then e:SetGradient("HORIZONTAL", solid, solid) end
+                    if e.SetGradient then e:SetGradient("HORIZONTAL", clear, clear) end
                 end
             end
             for _, e in ipairs(edges) do
