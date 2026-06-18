@@ -1,5 +1,5 @@
 local addonName, DF = ...
-DF.BUILD_DATE = "2026-06-17T17:30:41Z"
+DF.BUILD_DATE = "2026-06-18T12:09:50Z"
 DF.RELEASE_CHANNEL = "alpha"
 DF.CHANGELOG_TEXT = [===[
 # DandersFrames Changelog
@@ -28,6 +28,7 @@ DF.CHANGELOG_TEXT = [===[
 
 ### Bug Fixes
 
+* (Pinned Frames) Text Designer elements now update on pinned frames right away when you add or edit them, instead of only showing up after toggling test mode.
 * (Raid) **Group Display Order** and **My Group First** now reposition the frames live: changing the order (or toggling My Group First) moves the raid frames immediately instead of only moving the group labels and leaving the frames in default order until the next roster change. The **My Group First** setting also now saves when toggled while editing an active auto layout, instead of being lost on reload. (by Krathe)
 * (Arena) Fixed teammates who load in late sometimes staying missing for the whole round, the frame order breaking after a mid-match reload, and frames staying hidden after a reload during a match. (by Krathe)
 * (Range) The frame border (and other element borders) now reliably **fade out of range**, preserved across border re-renders. (by Krathe)
