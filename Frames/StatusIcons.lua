@@ -229,33 +229,28 @@ function DF:ApplyTimerTextSettings(icon, db, prefix)
     -- it stays put across the 9:59 -> 10:00 boundary too. Anchor the left edge
     -- ~half a typical MM:SS left of centre so it reads centred under the icon.
     t:SetJustifyH("LEFT")
-    -- Centre the timer under the icon. SafeSetFont renders via SetTextScale (the
-    -- font family is fixed at BASE_FONT_SIZE), and that scale pivots about the
-    -- fontstring BOX's centre — so a box wider than the text pushes it off to the
-    -- side once scaled. Size the box to the rendered width and anchor its centre
-    -- under the icon, so the text scales about its own centre and stays put.
+    -- Centre the timer under the icon. SafeSetFont's font-family path renders via
+    -- SetTextScale, which pivots about the fontstring BOX's centre — so size the box
+    -- to the rendered text width and anchor its centre under the icon: the text then
+    -- scales about its own centre and stays put, LEFT-justified so the changing
+    -- seconds never re-centre (no wobble).
     --
-    -- Measure a fixed representative sample, NOT the live string: on pinned frames
-    -- this runs before the timer text is set, so measuring the current (empty or
-    -- transitional) text cached a too-narrow box and the timer truncated/jittered.
-    -- Pick the sample by the current string's LENGTH so the box also fits the
-    -- HH:MM:SS format once the timer passes an hour. Re-measure only when the font,
-    -- size, or format (sample) changes — so it never re-measures per tick.
+    -- Measure a fixed sample ("00:00", or "00:00:00" past an hour), NOT the live
+    -- string (which may be empty when this runs). Re-measure EVERY call rather than
+    -- caching: GetStringWidth taken before the font/scale was ready returned the
+    -- unscaled (BASE_FONT_SIZE) width, and caching that stuck a too-narrow box that
+    -- truncated; measured fresh once the font is live it already reflects the
+    -- rendered width, so no scale factor is needed. The sample is constant, so the
+    -- width never changes tick-to-tick.
     local cur = t:GetText() or ""
     local sample = (#cur >= 8) and "00:00:00" or "00:00"
-    if t._dfTimerSize ~= size or t._dfTimerFont ~= font or t._dfTimerSample ~= sample then
-        t:SetText(sample)
-        local w = t:GetStringWidth() or 0
-        t:SetText(cur)
-        if w > 0 then
-            t._dfTimerWidth = w
-            t._dfTimerSize = size
-            t._dfTimerFont = font
-            t._dfTimerSample = sample
-        end
-    end
-    local w = t._dfTimerWidth or (size * 2.4)
-    t:SetWidth(w)
+    t:SetText(sample)
+    local w = t:GetStringWidth() or 0
+    t:SetText(cur)
+    if w <= 0 then w = size * 2.4 end
+    -- Box is 1px wider than the text so the last glyph never clips, but anchor on
+    -- half the TEXT width (not the padded box) so the digits sit dead centre.
+    t:SetWidth(w + 1)
     t:ClearAllPoints()
     t:SetPoint("TOPLEFT", icon, "BOTTOM", (db[prefix .. "TimerX"] or 0) - w / 2, db[prefix .. "TimerY"] or -1)
 end
