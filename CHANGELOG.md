@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Aura Designer) Fixed a **health-bar Tint** indicator leaving the last 1–2 pixels unfilled at each edge of the bar when a frame border was shown — the tint was inset by the border thickness. The tint now fills the whole bar (the border draws on top and frames it cleanly), matching the Replace mode. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features
