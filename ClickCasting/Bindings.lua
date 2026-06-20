@@ -1221,7 +1221,11 @@ function CC:GetBindingKeyText(binding, includeCombatState)
     
     -- Add combat state indicator if requested
     if includeCombatState then
-        local combatSetting = binding.combat or "always"
+        -- Fall back to legacy loadCombat for freshly-added bindings (pre profile-load migration)
+        local combatSetting = binding.combat
+            or (binding.loadCombat == "combat" and "incombat")
+            or (binding.loadCombat == "nocombat" and "outofcombat")
+            or "always"
         if combatSetting == "incombat" then
             result = result .. " [C]"
         elseif combatSetting == "outofcombat" then

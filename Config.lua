@@ -1399,7 +1399,6 @@ DF.PartyDefaults = {
     dispelShowMagic = true,
     dispelShowPoison = true,
     dispelNameText = false,
-    dispellableHighlight = true,
 
     -- Dispel overlay source selector (Phase 1 UI uses bridge to old toggles)
     -- Values: "off" | "dandersframes" | "blizzard" | "both"
@@ -2169,7 +2168,6 @@ DF.PartyDefaults = {
     targetedSpellImportantBorderTexture = "SOLID",
     targetedSpellDisableMouse = false,
     targetedSpellDurationColor = {r = 1, g = 1, b = 1},
-    targetedSpellDurationColorByTime = false,
     targetedSpellDurationFont = "DF Roboto SemiBold",
     targetedSpellDurationOutline = "SHADOW",
     targetedSpellDurationScale = 1,
@@ -3076,7 +3074,6 @@ DF.RaidDefaults = {
     dispelShowMagic = true,
     dispelShowPoison = true,
     dispelNameText = false,
-    dispellableHighlight = true,
 
     -- Dispel overlay source selector (Phase 1 UI uses bridge to old toggles)
     -- Values: "off" | "dandersframes" | "blizzard" | "both"
@@ -3846,7 +3843,6 @@ DF.RaidDefaults = {
     targetedSpellImportantBorderTexture = "SOLID",
     targetedSpellDisableMouse = false,
     targetedSpellDurationColor = {r = 1, g = 1, b = 1},
-    targetedSpellDurationColorByTime = false,
     targetedSpellDurationFont = "DF Roboto SemiBold",
     targetedSpellDurationOutline = "SHADOW",
     targetedSpellDurationScale = 1,

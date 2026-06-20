@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Resource Bar) The **Smooth Bar Animation** toggle now actually smooths the resource/power bar's fill — it previously had no effect. (by Krathe)
+* (Buffs / Debuffs) Fixed pixel-perfect aura icons being sized as if the border were 1px when you set a different **Border Thickness**, which could slightly over-size the icon and misalign its art. (by Krathe)
+* (Status Icons) The **Frame Level** slider now previews live while dragging for the Resurrection, Phased, AFK, Vehicle, Raid Role and Summon icons (matching Scale and Alpha); the value applied before, but only after the next frame rebuild. (by Krathe)
+* (Profiles) The **Missing Buff** and **Defensive** icon **Border Color Source** (Class/Role) is now preserved when exporting or importing a single category, instead of reverting to a static colour. (by Krathe)
+* (Click Casting) A binding's **combat condition** (In/Out of Combat) now shows in the bindings list immediately after you add it, instead of only appearing after a `/reload`. (by Krathe)
+* (Debuffs) Removed the **Highlight Dispellable** toggle, which no longer did anything — dispellable highlighting is handled by the **Dispel Overlay** feature. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features
