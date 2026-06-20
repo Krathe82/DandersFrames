@@ -391,6 +391,13 @@ function Engine:UpdateFrame(frame)
     if (not adDB._specScopedV1 or not adDB._specScopedV2) and DF.MigrateAuraDesignerSpecScope then
         DF.MigrateAuraDesignerSpecScope(adDB)
     end
+    -- Lazy migration: type-keyed → indicators[] (an imported legacy-shape preset
+    -- would otherwise render no indicators at all).  Runs before the border fold.
+    if DF.MigrateAuraDesignerInstancesLazy then DF.MigrateAuraDesignerInstancesLazy(adDB) end
+    -- Lazy migration: fold legacy border keys (style/color/thickness) on the
+    -- resolved table render actually reads, so a half-migrated block can't render
+    -- via the stale legacy path.
+    if DF.MigrateAuraDesignerBorderKeysLazy then DF.MigrateAuraDesignerBorderKeysLazy(adDB) end
 
     -- Debug: throttled diagnostic dump
     local now = GetTime()
@@ -880,6 +887,8 @@ function Engine:UpdateTestFrame(frame)
     if (not adDB._specScopedV1 or not adDB._specScopedV2) and DF.MigrateAuraDesignerSpecScope then
         DF.MigrateAuraDesignerSpecScope(adDB)
     end
+    if DF.MigrateAuraDesignerInstancesLazy then DF.MigrateAuraDesignerInstancesLazy(adDB) end
+    if DF.MigrateAuraDesignerBorderKeysLazy then DF.MigrateAuraDesignerBorderKeysLazy(adDB) end
 
     local specAuras = adDB.auras and adDB.auras[spec]
     if not specAuras then
@@ -1091,6 +1100,8 @@ function Engine:PreWarmIndicators(frame)
     if not db then return end
     local adDB = DF:ResolveAuraDesigner(frame)
     if not adDB then return end
+    if DF.MigrateAuraDesignerInstancesLazy then DF.MigrateAuraDesignerInstancesLazy(adDB) end
+    if DF.MigrateAuraDesignerBorderKeysLazy then DF.MigrateAuraDesignerBorderKeysLazy(adDB) end
 
     -- Resolve spec
     local spec = self:ResolveSpec(adDB)

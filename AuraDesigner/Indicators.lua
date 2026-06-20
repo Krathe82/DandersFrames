@@ -1082,9 +1082,14 @@ end
 -- Shared logic for applying border style, change detection, and expiring
 -- registration to a border overlay frame. Used by both shared and custom borders.
 local function ApplyBorderToOverlay(ch, frame, config, auraData)
-    -- Legacy configs (still carrying the old `style` enum, pre-migration or a
-    -- fresh import) map via BuildBorderTypeSpec; migrated configs build the
-    -- canonical spec directly.  Both produce the same DF.Border spec shape.
+    -- Legacy configs (still carrying the old `style` enum) map via
+    -- BuildBorderTypeSpec; migrated configs build the canonical spec directly.
+    -- The lazy border-key fold (DF.MigrateAuraDesignerBorderKeysLazy) runs on the
+    -- resolved adDB at every render/test entry BEFORE we get here, so a config
+    -- reaching this line with `style` still set is genuinely un-folded — we let it
+    -- use the legacy builder rather than masking the fold gap.  (A half-migrated
+    -- block that carries both `style` and canonical keys can only appear if the
+    -- fold failed to run; that should surface visibly, not be papered over.)
     local spec = config.style and BuildBorderTypeSpec(config) or DF.Border:BuildSpec(config, "")
     -- AD config has no pixelPerfect key of its own; inherit the frame's so the
     -- border thickness snaps. (This border SetAllPoints the frame, which is already

@@ -4321,10 +4321,19 @@ DF._MainEventDispatcher = function(self, event, arg1)
         if DF.MigrateAuraDesignerIconBorderKeys then
             DF:MigrateAuraDesignerIconBorderKeys(DF.db.party)
             DF:MigrateAuraDesignerIconBorderKeys(DF.db.raid)
+            -- Designer Presets relocated AD configs onto the profile root; walk
+            -- those too (the mode-DB calls above miss preset-nested border blocks,
+            -- which left imported legacy borders rendering via the old `style` path).
+            if DF.MigrateAuraDesignerPresetBorderKeys then
+                DF:MigrateAuraDesignerPresetBorderKeys(DF.db)
+            end
             if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
                 for _, profile in pairs(DandersFramesDB_v2.profiles) do
                     DF:MigrateAuraDesignerIconBorderKeys(profile.party)
                     DF:MigrateAuraDesignerIconBorderKeys(profile.raid)
+                    if DF.MigrateAuraDesignerPresetBorderKeys then
+                        DF:MigrateAuraDesignerPresetBorderKeys(profile)
+                    end
                 end
             end
         end

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Aura Designer) Fixed an aura **border** showing the wrong colour and thickness — and ignoring your edits — on imported or older profiles (for example a thin purple border where you'd set a thick red one). A stale internal border value was being kept alongside your changes and rendered underneath them; these settings now upgrade and clean up automatically, on the exact layout being drawn, so the border renders exactly as configured. (by Krathe)
+* (Aura Designer) Fixed imported or older setups that still used the previous internal aura format sometimes showing **no indicators at all** on some auras until re-saved — the format upgrade now runs automatically the first time the frame draws, including for profiles that use Designer Presets. (by Krathe)
+* (Aura Designer) The fill-**Bar** indicator's expiring **Tint** overlay is now adjustable in the editor (Show Expiring Tint + Tint Color) — the render already supported it but the controls were missing. The **Border** indicator no longer shows those tint controls, since a border has no fill to tint. (by Krathe)
+* (Aura Designer) Fixed **Import Buffs Tab Defaults** not carrying the buff **border** on/off setting over to new icon auras. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features
