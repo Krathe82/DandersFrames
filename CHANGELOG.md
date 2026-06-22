@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Defensive Icons) Fixed click-through not applying to stacked defensive icons that first appear mid-combat, so external click-casting now passes through them immediately instead of only after combat ends. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features
