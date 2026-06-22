@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Options / Click Casting) Note labels no longer show a stray "?" in place of an unsupported symbol, and inline "Note:" labels now use one consistent style across the options. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features

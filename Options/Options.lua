@@ -4183,7 +4183,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 30)
         tsDisableMouse.disableOn = function(d) return not d.targetedSpellEnabled end
         
-        clickThroughGroup:AddWidget(GUI:CreateLabel(self.child, L["⚠ Note: Click-through icons will not show tooltips."], 250), 25)
+        clickThroughGroup:AddWidget(GUI:CreateLabel(self.child, L["|cFFFF4444Note:|r Click-through icons will not show tooltips."], 250), 25)
         
         Add(clickThroughGroup, nil, 1)
         
