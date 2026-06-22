@@ -1038,6 +1038,32 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         healthBarGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Health Percentage"], db, "petShowHealthText", function()
             if DF.ApplyPetSettings then DF:ApplyPetSettings() end
         end), 30)
+
+        healthBarGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Power Bar"], db, "petShowPowerBar", function()
+            if DF.ApplyPetSettings then DF:ApplyPetSettings() end
+            GUI:RefreshCurrentPage()
+        end), 30)
+
+        local petPowerHeight = healthBarGroup:AddWidget(GUI:CreateSlider(self.child, L["Power Bar Height"], 1, 12, 1, db, "petPowerBarHeight", function()
+            if DF.ApplyPetSettings then DF:ApplyPetSettings() end
+        end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 55)
+        petPowerHeight.hideOn = function(d) return not d.petShowPowerBar end
+
+        local powerColorValues = {
+            POWER = L["By Power Type"],
+            CUSTOM = L["Custom Color"],
+        }
+        local petPowerColorMode = healthBarGroup:AddWidget(GUI:CreateDropdown(self.child, L["Power Bar Color"], powerColorValues, db, "petPowerColorMode", function()
+            if DF.ApplyPetSettings then DF:ApplyPetSettings() end
+            GUI:RefreshCurrentPage()
+        end), 55)
+        petPowerColorMode.hideOn = function(d) return not d.petShowPowerBar end
+
+        local customPowerColor = healthBarGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Custom Power Color"], db, "petPowerColor", false, function()
+            if DF.ApplyPetSettings then DF:ApplyPetSettings() end
+        end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 35)
+        customPowerColor.hideOn = function(d) return not d.petShowPowerBar or d.petPowerColorMode ~= "CUSTOM" end
+
         Add(healthBarGroup, nil, 1)
         
         -- NAME TEXT GROUP (col1)

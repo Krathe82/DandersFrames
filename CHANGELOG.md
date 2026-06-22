@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### New Features
+
+* (Pet Frames) Added an optional **power bar**. Enable **Show Power Bar** to display the pet's power (mana / energy / focus / etc.) as a bar along the bottom of the frame, with an adjustable height and either power-type or a custom colour. Off by default. (by Krathe)
+
+### Bug Fixes
+
+* (Pet Frames) Pet **name and health text show again**. They were suppressed along with the Text Designer rework even though pet frames render their own name/health text, so the pet text — and its font, anchor and colour settings — had no effect. (by Krathe)
+* (Pet Frames) An empty party pet frame no longer lingers as an overlay on the raid frames when a group member summons a pet while you are in a live raid. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features

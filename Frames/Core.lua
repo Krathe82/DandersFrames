@@ -464,6 +464,12 @@ function DF:IsLegacyTextHidden(frame)
     -- without touching each call site. The per-profile "Hide Legacy Text" toggle
     -- and the legacy text settings pages are hidden from the UI. To temporarily
     -- restore the old per-profile behaviour, return the commented expression below.
+    --
+    -- EXCEPTION: pet frames are not part of the Text Designer. Their name/health text
+    -- is driven by the legacy fontstrings with pet-specific settings (petNameFont,
+    -- petShowHealthText, petNameMaxLength, …), so they must keep it — otherwise pet
+    -- name/health text disappears entirely and those settings have no effect.
+    if frame and frame.isPetFrame then return false end
     return true
     -- local db = DF:GetFrameDB(frame)
     -- return db and db.textDesigner and db.textDesigner.hideLegacyText or false

@@ -1823,8 +1823,12 @@ DF.PartyDefaults = {
     petNameY = 0,
     petOffsetX = 0,
     petOffsetY = -1,
+    petPowerBarHeight = 4,
+    petPowerColor = {r = 0.2, g = 0.4, b = 0.9},
+    petPowerColorMode = "POWER",
     petShowBorder = false,
     petShowHealthText = true,
+    petShowPowerBar = false,
     petTexture = "Interface\\TargetingFrame\\UI-StatusBar",
 
     -- Phased Icon
@@ -3500,8 +3504,12 @@ DF.RaidDefaults = {
     petNameY = 0,
     petOffsetX = 0,
     petOffsetY = -1,
+    petPowerBarHeight = 4,
+    petPowerColor = {r = 0.2, g = 0.4, b = 0.9},
+    petPowerColorMode = "POWER",
     petShowBorder = false,
     petShowHealthText = true,
+    petShowPowerBar = false,
     petTexture = "Interface\\TargetingFrame\\UI-StatusBar",
 
     -- Phased Icon

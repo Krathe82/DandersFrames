@@ -54,6 +54,18 @@ function DF:CreatePetFrame(unit, ownerFrame, isRaid)
     frame.healthBar.bg = frame.healthBar:CreateTexture(nil, "BACKGROUND")
     frame.healthBar.bg:SetAllPoints()
     frame.healthBar.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+
+    -- Power bar (optional). Hidden until enabled; ApplyPetFrameStyle anchors it as a
+    -- bottom strip and shrinks the health bar to make room.
+    frame.powerBar = CreateFrame("StatusBar", nil, frame)
+    frame.powerBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    frame.powerBar:SetMinMaxValues(0, 100)
+    frame.powerBar:SetValue(100)
+    frame.powerBar:SetStatusBarColor(0.2, 0.4, 0.9)
+    frame.powerBar.bg = frame.powerBar:CreateTexture(nil, "BACKGROUND")
+    frame.powerBar.bg:SetAllPoints()
+    frame.powerBar.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+    frame.powerBar:Hide()
     
     -- Border via the unified DF.Border backend (Stage 4.3).
     -- ApplyPetFrameStyle drives BuildSpec + Apply on each update.
@@ -94,6 +106,9 @@ function DF:CreatePetFrame(unit, ownerFrame, isRaid)
     frame:RegisterUnitEvent("UNIT_NAME_UPDATE", unit)        -- Pet only
     frame:RegisterUnitEvent("UNIT_FLAGS", unit, ownerUnit)   -- Need both (death detection)
     frame:RegisterUnitEvent("UNIT_PET", ownerUnit)           -- Fires on owner when pet changes
+    frame:RegisterUnitEvent("UNIT_POWER_UPDATE", unit)       -- Pet power (optional power bar)
+    frame:RegisterUnitEvent("UNIT_MAXPOWER", unit)           -- Pet max power
+    frame:RegisterUnitEvent("UNIT_DISPLAYPOWER", unit)       -- Pet power type change
     
     --[[ OLD CODE - Remove after testing (was causing event flooding in cities)
     frame:RegisterEvent("UNIT_HEALTH")
@@ -173,6 +188,18 @@ function DF:CreateTestPetFrame(unit, ownerTestFrame, isRaid)
     frame.healthBar.bg = frame.healthBar:CreateTexture(nil, "BACKGROUND")
     frame.healthBar.bg:SetAllPoints()
     frame.healthBar.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+
+    -- Power bar (optional). Hidden until enabled; ApplyPetFrameStyle anchors it as a
+    -- bottom strip and shrinks the health bar to make room.
+    frame.powerBar = CreateFrame("StatusBar", nil, frame)
+    frame.powerBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    frame.powerBar:SetMinMaxValues(0, 100)
+    frame.powerBar:SetValue(100)
+    frame.powerBar:SetStatusBarColor(0.2, 0.4, 0.9)
+    frame.powerBar.bg = frame.powerBar:CreateTexture(nil, "BACKGROUND")
+    frame.powerBar.bg:SetAllPoints()
+    frame.powerBar.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+    frame.powerBar:Hide()
 
     -- Border via the unified DF.Border backend (Stage 4.3).
     -- ApplyPetFrameStyle drives BuildSpec + Apply on each update.
@@ -287,6 +314,8 @@ function DF:OnPetFrameEvent(frame, event, unit, ...)
     
     if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
         DF:UpdatePetHealth(frame)
+    elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
+        DF:UpdatePetPower(frame)
     elseif event == "UNIT_NAME_UPDATE" then
         DF:UpdatePetName(frame)
     elseif event == "UNIT_FLAGS" then
@@ -448,6 +477,56 @@ function DF:GetPetHealthGradientCurve()
     return DF.petHealthCurve
 end
 
+-- Resolve the pet power bar colour: by the pet's power type (default) or a custom colour.
+function DF:GetPetPowerColor(unit, db)
+    if db.petPowerColorMode == "CUSTOM" then
+        local c = db.petPowerColor or {r = 0.2, g = 0.4, b = 0.9}
+        return c.r, c.g, c.b
+    end
+    -- POWER: colour by the pet's current power type (mana blue / energy yellow / etc.)
+    local _, token = UnitPowerType(unit)
+    local c = token and PowerBarColor and PowerBarColor[token]
+    if c then return c.r, c.g, c.b end
+    return 0.2, 0.4, 0.9  -- fallback when the power type has no defined colour
+end
+
+-- Update the pet power bar value + colour. Mirrors the main frame's UpdatePower:
+-- guards against secret values (instanced content) by hiding rather than erroring.
+function DF:UpdatePetPower(frame)
+    if not frame or not frame.unit or not frame.powerBar then return end
+
+    local db = DF:GetFrameDB(frame)
+    if not db.petShowPowerBar then
+        frame.powerBar:Hide()
+        return
+    end
+
+    local unit = frame.unit
+    if not UnitExists(unit) then
+        frame.powerBar:Hide()
+        return
+    end
+
+    local power = UnitPower(unit)
+    local maxPower = UnitPowerMax(unit)
+
+    -- Secret-value guard: UnitPower/UnitPowerMax return secret numbers in instanced
+    -- content. NEVER compare or do arithmetic on them in Lua (that taints) — pass them
+    -- straight to the StatusBar, which accepts secret values. type() is safe and still
+    -- catches genuine non-numbers (e.g. nil when the unit briefly doesn't exist).
+    if type(power) ~= "number" or type(maxPower) ~= "number" then
+        frame.powerBar:Hide()
+        return
+    end
+
+    frame.powerBar:SetMinMaxValues(0, maxPower)
+    frame.powerBar:SetValue(power)
+
+    local r, g, b = DF:GetPetPowerColor(unit, db)
+    frame.powerBar:SetStatusBarColor(r, g, b, 1)
+    frame.powerBar:Show()
+end
+
 -- Apply visual styling to pet frame
 function DF:ApplyPetFrameStyle(frame)
     if not frame then return end
@@ -485,7 +564,27 @@ function DF:ApplyPetFrameStyle(frame)
     -- Health bar background color
     local healthBgColor = db.petHealthBgColor or {r = 0.2, g = 0.2, b = 0.2, a = 0.8}
     frame.healthBar.bg:SetVertexColor(healthBgColor.r, healthBgColor.g, healthBgColor.b, healthBgColor.a or 0.8)
-    
+
+    -- Power bar layout: when enabled, reserve a bottom strip for it and shrink the
+    -- health bar to match; otherwise the health bar fills the frame and power is hidden.
+    if frame.powerBar then
+        frame.healthBar:ClearAllPoints()
+        if db.petShowPowerBar then
+            local powerHeight = db.petPowerBarHeight or 4
+            frame.healthBar:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+            frame.healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, powerHeight)
+            frame.powerBar:ClearAllPoints()
+            frame.powerBar:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, powerHeight)
+            frame.powerBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+            DF:SafeSetStatusBarTexture(frame.powerBar, texture)
+            DF:SafeSetTexture(frame.powerBar.bg, texture)
+            frame.powerBar:Show()
+        else
+            frame.healthBar:SetAllPoints(frame)
+            frame.powerBar:Hide()
+        end
+    end
+
     -- Border via unified DF.Border backend (Stage 4.3). No ctx — Class /
     -- Role colour deliberately not exposed on Pet Frame: UnitClass("pet")
     -- returns the pet family (Beast / Felguard / etc.), not a class token
@@ -598,6 +697,7 @@ function DF:UpdatePetFrame(frame)
         -- Update health and name
         DF:UpdatePetHealth(frame)
         DF:UpdatePetName(frame)
+        DF:UpdatePetPower(frame)
         DF:SetPetFrameVisible(frame, true)
         DF:Debug("PET", "UpdatePetFrame: %s VISIBLE (unitExists=%s ownerDead=%s)", frame.unit, tostring(unitExists), tostring(ownerDead))
     else
@@ -638,6 +738,21 @@ function DF:UpdatePetFrameTestMode(frame)
 
     -- Set health bar color (green)
     frame.healthBar:SetStatusBarColor(0.2, 0.8, 0.2)
+
+    -- Fake power bar (geometry/visibility already set by ApplyPetFrameStyle)
+    if frame.powerBar then
+        local db = DF:GetFrameDB(frame)
+        if db.petShowPowerBar then
+            local powerPercent = 0.4 + (math.random() * 0.6)
+            frame.powerBar:SetMinMaxValues(0, 1)
+            frame.powerBar:SetValue(powerPercent)
+            local r, g, b = DF:GetPetPowerColor(frame.unit, db)
+            frame.powerBar:SetStatusBarColor(r, g, b)
+            frame.powerBar:Show()
+        else
+            frame.powerBar:Hide()
+        end
+    end
 
     -- Update health text if shown
     if frame.healthText then
@@ -1294,6 +1409,20 @@ function DF:UpdateAllPetFrames(force)
             if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
         end
         DF:HideAllTestPetFrames()
+        return
+    end
+
+    -- Hide party pet frames when physically in a live raid (the raid pet track handles pets there).
+    -- Mirrors the raid-test-mode guard above, for real raids. Without this the party pet frames can
+    -- linger as an orphaned overlay over the raid frames, since the party frames they anchor to are
+    -- hidden once raid frames take over.
+    if not DF.testMode and IsInRaid() then
+        DF:Debug("PET", "UpdateAllPetFrames: hiding party pets (live raid active)")
+        if DF.petFrames.player then DF.petFrames.player:Hide() end
+        for i = 1, 4 do
+            if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
+        end
+        if DF.petGroupContainer then DF.petGroupContainer:Hide() end
         return
     end
 
