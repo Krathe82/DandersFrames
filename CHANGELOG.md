@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Raid) Group labels no longer occasionally appear over the flat raid grid. When an auto layout switched from a grouped layout to a flat one, the group labels from the grouped layout could be left behind floating over the flat frames; they are now hidden when flat mode takes over, the same as the grouped headers already were. (by Krathe)
+
 ## [4.5.0]
 
 ### New Features
