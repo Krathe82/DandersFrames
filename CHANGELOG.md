@@ -10,6 +10,7 @@
 * (Raid) Test mode now matches your live raid frame positions exactly in both **flat** and **group-based** layouts. Several combinations of fill direction, group alignment, "grow from" and "players grow from" used to render differently in test mode than they did in real combat, so the preview couldn't be trusted for fine-tuning; the test path now mirrors the live secure positioning in every case. This includes **Center** group alignment, where test mode wasn't applying the populated-row compensation that keeps live frames from drifting as the roster changes — so a centred raid now previews in the right place and stays put when players join or leave. (by Krathe)
 * (Raid) Group labels no longer occasionally appear over the flat raid grid. When an auto layout switched from a grouped layout to a flat one, the group labels from the grouped layout could be left behind floating over the flat frames; they are now hidden when flat mode takes over, the same as the grouped headers already were. (by Krathe)
 * (Defensive Icons) Fixed click-through not applying to stacked defensive icons that first appear mid-combat, so external click-casting now passes through them immediately instead of only after combat ends. (by Krathe)
+* (Aura Designer) Fixed a **health-bar Tint** indicator leaving the last 1–2 pixels unfilled at each edge of the bar when a frame border was shown — the tint was inset by the border thickness. The tint now fills the whole bar (the border draws on top and frames it cleanly), matching the Replace mode. (by Krathe)
 
 ## [4.5.0]
 
