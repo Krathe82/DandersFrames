@@ -11,6 +11,10 @@
 * (Raid) Group labels no longer occasionally appear over the flat raid grid. When an auto layout switched from a grouped layout to a flat one, the group labels from the grouped layout could be left behind floating over the flat frames; they are now hidden when flat mode takes over, the same as the grouped headers already were. (by Krathe)
 * (Defensive Icons) Fixed click-through not applying to stacked defensive icons that first appear mid-combat, so external click-casting now passes through them immediately instead of only after combat ends. (by Krathe)
 * (Aura Designer) Fixed a **health-bar Tint** indicator leaving the last 1–2 pixels unfilled at each edge of the bar when a frame border was shown — the tint was inset by the border thickness. The tint now fills the whole bar (the border draws on top and frames it cleanly), matching the Replace mode. (by Krathe)
+* (Aura Designer) Fixed an aura **border** showing the wrong colour and thickness — and ignoring your edits — on imported or older profiles (for example a thin purple border where you'd set a thick red one). A stale internal border value was being kept alongside your changes and rendered underneath them; these settings now upgrade and clean up automatically, on the exact layout being drawn, so the border renders exactly as configured. (by Krathe)
+* (Aura Designer) Fixed imported or older setups that still used the previous internal aura format sometimes showing **no indicators at all** on some auras until re-saved — the format upgrade now runs automatically the first time the frame draws, including for profiles that use Designer Presets. (by Krathe)
+* (Aura Designer) The fill-**Bar** indicator's expiring **Tint** overlay is now adjustable in the editor (Show Expiring Tint + Tint Color) — the render already supported it but the controls were missing. The **Border** indicator no longer shows those tint controls, since a border has no fill to tint. (by Krathe)
+* (Aura Designer) Fixed **Import Buffs Tab Defaults** not carrying the buff **border** on/off setting over to new icon auras. (by Krathe)
 
 ## [4.5.0]
 

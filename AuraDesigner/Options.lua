@@ -234,24 +234,32 @@ DF.MigrateAuraDesignerSpecScope = MigrateToSpecScoped
 -- `showBorder`; both fold to canonical `ShowBorder`.
 -- ============================================================
 
+-- Backfill canonical ONLY when absent, but ALWAYS strip the legacy key — even
+-- when the canonical key already exists.  A block edited in the new GUI writes
+-- canonical keys but leaves the legacy ones behind; the old "swap-and-nil only
+-- if canonical == nil" form then skipped the strip, leaving the legacy key to
+-- linger forever (the half-migrated state).  Mirrors renameBorderTypeKeys.
 local function renameIconBorderKeys(t)
     if type(t) ~= "table" then return end
-    if t.borderEnabled ~= nil and t.ShowBorder == nil then
-        t.ShowBorder, t.borderEnabled = t.borderEnabled, nil
+    if t.borderEnabled ~= nil then
+        if t.ShowBorder == nil then t.ShowBorder = t.borderEnabled end
+        t.borderEnabled = nil
     end
-    if t.borderThickness ~= nil and t.BorderSize == nil then
-        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    if t.borderThickness ~= nil then
+        if t.BorderSize == nil then t.BorderSize = t.borderThickness end
+        t.borderThickness = nil
     end
-    if t.borderInset ~= nil and t.BorderInset == nil then
-        t.BorderInset, t.borderInset = t.borderInset, nil
+    if t.borderInset ~= nil then
+        if t.BorderInset == nil then t.BorderInset = t.borderInset end
+        t.borderInset = nil
     end
     -- Stage 5.1d.2: legacy expiringPulsate (boolean) → ExpiringAnimationType
     -- (string).  expiringPulsate = true means the user wanted the AD legacy
     -- alpha-fade pulse during expiring; that effect is now first-class as
     -- DF_PULSATE.  False just clears the boolean — the new key defaults to
     -- "NONE" which means no expiring animation override.
-    if t.expiringPulsate ~= nil and t.ExpiringAnimationType == nil then
-        if t.expiringPulsate == true then
+    if t.expiringPulsate ~= nil then
+        if t.ExpiringAnimationType == nil and t.expiringPulsate == true then
             t.ExpiringAnimationType = "DF_PULSATE"
         end
         t.expiringPulsate = nil
@@ -264,14 +272,18 @@ end
 -- from the icon's border DF_PULSATE, so it stays a boolean.
 local function renameSquareBorderKeys(t)
     if type(t) ~= "table" then return end
-    if t.showBorder ~= nil and t.ShowBorder == nil then
-        t.ShowBorder, t.showBorder = t.showBorder, nil
+    -- Always strip legacy (see renameIconBorderKeys); backfill canonical if absent.
+    if t.showBorder ~= nil then
+        if t.ShowBorder == nil then t.ShowBorder = t.showBorder end
+        t.showBorder = nil
     end
-    if t.borderThickness ~= nil and t.BorderSize == nil then
-        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    if t.borderThickness ~= nil then
+        if t.BorderSize == nil then t.BorderSize = t.borderThickness end
+        t.borderThickness = nil
     end
-    if t.borderInset ~= nil and t.BorderInset == nil then
-        t.BorderInset, t.borderInset = t.borderInset, nil
+    if t.borderInset ~= nil then
+        if t.BorderInset == nil then t.BorderInset = t.borderInset end
+        t.borderInset = nil
     end
 end
 
@@ -280,14 +292,18 @@ end
 -- `BorderColor`.  The bar has no legacy inset key.
 local function renameBarBorderKeys(t)
     if type(t) ~= "table" then return end
-    if t.showBorder ~= nil and t.ShowBorder == nil then
-        t.ShowBorder, t.showBorder = t.showBorder, nil
+    -- Always strip legacy (see renameIconBorderKeys); backfill canonical if absent.
+    if t.showBorder ~= nil then
+        if t.ShowBorder == nil then t.ShowBorder = t.showBorder end
+        t.showBorder = nil
     end
-    if t.borderThickness ~= nil and t.BorderSize == nil then
-        t.BorderSize, t.borderThickness = t.borderThickness, nil
+    if t.borderThickness ~= nil then
+        if t.BorderSize == nil then t.BorderSize = t.borderThickness end
+        t.borderThickness = nil
     end
-    if t.borderColor ~= nil and t.BorderColor == nil then
-        t.BorderColor, t.borderColor = t.borderColor, nil
+    if t.borderColor ~= nil then
+        if t.BorderColor == nil then t.BorderColor = t.borderColor end
+        t.borderColor = nil
     end
 end
 
@@ -297,32 +313,55 @@ end
 -- it runs once.
 local function renameBorderTypeKeys(t)
     if type(t) ~= "table" then return end
-    if t.style == nil or t.BorderStyle ~= nil then return end
+    -- The legacy `style` key is what forces the old render path (Indicators.lua's
+    -- `config.style and BuildBorderTypeSpec(...)`), so its presence is what we key
+    -- on.  Crucially we run EVEN WHEN BorderStyle already exists: a block edited in
+    -- the new GUI writes canonical keys but leaves `style` behind, so it must still
+    -- get stripped or it keeps rendering via the legacy builder (the half-migrated
+    -- bug — legacy color/thickness shadowing the GUI's BorderColor/BorderSize).
+    if t.style == nil then return end
     local thickness = t.thickness or 2
     local inset     = t.inset or 0
     local color     = t.color or { r = 0, g = 0, b = 0, a = 1 }
     local legacy    = { Solid = "SOLID", Glow = "GLOW", Pulse = "SOLID" }
     local style     = legacy[t.style] or t.style or "SOLID"
-    t.ShowBorder  = true
-    t.BorderInset = inset
-    t.BorderColor = color
-    if style == "GLOW" then
-        t.BorderStyle = "TEXTURE"; t.BorderTexture = "DF Glow"; t.BorderSize = thickness
-    elseif style == "DASHED" or style == "ANIMATED" then
-        t.BorderStyle = "SOLID"; t.BorderSize = 0
-        t.BorderAnimationType      = "DF_DASH"
-        t.BorderAnimationFrequency = (style == "ANIMATED") and 1 or 0
-        t.BorderAnimationThickness = thickness
-        t.BorderAnimationColor     = color
-        t.BorderAnimationInset     = inset
-    elseif style == "CORNERS" then
-        t.BorderStyle = "SOLID"; t.BorderSize = 0
-        t.BorderAnimationType      = "CORNERS_ONLY"
-        t.BorderAnimationThickness = thickness
-        t.BorderAnimationColor     = color
-    else  -- SOLID (and anything unknown)
-        t.BorderStyle = "SOLID"; t.BorderSize = thickness
+    -- Fold legacy → canonical ONLY where the canonical key is absent, so we never
+    -- overwrite edits the user already made in the new GUI (BorderColor/BorderSize).
+    if t.ShowBorder  == nil then t.ShowBorder  = true  end
+    if t.BorderInset == nil then t.BorderInset = inset end
+    if t.BorderColor == nil then t.BorderColor = color end
+    if t.BorderStyle == nil then
+        if style == "GLOW" then
+            t.BorderStyle = "TEXTURE"
+            if t.BorderTexture == nil then t.BorderTexture = "DF Glow" end
+            if t.BorderSize    == nil then t.BorderSize    = thickness end
+        elseif style == "DASHED" or style == "ANIMATED" then
+            t.BorderStyle = "SOLID"
+            if t.BorderSize == nil then t.BorderSize = 0 end
+            if t.BorderAnimationType == nil then
+                t.BorderAnimationType      = "DF_DASH"
+                t.BorderAnimationFrequency = (style == "ANIMATED") and 1 or 0
+                t.BorderAnimationThickness = thickness
+                t.BorderAnimationColor     = color
+                t.BorderAnimationInset     = inset
+            end
+        elseif style == "CORNERS" then
+            t.BorderStyle = "SOLID"
+            if t.BorderSize == nil then t.BorderSize = 0 end
+            if t.BorderAnimationType == nil then
+                t.BorderAnimationType      = "CORNERS_ONLY"
+                t.BorderAnimationThickness = thickness
+                t.BorderAnimationColor     = color
+            end
+        else  -- SOLID (and anything unknown)
+            t.BorderStyle = "SOLID"
+            if t.BorderSize == nil then t.BorderSize = thickness end
+        end
+    elseif t.BorderSize == nil then
+        -- BorderStyle already set (by the GUI); just backfill size from legacy.
+        t.BorderSize = thickness
     end
+    -- Strip legacy keys so rendering routes through DF.Border:BuildSpec.
     t.style = nil; t.thickness = nil; t.inset = nil; t.color = nil
 end
 
@@ -354,21 +393,19 @@ local function MigrateIconBorderKeysOnAuras(specAuras)
     end
 end
 
-local function MigrateAuraDesignerIconBorderKeys(modeDb)
-    local adDB = modeDb and modeDb.auraDesigner
-    if not adDB or not adDB.auras then return end
-
-    -- Detect shape: pre-spec-scoping (flat aura configs) vs spec-scoped.
-    -- Mirrors MigrateAuraDesignerToInstances' detection so we stay correct
-    -- whether the spec-scope migration ran before us or not.
-    for _, val in pairs(adDB.auras) do
+-- Run the icon/square/bar/border key renames over one `.auras` table, handling
+-- both the flat ({ auraName → auraCfg }) and spec-scoped
+-- ({ specKey → { auraName → auraCfg } }) shapes.  Mirrors
+-- MigrateAuraDesignerToInstances' shape detection so we stay correct whether the
+-- spec-scope migration ran before us or not.
+local function MigrateBorderKeysOnAurasTable(auras)
+    if type(auras) ~= "table" then return end
+    for _, val in pairs(auras) do
         if type(val) == "table" then
             if val.priority ~= nil or val.indicators ~= nil or val.icon ~= nil then
-                -- Flat: adDB.auras is { auraName → auraCfg }
-                MigrateIconBorderKeysOnAuras(adDB.auras)
+                MigrateIconBorderKeysOnAuras(auras)             -- flat
             else
-                -- Spec-scoped: adDB.auras is { specKey → { auraName → auraCfg } }
-                for _, specAuras in pairs(adDB.auras) do
+                for _, specAuras in pairs(auras) do             -- spec-scoped
                     MigrateIconBorderKeysOnAuras(specAuras)
                 end
             end
@@ -377,7 +414,63 @@ local function MigrateAuraDesignerIconBorderKeys(modeDb)
     end
 end
 
-DF.MigrateAuraDesignerIconBorderKeys = MigrateAuraDesignerIconBorderKeys
+local function MigrateAuraDesignerIconBorderKeys(modeDb)
+    local adDB = modeDb and modeDb.auraDesigner
+    if adDB and adDB.auras then
+        MigrateBorderKeysOnAurasTable(adDB.auras)
+    end
+end
+
+-- The Designer Presets rework relocated AD aura configs into
+-- profile.auraDesignerPresets[name].auras.  MigrateAuraDesignerIconBorderKeys
+-- only walks the legacy per-mode modeDb.auraDesigner location, so preset-nested
+-- border blocks were never folded — they kept their legacy `style` (rendering via
+-- the old builder) while the GUI wrote canonical keys onto them (the half-migrated
+-- state).  Walk every preset's auras so those blocks get folded + `style` stripped.
+local function MigrateAuraDesignerPresetBorderKeys(profile)
+    local presets = profile and profile.auraDesignerPresets
+    if type(presets) ~= "table" then return end
+    for _, preset in pairs(presets) do
+        if type(preset) == "table" then
+            MigrateBorderKeysOnAurasTable(preset.auras)
+        end
+    end
+end
+
+DF.MigrateAuraDesignerIconBorderKeys   = MigrateAuraDesignerIconBorderKeys
+DF.MigrateAuraDesignerPresetBorderKeys = MigrateAuraDesignerPresetBorderKeys
+
+-- Lazy, flag-gated border-key fold.  This is the one that actually matters for
+-- live frames: the ADDON_LOADED passes above clean the STORED tables (modeDb
+-- auraDesigner + presets), but render resolves its config through
+-- DF:ResolveAuraDesigner / GetModeBaseAuraDesigner, which can hand back a
+-- resolved / auto-layout-overlay table the load-time passes never touched.
+-- Mirroring MigrateToSpecScoped's lazy-on-access pattern, we fold the border keys
+-- on the EXACT adDB about to be rendered/edited, gated by `_borderKeysFoldedV1`
+-- so it runs once per table.  (Idempotent if the table is rebuilt each access.)
+local function MigrateBorderKeysLazy(adDB)
+    if type(adDB) ~= "table" or adDB._borderKeysFoldedV1 then return end
+    if adDB.auras then MigrateBorderKeysOnAurasTable(adDB.auras) end
+    adDB._borderKeysFoldedV1 = true
+end
+DF.MigrateAuraDesignerBorderKeysLazy = MigrateBorderKeysLazy
+
+-- Same lazy-on-access pattern for the type-keyed → instances[] migration.  It
+-- only ran at ADDON_LOADED on modeDb.auraDesigner, so an imported preset still in
+-- the legacy type-keyed shape (icon/square/bar sub-tables, no `indicators`) would
+-- render NOTHING — the engine reads `auraCfg.indicators`.  Reuses the existing,
+-- idempotent DF.MigrateAuraDesignerToInstances (guarded per-aura by `not
+-- auraCfg.indicators`) via a thin modeDb wrapper, so there's no duplicated
+-- conversion logic.  The resolved adDB IS the preset by reference, so folding it
+-- also cleans the stored data.  Runs before the border fold to match load order.
+local function MigrateInstancesLazy(adDB)
+    if type(adDB) ~= "table" or adDB._instancesFoldedV1 then return end
+    if DF.MigrateAuraDesignerToInstances and adDB.auras then
+        DF.MigrateAuraDesignerToInstances({ auraDesigner = adDB })
+    end
+    adDB._instancesFoldedV1 = true
+end
+DF.MigrateAuraDesignerInstancesLazy = MigrateInstancesLazy
 
 local function GetAuraDesignerDB()
     -- The editor is mode-tabbed: it edits the preset the active mode uses
@@ -395,6 +488,8 @@ local function GetAuraDesignerDB()
     if adDB and (not adDB._specScopedV1 or not adDB._specScopedV2) then
         MigrateToSpecScoped(adDB)
     end
+    MigrateInstancesLazy(adDB)
+    MigrateBorderKeysLazy(adDB)
     return adDB
 end
 
@@ -614,7 +709,9 @@ local function EnsureTypeConfig(auraName, typeKey)
                 -- aura's icon sub-config; everything else (style, colour,
                 -- gradient, shadow, offset, blend) reads from TYPE_DEFAULTS
                 -- via proxy fall-through until the user overrides it.
-                ShowBorder = true, BorderSize = 1, BorderInset = 0,
+                -- Seed Show/Size from the global icon-border defaults so the
+                -- "Import Buffs Tab Defaults" border toggle actually carries over.
+                ShowBorder = (gd.iconBorderEnabled ~= false), BorderSize = gd.iconBorderThickness or 1, BorderInset = 0,
                 hideSwipe = false,
                 -- Duration text
                 showDuration = gd.showDuration ~= false,
@@ -3176,7 +3273,10 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
                     -- draw, so hide it there too (no border = nowhere to attach).
                     animation     = not iconTextOnly,
                     iconEffects   = opts.iconEffects,
-                    tint          = true,  -- secret-safe; works on all auras
+                    -- secret-safe; works on all auras. Opt out via opts.tint=false
+                    -- for indicator types whose render can't apply a tint (e.g. the
+                    -- border type draws no fill, so SetupExpiringTint is never called).
+                    tint          = (opts.tint ~= false),
                 },
                 lightTint = RPL,
             })
@@ -3490,6 +3590,11 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
             g:AddWidget(GUI:CreateCheckbox(parent, L["Expiring Color Override"], proxy, "expiringEnabled"), 28)
             g:AddWidget(CreateExpiringThresholdRow(parent, proxy, contentWidth - 10), 54)
             g:AddWidget(GUI:CreateColorPicker(parent, L["Expiring Color"], proxy, "expiringColor", true, RPL, RPL, true), 28)
+            -- Expiring tint overlay: the bar render (ConfigureBar/UpdateBar) is fully
+            -- wired for these keys via SetupExpiringTint, but the hand-built bar group
+            -- never exposed them. Surface them so the wired feature is reachable.
+            g:AddWidget(GUI:CreateCheckbox(parent, L["Show Expiring Tint"], proxy, "expiringTintEnabled", RPL), 28)
+            g:AddWidget(GUI:CreateColorPicker(parent, L["Tint Color"], proxy, "expiringTintColor", true, RPL, RPL, true), 28)
         end)
         -- Duration Text
         AddGroup(L["Duration Text"], function(g)
@@ -3544,9 +3649,13 @@ local function BuildTypeContent(parent, typeKey, auraName, width, optProxy, yOff
         -- effect below threshold (e.g. solid → marching DF Dash).
         -- Bar: single Expiring Colour, thicker max (8), a duration-priority row,
         -- and no Icon-Effects (bars don't pulse/bounce the whole icon).
+        -- The border type draws no fill, so the expiring "tint" overlay has nothing
+        -- to tint and ApplyBorderToOverlay never calls SetupExpiringTint — hide the
+        -- otherwise-dead "Show Expiring Tint" / "Tint Color" controls for this type.
         AddExpiringBorderGroup({
             thicknessMax = 8,
             durationPriority = true,
+            tint = false,
         })
 
     elseif typeKey == "healthbar" then
