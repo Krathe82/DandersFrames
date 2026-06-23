@@ -2047,7 +2047,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local infoGroup = GUI:CreateSettingsGroup(self.child, 280)
         infoGroup:AddWidget(GUI:CreateHeader(self.child, L["Affected Elements"]), 40)
         infoGroup:AddWidget(GUI:CreateLabel(self.child, L["• Name Text\n• Health Text\n• Status Text (Dead/Offline)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• All Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"], 250), 235)
-        infoGroup:AddWidget(GUI:CreateLabel(self.child, L["Note: Font sizes are not changed. Adjust sizes in each element's page."], 250), 40)
+        infoGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["Font sizes are not changed. Adjust sizes in each element's page."], 250), 40)
         Add(infoGroup, nil, 2)
     end)
     
@@ -4231,7 +4231,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end), 30)
         tsDisableMouse.disableOn = function(d) return not d.targetedSpellEnabled end
         
-        clickThroughGroup:AddWidget(GUI:CreateLabel(self.child, L["|cFFFF4444Note:|r Click-through icons will not show tooltips."], 250), 25)
+        clickThroughGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["Click-through icons will not show tooltips."], 250), 25)
         
         Add(clickThroughGroup, nil, 1)
         

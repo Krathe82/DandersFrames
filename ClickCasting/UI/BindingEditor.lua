@@ -176,7 +176,7 @@ function CC:ShowAddBindingDialog(onComplete, existingBinding, existingIndex)
         macWarning:SetPoint("TOPLEFT", keyCaptureBtn, "BOTTOMLEFT", 0, -2)
         macWarning:SetWidth(390)
         macWarning:SetJustifyH("LEFT")
-        macWarning:SetText(L["Note: Cmd + Left Click unavailable on Mac"])
+        macWarning:SetText("|cFFFF4444Note:|r " .. L["Cmd + Left Click unavailable on Mac"])
         macWarning:SetTextColor(0.9, 0.6, 0.2)
         yOffset = yOffset - 12  -- Extra space for the warning
     end
@@ -1047,7 +1047,7 @@ function CC:CreateEditBindingPanel()
     macWarning:SetPoint("RIGHT", clearBindBtn, "RIGHT", 0, 0)
     macWarning:SetJustifyH("LEFT")
     macWarning:SetWordWrap(false)
-    macWarning:SetText(L["Note: Cmd + Left Click unavailable on Mac"])
+    macWarning:SetText("|cFFFF4444Note:|r " .. L["Cmd + Left Click unavailable on Mac"])
     macWarning:SetTextColor(0.9, 0.6, 0.2)
     if IsMacClient and IsMacClient() then
         macWarning:Show()
