@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+* (Nicknames) Fixed an error when matching nicknames against boss or NPC names on pinned frames during encounters.
+* (Localization) Test Mode, frame position, and grid layout labels now translate properly instead of always showing English.
+* (Localization) Text Designer, Aura Designer, and auto-profile labels now follow your chosen language.
+
 ## [4.5.0]
 
 ### New Features

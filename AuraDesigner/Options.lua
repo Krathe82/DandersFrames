@@ -36,50 +36,68 @@ local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
 local C_TEXT_DIM   = {r = 0.6, g = 0.6, b = 0.6, a = 1}
 
 -- Indicator type definitions
-local INDICATOR_TYPES = {
-    { key = "icon",       label = L["Icon"],             placed = true  },
-    { key = "square",     label = L["Square"],           placed = true  },
-    { key = "bar",        label = L["Bar"],              placed = true  },
-    { key = "border",     label = L["Border"],           placed = false },
-    { key = "healthbar",  label = L["Health Bar Color"], placed = false },
-    { key = "background", label = L["Background Color"],  placed = false },
-    { key = "nametext",   label = L["Name Text Color"],  placed = false },
-    { key = "healthtext", label = L["Health Text Color"], placed = false },
-    { key = "framealpha", label = L["Frame Alpha"],      placed = false },
-    { key = "sound",      label = L["Sound Alert"],      placed = false },
-}
+-- These option/label tables read L["..."]; at file scope that returns the enUS
+-- baseline (the languageOverride overlay runs later, at ADDON_LOADED). Build
+-- them in a registered refresh fn so Core rebuilds them after the overlay —
+-- otherwise these dropdowns stay English. Value-keys (CENTER, RIGHT, …) and
+-- the _order arrays are raw identifiers and must NOT be localized.
+local INDICATOR_TYPES = {}
+local ANCHOR_OPTIONS = {}
+local GROWTH_OPTIONS = {}
+local FRAME_STRATA_OPTIONS = {}
+local BORDER_STYLE_OPTIONS = {}
+local HEALTHBAR_MODE_OPTIONS = {}
+local BAR_ORIENT_OPTIONS = {}
 
-local ANCHOR_OPTIONS = {
-    CENTER = L["Center"], TOP = L["Top"], BOTTOM = L["Bottom"], LEFT = L["Left"], RIGHT = L["Right"],
-    TOPLEFT = L["Top Left"], TOPRIGHT = L["Top Right"], BOTTOMLEFT = L["Bottom Left"], BOTTOMRIGHT = L["Bottom Right"],
-    _order = {"TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"},
-}
+local function RefreshLocaleStrings()
+    INDICATOR_TYPES = {
+        { key = "icon",       label = L["Icon"],             placed = true  },
+        { key = "square",     label = L["Square"],           placed = true  },
+        { key = "bar",        label = L["Bar"],              placed = true  },
+        { key = "border",     label = L["Border"],           placed = false },
+        { key = "healthbar",  label = L["Health Bar Color"], placed = false },
+        { key = "background", label = L["Background Color"],  placed = false },
+        { key = "nametext",   label = L["Name Text Color"],  placed = false },
+        { key = "healthtext", label = L["Health Text Color"], placed = false },
+        { key = "framealpha", label = L["Frame Alpha"],      placed = false },
+        { key = "sound",      label = L["Sound Alert"],      placed = false },
+    }
 
-local GROWTH_OPTIONS = {
-    RIGHT = L["Right"], LEFT = L["Left"], UP = L["Up"], DOWN = L["Down"],
-    _order = {"RIGHT", "LEFT", "UP", "DOWN"},
-}
+    ANCHOR_OPTIONS = {
+        CENTER = L["Center"], TOP = L["Top"], BOTTOM = L["Bottom"], LEFT = L["Left"], RIGHT = L["Right"],
+        TOPLEFT = L["Top Left"], TOPRIGHT = L["Top Right"], BOTTOMLEFT = L["Bottom Left"], BOTTOMRIGHT = L["Bottom Right"],
+        _order = {"TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"},
+    }
 
-local FRAME_STRATA_OPTIONS = {
-    INHERIT = L["Inherit (Frame)"], BACKGROUND = L["Background"], LOW = L["Low"], MEDIUM = L["Medium"], HIGH = L["High"],
-    _order = {"INHERIT", "BACKGROUND", "LOW", "MEDIUM", "HIGH"},
-}
+    GROWTH_OPTIONS = {
+        RIGHT = L["Right"], LEFT = L["Left"], UP = L["Up"], DOWN = L["Down"],
+        _order = {"RIGHT", "LEFT", "UP", "DOWN"},
+    }
 
-local BORDER_STYLE_OPTIONS = {
-    SOLID = L["Solid Border"], ANIMATED = L["Animated Border"], DASHED = L["Dashed Border"],
-    GLOW = L["Glow"], CORNERS = L["Corners Only"],
-    _order = {"SOLID", "ANIMATED", "DASHED", "GLOW", "CORNERS"},
-}
+    FRAME_STRATA_OPTIONS = {
+        INHERIT = L["Inherit (Frame)"], BACKGROUND = L["Background"], LOW = L["Low"], MEDIUM = L["Medium"], HIGH = L["High"],
+        _order = {"INHERIT", "BACKGROUND", "LOW", "MEDIUM", "HIGH"},
+    }
 
-local HEALTHBAR_MODE_OPTIONS = {
-    Replace = L["Replace"], Tint = L["Tint"],
-    _order = {"Replace", "Tint"},
-}
+    BORDER_STYLE_OPTIONS = {
+        SOLID = L["Solid Border"], ANIMATED = L["Animated Border"], DASHED = L["Dashed Border"],
+        GLOW = L["Glow"], CORNERS = L["Corners Only"],
+        _order = {"SOLID", "ANIMATED", "DASHED", "GLOW", "CORNERS"},
+    }
 
-local BAR_ORIENT_OPTIONS = {
-    HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"],
-    _order = {"HORIZONTAL", "VERTICAL"},
-}
+    HEALTHBAR_MODE_OPTIONS = {
+        Replace = L["Replace"], Tint = L["Tint"],
+        _order = {"Replace", "Tint"},
+    }
+
+    BAR_ORIENT_OPTIONS = {
+        HORIZONTAL = L["Horizontal"], VERTICAL = L["Vertical"],
+        _order = {"HORIZONTAL", "VERTICAL"},
+    }
+end
+
+RefreshLocaleStrings()
+DF:RegisterLocaleRefresh(RefreshLocaleStrings)
 
 -- ============================================================
 -- HELPERS
@@ -1738,21 +1756,32 @@ local effectCardPool = {}   -- Reusable card frames
 
 local FRAME_LEVEL_TYPE_KEYS = { "border", "healthbar", "background", "nametext", "healthtext", "framealpha", "sound" }
 
-local FRAME_LEVEL_LABELS = {
-    border     = L["Border"],
-    healthbar  = L["Health Bar"],
-    background  = L["Background"],
-    nametext   = L["Name Text"],
-    healthtext = L["Health Text"],
-    framealpha = L["Frame Alpha"],
-    sound      = L["Sound Alert"],
-}
+-- Effect-type display labels. Same file-scope-vs-overlay timing issue as the
+-- option tables near the top of this file: build them in a registered refresh
+-- fn so they pick up the active locale.
+local FRAME_LEVEL_LABELS = {}
+local PLACED_TYPE_LABELS = {}
 
-local PLACED_TYPE_LABELS = {
-    icon   = L["Icon"],
-    square = L["Square"],
-    bar    = L["Bar"],
-}
+local function RefreshEffectLabels()
+    FRAME_LEVEL_LABELS = {
+        border     = L["Border"],
+        healthbar  = L["Health Bar"],
+        background  = L["Background"],
+        nametext   = L["Name Text"],
+        healthtext = L["Health Text"],
+        framealpha = L["Frame Alpha"],
+        sound      = L["Sound Alert"],
+    }
+
+    PLACED_TYPE_LABELS = {
+        icon   = L["Icon"],
+        square = L["Square"],
+        bar    = L["Bar"],
+    }
+end
+
+RefreshEffectLabels()
+DF:RegisterLocaleRefresh(RefreshEffectLabels)
 
 local BADGE_COLORS = {
     icon       = { r = 0.36, g = 0.72, b = 0.94 },  -- Blue

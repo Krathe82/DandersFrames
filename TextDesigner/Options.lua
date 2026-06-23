@@ -92,54 +92,66 @@ local CONTENT_CATEGORIES = {
     "group", "identity", "health", "power", "shields", "status", "threat",
 }
 
-local CONTENT_CATEGORY_LABELS = {
-    identity = L["Identity & Roster"],
-    health   = L["Health"],
-    power    = L["Power"],
-    shields  = L["Shields & Heals"],
-    status   = L["Status"],
-    threat   = L["Threat & Range"],
-    group    = L["Group"],
-}
+-- These label tables read L["..."], which at file-scope returns the enUS
+-- baseline (the languageOverride overlay is applied later, at ADDON_LOADED).
+-- Build them in a function we register with DF:RegisterLocaleRefresh so Core
+-- re-runs it after the overlay — otherwise the picker stays English.
+local CONTENT_CATEGORY_LABELS = {}
+local CONTENT_TYPES = {}
 
-local CONTENT_TYPES = {
-    -- Identity & Roster
-    { key = "name",              label = L["Name"],                       category = "identity" },
-    { key = "class",             label = L["Class"],                      category = "identity" },
-    { key = "group_number",      label = L["Group Number"],               category = "identity" },
-    { key = "level",             label = L["Level"],                      category = "identity" },
-    { key = "race",              label = L["Race"],                       category = "identity" },
-    { key = "faction",           label = L["Faction"],                    category = "identity" },
-    { key = "custom_static",     label = L["Custom Static Text"],         category = "identity" },
-    -- Health
-    { key = "hp_current",        label = L["Current HP"],                 category = "health"   },
-    { key = "hp_max",            label = L["Max HP"],                     category = "health"   },
-    { key = "hp_percent",        label = L["HP Percent"],                 category = "health"   },
-    { key = "hp_deficit",        label = L["HP Deficit"],                 category = "health"   },
-    { key = "hp_max_reduction",  label = L["Max HP Reduction %"],         category = "health"   },
-    -- Power
-    { key = "power_current",     label = L["Current Power"],              category = "power"    },
-    { key = "power_percent",     label = L["Power %"],                    category = "power"    },
-    { key = "power_deficit",     label = L["Power Deficit"],              category = "power"    },
-    { key = "power_type_string", label = L["Power Type String"],          category = "power"    },
-    -- Shields & Heals
-    { key = "absorb_amount",     label = L["Absorb Amount"],              category = "shields"  },
-    -- (overshield_amount removed — needs secret-value arithmetic that throws on Midnight)
-    { key = "heal_absorb_amount",label = L["Heal Absorb Amount"],         category = "shields"  },
-    { key = "incoming_heal",     label = L["Incoming Heal"],              category = "shields"  },
-    -- incoming_heal_mine removed from the picker: in practice it reads identical
-    -- to incoming_heal in-game. Resolver/getter left intact for any existing
-    -- elements; just not offered as a new choice.
-    -- { key = "incoming_heal_mine",label = L["Incoming Heal From Me Only"], category = "shields"  },
-    -- Status
-    { key = "status_text",       label = L["Dead / Offline / Ghost"],     category = "status"   },
-    -- Threat & Range
-    { key = "aggro_flag",        label = L["Aggro Flag"],                 category = "threat"   },
-    { key = "threat_percent",    label = L["Threat on Current Target"],   category = "threat"   },
-    { key = "range_text",        label = L["In-Range / OOR Text"],        category = "threat"   },
-    -- Group
-    { key = "group",             label = L["Text Group"],                 category = "group"    },
-}
+local function RefreshLocaleStrings()
+    CONTENT_CATEGORY_LABELS = {
+        identity = L["Identity & Roster"],
+        health   = L["Health"],
+        power    = L["Power"],
+        shields  = L["Shields & Heals"],
+        status   = L["Status"],
+        threat   = L["Threat & Range"],
+        group    = L["Group"],
+    }
+
+    CONTENT_TYPES = {
+        -- Identity & Roster
+        { key = "name",              label = L["Name"],                       category = "identity" },
+        { key = "class",             label = L["Class"],                      category = "identity" },
+        { key = "group_number",      label = L["Group Number"],               category = "identity" },
+        { key = "level",             label = L["Level"],                      category = "identity" },
+        { key = "race",              label = L["Race"],                       category = "identity" },
+        { key = "faction",           label = L["Faction"],                    category = "identity" },
+        { key = "custom_static",     label = L["Custom Static Text"],         category = "identity" },
+        -- Health
+        { key = "hp_current",        label = L["Current HP"],                 category = "health"   },
+        { key = "hp_max",            label = L["Max HP"],                     category = "health"   },
+        { key = "hp_percent",        label = L["HP Percent"],                 category = "health"   },
+        { key = "hp_deficit",        label = L["HP Deficit"],                 category = "health"   },
+        { key = "hp_max_reduction",  label = L["Max HP Reduction %"],         category = "health"   },
+        -- Power
+        { key = "power_current",     label = L["Current Power"],              category = "power"    },
+        { key = "power_percent",     label = L["Power %"],                    category = "power"    },
+        { key = "power_deficit",     label = L["Power Deficit"],              category = "power"    },
+        { key = "power_type_string", label = L["Power Type String"],          category = "power"    },
+        -- Shields & Heals
+        { key = "absorb_amount",     label = L["Absorb Amount"],              category = "shields"  },
+        -- (overshield_amount removed — needs secret-value arithmetic that throws on Midnight)
+        { key = "heal_absorb_amount",label = L["Heal Absorb Amount"],         category = "shields"  },
+        { key = "incoming_heal",     label = L["Incoming Heal"],              category = "shields"  },
+        -- incoming_heal_mine removed from the picker: in practice it reads identical
+        -- to incoming_heal in-game. Resolver/getter left intact for any existing
+        -- elements; just not offered as a new choice.
+        -- { key = "incoming_heal_mine",label = L["Incoming Heal From Me Only"], category = "shields"  },
+        -- Status
+        { key = "status_text",       label = L["Dead / Offline / Ghost"],     category = "status"   },
+        -- Threat & Range
+        { key = "aggro_flag",        label = L["Aggro Flag"],                 category = "threat"   },
+        { key = "threat_percent",    label = L["Threat on Current Target"],   category = "threat"   },
+        { key = "range_text",        label = L["In-Range / OOR Text"],        category = "threat"   },
+        -- Group
+        { key = "group",             label = L["Text Group"],                 category = "group"    },
+    }
+end
+
+RefreshLocaleStrings()
+DF:RegisterLocaleRefresh(RefreshLocaleStrings)
 
 local function FindContentType(key)
     for _, t in ipairs(CONTENT_TYPES) do
@@ -2941,7 +2953,7 @@ function DF.BuildTextDesignerPage(GUI, page, db)
     -- Placeholder note so users know this panel is purely cosmetic for now.
     local previewNote = previewPanel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     previewNote:SetPoint("BOTTOM", previewPanel, "BOTTOM", 0, 10)
-    previewNote:SetText("Preview placeholder (visual mockup)")
+    previewNote:SetText(L["Preview placeholder (visual mockup)"])
     previewNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
 
     -- ── RIGHT-SIDE CONTAINER ───────────────────────────────────

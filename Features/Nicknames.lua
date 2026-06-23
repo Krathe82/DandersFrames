@@ -205,14 +205,20 @@ function NK:Resolve(unit)
     end
 
     local name, realm = UnitName(unit)
+    -- Boss/arena units can return a SECRET name during encounters. It can't be
+    -- compared, normalised, or used as a match key — bail (don't cache) rather
+    -- than crash on the `==` below, same as the secret-GUID guard above.
+    if name and issecretvalue(name) then return nil end
     if not name or name == "" then return nil end  -- transient; don't cache
     -- Name not resolved yet (UNKNOWNOBJECT during zone-in/reload): treat as
     -- transient and DON'T cache, or we'd cache a "no match" that sticks until
     -- the next wholesale wipe and the real nickname would never appear.
     if name == UNKNOWNOBJECT then return nil end
     -- UnitName returns "" / nil realm for same-realm units; fill in the
-    -- player's own realm so "Name-MyRealm" rules still match them.
-    if not realm or realm == "" then
+    -- player's own realm so "Name-MyRealm" rules still match them. A secret
+    -- realm (same encounter masking as the name) also can't be compared, so
+    -- treat it like an empty realm — issecretvalue short-circuits before `==`.
+    if not realm or issecretvalue(realm) or realm == "" then
         realm = (GetNormalizedRealmName and GetNormalizedRealmName()) or ""
     end
 

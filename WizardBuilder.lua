@@ -2075,6 +2075,18 @@ function WB:GetBuiltinWizards()
     return builtinWizards
 end
 
+-- Built-in wizard `description` fields read L["..."] when the entry is
+-- registered at file scope — before the languageOverride overlay runs at
+-- ADDON_LOADED — so they freeze on the enUS baseline. Re-resolve them after
+-- the overlay. (Extend this match list if more built-in wizards are added.)
+DF:RegisterLocaleRefresh(function()
+    for _, w in ipairs(builtinWizards) do
+        if w.name == "Aura Filter Setup" then
+            w.description = L["Guided setup for configuring which buffs and debuffs appear on your frames."]
+        end
+    end
+end)
+
 -- ============================================================
 -- BUILT-IN WIZARD: Aura Filter Setup
 -- ============================================================

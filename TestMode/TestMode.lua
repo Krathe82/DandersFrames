@@ -5872,7 +5872,7 @@ function DF:CreateTestPanel()
     -- Title
     local title = panel:CreateFontString(nil, "OVERLAY", "DFFontNormal")
     title:SetPoint("TOPLEFT", 12, -10)
-    title:SetText("Test Mode")
+    title:SetText(L["Test Mode"])
     panel.title = title
 
     -- Mode badge
@@ -5886,7 +5886,7 @@ function DF:CreateTestPanel()
     })
     badge.text = badge:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     badge.text:SetPoint("CENTER", 0, 0)
-    badge.text:SetText("Party")
+    badge.text:SetText(L["Party"])
     panel.badge = badge
 
     -- Close button
@@ -5934,7 +5934,7 @@ function DF:CreateTestPanel()
     })
     toggleBtn.Text = toggleBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlight")
     toggleBtn.Text:SetPoint("CENTER")
-    toggleBtn.Text:SetText("Enable Test Mode")
+    toggleBtn.Text:SetText(L["Enable Test Mode"])
     toggleBtn:SetScript("OnClick", function()
         DF:ToggleTestMode()
         panel:UpdateState()
@@ -5948,7 +5948,7 @@ function DF:CreateTestPanel()
     desc:SetJustifyH("LEFT")
     desc:SetSpacing(2)
     desc:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.8)
-    desc:SetText("Expand sections to toggle features. Click label text to jump to its settings page.")
+    desc:SetText(L["Expand sections to toggle features. Click label text to jump to its settings page."])
 
     -- ============================================================
     -- THEMED CHECKBOX HELPER
@@ -6019,7 +6019,7 @@ function DF:CreateTestPanel()
                 labelText:SetTextColor(1, 0.82, 0)
                 arrow:SetTextColor(1, 0.82, 0)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText("Click to open settings", 1, 1, 1)
+                GameTooltip:SetText(L["Click to open settings"], 1, 1, 1)
                 GameTooltip:Show()
             end)
             labelBtn:SetScript("OnLeave", function(self)
@@ -6330,9 +6330,9 @@ function DF:CreateTestPanel()
     -- ============================================================
 
     -- --- GENERAL ---
-    local secGeneral = CreateSection(panel, "General", "general")
+    local secGeneral = CreateSection(panel, L["General"], "general")
 
-    panel.showPetsCheck = secGeneral:AddCheckbox("Show Pets", "testShowPets", function(enabled, isRaidMode)
+    panel.showPetsCheck = secGeneral:AddCheckbox(L["Show Pets"], "testShowPets", function(enabled, isRaidMode)
         if isRaidMode then
             if DF.raidTestMode then
                 if enabled then
@@ -6354,7 +6354,7 @@ function DF:CreateTestPanel()
         end
     end, "display_pets")
 
-    panel.animHealthCheck = secGeneral:AddCheckbox("Animate Health", "testAnimateHealth", function(enabled, isRaidMode)
+    panel.animHealthCheck = secGeneral:AddCheckbox(L["Animate Health"], "testAnimateHealth", function(enabled, isRaidMode)
         if isRaidMode then
             if DF.raidTestMode then
                 if enabled then DF:StartTestAnimation()
@@ -6379,7 +6379,7 @@ function DF:CreateTestPanel()
     fcRow:SetHeight(28)
     local fcLabel = fcRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     fcLabel:SetPoint("LEFT", 0, 0)
-    fcLabel:SetText("Frame Count")
+    fcLabel:SetText(L["Frame Count"])
     fcLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     local fcValue = fcRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     fcValue:SetPoint("LEFT", fcLabel, "RIGHT", 6, 0)
@@ -6425,18 +6425,18 @@ function DF:CreateTestPanel()
     secGeneral:AddWidget(fcRow, 28)
 
     -- --- BARS & OVERLAYS ---
-    local secBars = CreateSection(panel, "Bars & Overlays", "bars")
-    panel.showAbsorbsCheck = secBars:AddCheckbox("Absorbs", "testShowAbsorbs", nil, "bars_absorb")
-    panel.showHealPredictCheck = secBars:AddCheckbox("Heal Prediction", "testShowHealPrediction", nil, "bars_healpred")
-    panel.showClassPowerCheck = secBars:AddCheckbox("Class Power", "testShowClassPower", function(enabled)
+    local secBars = CreateSection(panel, L["Bars & Overlays"], "bars")
+    panel.showAbsorbsCheck = secBars:AddCheckbox(L["Absorbs"], "testShowAbsorbs", nil, "bars_absorb")
+    panel.showHealPredictCheck = secBars:AddCheckbox(L["Heal Prediction"], "testShowHealPrediction", nil, "bars_healpred")
+    panel.showClassPowerCheck = secBars:AddCheckbox(L["Class Power"], "testShowClassPower", function(enabled)
         if enabled then
             if DF.UpdateAllTestClassPower then DF:UpdateAllTestClassPower() end
         else
             if DF.CleanupTestClassPower then DF:CleanupTestClassPower() end
         end
     end, "bars_classpower")
-    panel.showOutOfRangeCheck = secBars:AddCheckbox("Out of Range", "testShowOutOfRange", nil, "display_fading")
-    panel.showReducedMaxCheck = secBars:AddCheckbox("Reduced Max Health", "testShowReducedMaxHealth", nil, "bars_health")
+    panel.showOutOfRangeCheck = secBars:AddCheckbox(L["Out of Range"], "testShowOutOfRange", nil, "display_fading")
+    panel.showReducedMaxCheck = secBars:AddCheckbox(L["Reduced Max Health"], "testShowReducedMaxHealth", nil, "bars_health")
     -- Text Designer is alpha-gated; only offer the toggle when the module loaded.
     if DF.UpdateTextDesigner then
         -- Default ON: seed any profile that predates the Config default so the
@@ -6444,7 +6444,7 @@ function DF:CreateTestPanel()
         local pdb, rdb = DF:GetDB(), DF:GetRaidDB()
         if pdb and pdb.testShowTextDesigner == nil then pdb.testShowTextDesigner = true end
         if rdb and rdb.testShowTextDesigner == nil then rdb.testShowTextDesigner = true end
-        panel.showTextDesignerCheck = secBars:AddCheckbox("Text Designer", "testShowTextDesigner", function()
+        panel.showTextDesignerCheck = secBars:AddCheckbox(L["Text Designer"], "testShowTextDesigner", function()
             if DF.UpdateTextDesigner then
                 for i = 0, 4 do
                     local f = DF.testPartyFrames and DF.testPartyFrames[i]
@@ -6459,11 +6459,11 @@ function DF:CreateTestPanel()
     end
 
     -- --- AURAS ---
-    local secAuras = CreateSection(panel, "Auras", "auras")
-    panel.showAurasCheck = secAuras:AddCheckbox("Show Auras", "testShowAuras", function(enabled, isRaidMode)
+    local secAuras = CreateSection(panel, L["Auras"], "auras")
+    panel.showAurasCheck = secAuras:AddCheckbox(L["Show Auras"], "testShowAuras", function(enabled, isRaidMode)
         if enabled and not isRaidMode and DF.testMode then DF:RefreshTestFramesWithLayout() end
     end, "auras_buffs")
-    panel.showBossDebuffsCheck = secAuras:AddCheckbox("Boss Debuffs", "testShowBossDebuffs", function(enabled, isRaidMode)
+    panel.showBossDebuffsCheck = secAuras:AddCheckbox(L["Boss Debuffs"], "testShowBossDebuffs", function(enabled, isRaidMode)
         if isRaidMode then
             if DF.raidTestMode then
                 for i = 1, 40 do
@@ -6486,13 +6486,13 @@ function DF:CreateTestPanel()
             end
         end
     end, "auras_bossdebuffs")
-    panel.showDispelGlowCheck = secAuras:AddCheckbox("Dispel Overlay", "testShowDispelGlow", function()
+    panel.showDispelGlowCheck = secAuras:AddCheckbox(L["Dispel Overlay"], "testShowDispelGlow", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestDispelGlow() end
     end, "auras_dispel")
-    panel.showMissingBuffCheck = secAuras:AddCheckbox("Missing Buff", "testShowMissingBuff", function()
+    panel.showMissingBuffCheck = secAuras:AddCheckbox(L["Missing Buff"], "testShowMissingBuff", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestMissingBuff() end
     end, "auras_missingbuffs")
-    panel.showADCheck = secAuras:AddCheckbox("Aura Designer", "testShowAuraDesigner", function(enabled)
+    panel.showADCheck = secAuras:AddCheckbox(L["Aura Designer"], "testShowAuraDesigner", function(enabled)
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestAuraDesigner() end
     end, "auras_auradesigner")
 
@@ -6502,7 +6502,7 @@ function DF:CreateTestPanel()
 
     local buffLabel = auraSliderRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     buffLabel:SetPoint("LEFT", 0, 0)
-    buffLabel:SetText("Buffs:")
+    buffLabel:SetText(L["Buffs:"])
     buffLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
 
     local buffSlider = CreateThemedSlider(auraSliderRow, 55, 0, 5, 1)
@@ -6514,7 +6514,7 @@ function DF:CreateTestPanel()
 
     local debuffLabel = auraSliderRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     debuffLabel:SetPoint("LEFT", buffValue, "RIGHT", 12, 0)
-    debuffLabel:SetText("Debuffs:")
+    debuffLabel:SetText(L["Debuffs:"])
     debuffLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
 
     local debuffSlider = CreateThemedSlider(auraSliderRow, 55, 0, 5, 1)
@@ -6577,40 +6577,40 @@ function DF:CreateTestPanel()
     secAuras:AddWidget(auraSliderRow, 22)
 
     -- --- INDICATORS & ICONS ---
-    local secIndicators = CreateSection(panel, "Indicators & Icons", "indicators")
-    panel.showExternalDefCheck = secIndicators:AddCheckbox("Defensive Icon", "testShowExternalDef", function()
+    local secIndicators = CreateSection(panel, L["Indicators & Icons"], "indicators")
+    panel.showExternalDefCheck = secIndicators:AddCheckbox(L["Defensive Icon"], "testShowExternalDef", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestDefensiveBar() end
     end, "auras_defensiveicon")
     -- "Targeted Spell" was the old group-frame icon display that
     -- Blizzard's 2026-04-07 hotfix killed. The checkbox slot is now
     -- repurposed for the Targeted List (alpha/beta-only feature).
-    panel.showTargetedListCheck = secIndicators:AddCheckbox("Targeted List", "testShowTargetedList", function()
+    panel.showTargetedListCheck = secIndicators:AddCheckbox(L["Targeted List"], "testShowTargetedList", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedList() end
     end, "indicators_targetedlist")
-    panel.animTargetedListCheck = secIndicators:AddCheckbox("Animate Targeted List", "testAnimateTargetedList", function()
+    panel.animTargetedListCheck = secIndicators:AddCheckbox(L["Animate Targeted List"], "testAnimateTargetedList", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedList() end
     end)
     -- The (new fingerprint) Targeted Spells icons + the Personal Targeted display.
     -- UpdateAllTestTargetedSpell drives BOTH previews, so both share it.
-    panel.showTargetedSpellCheck = secIndicators:AddCheckbox("Targeted Spells", "testShowTargetedSpell", function()
+    panel.showTargetedSpellCheck = secIndicators:AddCheckbox(L["Targeted Spells"], "testShowTargetedSpell", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
     end)
-    panel.showPersonalTargetedCheck = secIndicators:AddCheckbox("Personal Targeted", "testShowPersonalTargeted", function()
+    panel.showPersonalTargetedCheck = secIndicators:AddCheckbox(L["Personal Targeted"], "testShowPersonalTargeted", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
     end)
     -- One unified "Icons" toggle for the whole status/role/leader icon set in test
     -- mode (was split into "Status / Ready" + "Role / Leader"). Keyed on
     -- testShowStatusIcons; the role/leader render gate reads the same key.
-    panel.showStatusIconsCheck = secIndicators:AddCheckbox("Icons", "testShowStatusIcons", function()
+    panel.showStatusIconsCheck = secIndicators:AddCheckbox(L["Icons"], "testShowStatusIcons", function()
         if DF.testMode or DF.raidTestMode then DF:RefreshTestFrames() end
     end, "indicators_icons")
 
     -- --- HIGHLIGHTS ---
-    local secHighlights = CreateSection(panel, "Highlights", "highlights")
-    panel.showSelectionCheck = secHighlights:AddCheckbox("Selection", "testShowSelection", function()
+    local secHighlights = CreateSection(panel, L["Highlights"], "highlights")
+    panel.showSelectionCheck = secHighlights:AddCheckbox(L["Selection"], "testShowSelection", function()
         if DF.UpdateAllTestHighlights then DF:UpdateAllTestHighlights() end
     end, "indicators_highlights")
-    panel.showAggroCheck = secHighlights:AddCheckbox("Aggro", "testShowAggro", function()
+    panel.showAggroCheck = secHighlights:AddCheckbox(L["Aggro"], "testShowAggro", function()
         if DF.UpdateAllTestHighlights then DF:UpdateAllTestHighlights() end
     end, "indicators_highlights")
 
@@ -6630,12 +6630,12 @@ function DF:CreateTestPanel()
 
     local presetLabel = presetsFooter:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     presetLabel:SetPoint("TOPLEFT", 12, -8)
-    presetLabel:SetText("QUICK PRESETS")
+    presetLabel:SetText(L["QUICK PRESETS"])
     presetLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b, 0.7)
     panel.presetLabel = presetLabel
 
     local presets = {"STATIC", "COMBAT", "HEALER", "FULL"}
-    local presetNames = {STATIC = "Static", COMBAT = "Combat", HEALER = "Healer", FULL = "Full"}
+    local presetNames = {STATIC = L["Static"], COMBAT = L["Combat"], HEALER = L["Healer"], FULL = L["Full"]}
     local btnSpacing = 4
     local btnCount = #presets
     local btnWidth = math.floor((CONTENT_WIDTH - (btnSpacing * (btnCount - 1))) / btnCount)
@@ -6704,11 +6704,11 @@ function DF:CreateTestPanel()
         local testActive = IsTestActive()
 
         -- Title
-        self.title:SetText("Test Mode")
+        self.title:SetText(L["Test Mode"])
         self.title:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
 
         -- Badge
-        local badgeLabel = isRaidMode and "Raid" or "Party"
+        local badgeLabel = isRaidMode and L["Raid"] or L["Party"]
         self.badge.text:SetText(badgeLabel)
         self.badge:SetSize(self.badge.text:GetStringWidth() + 14, 18)
         self.badge:SetBackdropColor(themeColor.r * 0.15, themeColor.g * 0.15, themeColor.b * 0.15, 1)
@@ -6719,12 +6719,12 @@ function DF:CreateTestPanel()
         if testActive then
             self.toggleBtn:SetBackdropColor(themeColor.r * 0.3, themeColor.g * 0.3, themeColor.b * 0.3, 1)
             self.toggleBtn:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
-            self.toggleBtn.Text:SetText("Disable Test Mode")
+            self.toggleBtn.Text:SetText(L["Disable Test Mode"])
             self.toggleBtn.Text:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
         else
             self.toggleBtn:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1)
             self.toggleBtn:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
-            self.toggleBtn.Text:SetText("Enable Test Mode")
+            self.toggleBtn.Text:SetText(L["Enable Test Mode"])
             self.toggleBtn.Text:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
         end
 

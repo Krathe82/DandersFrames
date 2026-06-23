@@ -120,7 +120,7 @@ local POSITION_MODES = {
             local i = DF.positionPanelPinnedSet or 1
             local pf = DF.PinnedFrames
             local label = pf and pf.GetPositionPanelLabel and pf:GetPositionPanelLabel(i)
-            return (label or ("Pinned " .. i)) .. " - Position"
+            return format(L["%s - Position"], label or format(L["Pinned %d"], i))
         end,
         -- Pinned X/Y live NESTED in set.position = {point, x, y}, unlike the flat
         -- db fields the other modes use. Return a thin proxy so the shared panel
@@ -239,7 +239,7 @@ function DF:CreateMoverFrame()
     label:SetPoint("CENTER")
     -- Set font explicitly to avoid "Font not set" errors
     DF.GUI:SetSettingsFont(label, 14, "OUTLINE")
-    label:SetText("Party Frames\nDrag to move")
+    label:SetText(L["Party Frames\nDrag to move"])
     label:SetTextColor(1, 1, 1, 1)
     
     DF.moverFrame = mover
@@ -371,7 +371,13 @@ end
 local InCombatLockdown = InCombatLockdown
 
 -- Quick action dispatch table
-local PERM_MOVER_ACTIONS = {
+-- Each entry's `label` reads L["..."] at file scope, before the languageOverride
+-- overlay is applied at ADDON_LOADED — so build the table in a registered refresh
+-- fn. (The fn closures' own L[...] reads run at click time and are unaffected.)
+local PERM_MOVER_ACTIONS = {}
+
+local function RefreshPermMoverActions()
+    PERM_MOVER_ACTIONS = {
     NONE              = { label = L["None"],                       combatSafe = true },
     OPEN_SETTINGS     = { label = L["Open Settings"],              combatSafe = true,  fn = function() DF:ToggleGUI() end },
     UNLOCK_FRAMES     = { label = L["Unlock Frames"],              combatSafe = false, fn = function(mode)
@@ -405,8 +411,12 @@ local PERM_MOVER_ACTIONS = {
         local db = DF:GetDB()
         C_PartyInfo.DoCountdown(db.permanentMoverPullTimerDuration or 10)
     end },
-}
-DF.PERM_MOVER_ACTIONS = PERM_MOVER_ACTIONS
+    }
+    DF.PERM_MOVER_ACTIONS = PERM_MOVER_ACTIONS
+end
+
+RefreshPermMoverActions()
+DF:RegisterLocaleRefresh(RefreshPermMoverActions)
 
 -- Cycle through profiles
 function DF:CycleNextProfile()
@@ -1552,8 +1562,14 @@ function DF:CreatePositionPanel()
         -- supply a function for a dynamic title, e.g. the pinned set number).
         if panel.title then
             local t = GetPositionMode().title
-            if type(t) == "function" then t = t() end
-            panel.title:SetText(t or "Position")
+            if type(t) == "function" then
+                t = t()
+            elseif t then
+                -- descriptor titles are raw enUS source strings; resolve to the
+                -- active locale here (at display time, after the overlay).
+                t = L[t]
+            end
+            panel.title:SetText(t or L["Position"])
         end
     end
     panel.UpdateTheme = UpdateTheme
@@ -1562,7 +1578,7 @@ function DF:CreatePositionPanel()
     local c = GetAccentColor()
     local title = panel:CreateFontString(nil, "OVERLAY", "DFFontNormal")
     title:SetPoint("TOPLEFT", 15, -12)
-    title:SetText("Position")
+    title:SetText(L["Position"])
     title:SetTextColor(c.r, c.g, c.b)
     title.UpdateThemeColor = function(self, col) self:SetTextColor(col.r, col.g, col.b) end
     table.insert(panel.themedElements, title)
@@ -1582,7 +1598,7 @@ function DF:CreatePositionPanel()
     -- X Position row
     local xLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     xLabel:SetPoint("TOPLEFT", 15, -40)
-    xLabel:SetText("X Position")
+    xLabel:SetText(L["X Position"])
     xLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     
     local xInput = CreateFrame("EditBox", nil, panel, "BackdropTemplate")
@@ -1646,7 +1662,7 @@ function DF:CreatePositionPanel()
     -- Y Position row
     local yLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     yLabel:SetPoint("TOPLEFT", 160, -40)
-    yLabel:SetText("Y Position")
+    yLabel:SetText(L["Y Position"])
     yLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     
     local yInput = CreateFrame("EditBox", nil, panel, "BackdropTemplate")
@@ -1722,7 +1738,7 @@ function DF:CreatePositionPanel()
     
     local posOverrideText = posOverrideRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     posOverrideText:SetPoint("LEFT", posOverrideStar, "RIGHT", 4, 0)
-    posOverrideText:SetText("Position Overridden")
+    posOverrideText:SetText(L["Position Overridden"])
     posOverrideText:SetTextColor(1, 0.8, 0.2)
     
     local posResetBtn = CreateFrame("Button", nil, posOverrideRow, "BackdropTemplate")
@@ -1744,7 +1760,7 @@ function DF:CreatePositionPanel()
     
     local posResetText = posResetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     posResetText:SetPoint("LEFT", posResetIcon, "RIGHT", 2, 0)
-    posResetText:SetText("Reset")
+    posResetText:SetText(L["Reset"])
     posResetText:SetTextColor(0.7, 0.7, 0.7)
     
     posResetBtn:SetScript("OnEnter", function(self)
@@ -1752,7 +1768,7 @@ function DF:CreatePositionPanel()
         posResetIcon:SetVertexColor(1, 0.8, 0.2)
         posResetText:SetTextColor(1, 0.8, 0.2)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Reset Position to Global")
+        GameTooltip:SetText(L["Reset Position to Global"])
         GameTooltip:Show()
     end)
     posResetBtn:SetScript("OnLeave", function(self)
@@ -1816,7 +1832,7 @@ function DF:CreatePositionPanel()
         local yOverridden = AutoProfilesUI:IsSettingOverridden("raidAnchorY")
         
         if xOverridden or yOverridden then
-            posOverrideText:SetText("Position Overridden")
+            posOverrideText:SetText(L["Position Overridden"])
             posOverrideRow:Show()
         else
             posOverrideRow:Hide()
@@ -1845,7 +1861,7 @@ function DF:CreatePositionPanel()
     
     local snapLabel = snapContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     snapLabel:SetPoint("LEFT", snapCheck, "RIGHT", 8, 0)
-    snapLabel:SetText("Snap to Grid")
+    snapLabel:SetText(L["Snap to Grid"])
     snapLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     
     snapCheck:SetScript("OnClick", function(self)
@@ -1895,7 +1911,7 @@ function DF:CreatePositionPanel()
 
     local hideOverlayLabel = hideOverlayContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     hideOverlayLabel:SetPoint("LEFT", hideOverlayCheck, "RIGHT", 8, 0)
-    hideOverlayLabel:SetText("Hide Drag Overlay")
+    hideOverlayLabel:SetText(L["Hide Drag Overlay"])
     hideOverlayLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     panel.hideOverlayLabel = hideOverlayLabel
 
@@ -1934,7 +1950,7 @@ function DF:CreatePositionPanel()
     -- Grid Size slider (matches main GUI slider style)
     local gridLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     gridLabel:SetPoint("TOPLEFT", 15, -164)
-    gridLabel:SetText("Grid Size")
+    gridLabel:SetText(L["Grid Size"])
     gridLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     
     -- Track background
@@ -2024,7 +2040,7 @@ function DF:CreatePositionPanel()
     resetIcon:SetVertexColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     local resetBtnText = resetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     resetBtnText:SetPoint("LEFT", resetIcon, "RIGHT", 2, 0)
-    resetBtnText:SetText("Reset")
+    resetBtnText:SetText(L["Reset"])
     resetBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     resetBtn:SetScript("OnClick", function() DF:ResetPosition() end)
     resetBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
@@ -2037,7 +2053,7 @@ function DF:CreatePositionPanel()
     CreateElementBackdrop(centerBtn)
     local centerBtnText = centerBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     centerBtnText:SetPoint("CENTER")
-    centerBtnText:SetText("Center")
+    centerBtnText:SetText(L["Center"])
     centerBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     centerBtn:SetScript("OnClick", function() DF:CenterFrames() end)
     centerBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
@@ -2055,7 +2071,7 @@ function DF:CreatePositionPanel()
     lockIcon:SetVertexColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     local lockBtnText = lockBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     lockBtnText:SetPoint("LEFT", lockIcon, "RIGHT", 2, 0)
-    lockBtnText:SetText("Lock")
+    lockBtnText:SetText(L["Lock"])
     lockBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
     lockBtn:SetScript("OnClick", function() LockCurrentFrames() end)
     lockBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
@@ -2103,7 +2119,7 @@ function DF:UpdatePositionPanel()
     -- toggle reads "Hide Mover" there.
     if DF.positionPanel.hideOverlayLabel then
         DF.positionPanel.hideOverlayLabel:SetText(
-            DF.positionPanelMode == "pinned" and "Hide Mover" or "Hide Drag Overlay")
+            DF.positionPanelMode == "pinned" and L["Hide Mover"] or L["Hide Drag Overlay"])
     end
 
     -- Update position override indicator if editing profile

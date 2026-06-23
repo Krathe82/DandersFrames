@@ -5525,7 +5525,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Warning note shown when the Blizzard source has been force-disabled.
         -- Uses hideOn (not disableOn) since it's informational text.
         local apiBlockedNote = modeGroup:AddWidget(GUI:CreateLabel(self.child,
-            "|cffffcc00WoW 12.0.5 removed addon access to Blizzard's party-frame aura data. The Blizzard source is no longer available; DandersFrames has switched to Direct API automatically.|r", 250), 60)
+            "|cffffcc00" .. L["WoW 12.0.5 removed addon access to Blizzard's party-frame aura data. The Blizzard source is no longer available; DandersFrames has switched to Direct API automatically."] .. "|r", 250), 60)
         apiBlockedNote.hideOn = function() return not DF.BlizzardAuraSourceUnavailable end
 
         Add(modeGroup, nil, 1)
@@ -5554,7 +5554,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         bfOnlyMine.hideOn = HideDirectOptions
         bfOnlyMine.tooltip = L["Only show buffs that you cast. Applies to all buff filters."]
 
-        local buffSubInfo = buffGroup:AddWidget(GUI:CreateLabel(self.child, "|cff888888Enabled filters are combined \226\128\148 buffs matching any selected filter will be shown.|r", 250), 35)
+        local buffSubInfo = buffGroup:AddWidget(GUI:CreateLabel(self.child, "|cff888888" .. L["Enabled filters are combined \226\128\148 buffs matching any selected filter will be shown."] .. "|r", 250), 35)
         buffSubInfo.hideOn = HideBuffSubFilters
 
         local bfRaid = buffGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Raid Buffs"], db, "directBuffFilterRaid", DirectFilterChanged), 30)
@@ -5618,7 +5618,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end
         debuffGroup:AddWidget(debuffWarningBanner, debuffWarningBanner.layoutHeight)
 
-        local debuffSubInfo = debuffGroup:AddWidget(GUI:CreateLabel(self.child, "|cff888888Enabled filters are combined \226\128\148 debuffs matching any selected filter will be shown.|r", 250), 35)
+        local debuffSubInfo = debuffGroup:AddWidget(GUI:CreateLabel(self.child, "|cff888888" .. L["Enabled filters are combined \226\128\148 debuffs matching any selected filter will be shown."] .. "|r", 250), 35)
         debuffSubInfo.hideOn = HideDebuffSubFilters
 
         local dfRaid = debuffGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Raid Debuffs"], db, "directDebuffFilterRaid", DirectFilterChanged), 30)

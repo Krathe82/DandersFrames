@@ -25,32 +25,42 @@ local function DeepCopyValue(value)
 end
 
 -- Content type definitions
-local CONTENT_TYPES = {
-    {
-        key = "instanced",
-        title = L["Instanced / PvP"],
-        description = L["Raids, battlegrounds (1-40)"],
-        minRange = 1,
-        maxRange = 40,
-        isFixed = false,
-    },
-    {
-        key = "mythic",
-        title = L["Mythic"],
-        description = L["20 players (fixed)"],
-        minRange = 20,
-        maxRange = 20,
-        isFixed = true,
-    },
-    {
-        key = "openWorld",
-        title = L["Open World"],
-        description = L["World bosses, outdoor raids (1-40)"],
-        minRange = 1,
-        maxRange = 40,
-        isFixed = false,
-    },
-}
+-- title/description read L["..."]; at file scope that returns the enUS baseline
+-- (the languageOverride overlay runs later, at ADDON_LOADED). Build them in a
+-- registered refresh fn so Core rebuilds them after the overlay.
+local CONTENT_TYPES = {}
+
+local function RefreshContentTypes()
+    CONTENT_TYPES = {
+        {
+            key = "instanced",
+            title = L["Instanced / PvP"],
+            description = L["Raids, battlegrounds (1-40)"],
+            minRange = 1,
+            maxRange = 40,
+            isFixed = false,
+        },
+        {
+            key = "mythic",
+            title = L["Mythic"],
+            description = L["20 players (fixed)"],
+            minRange = 20,
+            maxRange = 20,
+            isFixed = true,
+        },
+        {
+            key = "openWorld",
+            title = L["Open World"],
+            description = L["World bosses, outdoor raids (1-40)"],
+            minRange = 1,
+            maxRange = 40,
+            isFixed = false,
+        },
+    }
+end
+
+RefreshContentTypes()
+DF:RegisterLocaleRefresh(RefreshContentTypes)
 
 -- ============================================================
 -- LOCAL HELPERS for db.raid access and snapshot lookups
@@ -103,7 +113,13 @@ end
 -- Ordered most-specific first to avoid false matches
 -- (e.g. "healthText" before "health", "defensiveIcon" before "debuff").
 -- ============================================================
-local OVERRIDE_TAB_MAP = {
+-- The 3rd element of each row reads L["..."]; at file scope that returns the
+-- enUS baseline (the languageOverride overlay runs later, at ADDON_LOADED).
+-- Build the map in a registered refresh fn so the tab labels follow the locale.
+local OVERRIDE_TAB_MAP = {}
+
+local function RefreshOverrideTabMap()
+    OVERRIDE_TAB_MAP = {
     -- Display
     {"soloMode",            "display_visibility",   L["Visibility"]},
     {"showMinimapButton",   "display_visibility",   L["Visibility"]},
@@ -191,7 +207,11 @@ local OVERRIDE_TAB_MAP = {
     {"aggro",               "indicators_highlights", L["Highlights"]},
     -- Pinned frames (prefix match for "pinned.N.setting" format)
     {"pinned.",             "general_pinnedframes", L["Pinned Frames"]},
-}
+    }
+end
+
+RefreshOverrideTabMap()
+DF:RegisterLocaleRefresh(RefreshOverrideTabMap)
 
 -- Returns tabId, tabLabel for a given override key
 local function GetOverrideTabId(key)

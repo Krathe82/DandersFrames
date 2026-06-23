@@ -1999,4 +1999,47 @@ L["Use %s nicknames"] = true
 L["You are not in a guild."] = true
 L["Your nickname (broadcast)"] = true
 
+-- Localization gap fixes (community zhTW pass): strings previously hardcoded in English
+-- Test Mode panel
+L["Aggro"] = true
+L["Animate Health"] = true
+L["Animate Targeted List"] = true
+L["Bars & Overlays"] = true
+L["Buffs:"] = true
+L["Click to open settings"] = true
+L["Debuffs:"] = true
+L["Disable Test Mode"] = true
+L["Enable Test Mode"] = true
+L["Expand sections to toggle features. Click label text to jump to its settings page."] = true
+L["Frame Count"] = true
+L["Full"] = true
+L["Indicators & Icons"] = true
+L["Missing Buff"] = true
+L["QUICK PRESETS"] = true
+L["Selection"] = true
+L["Show Auras"] = true
+L["Show Pets"] = true
+-- Position panel
+L["%s - Position"] = true
+L["Grid Size"] = true
+L["Hide Drag Overlay"] = true
+L["Hide Mover"] = true
+L["Party Frames\nDrag to move"] = true
+L["Party Position"] = true
+L["Pinned %d"] = true
+L["Position Overridden"] = true
+L["Raid Position"] = true
+L["Reset Position to Global"] = true
+L["Snap to Grid"] = true
+L["X Position"] = true
+L["Y Position"] = true
+-- Grid layout dropdown
+L["Wrap"] = true
+-- Aura Filters page notes
+L["Enabled filters are combined \226\128\148 buffs matching any selected filter will be shown."] = true
+L["Enabled filters are combined \226\128\148 debuffs matching any selected filter will be shown."] = true
+L["WoW 12.0.5 removed addon access to Blizzard's party-frame aura data. The Blizzard source is no longer available; DandersFrames has switched to Direct API automatically."] = true
+-- Text Designer
+L["Preview placeholder (visual mockup)"] = true
+
 --@end-do-not-package@

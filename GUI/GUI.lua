@@ -4493,18 +4493,20 @@ function GUI:CreateGrowthControl(parent, db, dbKey, callback)
     local curOrientation, curWrap, curDirection = DecomposeGrowth(db[dbKey] or "LEFT_UP")
 
     -- Option tables per orientation
+    -- Display text is localized; the value-keys (HORIZONTAL, UP, …) and _order
+    -- arrays are raw identifiers and must NOT be localized.
     local ORIENT_OPTIONS = {
-        HORIZONTAL = "Horizontal",
-        VERTICAL = "Vertical",
+        HORIZONTAL = L["Horizontal"],
+        VERTICAL = L["Vertical"],
         _order = {"HORIZONTAL", "VERTICAL"},
     }
     local WRAP_OPTIONS = {
-        HORIZONTAL = { UP = "Up", DOWN = "Down", _order = {"UP", "DOWN"} },
-        VERTICAL = { LEFT = "Left", RIGHT = "Right", _order = {"LEFT", "RIGHT"} },
+        HORIZONTAL = { UP = L["Up"], DOWN = L["Down"], _order = {"UP", "DOWN"} },
+        VERTICAL = { LEFT = L["Left"], RIGHT = L["Right"], _order = {"LEFT", "RIGHT"} },
     }
     local DIR_OPTIONS = {
-        HORIZONTAL = { LEFT = "Left", CENTER = "Center", RIGHT = "Right", _order = {"LEFT", "CENTER", "RIGHT"} },
-        VERTICAL = { UP = "Up", CENTER = "Center", DOWN = "Down", _order = {"UP", "CENTER", "DOWN"} },
+        HORIZONTAL = { LEFT = L["Left"], CENTER = L["Center"], RIGHT = L["Right"], _order = {"LEFT", "CENTER", "RIGHT"} },
+        VERTICAL = { UP = L["Up"], CENTER = L["Center"], DOWN = L["Down"], _order = {"UP", "CENTER", "DOWN"} },
     }
 
     -- Shared write-back: recompose and save
@@ -4653,7 +4655,7 @@ function GUI:CreateGrowthControl(parent, db, dbKey, callback)
 
     -- Build the three dropdowns (forward-declare wrap/dir so orientation callback can reference them)
     local wrapDD, dirDD
-    local orientDD = BuildMiniDropdown(0, "Orientation", ORIENT_OPTIONS,
+    local orientDD = BuildMiniDropdown(0, L["Orientation"], ORIENT_OPTIONS,
         function() return curOrientation end,
         function(val)
             if val ~= curOrientation then
@@ -4668,12 +4670,12 @@ function GUI:CreateGrowthControl(parent, db, dbKey, callback)
         end
     )
 
-    wrapDD = BuildMiniDropdown(-50, "Wrap", WRAP_OPTIONS[curOrientation],
+    wrapDD = BuildMiniDropdown(-50, L["Wrap"], WRAP_OPTIONS[curOrientation],
         function() return curWrap end,
         function(val) curWrap = val end
     )
 
-    dirDD = BuildMiniDropdown(-100, "Direction", DIR_OPTIONS[curOrientation],
+    dirDD = BuildMiniDropdown(-100, L["Direction"], DIR_OPTIONS[curOrientation],
         function() return curDirection end,
         function(val) curDirection = val end
     )

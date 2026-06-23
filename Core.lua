@@ -16,6 +16,28 @@ DF.VERSION = GetAddOnMetadata(addonName, "Version") or "Unknown"
 DF.L = LibStub("AceLocale-3.0"):GetLocale("DandersFrames")
 local L = DF.L
 
+-- ============================================================
+-- LOCALE REFRESH REGISTRY
+-- Some modules build label/option tables at file scope, which reads
+-- L["..."] before the languageOverride overlay is applied at
+-- ADDON_LOADED (see the overlay in the ADDON_LOADED handler below).
+-- Those file-scope reads would otherwise freeze on the enUS baseline.
+-- A module registers a rebuild fn here; Core re-runs them all once,
+-- right after the overlay, so the tables pick up the active locale.
+-- ============================================================
+DF._localeRefreshers = DF._localeRefreshers or {}
+function DF:RegisterLocaleRefresh(fn)
+    DF._localeRefreshers[#DF._localeRefreshers + 1] = fn
+end
+function DF:RunLocaleRefreshers()
+    for i = 1, #DF._localeRefreshers do
+        local ok, err = pcall(DF._localeRefreshers[i])
+        if not ok and DF.DebugError then
+            DF:DebugError("LocaleRefresh failed: " .. tostring(err))
+        end
+    end
+end
+
 -- Locale warnings: silent by default (see Locales/enUS.lua for rationale).
 -- Call DF:SetLocaleWarnings(true) — or use /df localewarn — to enable
 -- error-handler warnings on missing L["..."] keys for the current session.
@@ -3674,6 +3696,10 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- we don't need to keep it around for subsequent lookups.
             DF_AllLocales = nil
         end
+
+        -- Rebuild any file-scope label tables now that the locale
+        -- overlay has been applied (see DF:RegisterLocaleRefresh above).
+        DF:RunLocaleRefreshers()
 
         -- Seed per-character profile from account-wide on first login for this character
         if not DandersFramesCharDB.currentProfile then
