@@ -57,6 +57,28 @@ local function ResolvePinnedSet()
     return DF.PinnedFrames:GetSetForPosition(DF.positionPanelPinnedSet or 1)
 end
 
+-- "Anchor To" options for the pinned position panel. SCREEN = free placement
+-- (default; anchored to UIParent). FRAMES_* glue the set's growth corner to the
+-- raid/party frames container at that corner, with X/Y as a fine offset, so the
+-- set tracks the frames and pinned↔frames alignment stays locked. The dropdown's
+-- label (set in UpdatePositionPanel) names the mode ("Raid"/"Party Frames"); the
+-- option text is just the corner. Stored in set.position.anchorTo (nil = SCREEN).
+local PINNED_ANCHOR_OPTIONS = {
+    SCREEN             = L["Screen (Free)"],
+    FRAMES_TOPLEFT     = L["Top Left"],
+    FRAMES_TOP         = L["Top"],
+    FRAMES_TOPRIGHT    = L["Top Right"],
+    FRAMES_LEFT        = L["Left"],
+    FRAMES_CENTER      = L["Center"],
+    FRAMES_RIGHT       = L["Right"],
+    FRAMES_BOTTOMLEFT  = L["Bottom Left"],
+    FRAMES_BOTTOM      = L["Bottom"],
+    FRAMES_BOTTOMRIGHT = L["Bottom Right"],
+    _order = { "SCREEN", "FRAMES_TOPLEFT", "FRAMES_TOP", "FRAMES_TOPRIGHT",
+               "FRAMES_LEFT", "FRAMES_CENTER", "FRAMES_RIGHT",
+               "FRAMES_BOTTOMLEFT", "FRAMES_BOTTOM", "FRAMES_BOTTOMRIGHT" },
+}
+
 local POSITION_MODES = {
     party = {
         title = "Party Position",
@@ -1525,6 +1547,11 @@ function DF:CreatePositionPanel()
     -- Main panel - matches main GUI style
     local panel = CreateFrame("Frame", "DandersFramesPositionPanel", UIParent, "BackdropTemplate")
     panel:SetSize(300, 294)
+    -- Base height for most modes; pinned mode adds room for the Anchor-To dropdown
+    -- (toggled in UpdatePositionPanel). The bottom Reset/Center/Lock row is anchored
+    -- to BOTTOM, so growing the height pushes it down and opens up the dropdown band.
+    panel.baseHeight = 294
+    panel.pinnedHeight = 312
     panel:SetPoint("TOP", UIParent, "TOP", 0, -50)
     panel:SetFrameStrata("FULLSCREEN_DIALOG")
     panel:SetFrameLevel(100)  -- High level to ensure it's on top
@@ -2027,7 +2054,51 @@ function DF:CreatePositionPanel()
     
     panel.gridSlider = slider
     panel.gridInput = gridInput
-    
+
+    -- "Anchor To Frames" dropdown — PINNED MODE ONLY (hidden for every other
+    -- mode). Anchors a pinned set to the raid/party frames container at a chosen
+    -- corner so it tracks the frames; X/Y above become a fine offset from that
+    -- corner. Sits in the empty band below the grid slider; no panel resize.
+    local anchorDropdown = DF.GUI:CreateDropdown(
+        panel,
+        L["Anchor To Frames"],
+        PINNED_ANCHOR_OPTIONS,
+        nil, nil,
+        function()
+            -- Re-anchor the targeted set after the choice changes.
+            if DF.PinnedFrames and DF.PinnedFrames.ApplySetPosition then
+                DF.PinnedFrames:ApplySetPosition(DF.positionPanelPinnedSet or 1)
+            end
+            if DF.UpdatePositionPanel then DF:UpdatePositionPanel() end
+        end,
+        function()  -- customGet: read the targeted set's anchor mode (nil = SCREEN)
+            local set = ResolvePinnedSet()
+            return (set and set.position and set.position.anchorTo) or "SCREEN"
+        end,
+        function(v)  -- customSet: store on the targeted set (nil for SCREEN default)
+            local set = ResolvePinnedSet()
+            if not set then return end
+            set.position = set.position or { point = "CENTER", x = 0, y = 0 }
+            local newAnchor = (v ~= "SCREEN") and v or nil
+            -- X/Y mean different things per mode: a screen offset from UIParent vs a
+            -- fine offset from the frames-container corner. Carrying a large screen
+            -- offset into frames-anchor mode (or vice versa) would fling the set far
+            -- off the chosen reference — off-screen. So whenever the anchor mode
+            -- changes, reset the offset to 0 so the set lands exactly AT the new
+            -- reference (the chosen corner / screen point); the user nudges from there.
+            if set.position.anchorTo ~= newAnchor then
+                set.position.x = 0
+                set.position.y = 0
+            end
+            set.position.anchorTo = newAnchor
+        end
+    )
+    anchorDropdown:ClearAllPoints()
+    anchorDropdown:SetPoint("TOPLEFT", 15, -204)
+    anchorDropdown:SetWidth(255)
+    anchorDropdown:Hide()
+    panel.anchorDropdown = anchorDropdown
+
     -- Reset Position button
     local resetBtn = CreateFrame("Button", nil, panel, "BackdropTemplate")
     resetBtn:SetSize(85, 26)
@@ -2120,6 +2191,33 @@ function DF:UpdatePositionPanel()
     if DF.positionPanel.hideOverlayLabel then
         DF.positionPanel.hideOverlayLabel:SetText(
             DF.positionPanelMode == "pinned" and L["Hide Mover"] or L["Hide Drag Overlay"])
+    end
+
+    -- Pinned-only "Anchor To Frames" dropdown: show in pinned mode, name it for
+    -- the targeted set's mode (Raid/Party), and refresh the selected value.
+    if DF.positionPanel.anchorDropdown then
+        if DF.positionPanelMode == "pinned" then
+            -- Grow the panel so the dropdown sits in its own band between the grid
+            -- slider and the buttons (shrinks back for the other, shorter modes).
+            if DF.positionPanel.pinnedHeight then
+                DF.positionPanel:SetHeight(DF.positionPanel.pinnedHeight)
+            end
+            local raid = DF.PinnedFrames and DF.PinnedFrames.IsPositionTargetRaid
+                and DF.PinnedFrames:IsPositionTargetRaid()
+            if DF.positionPanel.anchorDropdown.label then
+                DF.positionPanel.anchorDropdown.label:SetText(
+                    raid and L["Anchor To Raid Frames"] or L["Anchor To Party Frames"])
+            end
+            if DF.positionPanel.anchorDropdown.UpdateText then
+                DF.positionPanel.anchorDropdown:UpdateText()
+            end
+            DF.positionPanel.anchorDropdown:Show()
+        else
+            DF.positionPanel.anchorDropdown:Hide()
+            if DF.positionPanel.baseHeight then
+                DF.positionPanel:SetHeight(DF.positionPanel.baseHeight)
+            end
+        end
     end
 
     -- Update position override indicator if editing profile
