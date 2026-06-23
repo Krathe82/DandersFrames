@@ -3708,6 +3708,16 @@ function SecureSort:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGr
     end
     local gInRC = isPartialRow and popRem or groupsPerRowCol
 
+    -- Reverse group order within the row/column when raidGroupOrder == "REVERSE".
+    -- gInRC is the live snippet's groupsInThisRC (full row -> groupsPerRowCol,
+    -- partial last row -> popRem), so this mirrors the secure snippet's
+    -- `posInRC = groupsInThisRC - 1 - posInRC`. Applied unconditionally (NOT gated
+    -- on testMode): this function also drives the live sorting-disabled grouped
+    -- path (Frames/Init.lua), so both live and test must reverse identically.
+    if reverseGroupOrder then
+        posInRC = gInRC - 1 - posInRC
+    end
+
     local x, yDown
     if horizontal then
         local xOff = posInRC * (groupW + groupSpacing)
