@@ -1877,6 +1877,12 @@ function DF:MigratePinnedMatchMode()
                         -- a value still at the old hard default (1.0) is treated as
                         -- "inherit" (cleared); a changed value is kept as override.
                         if set.scale == 1.0 then set.scale = nil end
+                        -- Spacing inherits the Based-on mode's frameSpacing unless
+                        -- overridden: the old hard default was 2, so a value still
+                        -- at 2 is treated as "inherit" (cleared); a non-2 value is
+                        -- kept as a deliberate override.
+                        if set.horizontalSpacing == 2 then set.horizontalSpacing = nil end
+                        if set.verticalSpacing == 2 then set.verticalSpacing = nil end
                         -- growDirection is a plain pinned-only setting; an earlier
                         -- build briefly cleared its HORIZONTAL default to nil, so
                         -- restore a concrete value for the dropdown.

@@ -29,6 +29,9 @@
 
 * (Pet Frames) Pet **name and health text show again**. They were suppressed along with the Text Designer rework even though pet frames render their own name/health text, so the pet text — and its font, anchor and colour settings — had no effect. (by Krathe)
 * (Pet Frames) An empty party pet frame no longer lingers as an overlay on the raid frames when a group member summons a pet while you are in a live raid. (by Krathe)
+### Improvements
+
+* (Pinned Frames) Each pinned set's **Horizontal** and **Vertical Spacing** now inherit from the Based-on mode — the grouped frame spacing, or the flat raid spacing — and can be overridden per set with a star and a reset, the same way Width / Height / Scale already do. A pinned set now stays aligned with the frames it mirrors instead of falling back to a fixed spacing. (by Krathe)
 
 ## [4.5.0]
 

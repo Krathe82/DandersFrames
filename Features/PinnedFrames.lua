@@ -236,6 +236,27 @@ local function GetSetScale(set, db)
     return (b and b.frameScale) or 1.0
 end
 
+-- Pinned row/column spacing inherits the Based-on mode's layout spacing when the
+-- per-set value is unset (nil), exactly like GetSetScale inherits frameScale.
+-- Without this a pinned set sat on a hardcoded default of 2 and drifted out of
+-- alignment with a raid whose frameSpacing was e.g. 1.  Grouped party / grouped
+-- raid use a single frameSpacing for both axes; flat raid uses
+-- raidFlatHorizontalSpacing / raidFlatVerticalSpacing.  A non-nil per-set
+-- horizontalSpacing / verticalSpacing override wins.  Returns hSpacing, vSpacing.
+local function GetSetSpacing(set, db)
+    local b = GetSetBaselineDB(set, db or GetPinnedModeDB())
+    local bh, bv
+    if b and b.raidUseGroups == false then
+        bh, bv = (b.raidFlatHorizontalSpacing or 2), (b.raidFlatVerticalSpacing or 2)
+    else
+        local s = (b and b.frameSpacing) or 2
+        bh, bv = s, s
+    end
+    local h = set and set.horizontalSpacing
+    local v = set and set.verticalSpacing
+    return (h ~= nil) and h or bh, (v ~= nil) and v or bv
+end
+
 -- Frame-border keys are all "frame…Border…" (frameShowBorder, frameBorderStyle,
 -- frameBorderColor, …); pixelPerfect is the one extra frame-level key BuildSpec
 -- reads. Used to snapshot a set's Border Override from the Based-on mode.
@@ -980,8 +1001,7 @@ function PinnedFrames:UpdateBossHandlerConfig(setIndex)
     if not db then return end
 
     local frameWidth, frameHeight = GetSetFrameSize(set, db)
-    local hSpacing      = set.horizontalSpacing or 2
-    local vSpacing      = set.verticalSpacing or 2
+    local hSpacing, vSpacing = GetSetSpacing(set, db)
     local unitsPerRow   = set.unitsPerRow or 5
     local horizontal    = (GetSetGrowDirection(set) == "HORIZONTAL")
     local frameAnchor   = set.frameAnchor or "START"
@@ -1804,8 +1824,7 @@ function PinnedFrames:ApplyLayoutSettings(setIndex)
     end
     
     local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
-    local hSpacing = set.horizontalSpacing or 2
-    local vSpacing = set.verticalSpacing or 2
+    local hSpacing, vSpacing = GetSetSpacing(set, db)
     local unitsPerRow = set.unitsPerRow or 5
     local columnAnchor = set.columnAnchor or "START"
     local frameAnchor = set.frameAnchor or "START"
@@ -2016,7 +2035,8 @@ function PinnedFrames:ResizeContainer(setIndex)
         end
 
         local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
-        local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
+        local hSp, vSp = GetSetSpacing(set, db)
+        local spacing = horizontal and hSp or vSp
         local unitsPerRow = set.unitsPerRow or 5
 
         local rows = math.ceil(visibleCount / unitsPerRow)
@@ -2025,9 +2045,9 @@ function PinnedFrames:ResizeContainer(setIndex)
         local width, height
         if horizontal then
             width = cols * frameWidth + (cols - 1) * spacing
-            height = rows * frameHeight + (rows - 1) * (set.verticalSpacing or 2)
+            height = rows * frameHeight + (rows - 1) * vSp
         else
-            width = rows * frameWidth + (rows - 1) * (set.horizontalSpacing or 2)
+            width = rows * frameWidth + (rows - 1) * hSp
             height = cols * frameHeight + (cols - 1) * spacing
         end
 
@@ -2050,7 +2070,8 @@ function PinnedFrames:ResizeContainer(setIndex)
     end
     
     local horizontal = GetSetGrowDirection(set) == "HORIZONTAL"
-    local spacing = horizontal and (set.horizontalSpacing or 2) or (set.verticalSpacing or 2)
+    local hSp, vSp = GetSetSpacing(set, db)
+    local spacing = horizontal and hSp or vSp
     local unitsPerRow = set.unitsPerRow or 5
     
     local rows = math.ceil(visibleCount / unitsPerRow)
@@ -2059,9 +2080,9 @@ function PinnedFrames:ResizeContainer(setIndex)
     local width, height
     if horizontal then
         width = cols * frameWidth + (cols - 1) * spacing
-        height = rows * frameHeight + (rows - 1) * (set.verticalSpacing or 2)
+        height = rows * frameHeight + (rows - 1) * vSp
     else
-        width = rows * frameWidth + (rows - 1) * (set.horizontalSpacing or 2)
+        width = rows * frameWidth + (rows - 1) * hSp
         height = cols * frameHeight + (cols - 1) * spacing
     end
     
@@ -2589,8 +2610,9 @@ local function MakeDefaultSet(index)
         players = {},
         growDirection = "HORIZONTAL",
         unitsPerRow = 5,
-        horizontalSpacing = 2,
-        verticalSpacing = 2,
+        -- horizontalSpacing / verticalSpacing left unset (nil) so a new set
+        -- INHERITS its Based-on mode's frameSpacing via GetSetSpacing; set a
+        -- value only to override (keeps pinned aligned with the frames it mirrors).
         position = { point = "CENTER", x = 0, y = 250 - (index - 1) * 130 },
         showLabel = false,
         columnAnchor = "START",
@@ -3501,8 +3523,7 @@ function PinnedFrames:ApplyPlayerTestLayout(setIndex, set, isRaidMode)
     local borderDB = GetSetBorderDB(set, GetSetBaselineDB(set, db))
     local effDB = BuildPinnedEffDB(db, set.hideAuras, set.hideIcons)
 
-    local hSpacing = set.horizontalSpacing or 2
-    local vSpacing = set.verticalSpacing or 2
+    local hSpacing, vSpacing = GetSetSpacing(set, db)
     local unitsPerRow = set.unitsPerRow or 5
     local frameAnchor = set.frameAnchor or "START"
     local columnAnchor = set.columnAnchor or "START"

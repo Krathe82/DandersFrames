@@ -2985,6 +2985,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 local set = GetCurrentSet()
                 local mode = (set and set.matchMode) or GUI.SelectedMode
                 local mdb = DF:GetDB(mode)
+                -- baselineKey may be a function (mdb, set) -> value, for settings
+                -- whose inherited source is mode-dependent (e.g. spacing: grouped
+                -- raid uses frameSpacing, flat raid uses raidFlat*Spacing).
+                if type(baselineKey) == "function" then
+                    return baselineKey(mdb, set) or minVal
+                end
                 return (mdb and mdb[baselineKey]) or minVal
             end
             -- Float-tolerant compare (half a step): fractional-step slider drags
@@ -3653,10 +3659,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- displayed baseline when the matched mode changes (an un-overridden control
         -- then shows the new mode's value; an overridden one keeps its star).
         local pinnedWidthSlider, pinnedHeightSlider, pinnedScaleSlider
+        local pinnedHSpacingSlider, pinnedVSpacingSlider
         local function RefreshMatchOverrides()
             if pinnedWidthSlider then pinnedWidthSlider.Refresh() end
             if pinnedHeightSlider then pinnedHeightSlider.Refresh() end
             if pinnedScaleSlider then pinnedScaleSlider.Refresh() end
+            if pinnedHSpacingSlider then pinnedHSpacingSlider.Refresh() end
+            if pinnedVSpacingSlider then pinnedVSpacingSlider.Refresh() end
         end
 
         local matchOptions = { party = L["Party"], raid = L["Raid"] }
@@ -3763,8 +3772,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(layoutGroup, nil, 1)
         layoutGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
 
-        -- ===== LAYOUT GROUP (Column 2) — pinned-only arrangement (no main-frame
-        -- equivalent, so these are independent settings, not Match overrides) =====
+        -- ===== LAYOUT GROUP (Column 2) — pinned arrangement. Direction / growth /
+        -- units-per-row are pinned-only (no main-frame equivalent). Spacing IS a
+        -- Match override: it inherits the Based-on mode's frameSpacing (grouped) /
+        -- raidFlat*Spacing (flat) so a pinned set stays aligned with the frames it
+        -- mirrors, overridable per set. =====
         local arrangeGroup = GUI:CreateSettingsGroup(self.child, 280)
         arrangeGroup:AddWidget(GUI:CreateHeader(self.child, L["Layout"]), 40)
 
@@ -3783,8 +3795,18 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
 
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
-        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", UpdateHighlightLayout), 55)
-        arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", UpdateHighlightLayout), 55)
+        -- Spacing inherits the Based-on mode's layout spacing (grouped -> frameSpacing,
+        -- flat raid -> raidFlat*Spacing); a per-set value overrides it (gold star + reset).
+        local function SpacingBaseline(flatKey)
+            return function(mdb)
+                if mdb and mdb.raidUseGroups == false then return mdb[flatKey] or 2 end
+                return (mdb and mdb.frameSpacing) or 2
+            end
+        end
+        pinnedHSpacingSlider = CreateMatchOverrideSlider(self.child, L["Horizontal Spacing"], -5, 50, 1, "horizontalSpacing", SpacingBaseline("raidFlatHorizontalSpacing"), UpdateHighlightLayout)
+        arrangeGroup:AddWidget(pinnedHSpacingSlider, 55)
+        pinnedVSpacingSlider = CreateMatchOverrideSlider(self.child, L["Vertical Spacing"], -5, 50, 1, "verticalSpacing", SpacingBaseline("raidFlatVerticalSpacing"), UpdateHighlightLayout)
+        arrangeGroup:AddWidget(pinnedVSpacingSlider, 55)
         Add(arrangeGroup, nil, 2)
         arrangeGroup.hideOn = function() return activeSubTab ~= "appearance" end  -- Appearance tab
 
