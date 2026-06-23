@@ -8,6 +8,7 @@
 * (Localization) Test Mode, frame position, and grid layout labels now translate properly instead of always showing English.
 * (Localization) Text Designer, Aura Designer, and auto-profile labels now follow your chosen language.
 * (Raid) Test mode now matches your live raid frame positions exactly in both **flat** and **group-based** layouts. Several combinations of fill direction, group alignment, "grow from" and "players grow from" used to render differently in test mode than they did in real combat, so the preview couldn't be trusted for fine-tuning; the test path now mirrors the live secure positioning in every case. This includes **Center** group alignment, where test mode wasn't applying the populated-row compensation that keeps live frames from drifting as the roster changes — so a centred raid now previews in the right place and stays put when players join or leave. (by Krathe)
+* (Raid) Group labels no longer occasionally appear over the flat raid grid. When an auto layout switched from a grouped layout to a flat one, the group labels from the grouped layout could be left behind floating over the flat frames; they are now hidden when flat mode takes over, the same as the grouped headers already were. (by Krathe)
 
 ## [4.5.0]
 
