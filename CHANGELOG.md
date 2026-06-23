@@ -21,6 +21,14 @@
 * (Profiles) The **Missing Buff** and **Defensive** icon **Border Color Source** (Class/Role) is now preserved when exporting or importing a single category, instead of reverting to a static colour. (by Krathe)
 * (Click Casting) A binding's **combat condition** (In/Out of Combat) now shows in the bindings list immediately after you add it, instead of only appearing after a `/reload`. (by Krathe)
 * (Debuffs) Removed the **Highlight Dispellable** toggle, which no longer did anything — dispellable highlighting is handled by the **Dispel Overlay** feature. (by Krathe)
+### New Features
+
+* (Pet Frames) Added an optional **power bar**. Enable **Show Power Bar** to display the pet's power (mana / energy / focus / etc.) as a bar along the bottom of the frame, with an adjustable height and either power-type or a custom colour. Off by default. (by Krathe)
+
+### Bug Fixes
+
+* (Pet Frames) Pet **name and health text show again**. They were suppressed along with the Text Designer rework even though pet frames render their own name/health text, so the pet text — and its font, anchor and colour settings — had no effect. (by Krathe)
+* (Pet Frames) An empty party pet frame no longer lingers as an overlay on the raid frames when a group member summons a pet while you are in a live raid. (by Krathe)
 
 ## [4.5.0]
 
