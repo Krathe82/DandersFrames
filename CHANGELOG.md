@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## [4.5.0]
+### Bug Fixes
+
+* (Raid) Test mode now matches your live raid frame positions exactly in both **flat** and **group-based** layouts. Several combinations of fill direction, group alignment, "grow from" and "players grow from" used to render differently in test mode than they did in real combat, so the preview couldn't be trusted for fine-tuning; the test path now mirrors the live secure positioning in every case. This includes **Center** group alignment, where test mode wasn't applying the populated-row compensation that keeps live frames from drifting as the roster changes — so a centred raid now previews in the right place and stays put when players join or leave. (by Krathe)
 
 ### New Features
 
