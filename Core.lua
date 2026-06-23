@@ -1559,7 +1559,19 @@ function DF:LightweightUpdateFrameLevel(elementType)
     local mode = DF.GUI and DF.GUI.SelectedMode or "party"
     local db = DF.db[mode]
     if not db then return end
-    
+
+    -- Status icons whose full-render frame level (ApplyIconSettings) is
+    -- (parent-of-parent level + value); mirror that here so the Frame Level
+    -- slider previews live, matching Scale/Alpha. Keyed elementType -> frame field.
+    local SIMPLE_LEVEL_ICONS = {
+        resurrection = "resurrectionIcon",
+        phased       = "phasedIcon",
+        afk          = "afkIcon",
+        vehicle      = "vehicleIcon",
+        raidRole     = "raidRoleIcon",
+        summon       = "summonIcon",
+    }
+
     local function UpdateLevel(frame)
         if not frame then return end
         
@@ -1621,6 +1633,16 @@ function DF:LightweightUpdateFrameLevel(elementType)
                 frame.centerStatusIcon:SetFrameLevel(frameBaseLevel + level)
             else
                 frame.centerStatusIcon:SetFrameLevel(baseLevel + 5)
+            end
+        else
+            -- resurrection / phased / afk / vehicle / raidRole / summon icons
+            local field = SIMPLE_LEVEL_ICONS[elementType]
+            local icon = field and frame[field]
+            if icon then
+                local level = db[field .. "FrameLevel"] or 0
+                if level > 0 then
+                    icon:SetFrameLevel(icon:GetParent():GetParent():GetFrameLevel() + level)
+                end
             end
         end
     end

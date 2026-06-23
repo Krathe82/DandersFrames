@@ -733,7 +733,12 @@ function CC:CreateBindingRow(parent, binding, index)
     local isMacro = (actionType == "macro") or (binding.macroId ~= nil)
     local fallback = binding.fallback or {}
     local fallbackText = isMacro and nil or GetFallbackDisplayText(fallback)
-    local combatSetting = binding.combat or "always"
+    -- Fall back to the legacy loadCombat field for freshly-added bindings (the
+    -- loadCombat -> combat migration only runs at profile load); map its vocabulary.
+    local combatSetting = binding.combat
+        or (binding.loadCombat == "combat" and "incombat")
+        or (binding.loadCombat == "nocombat" and "outofcombat")
+        or "always"
     
     local targetingInfo = row:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
     targetingInfo:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)

@@ -759,6 +759,7 @@ DF.ExportCategories = {
         "defensiveIconBorderAnimationType",
         "defensiveIconBorderBlendMode",
         "defensiveIconBorderColor",
+        "defensiveIconBorderColorSource",
         "defensiveIconBorderGradientDirection",
         "defensiveIconBorderGradientEnabled",
         "defensiveIconBorderGradientEndColor",
@@ -823,7 +824,6 @@ DF.ExportCategories = {
         "targetedSpellDurationX",
         "targetedSpellDurationY",
         "targetedSpellDurationColor",
-        "targetedSpellDurationColorByTime",
         "targetedSpellGrowth",
         "targetedSpellSpacing",
         "targetedSpellFrameLevel",
@@ -1034,7 +1034,6 @@ DF.ExportCategories = {
         "dispelOnlyPlayerTypes",
         "dispelAnimate",
         "dispelAnimateSpeed",
-        "dispellableHighlight",
         
         -- Missing Buff Icon
         "missingBuffIconEnabled",
@@ -1060,6 +1059,7 @@ DF.ExportCategories = {
         "missingBuffIconBorderAnimationType",
         "missingBuffIconBorderBlendMode",
         "missingBuffIconBorderColor",
+        "missingBuffIconBorderColorSource",
         "missingBuffIconBorderGradientDirection",
         "missingBuffIconBorderGradientEndColor",
         "missingBuffIconBorderGradientStartColor",

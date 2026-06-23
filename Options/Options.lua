@@ -6042,8 +6042,6 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             -- debuff hides/shows immediately instead of waiting for the next aura event.
             DF:RefreshAllVisibleFrames()
         end), 30)
-        local dispelHighlight = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Highlight Dispellable"], db, "dispellableHighlight", nil), 30)
-        dispelHighlight.disableOn = function(d) return not d.showDebuffs end
         local debuffMax = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Max Debuffs"], 0, 8, 1, db, "debuffMax", nil, function() DF:RefreshAllVisibleFrames() end, true), 55)
         debuffMax.disableOn = function(d) return not d.showDebuffs end
         local debuffSize = settingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Size"], 10, 40, 1, db, "debuffSize", nil, function() DF:LightweightUpdateAuraPosition("debuff") end, true), 55)

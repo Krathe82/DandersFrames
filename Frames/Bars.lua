@@ -191,7 +191,7 @@ function DF:ApplyResourceBarLayout(frame)
         local power = UnitPower(unit)
         local maxPower = UnitPowerMax(unit)
         bar:SetMinMaxValues(0, maxPower)
-        bar:SetValue(power)
+        DF.SetBarValue(bar, power, frame, db.resourceBarSmooth)
         local cr, cg, cb = DF:GetResourceBarColor(unit, db)
         bar:SetStatusBarColor(cr, cg, cb, 1)
     end
@@ -226,8 +226,8 @@ function DF:UpdateResourceBar(frame)
     
     if maxPower then
         bar:SetMinMaxValues(0, maxPower)
-        DF.SetBarValue(bar, power, frame)
-        
+        DF.SetBarValue(bar, power, frame, db.resourceBarSmooth)
+
         -- Resolve fill colour per the configured colour mode (power / class / custom).
         local cr, cg, cb = DF:GetResourceBarColor(unit, db)
         bar:SetStatusBarColor(cr, cg, cb, 1)
