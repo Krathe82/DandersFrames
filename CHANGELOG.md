@@ -32,6 +32,7 @@
 ### Improvements
 
 * (Pinned Frames) Each pinned set's **Horizontal** and **Vertical Spacing** now inherit from the Based-on mode — the grouped frame spacing, or the flat raid spacing — and can be overridden per set with a star and a reset, the same way Width / Height / Scale already do. A pinned set now stays aligned with the frames it mirrors instead of falling back to a fixed spacing. (by Krathe)
+* (Options / Click Casting) Note labels no longer show a stray "?" in place of an unsupported symbol, and inline "Note:" labels now use one consistent style across the options. (by Krathe)
 
 ## [4.5.0]
 
