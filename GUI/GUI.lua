@@ -8713,7 +8713,27 @@ function DF:CreateGUI()
         -- Raid mode uses raidLocked, party mode uses locked
         local isLocked = db and (GUI.SelectedMode == "raid" and db.raidLocked or db.locked)
         local themeColor = GetThemeColor()
-        
+
+        -- While an auto layout drives the raid frames, dragging the base position by
+        -- accident is the bug we're preventing: disable the toolbar Unlock and steer
+        -- users to the active layout's own Unlock button (Auto Layouts page). Only the
+        -- UNLOCK action is blocked (isLocked) — locking from here still works to finish
+        -- a session.
+        local layoutActive = (GUI.SelectedMode == "raid") and DF.AutoProfilesUI
+            and DF.AutoProfilesUI.IsLayoutActive and DF.AutoProfilesUI:IsLayoutActive()
+        if layoutActive and isLocked then
+            btnLock.dfDisabled = true
+            btnLock.Text:SetText(L["Unlock"])
+            btnLock.Icon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\lock")
+            btnLock:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 0.5)
+            btnLock:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.5)
+            btnLock.Text:SetTextColor(0.4, 0.4, 0.4)
+            btnLock.Icon:SetVertexColor(0.4, 0.4, 0.4)
+            UpdatePositionOverrideIndicator()
+            return
+        end
+        btnLock.dfDisabled = false
+
         btnLock.Text:SetText(isLocked and L["Unlock"] or L["Lock"])
         btnLock.Icon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\" .. (isLocked and "lock" or "lock_open"))
         
@@ -8736,10 +8756,29 @@ function DF:CreateGUI()
     end
     GUI.UpdateLockButtonState = UpdateLockButtonState
     
+    btnLock:SetScript("OnEnter", function(self)
+        if self.dfDisabled then
+            local name = DF.AutoProfilesUI and DF.AutoProfilesUI.GetActiveLayoutName
+                and DF.AutoProfilesUI:GetActiveLayoutName()
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(L["Locked by Auto Layout"], 1, 0.6, 0.2)
+            GameTooltip:AddLine(format(L["Auto layout \"%s\" is active. Unlock it from the Auto Layouts page to move its frames."], name or "?"), 0.7, 0.7, 0.7, true)
+            GameTooltip:Show()
+        end
+    end)
+    btnLock:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     btnLock:SetScript("OnClick", function()
+        if btnLock.dfDisabled then
+            local name = DF.AutoProfilesUI and DF.AutoProfilesUI.GetActiveLayoutName
+                and DF.AutoProfilesUI:GetActiveLayoutName()
+            print("|cffff9900DandersFrames:|r " .. format(L["Auto layout \"%s\" is active. Unlock it from the Auto Layouts page to move its frames."], name or "?"))
+            return
+        end
+
         local db = DF.db[GUI.SelectedMode]
         if not db then return end
-        
+
         -- Check current lock state using the correct key per mode
         local isLocked = GUI.SelectedMode == "raid" and db.raidLocked or db.locked
         

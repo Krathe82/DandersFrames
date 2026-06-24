@@ -1071,7 +1071,19 @@ function DF:LockRaidFrames()
     if not IsInRaid() then
         DF.raidContainer:Hide()
     end
-    
+
+    -- If this lock ends a layout-edit unlock session (started from a layout's own
+    -- Unlock button), exit editing so the dragged position is captured into that
+    -- layout (ExitEditing's diff-scan + the live SetProfileSetting on drag) and the
+    -- layout re-applies. Fires for ANY lock path (the layout's button, the position
+    -- panel's Lock, right-click, /df raidlock).
+    if DF.raidLayoutEditUnlock then
+        DF.raidLayoutEditUnlock = nil
+        if DF.AutoProfilesUI and DF.AutoProfilesUI.IsEditing and DF.AutoProfilesUI:IsEditing() then
+            DF.AutoProfilesUI:ExitEditing()
+        end
+    end
+
     -- Update button text if it exists
     if DF.raidLockButton and DF.raidLockButton.Text then
         DF.raidLockButton.Text:SetText("Unlock Raid Frames")

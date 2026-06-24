@@ -4999,7 +4999,15 @@ DF._MainEventDispatcher = function(self, event, arg1)
             elseif msg == "lock" then
                 if DF.LockFrames then DF:LockFrames() end
             elseif msg == "raidunlock" or msg == "unlockraid" then
-                if DF.UnlockRaidFrames then DF:UnlockRaidFrames() end
+                -- While an auto layout is active, base-position unlock is blocked
+                -- (matches the disabled toolbar button) — point users to the active
+                -- layout's own Unlock button so they don't move the base by accident.
+                if DF.AutoProfilesUI and DF.AutoProfilesUI.IsLayoutActive and DF.AutoProfilesUI:IsLayoutActive() then
+                    local name = DF.AutoProfilesUI.GetActiveLayoutName and DF.AutoProfilesUI:GetActiveLayoutName()
+                    print("|cffff9900DandersFrames:|r " .. string.format(L["Auto layout \"%s\" is active. Unlock it from the Auto Layouts page to move its frames."], name or "?"))
+                elseif DF.UnlockRaidFrames then
+                    DF:UnlockRaidFrames()
+                end
             elseif msg == "raidlock" or msg == "lockraid" then
                 if DF.LockRaidFrames then DF:LockRaidFrames() end
             elseif msg == "reset" then
