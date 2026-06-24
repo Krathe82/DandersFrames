@@ -880,6 +880,7 @@ L["Hide buffs from the buff bar when they are already displayed by the Defensive
 L["Hide Auras"] = true
 L["Hide Cooldown Swipe"] = true
 L["Hide from Main Frames"] = true
+L["Hide on Tanks"] = true
 L["Hide from Main Frames Tooltip"] = "Removes this set's pinned members from your main party/raid frames so they appear only in the pinned set. Applies out of combat. Your frame sorting setting is preserved."
 L["Hide duplicate buffs"] = true
 L["Hide in Combat"] = true

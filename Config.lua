@@ -921,6 +921,7 @@ DF.PartyDefaults = {
     aggroHighlightMode = "GLOW",
     aggroHighlightThickness = 1,
     aggroOnlyTanking = false,
+    aggroHideOnTanks = false,
     aggroUseCustomColors = false,
 
     -- Anchor/Position
@@ -2600,6 +2601,7 @@ DF.RaidDefaults = {
     aggroHighlightMode = "GLOW",
     aggroHighlightThickness = 1,
     aggroOnlyTanking = false,
+    aggroHideOnTanks = false,
     aggroUseCustomColors = false,
 
     -- Anchor/Position

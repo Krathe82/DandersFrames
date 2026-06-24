@@ -672,6 +672,14 @@ function DF:UpdateHighlights(frame, forceSelection, forceAggro)
         else
             isAggro = status and status > 0
         end
+        -- "Hide on Tanks": a tank holding aggro is expected, so the highlight is just
+        -- noise — suppress it for TANK-role units so healers only see when a DPS or
+        -- healer pulls aggro. Role-based, so it applies in role-assigned content
+        -- (dungeons/M+/raids) and no-ops where roles aren't set (UnitGroupRolesAssigned
+        -- returns "NONE").
+        if isAggro and db.aggroHideOnTanks and unit and UnitGroupRolesAssigned(unit) == "TANK" then
+            isAggro = false
+        end
     end
 
     -- TD: stash the threat status (already fetched above for the aggro border)
