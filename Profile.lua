@@ -299,6 +299,11 @@ function DF:SetProfile(name)
     if DF.MigrateTextDesignerFromLegacy then
         DF:MigrateTextDesignerFromLegacy()
     end
+    -- One-time cleanup of stray health text the pre-fix migration injected onto
+    -- profiles that had health text off (idempotent, self-guarded).
+    if DF.CorrectStrayMigratedHealthText then
+        DF:CorrectStrayMigratedHealthText()
+    end
 
     -- Strip orphaned legacy text overrides from raid auto-layouts now that TD
     -- owns the built-in text (gated on migratedFromLegacy inside).
