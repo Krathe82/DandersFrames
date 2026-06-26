@@ -6,6 +6,7 @@
 
 * (Highlights) New **Hide on Tanks** option for the Aggro Highlight — a tank holding aggro is expected, so the highlight there is just noise. Enable it and the aggro highlight is suppressed on tank-role players, so it stands out only when a **DPS or healer** pulls aggro. Off by default; works in role-assigned content (dungeons, Mythic+, raids). (by Krathe)
 * (Pet Frames) Added an optional **power bar**. Enable **Show Power Bar** to display the pet's power (mana / energy / focus / etc.) as a bar along the bottom of the frame, with an adjustable height and either power-type or a custom colour. Off by default. (by Krathe)
+* (Pinned Frames) Pinned sets can now **anchor to your raid or party frames** instead of the screen. While positioning a set (unlock your frames and click its handle), the position panel gains an **Anchor To Raid Frames** / **Anchor To Party Frames** dropdown — pick a corner (Top Left, Center, Bottom Right, …) and the set pins to that corner of your frames, with the X / Y nudge becoming a fine offset from there. The set then tracks the frames as they move or resize — across roster changes and in combat — so a pinned group stays aligned with your raid instead of drifting out of place. Choose **Screen (Free)** (the default) to keep placing the set freely on screen as before. (by Krathe)
 
 ### Improvements
 
