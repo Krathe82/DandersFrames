@@ -4047,6 +4047,10 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
 
     -- Update tab override stars
     self:RefreshTabOverrideStars()
+
+    -- A layout going active greys the toolbar Unlock (it gates on IsLayoutActive);
+    -- refresh it if the GUI is open so the button state isn't stale.
+    if DF.GUI and DF.GUI.UpdateLockButtonState then DF.GUI.UpdateLockButtonState() end
 end
 
 -- Remove the active runtime profile overlay
@@ -4069,6 +4073,10 @@ function AutoProfilesUI:RemoveRuntimeProfile()
 
     print("|cff00ff00DandersFrames:|r " .. L["Auto-profile deactivated, using global settings"])
     self:RefreshTabOverrideStars()
+
+    -- A layout deactivating must re-enable the toolbar Unlock — otherwise it stays
+    -- greyed and its click wrongly steers to the Auto Layouts page (stuck state).
+    if DF.GUI and DF.GUI.UpdateLockButtonState then DF.GUI.UpdateLockButtonState() end
 end
 
 -- ============================================================
