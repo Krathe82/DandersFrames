@@ -13,6 +13,7 @@
 
 ### Bug Fixes
 
+* (Borders) Fixed **Border Inset** being ignored when the border uses a **texture** style — texture borders sat flush against the frame regardless of the inset, and a changed inset didn't update live. Texture borders now honour Border Inset and update immediately, matching solid/gradient borders. Affects every texture border in the addon (frame borders, buff/debuff squares, Aura Designer, etc.). (by Krathe)
 * (Nicknames) Fixed an error when matching nicknames against boss or NPC names on pinned frames during encounters.
 * (Localization) Test Mode, frame position, and grid layout labels now translate properly instead of always showing English.
 * (Localization) Text Designer, Aura Designer, and auto-profile labels now follow your chosen language.
