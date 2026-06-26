@@ -95,15 +95,28 @@ local PINNED_OVERRIDABLE = {
     enabled = true,
 }
 
--- True unless `key` is a pinned key (pinned.N.setting) whose setting is NOT
--- overridable. Non-pinned keys are always allowed (governed elsewhere). This is
--- the single gate that keeps non-overridable pinned settings out of the layout
--- override store — used by SetProfileSetting / IsSettingOverridden below.
+-- Transient / UI-state keys that must NEVER become a layout override — they're
+-- not per-layout settings, so capturing them poisons the layout. raidLocked is the
+-- culprit: the per-layout Unlock button unlocks frames DURING an edit session, so
+-- raidLocked goes false; if editing exits while still unlocked, the diff-scan
+-- stored raidLocked=false and the layout then forced the frames unlocked whenever
+-- it activated (the Lock/Unlock button read backwards). `locked` is the party
+-- equivalent, listed for symmetry.
+local NON_OVERRIDABLE_KEYS = {
+    raidLocked = true,
+    locked = true,
+}
+
+-- True unless `key` is non-overridable: a pinned key (pinned.N.setting) whose
+-- setting isn't overridable, or a transient UI-state key. The single gate that
+-- keeps such keys out of the layout override store — used by SetProfileSetting /
+-- IsSettingOverridden / the ExitEditing diff-scan / ApplyRuntimeProfile.
 local function IsKeyOverridable(key)
     local _, setting = ParsePinnedKey(key)
     if setting then
         return PINNED_OVERRIDABLE[setting] == true
     end
+    if NON_OVERRIDABLE_KEYS[key] then return false end
     return true
 end
 
@@ -587,6 +600,29 @@ function AutoProfilesUI:InitDefaults()
     -- Migration: add howItWorksCollapsed if missing from existing db
     if DF.db.raidAutoProfiles.howItWorksCollapsed == nil then
         DF.db.raidAutoProfiles.howItWorksCollapsed = false
+    end
+
+    -- One-time cleanup: strip transient/never-override keys (raidLocked etc.) that
+    -- an earlier build's diff-scan may have captured into layout overrides. Such a
+    -- key forced the frames locked/unlocked whenever its layout activated (the
+    -- Lock/Unlock button read backwards). Runtime/edit paths now skip these keys,
+    -- but scrub the stored data so override counts are accurate too.
+    local ap = DF.db.raidAutoProfiles
+    if not ap.nonOverridableCleanupDone then
+        local function cleanOverrides(profile)
+            if profile and profile.overrides then
+                for key in pairs(NON_OVERRIDABLE_KEYS) do
+                    profile.overrides[key] = nil
+                end
+            end
+        end
+        if ap.mythic then cleanOverrides(ap.mythic.profile) end
+        for _, ct in ipairs({ "instanced", "openWorld" }) do
+            if ap[ct] and ap[ct].profiles then
+                for _, p in ipairs(ap[ct].profiles) do cleanOverrides(p) end
+            end
+        end
+        ap.nonOverridableCleanupDone = true
     end
 end
 
@@ -1339,6 +1375,79 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
     copyBtn:SetScript("OnClick", function()
         AutoProfilesUI:ShowCopyDialog(contentType, profile, index, pageFrame)
     end)
+
+    -- Unlock button — ACTIVE layout only. Mirrors the main toolbar Lock/Unlock
+    -- toggle (icon + text) but scoped to this layout: clicking it edits THIS
+    -- (active) layout with the raid frames unlocked, so dragging saves the position
+    -- into the layout instead of the base. The main toolbar Unlock is disabled
+    -- while a layout is active (steering position edits here), same convention as
+    -- Edit Settings being active-layout-only.
+    if AutoProfilesUI.activeRuntimeProfile == profile then
+        local unlockBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
+        unlockBtn:SetSize(80, 20)
+        unlockBtn:SetPoint("RIGHT", copyBtn, "LEFT", -6, 0)
+        unlockBtn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        unlockBtn:SetBackdropColor(0.15, 0.15, 0.15, 1)
+        unlockBtn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        local unlockIcon = unlockBtn:CreateTexture(nil, "OVERLAY")
+        unlockIcon:SetPoint("LEFT", 6, 0)
+        unlockIcon:SetSize(12, 12)
+
+        local unlockText = unlockBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        unlockText:SetPoint("LEFT", unlockIcon, "RIGHT", 4, 0)
+        unlockText:SetTextColor(1, 0.5, 0.2)
+
+        local function RefreshUnlockBtn()
+            local locked = DF:GetRaidDB().raidLocked
+            unlockText:SetText(locked and L["Unlock"] or L["Lock"])
+            unlockIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\" .. (locked and "lock" or "lock_open"))
+            unlockIcon:SetVertexColor(1, 0.5, 0.2)
+        end
+        RefreshUnlockBtn()
+
+        unlockBtn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(0.25, 0.15, 0.1, 1)
+            self:SetBackdropBorderColor(1, 0.5, 0.2, 1)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(L["Unlock to Move"], 1, 0.5, 0.2)
+            GameTooltip:AddLine(L["Unlock this layout's frames to drag them. Changes save to this layout."], 0.7, 0.7, 0.7, true)
+            GameTooltip:Show()
+        end)
+        unlockBtn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(0.15, 0.15, 0.15, 1)
+            self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+            GameTooltip:Hide()
+        end)
+        unlockBtn:SetScript("OnClick", function()
+            local locked = DF:GetRaidDB().raidLocked
+            if locked then
+                if InCombatLockdown() then
+                    print("|cffff0000DandersFrames:|r Cannot unlock during combat.")
+                    return
+                end
+                -- Edit THIS layout (already the active one) so drag-writes land on
+                -- it, then unlock for world dragging. Skip re-entering if Edit
+                -- Settings already opened this layout (don't steal that session).
+                local alreadyEditingThis = AutoProfilesUI:IsEditing()
+                    and AutoProfilesUI.editingProfile == profile
+                if not alreadyEditingThis then
+                    -- Refused (shouldn't happen for the active layout) → don't fall
+                    -- through to unlocking the BASE, which is the bug we're fixing.
+                    if AutoProfilesUI:EnterEditing(contentType.key, index) == false then return end
+                    DF.raidLayoutEditUnlock = true
+                end
+                if DF.UnlockRaidFrames then DF:UnlockRaidFrames() end
+            else
+                if DF.LockRaidFrames then DF:LockRaidFrames() end
+            end
+            RefreshUnlockBtn()
+        end)
+    end
 
     -- Edit Settings button
     local editBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
@@ -2736,6 +2845,17 @@ function AutoProfilesUI:IsEditing()
     return self.editingProfile ~= nil
 end
 
+-- True when an auto layout is currently driving the live raid frames. Used to
+-- steer base-position edits (the toolbar Unlock + /df raidunlock) toward the
+-- active layout's own Unlock button so users don't move the base by accident.
+function AutoProfilesUI:IsLayoutActive()
+    return self.activeRuntimeProfile ~= nil
+end
+
+function AutoProfilesUI:GetActiveLayoutName()
+    return self.activeRuntimeProfile and self.activeRuntimeProfile.name or nil
+end
+
 function AutoProfilesUI:EnterEditing(contentType, profileIndex)
     DF:Debug("LAYOUT", "EnterEditing: contentType=%s profileIndex=%s", contentType, tostring(profileIndex))
 
@@ -2865,6 +2985,10 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
         for key, value in pairs(self.editingProfile.overrides) do
             if key == "pinnedFrames" then
                 DF:DebugWarn("LAYOUT", "EnterEditing: skipping stale pinnedFrames direct override key")
+            elseif not IsKeyOverridable(key) then
+                -- transient/never-override key (e.g. a stale raidLocked) — don't
+                -- apply it to the live preview (ExitEditing self-heals it away).
+                DF:DebugWarn("LAYOUT", "EnterEditing: skipping non-overridable override \"%s\"", key)
             else
                 SetRaidValue(key, DeepCopyValue(value))
                 overrideCount = overrideCount + 1
@@ -2988,6 +3112,14 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
                     overrides[key] = nil
                     autoCleaned = autoCleaned + 1
                     DF:DebugWarn("LAYOUT", "ExitEditing: removed stale pinnedFrames direct override key")
+                end
+            elseif not IsKeyOverridable(key) then
+                -- Transient/never-override key (e.g. raidLocked) — never store it,
+                -- and self-heal any override an earlier build captured.
+                if overrides[key] ~= nil then
+                    overrides[key] = nil
+                    autoCleaned = autoCleaned + 1
+                    DF:DebugWarn("LAYOUT", "ExitEditing: removed non-overridable override \"%s\"", key)
                 end
             else
                 local currentVal = GetRaidValue(key)
@@ -3803,17 +3935,24 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
     local simpleKeys = {}    -- { [key] = value }
 
     for key, value in pairs(profile.overrides) do
-        local setIndex, setting = ParsePinnedKey(key)
-        if setIndex and setting then
-            if not pinnedGroups[setIndex] then pinnedGroups[setIndex] = {} end
-            pinnedGroups[setIndex][setting] = value
+        -- Defensive: never apply a transient/never-override key (e.g. a raidLocked
+        -- captured by an earlier build) to the live overlay, or the layout would
+        -- force the frames locked/unlocked whenever it activates.
+        if not IsKeyOverridable(key) then
+            -- skip
         else
-            local tableName, index = ParseTableKey(key)
-            if tableName and index then
-                if not tableGroups[tableName] then tableGroups[tableName] = {} end
-                tableGroups[tableName][index] = value
+            local setIndex, setting = ParsePinnedKey(key)
+            if setIndex and setting then
+                if not pinnedGroups[setIndex] then pinnedGroups[setIndex] = {} end
+                pinnedGroups[setIndex][setting] = value
             else
-                simpleKeys[key] = value
+                local tableName, index = ParseTableKey(key)
+                if tableName and index then
+                    if not tableGroups[tableName] then tableGroups[tableName] = {} end
+                    tableGroups[tableName][index] = value
+                else
+                    simpleKeys[key] = value
+                end
             end
         end
     end
@@ -3908,6 +4047,10 @@ function AutoProfilesUI:ApplyRuntimeProfile(profile, contentKey)
 
     -- Update tab override stars
     self:RefreshTabOverrideStars()
+
+    -- A layout going active greys the toolbar Unlock (it gates on IsLayoutActive);
+    -- refresh it if the GUI is open so the button state isn't stale.
+    if DF.GUI and DF.GUI.UpdateLockButtonState then DF.GUI.UpdateLockButtonState() end
 end
 
 -- Remove the active runtime profile overlay
@@ -3930,6 +4073,34 @@ function AutoProfilesUI:RemoveRuntimeProfile()
 
     print("|cff00ff00DandersFrames:|r " .. L["Auto-profile deactivated, using global settings"])
     self:RefreshTabOverrideStars()
+
+    -- A layout deactivating must re-enable the toolbar Unlock — otherwise it stays
+    -- greyed and its click wrongly steers to the Auto Layouts page (stuck state).
+    if DF.GUI and DF.GUI.UpdateLockButtonState then DF.GUI.UpdateLockButtonState() end
+end
+
+-- Write a raid position straight into the ACTIVE layout's override + live overlay,
+-- for direct world drags (the permanent mover) that shouldn't open the full editing
+-- GUI. Returns true when it handled the write (a layout is active and not being
+-- edited) so the caller skips the base write; false otherwise (no layout / editing
+-- — the caller writes base, or the editing-preview path captures it on lock).
+-- Mirrors what the toolbar Unlock flow persists, minus the snapshot/diff machinery
+-- (a single scalar position key needs none — ApplyRuntimeProfile rebuilds the
+-- overlay from profile.overrides on the next layout re-eval).
+function AutoProfilesUI:SetActiveLayoutRaidPosition(x, y)
+    if self:IsEditing() then return false end
+    local p = self.activeRuntimeProfile
+    if not p then return false end
+    p.overrides = p.overrides or {}
+    p.overrides.raidAnchorX = x
+    p.overrides.raidAnchorY = y
+    -- Reflect immediately so GetRaidDB() (overlay view) returns the new value.
+    if DF.raidOverrides then
+        DF.raidOverrides.raidAnchorX = x
+        DF.raidOverrides.raidAnchorY = y
+    end
+    if DF.UpdateRaidContainerPosition then DF:UpdateRaidContainerPosition() end
+    return true
 end
 
 -- ============================================================
