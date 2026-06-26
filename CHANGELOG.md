@@ -13,7 +13,7 @@
 
 ### Bug Fixes
 
-* (Text) Fixed a stray health value (often a **"%"**) appearing on the health bar for users who never turned health text on. When the built-in text was migrated to the Text Designer, the migration ignored the "Show Health Text" toggle and added a health element anyway — defaulting to percent — so anyone who had health text off (the default) could suddenly see it. The migration now respects that toggle, and a one-time cleanup removes the stray element it previously added (only where health text was off and the element hasn't been edited, so customised text is never touched). (by Krathe)
+* (Text) Fixed a stray health value (often a **"%"**) appearing for users who never turned health text on; a one-time cleanup removes it. (by Krathe)
 * (Nicknames) Fixed an error when matching nicknames against boss or NPC names on pinned frames during encounters.
 * (Localization) Test Mode, frame position, and grid layout labels now translate properly instead of always showing English.
 * (Localization) Text Designer, Aura Designer, and auto-profile labels now follow your chosen language.

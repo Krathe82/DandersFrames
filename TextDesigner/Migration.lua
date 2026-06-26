@@ -301,6 +301,7 @@ end
 function DF:CorrectStrayMigratedHealthText()
     if not DF.db then return end
     local total = 0
+    local tremove = table.remove
     for _, mode in ipairs({ "party", "raid" }) do
         local db = DF:GetDB(mode)
         local tdDB = db and ((DF.GetModeTextDesigner and DF:GetModeTextDesigner(mode))
@@ -312,11 +313,13 @@ function DF:CorrectStrayMigratedHealthText()
                 local expected = legacyMigratedHealthElement(db)
                 for i = #tdDB.elements, 1, -1 do
                     if deepEqual(expected, tdDB.elements[i]) then
-                        table.remove(tdDB.elements, i)
+                        tremove(tdDB.elements, i)
                         total = total + 1
                     end
                 end
             end
+            -- Mark every visited store corrected — including the ineligible paths
+            -- (not auto-migrated, or health text was on) — so the scan never re-runs.
             tdDB.healthMigrationCorrected = true
         end
     end
