@@ -4,39 +4,38 @@
 
 ### New Features
 
-* (Highlights) New **Hide on Tanks** option for the Aggro Highlight — a tank holding aggro is expected, so the highlight there is just noise. Enable it and the aggro highlight is suppressed on tank-role players, so it stands out only when a **DPS or healer** pulls aggro. Off by default; works in role-assigned content (dungeons, Mythic+, raids). (by Krathe)
-* (Pet Frames) Added an optional **power bar**. Enable **Show Power Bar** to display the pet's power (mana / energy / focus / etc.) as a bar along the bottom of the frame, with an adjustable height and either power-type or a custom colour. Off by default. (by Krathe)
-* (Pinned Frames) Pinned sets can now **anchor to your raid or party frames** instead of the screen. While positioning a set (unlock your frames and click its handle), the position panel gains an **Anchor To Raid Frames** / **Anchor To Party Frames** dropdown — pick a corner (Top Left, Center, Bottom Right, …) and the set pins to that corner of your frames, with the X / Y nudge becoming a fine offset from there. The set then tracks the frames as they move or resize — across roster changes and in combat — so a pinned group stays aligned with your raid instead of drifting out of place. Choose **Screen (Free)** (the default) to keep placing the set freely on screen as before. (by Krathe)
+* (Highlights) New **Hide on Tanks** option — suppresses the aggro highlight on tanks so it only flags when a DPS/healer pulls. Off by default. (by Krathe)
+* (Pet Frames) Added an optional **power bar** for pet frames, with adjustable height and colour. Off by default. (by Krathe)
+* (Pinned Frames) Pinned sets can now **anchor to your raid/party frames** instead of the screen, tracking them as they move or resize. (by Krathe)
 
 ### Improvements
 
-* (Auto Layouts) Moving your raid frames while an auto layout is active now edits **that layout** instead of the base position. Previously, unlocking and dragging quietly moved the base anchors while you were looking at the active layout, so your change seemed to do nothing (or snapped back). The main **Unlock** button is now disabled while a layout is active (with a tooltip pointing you to the right place), and the active layout gets its own **Unlock** button on the Auto Layouts page — the same convention as Edit Settings being limited to the active layout. Unlock there, drag your frames, and the position saves into that layout. The permanent-mover handle also moves the active layout (rather than the base) while one is running. (by Krathe)
-* (Pinned Frames) Each pinned set's **Horizontal** and **Vertical Spacing** now inherit from the Based-on mode — the grouped frame spacing, or the flat raid spacing — and can be overridden per set with a star and a reset, the same way Width / Height / Scale already do. A pinned set now stays aligned with the frames it mirrors instead of falling back to a fixed spacing. (by Krathe)
-* (Options / Click Casting) Note labels no longer show a stray "?" in place of an unsupported symbol, and inline "Note:" labels now use one consistent style across the options. (by Krathe)
+* (Auto Layouts) Moving raid frames while an auto layout is active now edits **that layout**, via its own Unlock button. (by Krathe)
+* (Pinned Frames) Each set's **Horizontal/Vertical Spacing** now inherits from the based-on mode, overridable per set. (by Krathe)
+* (Options / Click Casting) Inline "Note:" labels are now consistent and no longer show a stray "?". (by Krathe)
 
 ### Bug Fixes
 
-* (Borders) Fixed **Border Inset** being ignored when the border uses a **texture** style — texture borders sat flush against the frame regardless of the inset, and a changed inset didn't update live. Texture borders now honour Border Inset and update immediately, matching solid/gradient borders. Affects every texture border in the addon (frame borders, buff/debuff squares, Aura Designer, etc.). (by Krathe)
-* (Text) Fixed a stray health value (often a **"%"**) appearing for users who never turned health text on; a one-time cleanup removes it. (by Krathe)
-* (Nicknames) Fixed an error when matching nicknames against boss or NPC names on pinned frames during encounters.
-* (Localization) Test Mode, frame position, and grid layout labels now translate properly instead of always showing English.
-* (Localization) Text Designer, Aura Designer, and auto-profile labels now follow your chosen language.
-* (Raid) Test mode now matches your live raid frame positions exactly in both **flat** and **group-based** layouts. Several combinations of fill direction, group alignment, "grow from" and "players grow from" used to render differently in test mode than they did in real combat, so the preview couldn't be trusted for fine-tuning; the test path now mirrors the live secure positioning in every case. This includes **Center** group alignment, where test mode wasn't applying the populated-row compensation that keeps live frames from drifting as the roster changes — so a centred raid now previews in the right place and stays put when players join or leave. (by Krathe)
-* (Raid) Group labels no longer occasionally appear over the flat raid grid. When an auto layout switched from a grouped layout to a flat one, the group labels from the grouped layout could be left behind floating over the flat frames; they are now hidden when flat mode takes over, the same as the grouped headers already were. (by Krathe)
-* (Defensive Icons) Fixed click-through not applying to stacked defensive icons that first appear mid-combat, so external click-casting now passes through them immediately instead of only after combat ends. (by Krathe)
-* (Aura Designer) Fixed a **health-bar Tint** indicator leaving the last 1–2 pixels unfilled at each edge of the bar when a frame border was shown — the tint was inset by the border thickness. The tint now fills the whole bar (the border draws on top and frames it cleanly), matching the Replace mode. (by Krathe)
-* (Aura Designer) Fixed an aura **border** showing the wrong colour and thickness — and ignoring your edits — on imported or older profiles (for example a thin purple border where you'd set a thick red one). A stale internal border value was being kept alongside your changes and rendered underneath them; these settings now upgrade and clean up automatically, on the exact layout being drawn, so the border renders exactly as configured. (by Krathe)
-* (Aura Designer) Fixed imported or older setups that still used the previous internal aura format sometimes showing **no indicators at all** on some auras until re-saved — the format upgrade now runs automatically the first time the frame draws, including for profiles that use Designer Presets. (by Krathe)
-* (Aura Designer) The fill-**Bar** indicator's expiring **Tint** overlay is now adjustable in the editor (Show Expiring Tint + Tint Color) — the render already supported it but the controls were missing. The **Border** indicator no longer shows those tint controls, since a border has no fill to tint. (by Krathe)
-* (Aura Designer) Fixed **Import Buffs Tab Defaults** not carrying the buff **border** on/off setting over to new icon auras. (by Krathe)
-* (Resource Bar) The **Smooth Bar Animation** toggle now actually smooths the resource/power bar's fill — it previously had no effect. (by Krathe)
-* (Buffs / Debuffs) Fixed pixel-perfect aura icons being sized as if the border were 1px when you set a different **Border Thickness**, which could slightly over-size the icon and misalign its art. (by Krathe)
-* (Status Icons) The **Frame Level** slider now previews live while dragging for the Resurrection, Phased, AFK, Vehicle, Raid Role and Summon icons (matching Scale and Alpha); the value applied before, but only after the next frame rebuild. (by Krathe)
-* (Profiles) The **Missing Buff** and **Defensive** icon **Border Color Source** (Class/Role) is now preserved when exporting or importing a single category, instead of reverting to a static colour. (by Krathe)
-* (Click Casting) A binding's **combat condition** (In/Out of Combat) now shows in the bindings list immediately after you add it, instead of only appearing after a `/reload`. (by Krathe)
-* (Debuffs) Removed the **Highlight Dispellable** toggle, which no longer did anything — dispellable highlighting is handled by the **Dispel Overlay** feature. (by Krathe)
-* (Pet Frames) Pet **name and health text show again**. They were suppressed along with the Text Designer rework even though pet frames render their own name/health text, so the pet text — and its font, anchor and colour settings — had no effect. (by Krathe)
-* (Pet Frames) An empty party pet frame no longer lingers as an overlay on the raid frames when a group member summons a pet while you are in a live raid. (by Krathe)
+* (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
+* (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
+* (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.
+* (Localization) Test Mode, position, grid, Text/Aura Designer and auto-profile labels now translate properly.
+* (Raid) Test mode now matches live raid frame positions in flat and grouped layouts, including Center alignment. (by Krathe)
+* (Raid) Group labels no longer linger over the flat raid grid after switching from a grouped layout. (by Krathe)
+* (Defensive Icons) Fixed click-through not applying to stacked defensives that appear mid-combat. (by Krathe)
+* (Aura Designer) Health-bar **Tint** now fills the whole bar instead of leaving an edge gap under a border. (by Krathe)
+* (Aura Designer) Fixed aura **borders** showing the wrong colour/thickness on imported or older profiles. (by Krathe)
+* (Aura Designer) Fixed imported/older auras sometimes showing **no indicators** until re-saved. (by Krathe)
+* (Aura Designer) The fill-**Bar** indicator's expiring **Tint** controls are now available in the editor. (by Krathe)
+* (Aura Designer) Fixed **Import Buffs Tab Defaults** not carrying the buff border toggle to new icon auras. (by Krathe)
+* (Resource Bar) **Smooth Bar Animation** now actually smooths the bar's fill. (by Krathe)
+* (Buffs / Debuffs) Fixed pixel-perfect aura icons being mis-sized when a custom **Border Thickness** was set. (by Krathe)
+* (Status Icons) The **Frame Level** slider now previews live while dragging. (by Krathe)
+* (Profiles) The **Border Color Source** (Class/Role) for Missing Buff/Defensive icons is now kept on single-category export/import. (by Krathe)
+* (Click Casting) A binding's **combat condition** now shows in the list immediately instead of after a reload. (by Krathe)
+* (Debuffs) Removed the defunct **Highlight Dispellable** toggle (handled by Dispel Overlay). (by Krathe)
+* (Pet Frames) Pet **name and health text show again** (font/anchor/colour settings now apply). (by Krathe)
+* (Pet Frames) An empty party pet frame no longer lingers over the raid frames when a member summons a pet in a raid. (by Krathe)
 
 ## [4.5.0]
 
