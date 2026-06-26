@@ -4079,6 +4079,30 @@ function AutoProfilesUI:RemoveRuntimeProfile()
     if DF.GUI and DF.GUI.UpdateLockButtonState then DF.GUI.UpdateLockButtonState() end
 end
 
+-- Write a raid position straight into the ACTIVE layout's override + live overlay,
+-- for direct world drags (the permanent mover) that shouldn't open the full editing
+-- GUI. Returns true when it handled the write (a layout is active and not being
+-- edited) so the caller skips the base write; false otherwise (no layout / editing
+-- — the caller writes base, or the editing-preview path captures it on lock).
+-- Mirrors what the toolbar Unlock flow persists, minus the snapshot/diff machinery
+-- (a single scalar position key needs none — ApplyRuntimeProfile rebuilds the
+-- overlay from profile.overrides on the next layout re-eval).
+function AutoProfilesUI:SetActiveLayoutRaidPosition(x, y)
+    if self:IsEditing() then return false end
+    local p = self.activeRuntimeProfile
+    if not p then return false end
+    p.overrides = p.overrides or {}
+    p.overrides.raidAnchorX = x
+    p.overrides.raidAnchorY = y
+    -- Reflect immediately so GetRaidDB() (overlay view) returns the new value.
+    if DF.raidOverrides then
+        DF.raidOverrides.raidAnchorX = x
+        DF.raidOverrides.raidAnchorY = y
+    end
+    if DF.UpdateRaidContainerPosition then DF:UpdateRaidContainerPosition() end
+    return true
+end
+
 -- ============================================================
 -- RUNTIME WRITE INTERCEPTION
 -- When a user changes a global setting via GUI while an auto-profile

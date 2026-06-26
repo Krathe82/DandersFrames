@@ -792,11 +792,20 @@ function DF:CreatePermanentMover(container, mode)
         local y = (finalCursorY + self._cursorOffY) - screenHeight / 2
 
         if isRaid then
-            local stopDb = DF:GetRaidDB()
             DF:LogRaidAnchorWrite("DragMover:OnDragStop", x, y)
-            stopDb.raidAnchorX = x
-            stopDb.raidAnchorY = y
-            DF:UpdateRaidContainerPosition()
+            -- When an auto layout is active, the permanent mover edits THAT layout's
+            -- position (not the base) — otherwise it would silently move the base
+            -- anchors while the layout drives the frames. Falls through to the base
+            -- write when no layout is active (or while editing, where the preview
+            -- path captures it).
+            local routed = DF.AutoProfilesUI and DF.AutoProfilesUI.SetActiveLayoutRaidPosition
+                and DF.AutoProfilesUI:SetActiveLayoutRaidPosition(x, y)
+            if not routed then
+                local stopDb = DF:GetRaidDB()
+                stopDb.raidAnchorX = x
+                stopDb.raidAnchorY = y
+                DF:UpdateRaidContainerPosition()
+            end
         else
             local stopDb = DF:GetDB()
             stopDb.anchorX = x
