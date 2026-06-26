@@ -1147,6 +1147,7 @@ DF.ExportCategories = {
         "aggroHighlightThickness",
         "aggroHighlightInset",
         "aggroOnlyTanking",
+        "aggroHideOnTanks",
         "aggroUseCustomColors",
         "aggroColorHighThreat",
         "aggroColorHighestThreat",

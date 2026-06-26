@@ -8459,6 +8459,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllHighlights then DF:UpdateAllHighlights() end
         end), 28)
         aggroOnlyTanking.hideOn = HideAggroModeNone
+        local aggroHideOnTanks = aggroGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide on Tanks"], db, "aggroHideOnTanks", function()
+            if DF.UpdateAllHighlights then DF:UpdateAllHighlights() end
+        end), 28)
+        aggroHideOnTanks.hideOn = HideAggroModeNone
         local aggroThick = aggroGroup:AddWidget(GUI:CreateSlider(self.child, L["Thickness"], 1, 10, 1, db, "aggroHighlightThickness", nil, function() DF:LightweightUpdateHighlight("aggro") end, true), 55)
         aggroThick.hideOn = HideAggroOptions
         local aggroInset = aggroGroup:AddWidget(GUI:CreateSlider(self.child, L["Inset"], -10, 10, 1, db, "aggroHighlightInset", nil, function() DF:LightweightUpdateHighlight("aggro") end, true), 55)

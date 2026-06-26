@@ -4,6 +4,7 @@
 
 ### New Features
 
+* (Highlights) New **Hide on Tanks** option for the Aggro Highlight — a tank holding aggro is expected, so the highlight there is just noise. Enable it and the aggro highlight is suppressed on tank-role players, so it stands out only when a **DPS or healer** pulls aggro. Off by default; works in role-assigned content (dungeons, Mythic+, raids). (by Krathe)
 * (Pet Frames) Added an optional **power bar**. Enable **Show Power Bar** to display the pet's power (mana / energy / focus / etc.) as a bar along the bottom of the frame, with an adjustable height and either power-type or a custom colour. Off by default. (by Krathe)
 
 ### Improvements
