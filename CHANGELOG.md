@@ -13,7 +13,7 @@
 * (Auto Layouts) Moving raid frames while an auto layout is active now edits **that layout**, via its own Unlock button. (by Krathe)
 * (Pinned Frames) Each set's **Horizontal/Vertical Spacing** now inherits from the based-on mode, overridable per set. (by Krathe)
 * (Options / Click Casting) Inline "Note:" labels are now consistent and no longer show a stray "?". (by Krathe)
-* (Options) **GUI wording & value consistency pass** — standardised inconsistent labels and dropdown values across every settings section: grow-direction/anchor/outline/duration/spacing/offset wording, qualified grow-from values (Start (Left/Top) etc.), American "Color" spelling throughout, Title-Case labels, and "(seconds)" units. The Settings-panel font outline now offers the full option set and stores the canonical "NONE" key. (by Krathe)
+* (Options) **GUI wording & value consistency pass** — standardised inconsistent labels and dropdown values across the settings UI, and the Settings-panel font outline now offers the full option set. (by Krathe)
 
 ### Bug Fixes
 
