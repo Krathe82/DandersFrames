@@ -385,7 +385,7 @@ function CC:CreateProfilesPanelContent()
 
     local flyingLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontNormal")
     flyingLabel:SetPoint("LEFT", flyingCb, "RIGHT", 6, 0)
-    flyingLabel:SetText(L["Disable only while flying"])
+    flyingLabel:SetText(L["Disable Only While Flying"])
     flyingLabel:SetTextColor(C.text.r, C.text.g, C.text.b)
 
     flyingCb.SetChecked = function(self, checked)

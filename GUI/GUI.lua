@@ -3826,7 +3826,7 @@ function GUI:CreateAnimationControls(group, dbTable, animPrefix, opts)
     -- Animation colour applies to every effect except DF_PULSATE (which
     -- modulates the border's own edge alpha — no separate colour). lightColors
     -- is threaded through so AD's proxy gets live preview while dragging.
-    w.animationColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Animation Colour"],
+    w.animationColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Animation Color"],
         dbTable, aKey("Color"), true, fullUpdate, lightColors, lightColors ~= nil), 35)
     w.animationColor.hideOn = function()
         return animOff() or animType() == "DF_PULSATE"
@@ -4003,10 +4003,10 @@ function GUI:CreateBorderControls(group, dbTable, prefix, opts)
     if include.gradient then
         local function gradHide() return hideOff() or not isGradient() end
 
-        w.gradientStart = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient Start Colour"],
+        w.gradientStart = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient Start Color"],
             dbTable, key("BorderGradientStartColor"), true, fullUpdate), 35)
         w.gradientStart.hideOn = gradHide
-        w.gradientEnd = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient End Colour"],
+        w.gradientEnd = group:AddWidget(GUI:CreateColorPicker(parent, L["Gradient End Color"],
             dbTable, key("BorderGradientEndColor"), true, fullUpdate), 35)
         w.gradientEnd.hideOn = gradHide
         w.gradientDirection = group:AddWidget(GUI:CreateDropdown(parent, L["Gradient Direction"],
@@ -4103,7 +4103,7 @@ function GUI:CreateBorderControls(group, dbTable, prefix, opts)
 
     if include.blendMode then
         w.blendMode = group:AddWidget(GUI:CreateDropdown(parent, L["Border Blend Mode"],
-            { BLEND = L["Blend"], ADD = L["Add"], MOD = L["Mod"], DISABLE = L["Disable"] },
+            { BLEND = L["Blend"], ADD = L["Add"], MOD = L["Modulate"], DISABLE = L["Disable"] },
             dbTable, key("BorderBlendMode"), fullUpdate), 55)
         w.blendMode.hideOn = hideOff
     end
@@ -4117,7 +4117,7 @@ function GUI:CreateBorderControls(group, dbTable, prefix, opts)
         w.shadowEnabled.hideOn = hideOff
         local function shadowHide() return hideOff() or dbTable[shadowOnKey] == false end
 
-        w.shadowColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Shadow Colour"],
+        w.shadowColor = group:AddWidget(GUI:CreateColorPicker(parent, L["Shadow Color"],
             dbTable, key("BorderShadowColor"), true, fullUpdate), 35)
         w.shadowColor.hideOn = shadowHide
         w.shadowSize = group:AddWidget(GUI:CreateSlider(parent, L["Shadow Size"], 0, 10, 1,
@@ -4420,7 +4420,7 @@ function GUI:CreateExpiringControls(group, dbTable, opts)
         addGated(GUI:CreateExpiringSubheader(parent, L["Expiring Effects"]), 18)
     end
     if fx then
-        if fx.fillPulsate and K.fillPulsate then addGated(GUI:CreateCheckbox(parent, L["Fill Pulsate"], dbTable, K.fillPulsate, fullUpdate), 30) end
+        if fx.fillPulsate and K.fillPulsate then addGated(GUI:CreateCheckbox(parent, L["Pulsate"], dbTable, K.fillPulsate, fullUpdate), 30) end
         if fx.wholeAlpha and K.wholeAlpha then addGated(GUI:CreateCheckbox(parent, L["Whole Alpha Pulse"], dbTable, K.wholeAlpha, fullUpdate), 30) end
         if fx.bounce and K.bounce then addGated(GUI:CreateCheckbox(parent, L["Bounce"], dbTable, K.bounce, fullUpdate), 30) end
     end

@@ -472,7 +472,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         frameTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor To"], frameAnchorValues, db, "tooltipFrameAnchor", function() GUI:RefreshCurrentPage() end), 55)
         
-        local frameAnchorPos = frameTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorPositionValues, db, "tooltipFrameAnchorPos", function() end), 55)
+        local frameAnchorPos = frameTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorPositionValues, db, "tooltipFrameAnchorPos", function() end), 55)
         frameAnchorPos.disableOn = function(d) return d.tooltipFrameAnchor == "DEFAULT" end
         
         local frameOffsetX = frameTooltipGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -100, 100, 1, db, "tooltipFrameX", function() end), 55)
@@ -496,7 +496,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         buffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor To"], buffAnchorValues, db, "tooltipBuffAnchor", function() GUI:RefreshCurrentPage() end), 55)
         
-        local buffAnchorPos = buffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorPositionValues, db, "tooltipBuffAnchorPos", function() end), 55)
+        local buffAnchorPos = buffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorPositionValues, db, "tooltipBuffAnchorPos", function() end), 55)
         buffAnchorPos.disableOn = function(d) return d.tooltipBuffAnchor == "DEFAULT" end
         
         local buffOffsetX = buffTooltipGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -150, 150, 1, db, "tooltipBuffX", function() end), 55)
@@ -525,7 +525,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         debuffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor To"], debuffAnchorValues, db, "tooltipDebuffAnchor", function() GUI:RefreshCurrentPage() end), 55)
         
-        local debuffAnchorPos = debuffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorPositionValues, db, "tooltipDebuffAnchorPos", function() end), 55)
+        local debuffAnchorPos = debuffTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorPositionValues, db, "tooltipDebuffAnchorPos", function() end), 55)
         debuffAnchorPos.disableOn = function(d) return d.tooltipDebuffAnchor == "DEFAULT" end
         
         local debuffOffsetX = debuffTooltipGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -150, 150, 1, db, "tooltipDebuffX", function() end), 55)
@@ -549,7 +549,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         defTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor To"], defAnchorValues, db, "tooltipDefensiveAnchor", function() GUI:RefreshCurrentPage() end), 55)
         
-        local defAnchorPos = defTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorPositionValues, db, "tooltipDefensiveAnchorPos", function() end), 55)
+        local defAnchorPos = defTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorPositionValues, db, "tooltipDefensiveAnchorPos", function() end), 55)
         defAnchorPos.disableOn = function(d) return d.tooltipDefensiveAnchor == "DEFAULT" end
         
         local defOffsetX = defTooltipGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -100, 100, 1, db, "tooltipDefensiveX", function() end), 55)
@@ -584,7 +584,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         }
         bindTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor To"], bindAnchorValues, db, "tooltipBindingAnchor", function() GUI:RefreshCurrentPage() end), 55)
 
-        local bindAnchorPos = bindTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorPositionValues, db, "tooltipBindingAnchorPos", function() end), 55)
+        local bindAnchorPos = bindTooltipGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorPositionValues, db, "tooltipBindingAnchorPos", function() end), 55)
         bindAnchorPos.disableOn = function(d) return d.tooltipBindingAnchor == "DEFAULT" end
 
         local bindOffsetX = bindTooltipGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -100, 100, 1, db, "tooltipBindingX", function() end), 55)
@@ -826,7 +826,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local deadHealthAlpha = deadGroup:AddWidget(GUI:CreateSlider(self.child, L["Health Bar Alpha"], 0.0, 1.0, 0.05, db, "fadeDeadHealthBar", function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true), 55)
         deadHealthAlpha.hideOn = HideDeadOptions
         
-        local deadNameAlpha = deadGroup:AddWidget(GUI:CreateSlider(self.child, L["Name Alpha"], 0.0, 1.0, 0.05, db, "fadeDeadName", function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true), 55)
+        local deadNameAlpha = deadGroup:AddWidget(GUI:CreateSlider(self.child, L["Name Text Alpha"], 0.0, 1.0, 0.05, db, "fadeDeadName", function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true), 55)
         deadNameAlpha.hideOn = HideDeadOptions
         
         local deadPowerAlpha = deadGroup:AddWidget(GUI:CreateSlider(self.child, L["Power Bar Alpha"], 0.0, 1.0, 0.05, db, "fadeDeadPowerBar", function() DF:RefreshAllVisibleFrames() end, function() DF:RefreshAllVisibleFrames() end, true), 55)
@@ -971,7 +971,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             
             local growthValues = { HORIZONTAL= L["Horizontal"], VERTICAL= L["Vertical"] }
             groupedSettingsGroup:AddWidget(GUI:CreateDropdown(self.child, L["Growth Direction"], growthValues, db, "petGroupGrowth", updateFunc), 55)
-            groupedSettingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Pet Spacing"], 0, 20, 1, db, "petGroupSpacing", updateFunc, updateFunc, true), 55)
+            groupedSettingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], 0, 20, 1, db, "petGroupSpacing", updateFunc, updateFunc, true), 55)
             groupedSettingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Group X Offset"], -100, 100, 1, db, "petGroupOffsetX", updateFunc, updateFunc, true), 55)
             groupedSettingsGroup:AddWidget(GUI:CreateSlider(self.child, L["Group Y Offset"], -100, 100, 1, db, "petGroupOffsetY", updateFunc, updateFunc, true), 55)
             
@@ -1021,8 +1021,8 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         local healthColorValues = {
             GREEN = L["Always Green"],
-            CLASS = L["Owner's Class Color"],
-            HEALTH = L["By Health %"],
+            CLASS = L["Class Color"],
+            HEALTH = L["Health Gradient"],
             CUSTOM = L["Custom Color"],
         }
         healthBarGroup:AddWidget(GUI:CreateDropdown(self.child, L["Health Bar Color"], healthColorValues, db, "petHealthColorMode", function()
@@ -1081,7 +1081,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         nameTextGroup:AddWidget(GUI:CreateSlider(self.child, L["Font Size"], 6, 16, 1, db, "petNameFontSize", function()
             if DF.ApplyPetSettings then DF:ApplyPetSettings() end
         end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 55)
-        nameTextGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Font Outline"], db, "petNameFontOutline", function()
+        nameTextGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Outline"], db, "petNameFontOutline", function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end), 55)
         nameTextGroup:AddWidget(GUI:CreateShadowCheckbox(self.child, L["Shadow"], db, "petNameFontOutline", function()
@@ -1093,7 +1093,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         nameTextGroup:AddWidget(GUI:CreateDropdown(self.child, L["Name Anchor"], textAnchorValues, db, "petNameAnchor", function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end), 55)
-        nameTextGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Name Color"], db, "petNameColor", false, function()
+        nameTextGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Name Text Color"], db, "petNameColor", false, function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 35)
         nameTextGroup:AddWidget(GUI:CreateSlider(self.child, L["Name X Offset"], -30, 30, 1, db, "petNameX", function()
@@ -1117,7 +1117,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 LEFT = L["Left of Owner"],
                 RIGHT = L["Right of Owner"],
             }
-            positionGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Position"], anchorValues, db, "petAnchor", function()
+            positionGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorValues, db, "petAnchor", function()
                 if DF.UpdateAllPetFramePositions then DF:UpdateAllPetFramePositions() end
             end), 55)
             positionGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "petOffsetX", function()
@@ -1170,7 +1170,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         healthTextGroup:AddWidget(GUI:CreateSlider(self.child, L["Font Size"], 6, 14, 1, db, "petHealthFontSize", function()
             if DF.ApplyPetSettings then DF:ApplyPetSettings() end
         end, function() if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end end, true), 55)
-        healthTextGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Font Outline"], db, "petHealthFontOutline", function()
+        healthTextGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Outline"], db, "petHealthFontOutline", function()
             if DF.LightweightUpdatePetFrames then DF:LightweightUpdatePetFrames() end
         end), 55)
         healthTextGroup:AddWidget(GUI:CreateShadowCheckbox(self.child, L["Shadow"], db, "petHealthFontOutline", function()
@@ -1384,18 +1384,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== SETTINGS PANEL APPEARANCE GROUP (Column 2, Top) =====
         -- Controls the look of this settings panel itself — does NOT affect
         -- in-game frame text (use Health Text / Name Text pages for those).
-        local outlineValues = {
-            [""]          = L["None"],
-            OUTLINE       = L["Outline"],
-            THICKOUTLINE  = L["Thick Outline"],
-            MONOCHROME    = L["Monochrome"],
-        }
         local appearanceGroup = GUI:CreateSettingsGroup(self.child, 280)
         appearanceGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings Panel Appearance"]), 40)
         appearanceGroup:AddWidget(GUI:CreateFontDropdown(self.child, L["Settings Font"], DF.db, "settingsFont", function()
             if GUI.RefreshSettingsFont then GUI:RefreshSettingsFont() end
         end), 55)
-        appearanceGroup:AddWidget(GUI:CreateDropdown(self.child, L["Settings Font Outline"], outlineValues, DF.db, "settingsFontOutline", function()
+        appearanceGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Settings Font Outline"], DF.db, "settingsFontOutline", function()
             if GUI.RefreshSettingsFont then GUI:RefreshSettingsFont() end
         end), 55)
         appearanceGroup:AddWidget(GUI:CreateLabel(self.child,
@@ -1521,11 +1515,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                     DF:UpdateRaidGroupLabels()
                 end
             end)
-            -- Rebuild the page so orientation-dependent dropdowns refresh their
-            -- labels AND their option text (e.g. Columns/Rows Grow From, Players
-            -- Grow From values) live, without needing to reopen the settings
-            -- window. Dropdowns bake options at build time, so a rebuild is the
-            -- only way to update the menu entries. Deferred so it runs after the
+            -- Rebuild the page so orientation-dependent dropdown TITLES refresh
+            -- live (e.g. "Columns Grow From" vs "Rows Grow From") without needing
+            -- to reopen the settings window. Dropdowns bake their label at build
+            -- time, so a rebuild is the only way to update it. (Option VALUES are
+            -- now the static "Start (Left/Top)" / "End (Right/Bottom)" form, so
+            -- only the titles need refreshing.) Deferred so it runs after the
             -- triggering dropdown's own click handler has finished unwinding.
             C_Timer.After(0, function()
                 if GUI.RefreshCurrentPage then GUI:RefreshCurrentPage() end
@@ -1577,26 +1572,23 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         
         -- Party dropdown
         local partyGrowOptions = { HORIZONTAL= L["Rows"], VERTICAL= L["Columns"] }
-        local partyArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Arrange In"], partyGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
+        local partyArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Growth Direction"], partyGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
         partyArrangeDropdown.hideOn = function() return GUI.SelectedMode == "raid" end
         
         -- Raid GROUP dropdown (groups mode)
         local raidGrowOptions = { HORIZONTAL= L["Columns"], VERTICAL= L["Rows"] }
-        local raidArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Arrange Groups In"], raidGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
+        local raidArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Growth Direction"], raidGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
         raidArrangeDropdown.hideOn = function() return GUI.SelectedMode ~= "raid" or not db.raidUseGroups end
         
         -- Raid FLAT dropdown
         local flatGrowOptions = { HORIZONTAL= L["Rows"], VERTICAL= L["Columns"] }
-        local flatArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Arrange Players In"], flatGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
+        local flatArrangeDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Growth Direction"], flatGrowOptions, db, "growDirection", OnGrowthDirectionChanged), 55)
         flatArrangeDropdown.hideOn = function() return GUI.SelectedMode ~= "raid" or db.raidUseGroups end
         
         -- Growth anchor (party only)
-        local anchorOptions = { START= L["Start"], CENTER= L["Center"], END= L["End"] }
+        local anchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
         local anchorDropdown = layoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Frames Grow From"], anchorOptions, db, "growthAnchor", UpdateFrames), 55)
         anchorDropdown.hideOn = function() return GUI.SelectedMode == "raid" end
-        
-        local helpText = layoutGroup:AddWidget(GUI:CreateLabel(self.child, L["Start = Left/Top, End = Right/Bottom depending on direction."], 250), 30)
-        helpText.hideOn = function() return GUI.SelectedMode == "raid" end
         
         Add(layoutGroup, nil, 1)
         
@@ -1653,13 +1645,13 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Group Alignment"], anchorOptions, db, "raidGroupAnchor", UpdateFrames), 55)
 
         local rowGrowLabel = db.growDirection == "VERTICAL" and L["Columns Grow From"] or L["Rows Grow From"]
-        local rowGrowOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
+        local rowGrowOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, rowGrowLabel, rowGrowOptions, db, "raidGroupRowGrowth", UpdateFrames), 55)
 
         -- Players Grow From = the direction players fill the group's main axis.
         -- HORIZONTAL groups stack players vertically (Top/Bottom); VERTICAL groups
         -- stack players horizontally (Left/Right). Values map to START/END.
-        local playerAnchorOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
+        local playerAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         groupLayoutGroup:AddWidget(GUI:CreateDropdown(self.child, L["Players Grow From"], playerAnchorOptions, db, "raidPlayerAnchor", UpdateFrames), 55)
         
         Add(groupLayoutGroup, nil, 1)
@@ -1746,19 +1738,19 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local playersPerLabel = db.growDirection == "VERTICAL" and L["Players Per Column"] or L["Players Per Row"]
         playersPerRowSlider = flatGridGroup:AddWidget(GUI:CreateSlider(self.child, playersPerLabel, 1, 40, 1, db, "raidPlayersPerRow", UpdateFlatLayoutFull, UpdateFlatLayoutFull, true), 55)
         
-        local growthAnchorOptions = { START= L["Start"], CENTER= L["Center"], END= L["End"] }
+        local growthAnchorOptions = { START= L["Start (Left/Top)"], CENTER= L["Center"], END= L["End (Right/Bottom)"] }
         flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Grid Alignment"], growthAnchorOptions, db, "raidFlatGrowthAnchor", UpdateFrames), 55)
 
         -- Columns/Rows Grow From = the direction the grid wraps (secondary axis).
         -- VERTICAL (Columns) wraps left/right; HORIZONTAL (Rows) wraps top/bottom.
         local flatColumnLabel = db.growDirection == "VERTICAL" and L["Columns Grow From"] or L["Rows Grow From"]
-        local flatColumnOptions = db.growDirection == "VERTICAL" and { START= L["Left"], END= L["Right"] } or { START= L["Top"], END= L["Bottom"] }
+        local flatColumnOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, flatColumnLabel, flatColumnOptions, db, "raidFlatColumnAnchor", UpdateFrames), 55)
 
         -- Players Grow From = the direction players fill the grid's main axis.
         -- HORIZONTAL (Rows) fills Left/Right; VERTICAL (Columns) fills Top/Bottom.
         -- Replaces the old "Reverse Order" checkbox; START/END values are identical.
-        local flatFillOptions = db.growDirection == "VERTICAL" and { START= L["Top"], END= L["Bottom"] } or { START= L["Left"], END= L["Right"] }
+        local flatFillOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
         flatGridGroup:AddWidget(GUI:CreateDropdown(self.child, L["Players Grow From"], flatFillOptions, db, "raidFlatFrameAnchor", UpdateFrames), 55)
         
         flatGridGroup:AddWidget(GUI:CreateSlider(self.child, L["Horizontal Spacing"], -5, 100, 1, db, "raidFlatHorizontalSpacing", UpdateFrames, function() DF:LightweightUpdateFrameSize() end, true), 55)
@@ -3789,10 +3781,10 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- frames (frames grow START-style; only the anchor/label shift). START/END
         -- only for now; a real centred layout can be added later.
         local frameAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
-        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frame Growth"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Frames Grow From"], frameAnchorOptions, "frameAnchor", UpdateHighlightLayout), 55)
 
         local columnAnchorOptions = { START= L["Start (Left/Top)"], END= L["End (Right/Bottom)"] }
-        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Column Growth"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
+        arrangeGroup:AddWidget(CreateRefreshableDropdown(self.child, L["Columns Grow From"], columnAnchorOptions, "columnAnchor", UpdateHighlightLayout), 55)
 
         arrangeGroup:AddWidget(CreateRefreshableSlider(self.child, L["Units Per Row"], 1, 10, 1, "unitsPerRow", UpdateHighlightLayout), 55)
         -- Spacing inherits the Based-on mode's layout spacing (grouped -> frameSpacing,
@@ -4353,7 +4345,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== Column 2: Role Colors =====
         local col2 = GUI:CreateSettingsGroup(self.child, 280)
         col2:AddWidget(GUI:CreateHeader(self.child, L["Role Colors"]), 40)
-        col2:AddWidget(GUI:CreateLabel(self.child, L["Customize role colors used by any border whose Colour Source is set to Role. Applies to Tank, Healer, and Damager assignments."], 260), 50)
+        col2:AddWidget(GUI:CreateLabel(self.child, L["Customize role colors used by any border whose Color Source is set to Role. Applies to Tank, Healer, and Damager assignments."], 260), 50)
 
         local roleResetBtn = CreateFrame("Button", nil, self.child, "BackdropTemplate")
         roleResetBtn:SetSize(260, 24)
@@ -4680,7 +4672,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             TOP= L["Top"], BOTTOM= L["Bottom"], LEFT= L["Left"], RIGHT= L["Right"], CENTER= L["Center"],
             TOPLEFT= L["Top Left"], TOPRIGHT= L["Top Right"], BOTTOMLEFT= L["Bottom Left"], BOTTOMRIGHT= L["Bottom Right"],
         }
-        positionGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor Point"], anchorOptions, db, "resourceBarAnchor", function() DF:UpdateAllFrames() end), 55)
+        positionGroup:AddWidget(GUI:CreateDropdown(self.child, L["Anchor"], anchorOptions, db, "resourceBarAnchor", function() DF:UpdateAllFrames() end), 55)
         positionGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "resourceBarX", nil, function() DF:LightweightUpdatePowerBarPosition() end, true), 55)
         positionGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "resourceBarY", nil, function() DF:LightweightUpdatePowerBarPosition() end, true), 55)
         Add(positionGroup, nil, 2)
@@ -4739,7 +4731,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== FRAME LEVEL GROUP (Column 2) =====
         local frameLevelGroup = GUI:CreateSettingsGroup(self.child, 280)
         frameLevelGroup:AddWidget(GUI:CreateHeader(self.child, L["Frame Level"]), 40)
-        frameLevelGroup:AddWidget(GUI:CreateSlider(self.child, L["Frame Level Offset"], 0, 20, 1, db, "resourceBarFrameLevel", nil, function() DF:LightweightUpdateResourceBarFrameLevel() end, true), 55)
+        frameLevelGroup:AddWidget(GUI:CreateSlider(self.child, L["Frame Level"], 0, 20, 1, db, "resourceBarFrameLevel", nil, function() DF:LightweightUpdateResourceBarFrameLevel() end, true), 55)
         frameLevelGroup:AddWidget(GUI:CreateLabel(self.child, L["Higher values render the bar above other elements. Frame border is at level 10."], 250), 50)
         Add(frameLevelGroup, nil, 2)
         
@@ -5416,7 +5408,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             self:RefreshStates()
             DF:RefreshAllVisibleFrames()
         end), 30)
-        local nameColor = colorGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Name Color"], db, "nameTextColor", true, nil, function() DF:LightweightUpdateTextColor("name") end, true), 35)
+        local nameColor = colorGroup:AddWidget(GUI:CreateColorPicker(self.child, L["Name Text Color"], db, "nameTextColor", true, nil, function() DF:LightweightUpdateTextColor("name") end, true), 35)
         nameColor.disableOn = function(d) return d.nameTextUseClassColor end
         Add(colorGroup, nil, 1)
         
@@ -5844,7 +5836,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local dedupGroup = GUI:CreateSettingsGroup(self.child, 280)
         dedupGroup:AddWidget(GUI:CreateHeader(self.child, L["Deduplication"]), 40)
         dedupGroup:AddWidget(GUI:CreateLabel(self.child, L["Hide buffs from the buff bar when they are already displayed by the Defensive Bar or Aura Designer."], 250), 45)
-        dedupGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide duplicate buffs"], db, "buffDeduplicateDefensives", function()
+        dedupGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Duplicate Buffs"], db, "buffDeduplicateDefensives", function()
             DF:UpdateAllAuras()
         end), 30)
         Add(dedupGroup, nil, 1)
@@ -6468,7 +6460,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllMissingBuffIcons then DF:UpdateAllMissingBuffIcons() end
         end), 30)
         classDetect.hideOn = HideMissingBuffOptions
-        local hideBar = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide raid buffs from buff bar"], db, "missingBuffHideFromBar", function()
+        local hideBar = settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Hide Raid Buffs from Buff Bar"], db, "missingBuffHideFromBar", function()
             DF:UpdateAllAuras()
         end), 30)
         hideBar.hideOn = HideMissingBuffOptions
@@ -6683,7 +6675,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local durationGroup = GUI:CreateSettingsGroup(self.child, 280)
         durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Text"]), 40)
         
-        local showDur = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration Text"], db, "defensiveIconShowDuration", function()
+        local showDur = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration"], db, "defensiveIconShowDuration", function()
             self:RefreshStates()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end), 30)
@@ -6703,7 +6695,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
         diDurScale.hideOn = HideDefensiveDurationOptions
         
-        local diDurOutline = durationGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Duration Outline"], db, "defensiveIconDurationOutline", function()
+        local diDurOutline = durationGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Outline"], db, "defensiveIconDurationOutline", function()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end), 55)
         diDurOutline.hideOn = HideDefensiveDurationOptions
@@ -6731,12 +6723,12 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local durPosGroup = GUI:CreateSettingsGroup(self.child, 280)
         durPosGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Position"]), 40)
 
-        local diDurX = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset X"], -20, 20, 1, db, "defensiveIconDurationX", function()
+        local diDurX = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -20, 20, 1, db, "defensiveIconDurationX", function()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
         diDurX.hideOn = HideDefensiveDurationOptions
 
-        local diDurY = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Duration Offset Y"], -20, 20, 1, db, "defensiveIconDurationY", function()
+        local diDurY = durPosGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -20, 20, 1, db, "defensiveIconDurationY", function()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
         diDurY.hideOn = HideDefensiveDurationOptions
@@ -6764,7 +6756,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         end, nil, true), 55)
         defWrap.hideOn = HideDefensiveIconOptions
 
-        local defSpacing = layoutGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Spacing"], -10, 10, 1, db, "defensiveBarSpacing", function()
+        local defSpacing = layoutGroup:AddWidget(GUI:CreateSlider(self.child, L["Spacing"], -10, 10, 1, db, "defensiveBarSpacing", function()
             if DF.UpdateAllDefensiveBars then DF:UpdateAllDefensiveBars() end
         end, function() DF:LightweightUpdateDefensiveIcons() end, true), 55)
         defSpacing.hideOn = HideDefensiveIconOptions
@@ -6958,7 +6950,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Duration Group (col2)
         local durationGroup = GUI:CreateSettingsGroup(self.child, 260)
         durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Text"]), 40)
-        local showDur = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration Text"], db, "targetedSpellShowDuration", function()
+        local showDur = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration"], db, "targetedSpellShowDuration", function()
             self:RefreshStates()
             FullUpdate()
         end), 30)
@@ -7368,7 +7360,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             tlFont.disableOn = HideTLOptions
             local tlFontSize = fontGroup:AddWidget(GUI:CreateSlider(self.child, L["Font Size"], 8, 24, 1, db, "targetedListFontSize", TargetedListUpdate, TargetedListUpdate, true), 55)
             tlFontSize.disableOn = HideTLOptions
-            local tlFontOutline = fontGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Font Outline"], db, "targetedListFontOutline", TargetedListUpdate), 55)
+            local tlFontOutline = fontGroup:AddWidget(GUI:CreateOutlineDropdown(self.child, L["Outline"], db, "targetedListFontOutline", TargetedListUpdate), 55)
             tlFontOutline.disableOn = HideTLOptions
             local tlFontShadow = fontGroup:AddWidget(GUI:CreateShadowCheckbox(self.child, L["Shadow"], db, "targetedListFontOutline", TargetedListUpdate), 30)
             tlFontShadow.disableOn = HideTLOptions
@@ -7597,7 +7589,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- Duration Group (col2)
         local durationGroup = GUI:CreateSettingsGroup(self.child, 260)
         durationGroup:AddWidget(GUI:CreateHeader(self.child, L["Duration Text"]), 40)
-        local ptsDuration = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration Text"], db, "personalTargetedSpellShowDuration", function()
+        local ptsDuration = durationGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Show Duration"], db, "personalTargetedSpellShowDuration", function()
             self:RefreshStates()
             PersonalTargetedUpdate()
         end), 30)
@@ -7988,7 +7980,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         local rcSettings = GUI:CreateSettingsGroup(self.child, 270, { collapsible = true, collapseKey = "readyCheckIcon:Settings" })
         rcSettings:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 25)
         rcSettings:AddWidget(GUI:CreateCheckbox(self.child, L["Enable Ready Check Icon"], db, "readyCheckIconEnabled", function() DF:UpdateAllFrames() end), 30)
-        rcSettings:AddWidget(GUI:CreateSlider(self.child, L["Persist (sec)"], 0, 15, 1, db, "readyCheckIconPersist"), 55)
+        rcSettings:AddWidget(GUI:CreateSlider(self.child, L["Persist (seconds)"], 0, 15, 1, db, "readyCheckIconPersist"), 55)
         Add(rcSettings, nil, 1)
         readySection:RegisterChild(rcSettings)
 
@@ -8669,11 +8661,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end), 55)
         iconPos.hideOn = HideIconOptions
-        local iconOffsetX = iconGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Offset X"], -50, 50, 1, db, "dispelIconOffsetX", function()
+        local iconOffsetX = iconGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset X"], -50, 50, 1, db, "dispelIconOffsetX", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
         iconOffsetX.hideOn = HideIconOptions
-        local iconOffsetY = iconGroup:AddWidget(GUI:CreateSlider(self.child, L["Icon Offset Y"], -50, 50, 1, db, "dispelIconOffsetY", function()
+        local iconOffsetY = iconGroup:AddWidget(GUI:CreateSlider(self.child, L["Offset Y"], -50, 50, 1, db, "dispelIconOffsetY", function()
             if DF.UpdateAllDispelOverlays then DF:UpdateAllDispelOverlays() end
         end, function() DF:LightweightUpdateDispelOverlay() end, true), 55)
         iconOffsetY.hideOn = HideIconOptions

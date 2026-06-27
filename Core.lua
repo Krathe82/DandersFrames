@@ -3764,7 +3764,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 partyEnabled = true,
                 raidEnabled = true,
                 settingsFont = "Friz Quadrata TT",
-                settingsFontOutline = "",
+                settingsFontOutline = "NONE",
             }
         end
         
@@ -3853,7 +3853,9 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
         -- Ensure settings-panel font defaults exist
         if DF.db.settingsFont        == nil then DF.db.settingsFont        = "Friz Quadrata TT" end
-        if DF.db.settingsFontOutline == nil then DF.db.settingsFontOutline = "" end
+        -- Outline "None" is stored canonically as "NONE" everywhere; normalise the
+        -- legacy empty-string the old hand-rolled settings dropdown wrote.
+        if DF.db.settingsFontOutline == nil or DF.db.settingsFontOutline == "" then DF.db.settingsFontOutline = "NONE" end
 
         -- Ensure top-level font preferences exist (SDF rendering toggle from PR #115)
         if DF.db.fontSlug == nil then DF.db.fontSlug = false end
@@ -3910,7 +3912,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
                 -- Ensure settings-panel font defaults exist on every profile
                 if profile.settingsFont        == nil then profile.settingsFont        = "Friz Quadrata TT" end
-                if profile.settingsFontOutline == nil then profile.settingsFontOutline = "" end
+                if profile.settingsFontOutline == nil or profile.settingsFontOutline == "" then profile.settingsFontOutline = "NONE" end
 
                 -- Backfill missing auraDesigner.defaults keys.
                 -- The top-level migration (pairs(PartyDefaults) above) skips auraDesigner
