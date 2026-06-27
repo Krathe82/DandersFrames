@@ -16,6 +16,7 @@
 
 ### Bug Fixes
 
+* (Global Font) **Apply to All** now also restyles the Text Designer text (Name / Health / Status and custom elements) — it had stopped affecting that text once name/health/status moved to the Text Designer. The Affected Elements list was updated to match. (by Krathe)
 * (Raid) The frame **Unlock/Lock** toolbar button now updates its label correctly in raid mode (it previously stayed on "Unlock" after unlocking). (by Krathe)
 * (Test Mode) The **Targeted Spells** and **Personal Targeted** toggles now link to their settings pages, like the other categories. (by Krathe)
 * (Click Casting) Macros-tab controls now right-align to match the Spells/Items tabs, the **Quick Macro** button fits its label, and the Profiles checkboxes now use the addon's standard checkbox style. (by Krathe)

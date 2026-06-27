@@ -1979,6 +1979,26 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
                 end
             end
 
+            -- Text Designer text elements: the legacy name/health/status
+            -- fontstrings are retired (IsLegacyTextHidden), so the visible
+            -- name/health/status text now comes from the Text Designer. Drive
+            -- its elements too (BASE preset, matching the AD block above) so
+            -- "Apply to All" actually changes that text.
+            local _tdMode = (db == DF.db.raid) and "raid" or "party"
+            local _tdCfg = (DF.GetModeBaseTextDesigner and DF:GetModeBaseTextDesigner(_tdMode))
+                or (DF.GetModeTextDesigner and DF:GetModeTextDesigner(_tdMode))
+            if _tdCfg then
+                if _tdCfg.elements then
+                    for _, el in ipairs(_tdCfg.elements) do
+                        el.font = font; el.outline = outline
+                    end
+                end
+                if _tdCfg.globalDefaults then
+                    _tdCfg.globalDefaults.font = font
+                    _tdCfg.globalDefaults.outline = outline
+                end
+            end
+
             DF:UpdateAllFrames()
             if GUI.SelectedMode == "raid" and DF.UpdateRaidLayout then DF:UpdateRaidLayout() end
             if DF.ApplyPetSettings then DF:ApplyPetSettings() end
@@ -1997,6 +2017,11 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             end
             -- Also refresh the AD options preview if visible
             if DF.AuraDesigner_RefreshPage then DF:AuraDesigner_RefreshPage() end
+
+            -- Text Designer owns the live name/health/status text — re-render it.
+            if DF.TextDesigner and DF.TextDesigner.Preview and DF.TextDesigner.Preview.RefreshLiveFrames then
+                DF.TextDesigner.Preview:RefreshLiveFrames()
+            end
 
             print("|cff00ff00DandersFrames:|r Applied global font settings to all text elements.")
         end)
@@ -2046,7 +2071,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         -- ===== AFFECTED ELEMENTS GROUP (Column 2) =====
         local infoGroup = GUI:CreateSettingsGroup(self.child, 280)
         infoGroup:AddWidget(GUI:CreateHeader(self.child, L["Affected Elements"]), 40)
-        infoGroup:AddWidget(GUI:CreateLabel(self.child, L["• Name Text\n• Health Text\n• Status Text (Dead/Offline)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• All Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"], 250), 235)
+        infoGroup:AddWidget(GUI:CreateLabel(self.child, L["• Text Designer (Name, Health, Status & custom text)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• All Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"], 250), 235)
         infoGroup:AddWidget(GUI:CreateLabel(self.child, "|cFFFF4444Note:|r " .. L["Font sizes are not changed. Adjust sizes in each element's page."], 250), 40)
         Add(infoGroup, nil, 2)
     end)

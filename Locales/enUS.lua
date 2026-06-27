@@ -1617,6 +1617,7 @@ L["Zoom Icon"] = true
 L["%sGlobal: 80%s %s— Setting matches global, no override stored%s"] = true
 L["%sModified%s %s— Setting differs from global. Click%s %sreset%s %sto revert.%s"] = true
 L["• Name Text\n• Health Text\n• Status Text (Dead/Offline)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• Status Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"] = true
+L["• Text Designer (Name, Health, Status & custom text)\n• Buff Stack & Duration\n• Debuff Stack & Duration\n• Pet Frame Text\n• Targeted Spell Duration\n• Defensive Icon Duration\n• All Icon Text (Res, Summon, etc.)\n• Group Labels (Raid)\n• Targeted List\n• Personal Targeted Spell\n• Aura Designer Indicators\n• Pinned Frames"] = true
 L["Click-through icons will not show tooltips."] = true
 
 -- Popup.lua and WizardBuilder.lua strings
