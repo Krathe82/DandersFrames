@@ -222,7 +222,7 @@ function CC:CreateProfilesPanelContent()
     -- Auto-create profiles checkbox
     local autoCreateCb = CreateFrame("CheckButton", nil, leftCol, "BackdropTemplate")
     autoCreateCb:SetPoint("TOPLEFT", ioRow, "BOTTOMLEFT", 0, -12)
-    autoCreateCb:SetSize(14, 14)
+    autoCreateCb:SetSize(18, 18)
     autoCreateCb:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -234,13 +234,12 @@ function CC:CreateProfilesPanelContent()
     local autoCreateCheck = autoCreateCb:CreateTexture(nil, "OVERLAY")
     autoCreateCheck:SetPoint("CENTER")
     autoCreateCheck:SetSize(10, 10)
-    autoCreateCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-    autoCreateCheck:SetDesaturated(true)
+    autoCreateCheck:SetTexture("Interface\\Buttons\\WHITE8x8")
     autoCreateCheck:SetVertexColor(themeColor.r, themeColor.g, themeColor.b)
     autoCreateCb.check = autoCreateCheck
     
     local autoCreateLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    autoCreateLabel:SetPoint("LEFT", autoCreateCb, "RIGHT", 5, 0)
+    autoCreateLabel:SetPoint("LEFT", autoCreateCb, "RIGHT", 8, 0)
     autoCreateLabel:SetText(L["Auto-create profiles for loadouts"])
     autoCreateLabel:SetTextColor(C.text.r, C.text.g, C.text.b)
     
@@ -286,25 +285,25 @@ function CC:CreateProfilesPanelContent()
     
     -- Disable while mounted checkbox
     local mountCb = CreateFrame("Button", nil, leftCol, "BackdropTemplate")
-    mountCb:SetSize(16, 16)
+    mountCb:SetSize(18, 18)
     mountCb:SetPoint("TOPLEFT", autoCreateCb, "BOTTOMLEFT", 0, -8)
     mountCb:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    mountCb:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    mountCb:SetBackdropColor(C.element.r, C.element.g, C.element.b, 1)
     mountCb:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
     
     local mountCheck = mountCb:CreateTexture(nil, "OVERLAY")
     mountCheck:SetSize(10, 10)
     mountCheck:SetPoint("CENTER")
-    mountCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    mountCheck:SetTexture("Interface\\Buttons\\WHITE8x8")
     mountCheck:SetVertexColor(themeColor.r, themeColor.g, themeColor.b)
     mountCb.check = mountCheck
     
-    local mountLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontNormal")
-    mountLabel:SetPoint("LEFT", mountCb, "RIGHT", 6, 0)
+    local mountLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    mountLabel:SetPoint("LEFT", mountCb, "RIGHT", 8, 0)
     mountLabel:SetText(L["Disable while mounted/flying"])
     mountLabel:SetTextColor(C.text.r, C.text.g, C.text.b)
     
@@ -366,25 +365,25 @@ function CC:CreateProfilesPanelContent()
 
     -- Disable while flying only checkbox
     local flyingCb = CreateFrame("Button", nil, leftCol, "BackdropTemplate")
-    flyingCb:SetSize(16, 16)
+    flyingCb:SetSize(18, 18)
     flyingCb:SetPoint("TOPLEFT", mountCb, "BOTTOMLEFT", 0, -8)
     flyingCb:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    flyingCb:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    flyingCb:SetBackdropColor(C.element.r, C.element.g, C.element.b, 1)
     flyingCb:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
 
     local flightCheck = flyingCb:CreateTexture(nil, "OVERLAY")
     flightCheck:SetSize(10, 10)
     flightCheck:SetPoint("CENTER")
-    flightCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    flightCheck:SetTexture("Interface\\Buttons\\WHITE8x8")
     flightCheck:SetVertexColor(themeColor.r, themeColor.g, themeColor.b)
     flyingCb.check = flightCheck
 
-    local flyingLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontNormal")
-    flyingLabel:SetPoint("LEFT", flyingCb, "RIGHT", 6, 0)
+    local flyingLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    flyingLabel:SetPoint("LEFT", flyingCb, "RIGHT", 8, 0)
     flyingLabel:SetText(L["Disable only while flying"])
     flyingLabel:SetTextColor(C.text.r, C.text.g, C.text.b)
 
@@ -443,25 +442,25 @@ function CC:CreateProfilesPanelContent()
 
     -- Target unit when click-casting checkbox
     local targetCb = CreateFrame("Button", nil, leftCol, "BackdropTemplate")
-    targetCb:SetSize(16, 16)
+    targetCb:SetSize(18, 18)
     targetCb:SetPoint("TOPLEFT", flyingCb, "BOTTOMLEFT", 0, -8)
     targetCb:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    targetCb:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    targetCb:SetBackdropColor(C.element.r, C.element.g, C.element.b, 1)
     targetCb:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
 
     local targetCheck = targetCb:CreateTexture(nil, "OVERLAY")
     targetCheck:SetSize(10, 10)
     targetCheck:SetPoint("CENTER")
-    targetCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    targetCheck:SetTexture("Interface\\Buttons\\WHITE8x8")
     targetCheck:SetVertexColor(themeColor.r, themeColor.g, themeColor.b)
     targetCb.check = targetCheck
 
-    local targetLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontNormal")
-    targetLabel:SetPoint("LEFT", targetCb, "RIGHT", 6, 0)
+    local targetLabel = leftCol:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+    targetLabel:SetPoint("LEFT", targetCb, "RIGHT", 8, 0)
     targetLabel:SetText(L["Target unit when click-casting"])
     targetLabel:SetTextColor(C.text.r, C.text.g, C.text.b)
 

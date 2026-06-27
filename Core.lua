@@ -4756,7 +4756,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
             DF.DebugConsole:Init()
         end
 
-        print("|cff00ff00DandersFrames|r " .. format(L["v%s loaded. Type %s/df%s for settings, %s/df resetgui%s if window is offscreen."], DF.VERSION, "|cffeda55f", "|r", "|cffeda55f", "|r"))
+        print("|cff00ff00DandersFrames|r " .. format(L["v%s loaded. Type %s/df%s for settings, %s/df resetgui%s if window is offscreen."], (DF.VERSION:gsub("^[vV]", "")), "|cffeda55f", "|r", "|cffeda55f", "|r"))
 
         -- ============================================================
         -- CRITICAL: Initialize frames HERE at ADDON_LOADED

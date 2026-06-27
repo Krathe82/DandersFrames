@@ -867,7 +867,7 @@ function AutoProfilesUI:BuildPage(GUI, pageFrame, db, Add, AddSpace)
         if profile then
             local rangeText = ""
             if profileKey == "mythic" then
-                rangeText = L["20 players (fixed)"]
+                rangeText = L["20 (Fixed)"]
             elseif profile.min and profile.max then
                 rangeText = profile.min .. "-" .. profile.max
             end
@@ -1202,7 +1202,7 @@ function AutoProfilesUI:CreateProfileRow(GUI, pageFrame, parent, contentType, pr
     rangeText:SetPoint("CENTER")
     
     if contentType.isFixed then
-        rangeText:SetText(L["20 players (fixed)"])
+        rangeText:SetText(L["20 (Fixed)"])
         rangeText:SetTextColor(0.5, 0.5, 0.5)
     else
         rangeText:SetText((profile.min or 1) .. " - " .. (profile.max or 40))

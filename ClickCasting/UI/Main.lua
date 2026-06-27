@@ -1132,14 +1132,12 @@ function CC:CreateClickCastUI(parent)
         CC.selectedMacroSource = key
         CC:RefreshSpellGrid()
     end)
-    macroSourceDropdown:SetPoint("LEFT", 4, 0)
     macroSourceDropdown:Hide()
     CC.macroSourceDropdown = macroSourceDropdown
     
     -- New Macro button (green, prominent)
     local newMacroBtn = CreateFrame("Button", nil, filterRow, "BackdropTemplate")
     newMacroBtn:SetSize(55, 20)
-    newMacroBtn:SetPoint("LEFT", macroSourceDropdown, "RIGHT", 8, 0)
     newMacroBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1171,7 +1169,6 @@ function CC:CreateClickCastUI(parent)
     -- Import button
     local importMacroBtn = CreateFrame("Button", nil, filterRow, "BackdropTemplate")
     importMacroBtn:SetSize(60, 20)
-    importMacroBtn:SetPoint("LEFT", newMacroBtn, "RIGHT", 4, 0)
     importMacroBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1202,8 +1199,7 @@ function CC:CreateClickCastUI(parent)
     
     -- Quick Macro button
     local quickMacroBtn = CreateFrame("Button", nil, filterRow, "BackdropTemplate")
-    quickMacroBtn:SetSize(62, 20)
-    quickMacroBtn:SetPoint("LEFT", importMacroBtn, "RIGHT", 4, 0)
+    quickMacroBtn:SetSize(86, 20)
     quickMacroBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1239,7 +1235,6 @@ function CC:CreateClickCastUI(parent)
     
     -- Macro hint (after buttons)
     local macroHint = filterRow:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    macroHint:SetPoint("LEFT", quickMacroBtn, "RIGHT", 12, 0)
     macroHint:SetText(L["Click macro to bind"])
     macroHint:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
     macroHint:Hide()
@@ -1436,8 +1431,14 @@ function CC:CreateClickCastUI(parent)
     showDropdown:SetPoint("RIGHT", bindHint, "LEFT", -8, 0)
     showLabel:SetPoint("RIGHT", showDropdown, "LEFT", -4, 0)
     itemsHint:SetPoint("RIGHT", listViewBtn, "LEFT", -15, 0)
-    
-    -- Macro controls are already positioned from LEFT inline above
+
+    -- Macro controls: right-aligned to match the Spells/Items tabs. Anchored
+    -- here (after the view buttons exist) and chained leftward from the hint.
+    macroHint:SetPoint("RIGHT", listViewBtn, "LEFT", -15, 0)
+    quickMacroBtn:SetPoint("RIGHT", macroHint, "LEFT", -12, 0)
+    importMacroBtn:SetPoint("RIGHT", quickMacroBtn, "LEFT", -4, 0)
+    newMacroBtn:SetPoint("RIGHT", importMacroBtn, "LEFT", -4, 0)
+    macroSourceDropdown:SetPoint("RIGHT", newMacroBtn, "LEFT", -8, 0)
     
     -- Load saved preferences
     CC.viewLayout = CC.db.options.viewLayout or "grid"

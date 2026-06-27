@@ -1399,7 +1399,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             if GUI.RefreshSettingsFont then GUI:RefreshSettingsFont() end
         end), 55)
         appearanceGroup:AddWidget(GUI:CreateLabel(self.child,
-            L["Font used for this settings panel. Does not affect in-game frame text — use the Health Text, Name Text, and Status Text pages for those."],
+            L["Font used for this settings panel. Does not affect in-game frame text — use the Text Designer for those."],
             260), 60)
         Add(appearanceGroup, nil, 2)
 
@@ -7190,7 +7190,7 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
             local settingsGroup = GUI:CreateSettingsGroup(self.child, 280)
             settingsGroup:AddWidget(GUI:CreateHeader(self.child, L["Settings"]), 40)
             settingsGroup:AddWidget(GUI:CreateLabel(self.child,
-                L["Shows an icon when an enemy is casting a spell targeting a party/raid member."], 250), 35)
+                L["Shows a bar when an enemy is casting a spell targeting a party/raid member."], 250), 35)
             settingsGroup:AddWidget(GUI:CreateLabel(self.child,
                 "|cff888888" .. L["To reposition: Unlock frames (/df unlock) and drag the mover."] .. "|r", 250), 30)
             settingsGroup:AddWidget(GUI:CreateCheckbox(self.child, L["Enable"], db, "targetedListEnabled", function()

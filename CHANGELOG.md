@@ -16,6 +16,13 @@
 
 ### Bug Fixes
 
+* (Raid) The frame **Unlock/Lock** toolbar button now updates its label correctly in raid mode (it previously stayed on "Unlock" after unlocking). (by Krathe)
+* (Test Mode) The **Targeted Spells** and **Personal Targeted** toggles now link to their settings pages, like the other categories. (by Krathe)
+* (Click Casting) Macros-tab controls now right-align to match the Spells/Items tabs, the **Quick Macro** button fits its label, and the Profiles checkboxes now use the addon's standard checkbox style. (by Krathe)
+* (Settings) The settings-panel font note now points to the **Text Designer** (the separate Health/Name/Status Text pages were merged into it). (by Krathe)
+* (Targeted List) The settings description now says it shows a **bar** rather than an icon. (by Krathe)
+* (Auto Layouts) The Mythic layout's fixed-range badge no longer overflows its button. (by Krathe)
+* (General) Fixed the doubled "v" in the version line printed on login. (by Krathe)
 * (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
 * (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
 * (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.

@@ -8710,8 +8710,13 @@ function DF:CreateGUI()
     
     local function UpdateLockButtonState()
         local db = DF.db[GUI.SelectedMode]
-        -- Raid mode uses raidLocked, party mode uses locked
-        local isLocked = db and (GUI.SelectedMode == "raid" and db.raidLocked or db.locked)
+        -- Raid mode uses raidLocked, party mode uses locked. Use an explicit
+        -- branch (NOT `a and b or c`) so an unlocked raid (raidLocked=false)
+        -- doesn't fall through to the party `locked` value and read as locked.
+        local isLocked
+        if db then
+            if GUI.SelectedMode == "raid" then isLocked = db.raidLocked else isLocked = db.locked end
+        end
         local themeColor = GetThemeColor()
 
         -- While an auto layout drives the raid frames, dragging the base position by
@@ -8779,8 +8784,10 @@ function DF:CreateGUI()
         local db = DF.db[GUI.SelectedMode]
         if not db then return end
 
-        -- Check current lock state using the correct key per mode
-        local isLocked = GUI.SelectedMode == "raid" and db.raidLocked or db.locked
+        -- Check current lock state using the correct key per mode (explicit
+        -- branch — `a and b or c` would misread an unlocked raid as locked).
+        local isLocked
+        if GUI.SelectedMode == "raid" then isLocked = db.raidLocked else isLocked = db.locked end
         
         if GUI.SelectedMode == "raid" then
             if isLocked then

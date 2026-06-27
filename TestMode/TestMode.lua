@@ -6594,10 +6594,10 @@ function DF:CreateTestPanel()
     -- UpdateAllTestTargetedSpell drives BOTH previews, so both share it.
     panel.showTargetedSpellCheck = secIndicators:AddCheckbox(L["Targeted Spells"], "testShowTargetedSpell", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
-    end)
+    end, "indicators_targetedspells")
     panel.showPersonalTargetedCheck = secIndicators:AddCheckbox(L["Personal Targeted"], "testShowPersonalTargeted", function()
         if DF.testMode or DF.raidTestMode then DF:UpdateAllTestTargetedSpell() end
-    end)
+    end, "indicators_personal_targeted")
     -- One unified "Icons" toggle for the whole status/role/leader icon set in test
     -- mode (was split into "Status / Ready" + "Role / Leader"). Keyed on
     -- testShowStatusIcons; the role/leader render gate reads the same key.
