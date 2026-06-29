@@ -680,9 +680,12 @@ function Search:CreateInlineDropdown(parent, entry)
     -- Returns CreateDropdown's container Frame (exposes :UpdateText / :SetEnabled /
     -- :RebuildOptions). The caller only repositions it via :SetPoint, so the Frame
     -- return shape is preserved.
+    -- NOT inline: inline mode hides the dropdown's own label, but this is a
+    -- labeled setting in the search results, so keep the label (matches the
+    -- slider/checkbox search widgets). Keep the blue Search accent.
     return DF.GUI:CreateDropdown(parent, entry.label, values,
         db, entry.dbKey, entry.callback, nil, nil,
-        { inline = true, accent = C_ACCENT })
+        { accent = C_ACCENT })
 end
 
 -- ============================================================

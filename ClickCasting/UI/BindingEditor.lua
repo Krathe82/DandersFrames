@@ -3271,12 +3271,19 @@ function CC:CreateItemCell(parent, itemData, index)
         nameText:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
     end
     
-    -- On-Use indicator
+    -- On-Use indicator: a small corner badge. Give it a dark backing pill on a high
+    -- OVERLAY sublevel so it reads clearly instead of blending into the icon art.
     if itemInfo and itemInfo.hasOnUse then
         local onUseBadge = cell:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
+        onUseBadge:SetDrawLayer("OVERLAY", 7)
         onUseBadge:SetPoint("TOPLEFT", 4, -4)
         onUseBadge:SetText(L["USE"])
         onUseBadge:SetTextColor(themeColor.r, themeColor.g, themeColor.b)
+        local onUseBg = cell:CreateTexture(nil, "OVERLAY")
+        onUseBg:SetDrawLayer("OVERLAY", 6)
+        onUseBg:SetColorTexture(0, 0, 0, 0.7)
+        onUseBg:SetPoint("TOPLEFT", onUseBadge, "TOPLEFT", -3, 2)
+        onUseBg:SetPoint("BOTTOMRIGHT", onUseBadge, "BOTTOMRIGHT", 3, -2)
     end
     
     -- Check for existing binding - just set border color (no text)
