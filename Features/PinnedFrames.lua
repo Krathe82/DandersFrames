@@ -101,16 +101,19 @@ local function StylePinnedHandle(mover, borderTex, innerTex, textFS, colors)
     mover:HookScript("OnEnter", function(self)
         self.dfHovered = true
         restyle()
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine(textFS and textFS:GetText() or "Pinned")
-        GameTooltip:AddLine("Drag to move", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("Click to open the position panel", 0.8, 0.8, 0.8)
-        GameTooltip:Show()
+        DF.GUI:ShowTooltip(self, {
+            anchor = "ANCHOR_TOP",
+            title = textFS and textFS:GetText() or DF.L["Pinned"],
+            lines = {
+                DF.L["Drag to move"],
+                DF.L["Click to open the position panel"],
+            },
+        })
     end)
     mover:HookScript("OnLeave", function(self)
         self.dfHovered = false
         restyle()
-        GameTooltip:Hide()
+        DF.GUI:HideTooltip()
     end)
 
     restyle()
@@ -1401,7 +1404,8 @@ function PinnedFrames:CreateSetFrames(setIndex)
     moverInner:SetColorTexture(unpack(colors.moverBg))
 
     -- Mover text
-    mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mover.text = mover:CreateFontString(nil, "OVERLAY")
+    DF.GUI:SetSettingsFont(mover.text, 10, "")
     mover.text:SetPoint("CENTER")
     mover.text:SetText(PinnedSetLabel(set, setIndex, IsInRaid()))
     mover.text:SetTextColor(unpack(colors.moverText))
@@ -1550,7 +1554,8 @@ function PinnedFrames:CreateSetFrames(setIndex)
     container.mover = mover
     
     -- Label (parented to UIParent for scale independence)
-    local label = UIParent:CreateFontString("DandersPinned" .. setIndex .. "Label", "OVERLAY", "GameFontNormal")
+    local label = UIParent:CreateFontString("DandersPinned" .. setIndex .. "Label", "OVERLAY")
+    DF.GUI:SetSettingsFont(label, 12, "")
     label:SetPoint("BOTTOM", container, "TOP", 0, 2)
     local labelText = set.name
     if not labelText or labelText == "" then
@@ -3371,7 +3376,8 @@ local function AttachTestMover(container, set, isRaidMode, setIndex)
     mover.inner:SetPoint("BOTTOMRIGHT", -1, 1)
     mover.inner:SetColorTexture(unpack(colors.moverBg))
 
-    mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mover.text = mover:CreateFontString(nil, "OVERLAY")
+    DF.GUI:SetSettingsFont(mover.text, 10, "")
     mover.text:SetPoint("CENTER")
     mover.text:SetText(PinnedSetLabel(set, setIndex, isRaidMode))
     mover.text:SetTextColor(unpack(colors.moverText))
@@ -3511,9 +3517,9 @@ function PinnedFrames:EnsureTestContainer(setIndex, set, isRaidMode)
     if not testLabel then
         testLabel = UIParent:CreateFontString(
             "DandersPinnedTest" .. setIndex .. "Label",
-            "OVERLAY",
-            "GameFontNormal"
+            "OVERLAY"
         )
+        DF.GUI:SetSettingsFont(testLabel, 12, "")
         testLabel:SetTextColor(0.8, 0.8, 1.0)
         container.testLabel = testLabel
     end

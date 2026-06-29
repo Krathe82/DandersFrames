@@ -474,21 +474,18 @@ end
 function DF:CreatePermanentMoverPopup()
     if DF.permanentMoverPopup then return DF.permanentMoverPopup end
 
-    local C_BG    = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
-    local C_ELEM  = {r = 0.18, g = 0.18, b = 0.18, a = 1}
-    local C_HOVER = {r = 0.22, g = 0.22, b = 0.22, a = 1}
-    local C_BORDER = {r = 0.25, g = 0.25, b = 0.25, a = 1}
+    -- Neutral tones reuse the shared GUI palette (same numeric values, zero
+    -- visual change). The accent here is passed in per-anchor (party/raid) by
+    -- the callers, so no accent constant lives in this popup.
+    local GUIColors = DF.GUI.Colors
+    local C_ELEM  = GUIColors.element
+    local C_HOVER = GUIColors.hover
+    local C_BORDER = GUIColors.border
 
     local popup = CreateFrame("Frame", "DandersFramesPermanentMoverPopup", UIParent, "BackdropTemplate")
     popup:SetFrameStrata("FULLSCREEN_DIALOG")
     popup:SetFrameLevel(200)
-    popup:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    popup:SetBackdropColor(C_BG.r, C_BG.g, C_BG.b, C_BG.a)
-    popup:SetBackdropBorderColor(0, 0, 0, 1)
+    DF.GUI:CreatePanelBackdrop(popup, { bgAlpha = 0.95, borderColor = { 0, 0, 0, 1 } })
     popup:EnableMouse(true)
     popup:Hide()
 
@@ -595,10 +592,11 @@ function DF:ShowPermanentMoverProfilePopup(anchorFrame)
     if not profiles or #profiles == 0 then return end
     local current = DF:GetCurrentProfile()
     local isRaid = anchorFrame and anchorFrame.isRaid
-    local ar, ag, ab = 0.45, 0.45, 0.95
+    local acc = DF.GUI.Colors.accent
+    local ar, ag, ab = acc.r, acc.g, acc.b
     if isRaid then ar, ag, ab = 1.0, 0.5, 0.2 end
 
-    popup:Populate("Profiles", profiles, current, function(name)
+    popup:Populate(L["Profiles"], profiles, current, function(name)
         DF:SetProfile(name)
     end, ar, ag, ab)
 
@@ -615,10 +613,11 @@ function DF:ShowPermanentMoverCCProfilePopup(anchorFrame)
     if not profiles or #profiles == 0 then return end
     local current = CC:GetActiveProfileName()
     local isRaid = anchorFrame and anchorFrame.isRaid
-    local ar, ag, ab = 0.45, 0.45, 0.95
+    local acc = DF.GUI.Colors.accent
+    local ar, ag, ab = acc.r, acc.g, acc.b
     if isRaid then ar, ag, ab = 1.0, 0.5, 0.2 end
 
-    popup:Populate("Click-Cast Profiles", profiles, current, function(name)
+    popup:Populate(L["Click-Cast Profiles"], profiles, current, function(name)
         CC:SetActiveProfile(name)
         CC:ApplyBindings()
         print("|cff00ff00DandersFrames:|r " .. format(L["Click-cast profile: %s"], name))
@@ -1489,14 +1488,17 @@ end
 -- ============================================================
 
 function DF:CreatePositionPanel()
-    -- Same color constants as main GUI
-    local C_BACKGROUND = {r = 0.08, g = 0.08, b = 0.08, a = 0.95}
-    local C_ELEMENT    = {r = 0.18, g = 0.18, b = 0.18, a = 1}
-    local C_BORDER     = {r = 0.25, g = 0.25, b = 0.25, a = 1}
-    local C_ACCENT     = {r = 0.45, g = 0.45, b = 0.95, a = 1}  -- Purple-Blue (matches main GUI)
+    -- Neutral tones + the party accent reuse the shared GUI palette (same numeric
+    -- values, zero visual change). C_RAID is left private because it is the
+    -- per-mode raid override resolved by GetAccentColor() below, not the GUI's
+    -- selected mode.
+    local GUIColors    = DF.GUI.Colors
+    local C_BACKGROUND = GUIColors.background
+    local C_ELEMENT    = GUIColors.element
+    local C_BORDER     = GUIColors.border
+    local C_ACCENT     = GUIColors.accent  -- party purple (matches main GUI)
     local C_RAID       = {r = 1.0, g = 0.5, b = 0.2, a = 1}
-    local C_HOVER      = {r = 0.22, g = 0.22, b = 0.22, a = 1}
-    local C_TEXT       = {r = 0.9, g = 0.9, b = 0.9, a = 1}
+    local C_TEXT       = GUIColors.text
     
     -- Theme color per mode. Raid uses a distinct color; everything
     -- else shares the party accent.
@@ -1543,16 +1545,6 @@ function DF:CreatePositionPanel()
         end
     end
     
-    local function CreateElementBackdrop(frame)
-        frame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
-        frame:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, C_ELEMENT.a)
-        frame:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
-    end
-    
     -- Main panel - matches main GUI style
     local panel = CreateFrame("Frame", "DandersFramesPositionPanel", UIParent, "BackdropTemplate")
     panel:SetSize(300, 294)
@@ -1564,13 +1556,7 @@ function DF:CreatePositionPanel()
     panel:SetPoint("TOP", UIParent, "TOP", 0, -50)
     panel:SetFrameStrata("FULLSCREEN_DIALOG")
     panel:SetFrameLevel(100)  -- High level to ensure it's on top
-    panel:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    panel:SetBackdropColor(C_BACKGROUND.r, C_BACKGROUND.g, C_BACKGROUND.b, C_BACKGROUND.a)
-    panel:SetBackdropBorderColor(0, 0, 0, 1)
+    DF.GUI:CreatePanelBackdrop(panel, { bgColor = C_BACKGROUND, borderColor = { 0, 0, 0, 1 } })
     panel:EnableMouse(true)
     panel:SetMovable(true)
     panel:RegisterForDrag("LeftButton")
@@ -1621,15 +1607,8 @@ function DF:CreatePositionPanel()
     panel.title = title
     
     -- Close button (simple X like main GUI)
-    local closeBtn = CreateFrame("Button", nil, panel)
-    closeBtn:SetSize(20, 20)
+    local closeBtn = DF.GUI:CreateCloseButton(panel, { onClick = function() LockCurrentFrames() end })
     closeBtn:SetPoint("TOPRIGHT", -8, -8)
-    closeBtn:SetNormalFontObject("DFFontNormal")
-    closeBtn:SetText("x")
-    closeBtn:GetFontString():SetTextColor(0.6, 0.6, 0.6)
-    closeBtn:SetScript("OnClick", function() LockCurrentFrames() end)
-    closeBtn:SetScript("OnEnter", function(self) self:GetFontString():SetTextColor(1, 1, 1) end)
-    closeBtn:SetScript("OnLeave", function(self) self:GetFontString():SetTextColor(0.6, 0.6, 0.6) end)
     
     -- X Position row
     local xLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -1640,7 +1619,8 @@ function DF:CreatePositionPanel()
     local xInput = CreateFrame("EditBox", nil, panel, "BackdropTemplate")
     xInput:SetSize(65, 22)
     xInput:SetPoint("TOPLEFT", 15, -56)
-    CreateElementBackdrop(xInput)
+    DF.GUI:CreateElementBackdrop(xInput, { bgColor = C_ELEMENT, borderColor = { C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5 } })
+    DF.GUI:StyleEditBox(xInput)
     xInput:SetFontObject("DFFontHighlightSmall")
     xInput:SetJustifyH("CENTER")
     xInput:SetAutoFocus(false)
@@ -1674,26 +1654,14 @@ function DF:CreatePositionPanel()
     
     -- X Nudge buttons
     local xMinus = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    xMinus:SetSize(22, 22)
     xMinus:SetPoint("LEFT", xInput, "RIGHT", 4, 0)
-    CreateElementBackdrop(xMinus)
-    local xMinusTxt = xMinus:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    xMinusTxt:SetPoint("CENTER")
-    xMinusTxt:SetText("<")
+    DF.GUI:StyleButton(xMinus, { width = 22, height = 22, text = "<" })
     xMinus:SetScript("OnClick", function() DF:NudgePosition(-1, 0) end)
-    xMinus:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    xMinus:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
-    
+
     local xPlus = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    xPlus:SetSize(22, 22)
     xPlus:SetPoint("LEFT", xMinus, "RIGHT", 2, 0)
-    CreateElementBackdrop(xPlus)
-    local xPlusTxt = xPlus:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    xPlusTxt:SetPoint("CENTER")
-    xPlusTxt:SetText(">")
+    DF.GUI:StyleButton(xPlus, { width = 22, height = 22, text = ">" })
     xPlus:SetScript("OnClick", function() DF:NudgePosition(1, 0) end)
-    xPlus:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    xPlus:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
     
     -- Y Position row
     local yLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -1704,7 +1672,8 @@ function DF:CreatePositionPanel()
     local yInput = CreateFrame("EditBox", nil, panel, "BackdropTemplate")
     yInput:SetSize(65, 22)
     yInput:SetPoint("TOPLEFT", 160, -56)
-    CreateElementBackdrop(yInput)
+    DF.GUI:CreateElementBackdrop(yInput, { bgColor = C_ELEMENT, borderColor = { C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5 } })
+    DF.GUI:StyleEditBox(yInput)
     yInput:SetFontObject("DFFontHighlightSmall")
     yInput:SetJustifyH("CENTER")
     yInput:SetAutoFocus(false)
@@ -1738,26 +1707,14 @@ function DF:CreatePositionPanel()
     
     -- Y Nudge buttons
     local yMinus = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    yMinus:SetSize(22, 22)
     yMinus:SetPoint("LEFT", yInput, "RIGHT", 4, 0)
-    CreateElementBackdrop(yMinus)
-    local yMinusTxt = yMinus:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    yMinusTxt:SetPoint("CENTER")
-    yMinusTxt:SetText("v")
+    DF.GUI:StyleButton(yMinus, { width = 22, height = 22, text = "v" })
     yMinus:SetScript("OnClick", function() DF:NudgePosition(0, -1) end)
-    yMinus:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    yMinus:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
-    
+
     local yPlus = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    yPlus:SetSize(22, 22)
     yPlus:SetPoint("LEFT", yMinus, "RIGHT", 2, 0)
-    CreateElementBackdrop(yPlus)
-    local yPlusTxt = yPlus:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    yPlusTxt:SetPoint("CENTER")
-    yPlusTxt:SetText("^")
+    DF.GUI:StyleButton(yPlus, { width = 22, height = 22, text = "^" })
     yPlus:SetScript("OnClick", function() DF:NudgePosition(0, 1) end)
-    yPlus:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    yPlus:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
     
     -- Position Override Row (visible when editing auto profile)
     local posOverrideRow = CreateFrame("Frame", nil, panel)
@@ -1778,40 +1735,29 @@ function DF:CreatePositionPanel()
     posOverrideText:SetTextColor(1, 0.8, 0.2)
     
     local posResetBtn = CreateFrame("Button", nil, posOverrideRow, "BackdropTemplate")
-    posResetBtn:SetSize(70, 18)
     posResetBtn:SetPoint("LEFT", posOverrideText, "RIGHT", 8, 0)
-    posResetBtn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    posResetBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
-    posResetBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    DF.GUI:StyleButton(posResetBtn, { width = 70, height = 18, accent = { r = 1, g = 0.8, b = 0.2 } })
     
     local posResetIcon = posResetBtn:CreateTexture(nil, "OVERLAY")
     posResetIcon:SetSize(10, 10)
-    posResetIcon:SetPoint("LEFT", 4, 0)
     posResetIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
     posResetIcon:SetVertexColor(0.6, 0.6, 0.6)
-    
+
     local posResetText = posResetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    posResetText:SetPoint("LEFT", posResetIcon, "RIGHT", 2, 0)
+    posResetText:SetPoint("CENTER", posResetBtn, "CENTER", 6, 0)
+    posResetIcon:SetPoint("RIGHT", posResetText, "LEFT", -2, 0)
     posResetText:SetText(L["Reset"])
     posResetText:SetTextColor(0.7, 0.7, 0.7)
     
-    posResetBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropBorderColor(1, 0.8, 0.2, 1)
+    posResetBtn:HookScript("OnEnter", function(self)
         posResetIcon:SetVertexColor(1, 0.8, 0.2)
         posResetText:SetTextColor(1, 0.8, 0.2)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["Reset Position to Global"])
-        GameTooltip:Show()
+        DF.GUI:ShowTooltip(self, { title = L["Reset Position to Global"] })
     end)
-    posResetBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    posResetBtn:HookScript("OnLeave", function(self)
         posResetIcon:SetVertexColor(0.6, 0.6, 0.6)
         posResetText:SetTextColor(0.7, 0.7, 0.7)
-        GameTooltip:Hide()
+        DF.GUI:HideTooltip()
     end)
     posResetBtn:SetScript("OnClick", function()
         if DF.AutoProfilesUI then
@@ -1881,18 +1827,11 @@ function DF:CreatePositionPanel()
     snapContainer:SetPoint("TOPLEFT", 15, -108)
     
     local snapCheck = CreateFrame("CheckButton", nil, snapContainer, "BackdropTemplate")
-    snapCheck:SetSize(18, 18)
     snapCheck:SetPoint("LEFT", 0, 0)
-    CreateElementBackdrop(snapCheck)
-    
-    local snapCheckMark = snapCheck:CreateTexture(nil, "OVERLAY")
-    snapCheckMark:SetTexture("Interface\\Buttons\\WHITE8x8")
-    snapCheckMark:SetVertexColor(c.r, c.g, c.b)
-    snapCheckMark:SetPoint("CENTER")
-    snapCheckMark:SetSize(10, 10)
-    snapCheck:SetCheckedTexture(snapCheckMark)
-    snapCheck.checkMark = snapCheckMark
-    snapCheck.UpdateThemeColor = function(self, col) self.checkMark:SetVertexColor(col.r, col.g, col.b) end
+    DF.GUI:StyleCheckButton(snapCheck)
+    snapCheck.UpdateThemeColor = function(self, col)
+        if self.ApplyThemeColor then self.ApplyThemeColor(col) end
+    end
     table.insert(panel.themedElements, snapCheck)
     
     local snapLabel = snapContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -1922,6 +1861,9 @@ function DF:CreatePositionPanel()
             -- Hide snap preview lines when disabling
             DF:HideSnapPreview()
         end
+        -- Grid Size only matters while snapping; grey it in place when snap is off
+        -- (visible but disabled — never hidden).
+        if panel.RefreshGridSliderEnabled then panel.RefreshGridSliderEnabled() end
     end)
     panel.snapCheck = snapCheck
 
@@ -1931,18 +1873,11 @@ function DF:CreatePositionPanel()
     hideOverlayContainer:SetPoint("TOPLEFT", 15, -134)
 
     local hideOverlayCheck = CreateFrame("CheckButton", nil, hideOverlayContainer, "BackdropTemplate")
-    hideOverlayCheck:SetSize(18, 18)
     hideOverlayCheck:SetPoint("LEFT", 0, 0)
-    CreateElementBackdrop(hideOverlayCheck)
-
-    local hideOverlayCheckMark = hideOverlayCheck:CreateTexture(nil, "OVERLAY")
-    hideOverlayCheckMark:SetTexture("Interface\\Buttons\\WHITE8x8")
-    hideOverlayCheckMark:SetVertexColor(c.r, c.g, c.b)
-    hideOverlayCheckMark:SetPoint("CENTER")
-    hideOverlayCheckMark:SetSize(10, 10)
-    hideOverlayCheck:SetCheckedTexture(hideOverlayCheckMark)
-    hideOverlayCheck.checkMark = hideOverlayCheckMark
-    hideOverlayCheck.UpdateThemeColor = function(self, col) self.checkMark:SetVertexColor(col.r, col.g, col.b) end
+    DF.GUI:StyleCheckButton(hideOverlayCheck)
+    hideOverlayCheck.UpdateThemeColor = function(self, col)
+        if self.ApplyThemeColor then self.ApplyThemeColor(col) end
+    end
     table.insert(panel.themedElements, hideOverlayCheck)
 
     local hideOverlayLabel = hideOverlayContainer:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
@@ -1983,86 +1918,41 @@ function DF:CreatePositionPanel()
     end)
     panel.hideOverlayCheck = hideOverlayCheck
 
-    -- Grid Size slider (matches main GUI slider style)
-    local gridLabel = panel:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    gridLabel:SetPoint("TOPLEFT", 15, -164)
-    gridLabel:SetText(L["Grid Size"])
-    gridLabel:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-    
-    -- Track background
-    local track = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    track:SetPoint("TOPLEFT", 15, -182)
-    track:SetSize(200, 8)
-    CreateElementBackdrop(track)
-    
-    -- Fill (colored portion)
-    local fill = track:CreateTexture(nil, "ARTWORK")
-    fill:SetPoint("LEFT", 1, 0)
-    fill:SetHeight(6)
-    fill:SetColorTexture(c.r, c.g, c.b, 0.8)
-    
-    -- Slider
-    local slider = CreateFrame("Slider", nil, panel)
-    slider:SetPoint("TOPLEFT", 15, -182)
-    slider:SetSize(200, 8)
-    slider:SetOrientation("HORIZONTAL")
-    slider:SetMinMaxValues(10, 100)
-    slider:SetValueStep(5)
-    slider:SetObeyStepOnDrag(true)
-    slider:SetHitRectInsets(-4, -4, -8, -8)
-    
-    -- Thumb
-    local thumb = slider:CreateTexture(nil, "OVERLAY")
-    thumb:SetSize(12, 16)
-    thumb:SetColorTexture(c.r, c.g, c.b, 1)
-    slider:SetThumbTexture(thumb)
-    
-    -- Theme update for slider
-    local sliderTheme = {
-        UpdateThemeColor = function(self, col)
-            fill:SetColorTexture(col.r, col.g, col.b, 0.8)
-            thumb:SetColorTexture(col.r, col.g, col.b, 1)
-        end
-    }
-    table.insert(panel.themedElements, sliderTheme)
-    
-    -- Grid value input
-    local gridInput = CreateFrame("EditBox", nil, panel, "BackdropTemplate")
-    gridInput:SetPoint("LEFT", track, "RIGHT", 10, 0)
-    gridInput:SetSize(50, 20)
-    CreateElementBackdrop(gridInput)
-    gridInput:SetFontObject("DFFontHighlightSmall")
-    gridInput:SetJustifyH("CENTER")
-    gridInput:SetAutoFocus(false)
-    
-    local function UpdateFill()
-        local val = slider:GetValue()
-        local pct = (val - 10) / 90
-        fill:SetWidth(math.max(1, pct * 198))
-    end
-    
-    slider:SetScript("OnValueChanged", function(self, val)
-        gridInput:SetText(tostring(math.floor(val)))
-        UpdateFill()
+    -- Grid Size slider (shared builder; follows the mode theme).
+    -- Get/set mirror the hand-rolled version exactly: party-wide gridSize via
+    -- GetPositionDB(), which for pinned mode falls through gridSize to the party
+    -- db (only x/y are set-specific). Default 20 matches the refresh code below.
+    local function getGridSize()
         local db = GetPositionDB()
-        db.gridSize = math.floor(val)
+        return (db and db.gridSize) or 20
+    end
+    local function setGridSize(val)
+        local db = GetPositionDB()
+        if db then db.gridSize = math.floor(val) end
         -- Refresh grid lines with new size
         if DF.gridFrame and DF.gridFrame:IsShown() and DF.gridFrame.RefreshLines then
             DF.gridFrame.RefreshLines()
         end
-    end)
-    
-    gridInput:SetScript("OnEnterPressed", function(self)
-        local val = tonumber(self:GetText())
-        if val and val >= 10 and val <= 100 then
-            slider:SetValue(val)
+    end
+
+    local gridContainer = DF.GUI:CreateSlider(panel, L["Grid Size"], 10, 100, 5, nil, nil, nil, nil, nil, getGridSize, setGridSize)
+    gridContainer:SetPoint("TOPLEFT", 15, -164)
+
+    -- External code drives the slider via panel.gridSlider; the builder's
+    -- OnValueChanged keeps its own value box in sync, so gridInput is no longer
+    -- a separate frame (the refresh below uses SetValue only).
+    panel.gridSlider = gridContainer.slider
+    panel.gridInput = nil
+
+    -- Grey the Grid Size slider when Snap to Grid is off (its only consumer).
+    -- Disabled-in-place: stays visible but non-interactive, per the standard
+    -- "grey when the boolean enable is off" rule. Re-applied on snap toggle and
+    -- on every panel refresh (UpdatePositionPanel) so mode switches honour it.
+    panel.RefreshGridSliderEnabled = function()
+        if gridContainer.SetEnabled then
+            gridContainer:SetEnabled(SnapEnabledForPanel())
         end
-        self:ClearFocus()
-    end)
-    gridInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    
-    panel.gridSlider = slider
-    panel.gridInput = gridInput
+    end
 
     -- "Anchor To Frames" dropdown — PINNED MODE ONLY (hidden for every other
     -- mode). Anchors a pinned set to the raid/party frames container at a chosen
@@ -2108,54 +1998,31 @@ function DF:CreatePositionPanel()
     anchorDropdown:Hide()
     panel.anchorDropdown = anchorDropdown
 
-    -- Reset Position button
+    -- Reset Position button (icon + label via the shared styler).
     local resetBtn = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    resetBtn:SetSize(85, 26)
     resetBtn:SetPoint("BOTTOMLEFT", 15, 15)
-    CreateElementBackdrop(resetBtn)
-    local resetIcon = resetBtn:CreateTexture(nil, "OVERLAY")
-    resetIcon:SetPoint("LEFT", 6, 0)
-    resetIcon:SetSize(16, 16)
-    resetIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
-    resetIcon:SetVertexColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-    local resetBtnText = resetBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    resetBtnText:SetPoint("LEFT", resetIcon, "RIGHT", 2, 0)
-    resetBtnText:SetText(L["Reset"])
-    resetBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    DF.GUI:StyleButton(resetBtn, {
+        width = 85, height = 26,
+        icon = { texture = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh", size = 18, color = C_TEXT, gap = 2 },
+        text = L["Reset"],
+    })
     resetBtn:SetScript("OnClick", function() DF:ResetPosition() end)
-    resetBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    resetBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
     
     -- Center button
     local centerBtn = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    centerBtn:SetSize(85, 26)
     centerBtn:SetPoint("BOTTOM", 0, 15)
-    CreateElementBackdrop(centerBtn)
-    local centerBtnText = centerBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    centerBtnText:SetPoint("CENTER")
-    centerBtnText:SetText(L["Center"])
-    centerBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    DF.GUI:StyleButton(centerBtn, { width = 85, height = 26, text = L["Center"] })
     centerBtn:SetScript("OnClick", function() DF:CenterFrames() end)
-    centerBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    centerBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
     
-    -- Lock button (matches main GUI button style)
+    -- Lock button (icon + label via the shared styler).
     local lockBtn = CreateFrame("Button", nil, panel, "BackdropTemplate")
-    lockBtn:SetSize(85, 26)
     lockBtn:SetPoint("BOTTOMRIGHT", -15, 15)
-    CreateElementBackdrop(lockBtn)
-    local lockIcon = lockBtn:CreateTexture(nil, "OVERLAY")
-    lockIcon:SetPoint("LEFT", 6, 0)
-    lockIcon:SetSize(16, 16)
-    lockIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\lock")
-    lockIcon:SetVertexColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
-    local lockBtnText = lockBtn:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
-    lockBtnText:SetPoint("LEFT", lockIcon, "RIGHT", 2, 0)
-    lockBtnText:SetText(L["Lock"])
-    lockBtnText:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
+    DF.GUI:StyleButton(lockBtn, {
+        width = 85, height = 26,
+        icon = { texture = "Interface\\AddOns\\DandersFrames\\Media\\Icons\\lock", size = 18, color = C_TEXT, gap = 2 },
+        text = L["Lock"],
+    })
     lockBtn:SetScript("OnClick", function() LockCurrentFrames() end)
-    lockBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(C_HOVER.r, C_HOVER.g, C_HOVER.b, 1) end)
-    lockBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(C_ELEMENT.r, C_ELEMENT.g, C_ELEMENT.b, 1) end)
     
     -- Apply initial theme
     UpdateTheme()
@@ -2186,8 +2053,14 @@ function DF:UpdatePositionPanel()
     else
         DF.positionPanel.snapCheck:SetChecked(partyDB.snapToGrid)
     end
+    -- SetValue drives the shared slider's own value box via OnValueChanged,
+    -- so there's no separate gridInput to update.
     DF.positionPanel.gridSlider:SetValue(partyDB.gridSize or 20)
-    DF.positionPanel.gridInput:SetText(tostring(partyDB.gridSize or 20))
+    -- Grid Size greys out when snap is off (boolean-enable grey rule); the snap
+    -- flag is per-mode, so re-apply on every refresh (mode switches land here).
+    if DF.positionPanel.RefreshGridSliderEnabled then
+        DF.positionPanel.RefreshGridSliderEnabled()
+    end
     if DF.positionPanel.hideOverlayCheck then
         if DF.positionPanelMode == "pinned" then
             DF.positionPanel.hideOverlayCheck:SetChecked(partyDB.pinnedHideMover or false)

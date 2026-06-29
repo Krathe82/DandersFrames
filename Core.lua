@@ -3764,7 +3764,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
                 partyEnabled = true,
                 raidEnabled = true,
                 settingsFont = "Friz Quadrata TT",
-                settingsFontOutline = "",
+                settingsFontOutline = "NONE",
             }
         end
         
@@ -3853,7 +3853,9 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
         -- Ensure settings-panel font defaults exist
         if DF.db.settingsFont        == nil then DF.db.settingsFont        = "Friz Quadrata TT" end
-        if DF.db.settingsFontOutline == nil then DF.db.settingsFontOutline = "" end
+        -- Outline "None" is stored canonically as "NONE" everywhere; normalise the
+        -- legacy empty-string the old hand-rolled settings dropdown wrote.
+        if DF.db.settingsFontOutline == nil or DF.db.settingsFontOutline == "" then DF.db.settingsFontOutline = "NONE" end
 
         -- Ensure top-level font preferences exist (SDF rendering toggle from PR #115)
         if DF.db.fontSlug == nil then DF.db.fontSlug = false end
@@ -3910,7 +3912,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
 
                 -- Ensure settings-panel font defaults exist on every profile
                 if profile.settingsFont        == nil then profile.settingsFont        = "Friz Quadrata TT" end
-                if profile.settingsFontOutline == nil then profile.settingsFontOutline = "" end
+                if profile.settingsFontOutline == nil or profile.settingsFontOutline == "" then profile.settingsFontOutline = "NONE" end
 
                 -- Backfill missing auraDesigner.defaults keys.
                 -- The top-level migration (pairs(PartyDefaults) above) skips auraDesigner
@@ -4756,7 +4758,7 @@ DF._MainEventDispatcher = function(self, event, arg1)
             DF.DebugConsole:Init()
         end
 
-        print("|cff00ff00DandersFrames|r " .. format(L["v%s loaded. Type %s/df%s for settings, %s/df resetgui%s if window is offscreen."], DF.VERSION, "|cffeda55f", "|r", "|cffeda55f", "|r"))
+        print("|cff00ff00DandersFrames|r " .. format(L["v%s loaded. Type %s/df%s for settings, %s/df resetgui%s if window is offscreen."], (DF.VERSION:gsub("^[vV]", "")), "|cffeda55f", "|r", "|cffeda55f", "|r"))
 
         -- ============================================================
         -- CRITICAL: Initialize frames HERE at ADDON_LOADED
@@ -4825,42 +4827,17 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- Theme color for popup
             local themeColor = { r = 0.2, g = 0.8, b = 0.2 }
             
-            -- Helper function to create styled buttons
+            -- Helper function to create styled buttons (routed through GUI:StyleButton)
             local function CreatePopupButton(parent, text, yOffset, isPrimary)
                 local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
-                btn:SetSize(220, 32)
-                btn:SetPoint("TOP", parent.warning, "BOTTOM", 0, yOffset)
-                btn:SetBackdrop({
-                    bgFile = "Interface\\Buttons\\WHITE8x8",
-                    edgeFile = "Interface\\Buttons\\WHITE8x8",
-                    edgeSize = 1,
-                })
-                
                 if isPrimary then
-                    btn:SetBackdropColor(themeColor.r * 0.3, themeColor.g * 0.3, themeColor.b * 0.3, 1)
-                    btn:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
+                    DF.GUI:StyleButton(btn, { width = 220, height = 32, text = text, primary = true })
                 else
-                    btn:SetBackdropColor(0.15, 0.15, 0.15, 1)
-                    btn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+                    DF.GUI:StyleButton(btn, { width = 220, height = 32, text = text })
                 end
-                
-                local btnText = btn:CreateFontString(nil, "OVERLAY", "DFFontNormal")
-                btnText:SetPoint("CENTER")
-                btnText:SetText(text)
-                btnText:SetTextColor(1, 1, 1)
-                btn.label = btnText
-                
-                btn:SetScript("OnEnter", function(self)
-                    self:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
-                end)
-                btn:SetScript("OnLeave", function(self)
-                    if isPrimary then
-                        self:SetBackdropBorderColor(themeColor.r, themeColor.g, themeColor.b, 1)
-                    else
-                        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-                    end
-                end)
-                
+                btn:SetPoint("TOP", parent.warning, "BOTTOM", 0, yOffset)
+                btn.label = btn.Text
+
                 return btn
             end
             
