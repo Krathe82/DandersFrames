@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Interface Overhaul
+
+A top-to-bottom rework of the configuration UI so every panel shares one consistent look and behaviour.
+
+* (Interface) **One shared widget toolkit** — buttons, checkboxes, dropdowns, sliders, range sliders, text inputs, colour pickers, tooltips, info banners, tab strips and panel/section backdrops are now built from a single themed set of helpers instead of dozens of hand-rolled one-offs, so every control looks and behaves identically across the addon (consistent accent colour, hover and disabled states). (by Krathe)
+* (Interface) **Disabled settings grey out in place, addon-wide** — when a feature is turned off its options stay visible but dimmed and inactive (a consistent preview) instead of staying clickable or disappearing. (by Krathe)
+* (Aura Designer / Text Designer) **Unified look** — both designers now share the same panel layout, preview frame, tab strip and column styling as the rest of the UI, so they no longer feel like separate tools. (by Krathe)
+* (Pinned Frames) **Reworked to match the standard UI** — the tab/sub-tab strip, designer-preset bar and grouped settings boxes now use the shared styling. (by Krathe)
+* (Nicknames) **Page rebuilt** — restructured into grouped section boxes (Add / Saved / Received / Marker / Name Precedence) consistent with the other feature pages. (by Krathe)
+* (Interface) **Consistent tabs, tooltips, banners & section boxes everywhere** — Options, Click Casting, Search, Auto Profiles, Test Mode and the icon library now share one tab style, one tooltip system, and the same info banners and settings-group boxes. (by Krathe)
+* (Interface) **Material Symbol icons** normalised to a consistent size and padding, with new icons added. (by Krathe)
+* (Interface) **Wording & value consistency** — standardised inconsistent labels and dropdown values across the settings UI; the Settings-panel font outline now offers its full option set. (by Krathe)
+* (Localization) Wrapped the remaining hardcoded UI text so settings labels and Click Casting messages translate properly. (by Krathe)
+
 ### New Features
 
 * (Highlights) New **Hide on Tanks** option — suppresses the aggro highlight on tanks so it only flags when a DPS/healer pulls. Off by default. (by Krathe)
@@ -36,6 +50,10 @@
 * (Debuffs) Removed the defunct **Highlight Dispellable** toggle (handled by Dispel Overlay). (by Krathe)
 * (Pet Frames) Pet **name and health text show again** (font/anchor/colour settings now apply). (by Krathe)
 * (Pet Frames) An empty party pet frame no longer lingers over the raid frames when a member summons a pet in a raid. (by Krathe)
+* (Global Font) **Apply to All** now also restyles the Text Designer text (Name / Health / Status and custom elements); the Affected Elements list was updated to match. (by Krathe)
+* (Raid) The frame **Unlock/Lock** toolbar button now updates its label correctly in raid mode (it previously stayed on "Unlock" after unlocking). (by Krathe)
+* (Auto Layouts) The Mythic layout's fixed-range badge no longer overflows its button. (by Krathe)
+* (General) Fixed the doubled "v" in the version line printed on login. (by Krathe)
 
 ## [4.5.0]
 
