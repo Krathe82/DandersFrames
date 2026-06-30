@@ -1274,22 +1274,10 @@ function CC:CreateEditBindingPanel()
     )
     prioritySlider:SetPoint("TOPLEFT", 68, -155)
 
-    -- Priority hint labels (1 = Low on left, 10 = High on right — higher wins).
-    local lowLabel = advancedContent:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
-    lowLabel:SetPoint("TOPLEFT", prioritySlider, "BOTTOMLEFT", 0, -2)
-    lowLabel:SetText(L["1 = Low"])
-    lowLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
-
-    local highLabel = advancedContent:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
-    highLabel:SetPoint("TOPRIGHT", prioritySlider, "BOTTOMRIGHT", 0, -2)
-    highLabel:SetText(L["10 = High"])
-    highLabel:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
-
-    -- Centre note clarifying direction (sits between the corner Low/High labels).
-    local priNote = advancedContent:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
-    priNote:SetPoint("TOP", prioritySlider, "BOTTOM", 0, -2)
-    priNote:SetText(L["Higher priority wins"])
-    priNote:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
+    -- Direction note in the standard GUI label style (dim, wrapped) so it matches
+    -- every other settings note: higher number = higher priority.
+    local priNote = DF.GUI:CreateLabel(advancedContent, L["Higher priority wins"], 248)
+    priNote:SetPoint("TOPLEFT", prioritySlider, "BOTTOMLEFT", 0, -2)
 
     panel.prioritySlider = prioritySlider
     

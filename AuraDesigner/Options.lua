@@ -5711,11 +5711,10 @@ CreateEffectCard = function(parent, yPos, effect)
             -- the effect's Appearance group (increment 54 → 68 → 84 with the note).
             priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 5, -(triggersH + 14))
             priSlider:SetWidth(bodyWidth - 10)
-            -- Direction note: HIGHER number = higher priority (matches every slider).
-            local priNote = body:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
+            -- Direction note in the standard GUI label style (dim, wrapped) so it
+            -- matches every other settings note: HIGHER number = higher priority.
+            local priNote = GUI:CreateLabel(body, L["Higher priority wins"], bodyWidth - 10)
             priNote:SetPoint("TOPLEFT", priSlider, "BOTTOMLEFT", 0, -2)
-            priNote:SetText(L["Higher priority wins"])
-            priNote:SetTextColor(0.6, 0.6, 0.6)
             triggersH = triggersH + 84
         end
 
