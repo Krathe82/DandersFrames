@@ -1404,9 +1404,9 @@ function DF:UpdateAllPetFrames(force)
     -- Hide party pet group container if in raid test mode
     if DF.raidTestMode then
         DF:Debug("PET", "UpdateAllPetFrames: hiding party pets (raid test mode active)")
-        if DF.petFrames.player then DF.petFrames.player:Hide() end
+        if DF.petFrames.player then DF:SetPetFrameVisible(DF.petFrames.player, false) end
         for i = 1, 4 do
-            if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
+            if DF.partyPetFrames[i] then DF:SetPetFrameVisible(DF.partyPetFrames[i], false) end
         end
         DF:HideAllTestPetFrames()
         return
@@ -1418,9 +1418,9 @@ function DF:UpdateAllPetFrames(force)
     -- hidden once raid frames take over.
     if not DF.testMode and IsInRaid() then
         DF:Debug("PET", "UpdateAllPetFrames: hiding party pets (live raid active)")
-        if DF.petFrames.player then DF.petFrames.player:Hide() end
+        if DF.petFrames.player then DF:SetPetFrameVisible(DF.petFrames.player, false) end
         for i = 1, 4 do
-            if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
+            if DF.partyPetFrames[i] then DF:SetPetFrameVisible(DF.partyPetFrames[i], false) end
         end
         if DF.petGroupContainer then DF.petGroupContainer:Hide() end
         return
@@ -1441,9 +1441,9 @@ function DF:UpdateAllPetFrames(force)
         if DF.testMode then
             DF:HideAllTestPetFrames()
         else
-            if DF.petFrames.player then DF.petFrames.player:Hide() end
+            if DF.petFrames.player then DF:SetPetFrameVisible(DF.petFrames.player, false) end
             for i = 1, 4 do
-                if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
+                if DF.partyPetFrames[i] then DF:SetPetFrameVisible(DF.partyPetFrames[i], false) end
             end
             if DF.petGroupContainer then DF.petGroupContainer:Hide() end
         end
@@ -1518,7 +1518,7 @@ function DF:UpdateAllRaidPetFrames(force)
     -- Hide raid pet frames if in party test mode (not raid test mode)
     if DF.testMode and not DF.raidTestMode then
         for i = 1, 40 do
-            if DF.raidPetFrames[i] then DF.raidPetFrames[i]:Hide() end
+            if DF.raidPetFrames[i] then DF:SetPetFrameVisible(DF.raidPetFrames[i], false) end
         end
         DF:HideAllTestRaidPetFrames()
         return
@@ -1537,7 +1537,7 @@ function DF:UpdateAllRaidPetFrames(force)
             DF:HideAllTestRaidPetFrames()
         else
             for i = 1, 40 do
-                if DF.raidPetFrames[i] then DF.raidPetFrames[i]:Hide() end
+                if DF.raidPetFrames[i] then DF:SetPetFrameVisible(DF.raidPetFrames[i], false) end
             end
             if DF.raidPetGroupContainer then DF.raidPetGroupContainer:Hide() end
         end
@@ -1684,10 +1684,12 @@ function DF:ApplyPetSettings()
         end
         DF:UpdateAllPetFrames(true)  -- force: explicit settings change
     else
-        -- Hide all party pet frames (both live and test)
-        if DF.petFrames.player then DF.petFrames.player:Hide() end
+        -- Hide all party pet frames (both live and test). Route through
+        -- SetPetFrameVisible so a disable toggled IN COMBAT falls back to alpha-0
+        -- — a direct :Hide() on the secure pet button is protected (taint/blocked).
+        if DF.petFrames.player then DF:SetPetFrameVisible(DF.petFrames.player, false) end
         for i = 1, 4 do
-            if DF.partyPetFrames[i] then DF.partyPetFrames[i]:Hide() end
+            if DF.partyPetFrames[i] then DF:SetPetFrameVisible(DF.partyPetFrames[i], false) end
         end
         DF:HideAllTestPetFrames()
     end
@@ -1701,7 +1703,7 @@ function DF:ApplyPetSettings()
         DF:UpdateAllRaidPetFrames(true)  -- force: explicit settings change
     else
         for i = 1, 40 do
-            if DF.raidPetFrames[i] then DF.raidPetFrames[i]:Hide() end
+            if DF.raidPetFrames[i] then DF:SetPetFrameVisible(DF.raidPetFrames[i], false) end
         end
         DF:HideAllTestRaidPetFrames()
     end

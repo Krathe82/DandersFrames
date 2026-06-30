@@ -31,6 +31,7 @@ A top-to-bottom rework of the configuration UI so every panel shares one consist
 
 ### Bug Fixes
 
+* (Pet Frames) Fixed a combat error (blocked action) when a pet appeared, died, or was dismissed during combat — pet frames now hide combat-safely. (by Krathe)
 * (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
 * (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
 * (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.
