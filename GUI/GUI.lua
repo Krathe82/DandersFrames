@@ -1227,13 +1227,29 @@ function GUI:CreateInfoBanner(parent, opts)
     end
 
     function banner:SetText(text, color)
+        text = text or ""
+        -- Idempotent guard (same freeze class as SetHTML): when already showing this
+        -- exact plain text, skip the cachedH reset + RecomputeHeight + host relayout
+        -- so a refreshContent-driven SetText can't loop. Colour is cheap to re-apply
+        -- without a recompute. (SetContent bakes its themed title into `text`, so a
+        -- mode switch changes the string and correctly re-renders.)
+        if not self._isHTML and self._plainText == text then
+            if color then
+                local r = color[1] or color.r
+                local g = color[2] or color.g
+                local b = color[3] or color.b
+                if r then self.body:SetTextColor(r, g, b) end
+            end
+            return
+        end
+        self._plainText = text
         -- Hide any flow widgets from a previous SetHTML call.
         if self._flowWidgets then
             for _, w in ipairs(self._flowWidgets) do w:Hide() end
         end
         self._isHTML = false
         self.body:Show()
-        self.body:SetText(text or "")
+        self.body:SetText(text)
         if color then
             local r = color[1] or color.r
             local g = color[2] or color.g
@@ -1348,7 +1364,25 @@ function GUI:CreateInfoBanner(parent, opts)
     banner._DoFlowLayout = DoFlowLayout
 
     function banner:SetHTML(text, onLinkClick)
-        self._htmlText = text or ""
+        text = text or ""
+        -- The link words are tinted with the theme colour at render time (below),
+        -- NOT baked into `text`, so a party/raid mode switch must re-render even
+        -- when the text is identical — fold the theme into the dedupe key.
+        local _tc = GUI.GetThemeColor and GUI.GetThemeColor() or {r = 1, g = 0.82, b = 0}
+        local themeKey = string.format("%.3f,%.3f,%.3f", _tc.r or 1, _tc.g or 1, _tc.b or 1)
+        -- Idempotent guard (FREEZE FIX): tearing down + rebuilding the flow widgets
+        -- resets cachedH and re-fires RecomputeHeight -> TriggerHostRelayout ->
+        -- host:RefreshStates. This banner's SetHTML is driven from a refreshContent
+        -- hook that RefreshStates calls on EVERY pass, so an unguarded rebuild loops
+        -- forever (game freeze — seen on the Buffs page when the Aura Designer banner
+        -- is shown). Skip the rebuild when neither the text nor the link-tint theme
+        -- changed; just keep the click handler current.
+        if self._isHTML and self._htmlText == text and self._htmlThemeKey == themeKey then
+            self._onLinkClick = onLinkClick
+            return
+        end
+        self._htmlThemeKey = themeKey
+        self._htmlText = text
         self._onLinkClick = onLinkClick
         self._isHTML = true
         self.body:Hide()
