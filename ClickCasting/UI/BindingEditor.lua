@@ -1273,10 +1273,15 @@ function CC:CreateEditBindingPanel()
         CC.ACCENT                   -- accentColor (ClickCasting green)
     )
     prioritySlider:SetPoint("TOPLEFT", 68, -155)
-    -- No direction note here: this binding editor is a compact fixed dialog and a
-    -- note line under the slider collides with the Delete/Cancel/Save row. The
-    -- slider is higher-wins (consistent with the Aura Designer, which shows the
-    -- explanatory "Higher priority wins" note where there's room for it).
+
+    -- Direction note (standard GUI label style). The slider's container is 50px
+    -- tall (its bottom sits near the Delete/Cancel/Save row), so the note is placed
+    -- in the gap BELOW the visible bar — anchored ~28px down from the slider top and
+    -- shifted left to x=0 to sit under the "Priority:" caption. Anchored to the
+    -- slider so it tracks the macro/spell repositioning; the CreateLabel frame has
+    -- no background, so its lower extent over the button row is invisible.
+    local priNote = DF.GUI:CreateLabel(advancedContent, L["Higher priority wins"], 248)
+    priNote:SetPoint("TOPLEFT", prioritySlider, "TOPLEFT", -68, -28)
 
     panel.prioritySlider = prioritySlider
     
