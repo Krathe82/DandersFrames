@@ -726,7 +726,7 @@ function Search:CreateResultWidget(parent, entry, index)
         DF.GUI:ShowTooltip(self, { title = string.format(L["Go to %s"], tabDisplay) })
     end)
     breadcrumb:HookScript("OnLeave", function()
-        GameTooltip:Hide()
+        DF.GUI:HideTooltip()
     end)
 
     -- Click to navigate

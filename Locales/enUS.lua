@@ -2251,7 +2251,6 @@ L["doesn't have a profile assigned."] = true
 L["for all your loadouts."] = true
 L["instead of Command for left click modifiers."] = true
 L["is already bound to:"] = true
-L["key"] = true
 L["or "] = true
 L["when switching to this spec"] = true
 

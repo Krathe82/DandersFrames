@@ -27,6 +27,7 @@ A top-to-bottom rework of the configuration UI so every panel shares one consist
 * (Auto Layouts) Moving raid frames while an auto layout is active now edits **that layout**, via its own Unlock button. (by Krathe)
 * (Pinned Frames) Each set's **Horizontal/Vertical Spacing** now inherits from the based-on mode, overridable per set. (by Krathe)
 * (Options / Click Casting) Inline "Note:" labels are now consistent and no longer show a stray "?". (by Krathe)
+* (Click Casting) The binding **Priority** slider now reads left-to-right as High → Low and shows the priority number directly. The stored priority is unchanged — only the slider's display orientation changed. (by Krathe)
 
 ### Bug Fixes
 
