@@ -1100,9 +1100,7 @@ function NK:ShowConflictPopup()
     popup:SetPoint("CENTER")
     popup:SetFrameStrata("FULLSCREEN_DIALOG")
     popup:SetFrameLevel(200)
-    popup:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
-    popup:SetBackdropColor(0.1, 0.1, 0.1, 0.98)
-    popup:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+    DF.GUI:CreatePanelBackdrop(popup, { bgAlpha = 0.98, borderColor = { theme.r, theme.g, theme.b, 1 } })
     popup:EnableMouse(true)
     popup:SetMovable(true)
     popup:RegisterForDrag("LeftButton")
@@ -1141,23 +1139,15 @@ function NK:ShowConflictPopup()
 
     local function makeButton(text, primary, onClick)
         local b = CreateFrame("Button", nil, popup, "BackdropTemplate")
-        b:SetSize(225, 42)
-        b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        -- Word-wrapped label kept manual; StyleButton handles fill/border/hover.
         if primary then
-            b:SetBackdropColor(theme.r * 0.3, theme.g * 0.3, theme.b * 0.3, 1)
-            b:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
+            DF.GUI:StyleButton(b, { width = 225, height = 42, primary = true })
         else
-            b:SetBackdropColor(0.15, 0.15, 0.15, 1)
-            b:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+            DF.GUI:StyleButton(b, { width = 225, height = 42 })
         end
         local t = b:CreateFontString(nil, "OVERLAY", "DFFontHighlightSmall")
         t:SetPoint("LEFT", 6, 0); t:SetPoint("RIGHT", -6, 0); t:SetJustifyH("CENTER")
         t:SetWordWrap(true); t:SetText(text); t:SetTextColor(1, 1, 1)
-        b:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1) end)
-        b:SetScript("OnLeave", function(self)
-            if primary then self:SetBackdropBorderColor(theme.r, theme.g, theme.b, 1)
-            else self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1) end
-        end)
         b:SetScript("OnClick", onClick)
         return b
     end
