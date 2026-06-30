@@ -1247,10 +1247,10 @@ function CC:CreateEditBindingPanel()
     -- Shared slider builder. The stored field (panel.pendingBinding.priority) is
     -- written 1:1 via customGet/customSet and shown directly in the input box.
     -- Direction: HIGHER number = higher priority (10 wins over 1), matching every
-    -- other slider (right = more). Thumb runs left = 1 (Low) .. right = 10 (High);
-    -- the hint labels + centre note below match. A one-time migration
-    -- (DF:MigratePriorityHigherWins) remapped older saved values, and the
-    -- resolution comparators were flipped, so existing bindings resolve the same.
+    -- other slider (right = more). Thumb runs left = 1 (Low) .. right = 10 (High).
+    -- A one-time migration (DF:MigratePriorityHigherWins) remapped older saved
+    -- values, and the resolution comparators were flipped, so existing bindings
+    -- resolve the same.
     local prioritySlider = DF.GUI:CreateSlider(
         advancedContent,            -- parent
         "",                         -- label (priorityLabel handles the caption)
@@ -1273,11 +1273,10 @@ function CC:CreateEditBindingPanel()
         CC.ACCENT                   -- accentColor (ClickCasting green)
     )
     prioritySlider:SetPoint("TOPLEFT", 68, -155)
-
-    -- Direction note in the standard GUI label style (dim, wrapped) so it matches
-    -- every other settings note: higher number = higher priority.
-    local priNote = DF.GUI:CreateLabel(advancedContent, L["Higher priority wins"], 248)
-    priNote:SetPoint("TOPLEFT", prioritySlider, "BOTTOMLEFT", 0, -2)
+    -- No direction note here: this binding editor is a compact fixed dialog and a
+    -- note line under the slider collides with the Delete/Cancel/Save row. The
+    -- slider is higher-wins (consistent with the Aura Designer, which shows the
+    -- explanatory "Higher priority wins" note where there's room for it).
 
     panel.prioritySlider = prioritySlider
     
