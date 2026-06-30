@@ -5709,11 +5709,13 @@ CreateEffectCard = function(parent, yPos, effect)
             -- Extra gap above (was +4) so the slider isn't squished against the
             -- triggers / Add Trigger row, plus a little breathing room below before
             -- the effect's Appearance group (increment 54 → 68 → 84 with the note).
-            priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 5, -(triggersH + 14))
-            priSlider:SetWidth(bodyWidth - 10)
+            -- x=8 matches the "TRIGGERED BY" section above (Options.lua trigContainer)
+            -- so the Priority slider + note line up with the card's other elements.
+            priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 8, -(triggersH + 14))
+            priSlider:SetWidth(bodyWidth - 16)
             -- Direction note in the standard GUI label style (dim, wrapped) so it
             -- matches every other settings note: HIGHER number = higher priority.
-            local priNote = GUI:CreateLabel(body, L["Higher priority wins"], bodyWidth - 10)
+            local priNote = GUI:CreateLabel(body, L["Higher priority wins"], bodyWidth - 16)
             priNote:SetPoint("TOPLEFT", priSlider, "BOTTOMLEFT", 0, -2)
             triggersH = triggersH + 84
         end
