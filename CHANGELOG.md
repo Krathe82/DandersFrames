@@ -31,6 +31,8 @@ A top-to-bottom rework of the configuration UI so every panel shares one consist
 
 ### Bug Fixes
 
+* (Raid) Test mode and settings changes can no longer disturb your **live** raid frames — group order and positions are always driven by the secure layout, fixing the grouped-raid inversion that previously needed a `/reload`. (by Krathe)
+* (Raid) Retired an obsolete internal reverse-group-order setting that could invert raid groups; group order is controlled entirely by **Group Display Order** / **My Group First**. (by Krathe)
 * (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
 * (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
 * (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.

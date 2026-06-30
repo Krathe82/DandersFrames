@@ -3317,7 +3317,15 @@ function SecureSort:PositionRaidFrameToSlot(frame, slotIndex, frameCount, layout
     if not frame or not container then
         return false
     end
-    
+
+    -- DOOR-SHUT backstop (flat): mirror the grouped positioner. The live flat raid
+    -- frames are children of the FlatRaidFrames secure header; this Lua per-frame
+    -- positioner is for TEST frames (DF.testRaidContainer) only. Refuse any call
+    -- that targets the live container so test mode can never drive live frames.
+    if container == DF.raidContainer then
+        return false
+    end
+
     local x, y = self:CalculateRaidSlotPosition(slotIndex, frameCount, layoutParams)
     local anchor, relativeAnchor = self:GetRaidSlotAnchors(layoutParams)
     
@@ -3642,8 +3650,7 @@ function SecureSort:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGr
     local horizontal = lp.horizontal
     local groupAnchor = lp.groupAnchor
     local playerAnchor = lp.playerAnchor
-    local reverseGroupOrder = lp.reverseGroupOrder
-    
+
     -- ============================================================
     -- Mirror the LIVE grouped positioner exactly so test == live:
     --   * the secure snippet (Headers.lua position snippet) anchors each group
@@ -3708,15 +3715,13 @@ function SecureSort:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGr
     end
     local gInRC = isPartialRow and popRem or groupsPerRowCol
 
-    -- Reverse group order within the row/column when raidGroupOrder == "REVERSE".
-    -- gInRC is the live snippet's groupsInThisRC (full row -> groupsPerRowCol,
-    -- partial last row -> popRem), so this mirrors the secure snippet's
-    -- `posInRC = groupsInThisRC - 1 - posInRC`. Applied unconditionally (NOT gated
-    -- on testMode): this function also drives the live sorting-disabled grouped
-    -- path (Frames/Init.lua), so both live and test must reverse identically.
-    if reverseGroupOrder then
-        posInRC = gInRC - 1 - posInRC
-    end
+    -- Group order is driven SOLELY by activeGroupList (Group Display Order /
+    -- My Group First, via DF:GetEffectiveRaidGroupOrder). The legacy
+    -- raidGroupOrder == "REVERSE" toggle is deprecated (no GUI; superseded by the
+    -- display-order feature) and is intentionally NOT applied here -- the live
+    -- header positioner (Headers.lua:UpdateRaidPositionAttributes) never honoured
+    -- it, so honouring it here made test/legacy disagree with live. gInRC is still
+    -- the row/column population used by the groupAnchor END/CENTER offsets below.
 
     local x, yDown
     if horizontal then
@@ -3861,7 +3866,17 @@ function SecureSort:PositionRaidFrameToGroupSlot(frame, groupNum, posInGroup, pl
     if not frame or not container then
         return false
     end
-    
+
+    -- DOOR-SHUT backstop: this legacy Lua per-frame positioner must NEVER drive
+    -- LIVE raid frames. In header mode the live frames are children of the secure
+    -- group headers (positioned by the secure header path); only TEST frames
+    -- (passed with DF.testRaidContainer) or genuinely headerless legacy frames may
+    -- use this. The live container + active headers => a live header frame slipped
+    -- through; refuse it so test mode can never corrupt live.
+    if container == DF.raidContainer and DF.raidSeparatedHeaders then
+        return false
+    end
+
     local x, y = self:CalculateRaidGroupPosition(groupNum, posInGroup, playersInGroup, activeGroupList, layoutParams)
 
     -- Anchor TOPLEFT, identical to the in-combat secure snippet. (An older
@@ -4346,8 +4361,7 @@ function SecureSort:RegisterPhase25Snippets()
         local horizontal = lc.horizontal
         local groupAnchor = lc.groupAnchor or "CENTER"
         local playerAnchor = lc.playerAnchor or "START"
-        local reverseGroupOrder = lc.reverseGroupOrder
-        
+
         -- Get frame count
         local frameCount = self:GetAttribute("raidFrameCount") or 0
         self:CallMethod("DebugPrint", "RAID POS GROUPED: frameCount=" .. frameCount)
@@ -4473,12 +4487,12 @@ function SecureSort:RegisterPhase25Snippets()
                         local rcIndex = math.floor((groupIndex - 1) / groupsPerRowCol) + 1
                         local posInRC = (groupIndex - 1) % groupsPerRowCol
 
-                        -- Apply reverse group order if enabled
+                        -- Group order comes solely from activeGroupList (display
+                        -- order / my-group-first). Legacy raidGroupOrder=="REVERSE"
+                        -- is deprecated and not applied (the header positioner never
+                        -- honoured it). groupsInThisRC is still needed for rc sizing.
                         local groupsInThisRC = math.min(groupsPerRowCol, activeGroupCount - (rcIndex - 1) * groupsPerRowCol)
-                        if reverseGroupOrder then
-                            posInRC = groupsInThisRC - 1 - posInRC
-                        end
-                        
+
                         -- Calculate row/column container dimensions
                         local rcWidth, rcHeight
                         if horizontal then
