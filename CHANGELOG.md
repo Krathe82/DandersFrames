@@ -31,6 +31,7 @@ A top-to-bottom rework of the configuration UI so every panel shares one consist
 
 ### Bug Fixes
 
+* (Sorting) Fixed the combat-status banner on the Sorting page sometimes appearing as a blank white box instead of its coloured status. (by Krathe)
 * (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
 * (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
 * (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.
