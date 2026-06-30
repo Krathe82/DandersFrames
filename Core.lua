@@ -3552,6 +3552,75 @@ function DF:MigrateBorderInsetFold()
     end
 end
 
+-- One-time: flip the Priority sliders from "lower number wins" to "higher
+-- number wins" so they match every other slider (right = more). The stored
+-- value is remapped 11-p (an involution over 1..10), and every comparator and
+-- the frame-level priority boost were flipped to match, so EXISTING setups
+-- resolve IDENTICALLY -- only the number the slider shows changes. Covers both
+-- the Aura Designer aura priority (DandersFramesDB_v2) and the Click Casting
+-- binding priority (DandersFramesClickCastingDB). Each store is guarded by its
+-- own flag; idempotent.
+local function FlipStoredPriority(t)
+    if type(t) == "table" and type(t.priority) == "number" then
+        local p = math.floor(t.priority + 0.5)
+        if p < 1 then p = 1 elseif p > 10 then p = 10 end
+        t.priority = 11 - p
+    end
+end
+
+-- Walk an Aura Designer config's auras (mirrors FoldAuraDesignerConfig: handles
+-- both the flat V1 `auras[name]` shape and the per-spec `auras[spec][name]`
+-- shape) and flip each aura's priority.
+local function FlipAuraDesignerPriorities(cfg)
+    if type(cfg) ~= "table" or type(cfg.auras) ~= "table" then return end
+    for _, entry in pairs(cfg.auras) do
+        if type(entry) == "table" then
+            if entry.indicators then
+                FlipStoredPriority(entry)                 -- flat: entry IS the auraCfg
+            else
+                for _, auraCfg in pairs(entry) do         -- per-spec: entry is a spec table
+                    FlipStoredPriority(auraCfg)
+                end
+            end
+        end
+    end
+end
+
+function DF:MigratePriorityHigherWins()
+    -- Aura Designer (party/raid configs + designer presets), per-profile guarded.
+    if DandersFramesDB_v2 and DandersFramesDB_v2.profiles then
+        for _, profile in pairs(DandersFramesDB_v2.profiles) do
+            if type(profile) == "table" and not profile._priorityHigherWinsV1 then
+                if type(profile.party) == "table" then FlipAuraDesignerPriorities(profile.party.auraDesigner) end
+                if type(profile.raid) == "table" then FlipAuraDesignerPriorities(profile.raid.auraDesigner) end
+                if type(profile.auraDesignerPresets) == "table" then
+                    for _, presetCfg in pairs(profile.auraDesignerPresets) do
+                        FlipAuraDesignerPriorities(presetCfg)
+                    end
+                end
+                profile._priorityHigherWinsV1 = true
+            end
+        end
+    end
+
+    -- Click Casting bindings (class -> profile -> bindings), guarded on the CC store.
+    local ccdb = DandersFramesClickCastingDB
+    if ccdb and type(ccdb.classes) == "table" and not ccdb._priorityHigherWinsV1 then
+        for _, classData in pairs(ccdb.classes) do
+            if type(classData) == "table" and type(classData.profiles) == "table" then
+                for _, profile in pairs(classData.profiles) do
+                    if type(profile) == "table" and type(profile.bindings) == "table" then
+                        for _, binding in ipairs(profile.bindings) do
+                            FlipStoredPriority(binding)
+                        end
+                    end
+                end
+            end
+        end
+        ccdb._priorityHigherWinsV1 = true
+    end
+end
+
 -- One-time: carry the old bespoke important-spell highlight settings
 -- (targetedSpellHighlightStyle/Color/Size/Inset) into the new Important Spell
 -- Border key set (targetedSpellImportantBorder*), which is a second DF.Border
@@ -5385,6 +5454,13 @@ DF._MainEventDispatcher = function(self, event, arg1)
             -- (Text Designer now renders all text). Per-profile guarded.
             if DF.MigrateOORTextAlpha then
                 DF:MigrateOORTextAlpha()
+            end
+
+            -- Flip Priority sliders to higher-wins (AD auras + CC bindings).
+            -- Behaviour-preserving (remaps stored values + flipped comparators);
+            -- per-store guarded, idempotent.
+            if DF.MigratePriorityHigherWins then
+                DF:MigratePriorityHigherWins()
             end
 
             -- CRITICAL: Update power bars now that unit data is available

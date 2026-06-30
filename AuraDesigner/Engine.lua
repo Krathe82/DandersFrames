@@ -136,7 +136,7 @@ local groupLookup = {}       -- Reused: "auraName#indicatorID" → { group, memb
 local groupActiveMembers = {} -- Reused: groupID → { ordered active members }
 
 local function prioritySort(a, b)
-    return a.priority < b.priority  -- Lower number = higher priority (1 wins over 10)
+    return a.priority > b.priority  -- Higher number = higher priority (10 wins over 1)
 end
 
 -- Hoisted from an inline closure inside ResolveLayoutGroups' sort call.

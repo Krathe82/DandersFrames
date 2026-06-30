@@ -2579,7 +2579,7 @@ local function RefreshPreviewEffects()
         end
     end
     sort(sortedAuras, function(a, b)
-        if a.priority ~= b.priority then return a.priority < b.priority end
+        if a.priority ~= b.priority then return a.priority > b.priority end  -- higher number = higher priority
         return a.name < b.name
     end)
 
@@ -5708,10 +5708,15 @@ CreateEffectCard = function(parent, yPos, effect)
             local priSlider = GUI:CreateSlider(body, L["Priority"], 1, 10, 1, auraProxy, "priority")
             -- Extra gap above (was +4) so the slider isn't squished against the
             -- triggers / Add Trigger row, plus a little breathing room below before
-            -- the effect's Appearance group (increment 54 → 68).
+            -- the effect's Appearance group (increment 54 → 68 → 84 with the note).
             priSlider:SetPoint("TOPLEFT", body, "TOPLEFT", 5, -(triggersH + 14))
             priSlider:SetWidth(bodyWidth - 10)
-            triggersH = triggersH + 68
+            -- Direction note: HIGHER number = higher priority (matches every slider).
+            local priNote = body:CreateFontString(nil, "OVERLAY", "DFFontNormalSmall")
+            priNote:SetPoint("TOPLEFT", priSlider, "BOTTOMLEFT", 0, -2)
+            priNote:SetText(L["Higher priority wins"])
+            priNote:SetTextColor(0.6, 0.6, 0.6)
+            triggersH = triggersH + 84
         end
 
         local _, bodyH = BuildTypeContent(body, effect.typeKey, effect.auraName, bodyWidth, proxy, triggersH, indicatorGroup, effect.indicatorID)
