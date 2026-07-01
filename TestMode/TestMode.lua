@@ -2507,27 +2507,28 @@ function DF:UpdateTestAbsorb(frame, testData)
                 local texEnd = healthPercent + clampedAbsorbPercent
                 
                 if healthFillTexture then
+                    local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
                     if healthOrient == "HORIZONTAL" then
-                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
                         attachedTex:SetWidth(absorbWidth)
                         -- TexCoord: left, right, top, bottom
                         attachedTex:SetTexCoord(texStart, texEnd, 0, 1)
                     elseif healthOrient == "HORIZONTAL_INV" then
-                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
                         attachedTex:SetWidth(absorbWidth)
                         -- For reversed, flip the texture coords
                         attachedTex:SetTexCoord(1 - texStart, 1 - texEnd, 0, 1)
                     elseif healthOrient == "VERTICAL" then
-                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
                         attachedTex:SetHeight(absorbHeight)
                         -- Vertical: adjust top/bottom coords
                         attachedTex:SetTexCoord(0, 1, 1 - texEnd, 1 - texStart)
                     elseif healthOrient == "VERTICAL_INV" then
-                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
                         attachedTex:SetHeight(absorbHeight)
                         attachedTex:SetTexCoord(0, 1, texStart, texEnd)
                     end
@@ -2748,24 +2749,25 @@ function DF:UpdateTestAbsorb(frame, testData)
                     local texEnd = healthPercent + clampedAbsorbPercent
                     
                     if healthFillTexture then
+                        local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
                         if healthOrient == "HORIZONTAL" then
-                            attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
-                            attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                            attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+                            attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
                             attachedTex:SetWidth(absorbWidth)
                             attachedTex:SetTexCoord(texStart, texEnd, 0, 1)
                         elseif healthOrient == "HORIZONTAL_INV" then
-                            attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
-                            attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+                            attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+                            attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
                             attachedTex:SetWidth(absorbWidth)
                             attachedTex:SetTexCoord(1 - texStart, 1 - texEnd, 0, 1)
                         elseif healthOrient == "VERTICAL" then
-                            attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-                            attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+                            attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+                            attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
                             attachedTex:SetHeight(absorbHeight)
                             attachedTex:SetTexCoord(0, 1, 1 - texEnd, 1 - texStart)
                         elseif healthOrient == "VERTICAL_INV" then
-                            attachedTex:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-                            attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                            attachedTex:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+                            attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
                             attachedTex:SetHeight(absorbHeight)
                             attachedTex:SetTexCoord(0, 1, texStart, texEnd)
                         end
@@ -3042,28 +3044,29 @@ function DF:UpdateTestHealAbsorb(frame, testData)
                 local texEnd = healthPercent
                 
                 if healthFillTexture then
+                    local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
                     if healthOrient == "HORIZONTAL" then
                         -- Heal absorb at right edge of health fill, extending left
-                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
                         attachedTex:SetWidth(healAbsorbWidth)
                         attachedTex:SetTexCoord(texStart, texEnd, 0, 1)
                     elseif healthOrient == "HORIZONTAL_INV" then
                         -- Heal absorb at left edge of health fill, extending right
-                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
                         attachedTex:SetWidth(healAbsorbWidth)
                         attachedTex:SetTexCoord(1 - texEnd, 1 - texStart, 0, 1)
                     elseif healthOrient == "VERTICAL" then
                         -- Heal absorb at top edge of health fill, extending down
-                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+                        attachedTex:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+                        attachedTex:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
                         attachedTex:SetHeight(healAbsorbHeight)
                         attachedTex:SetTexCoord(0, 1, 1 - texEnd, 1 - texStart)
                     elseif healthOrient == "VERTICAL_INV" then
                         -- Heal absorb at bottom edge of health fill, extending up
-                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+                        attachedTex:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+                        attachedTex:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
                         attachedTex:SetHeight(healAbsorbHeight)
                         attachedTex:SetTexCoord(0, 1, texStart, texEnd)
                     end

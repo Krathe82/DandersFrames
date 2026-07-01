@@ -915,34 +915,35 @@ function DF:UpdateAbsorb(frame, testIndex)
         local barHeight = frame.healthBar:GetHeight() - (inset * 2)
         
         -- Use StatusBar API to handle proportional fill - no manual division needed.
-        -- Pixel-perfect: pin the CROSS axis directly to the health fill's two edges
-        -- (no mid-edge centering, no border inset on that axis) so the shield matches
-        -- the health fill exactly with no 1px sliver/gap, independent of size parity.
-        -- The PRIMARY axis keeps its sized extent for proportional fill.
+        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges so the
+        -- shield matches the fill with no sliver/gap. edgeInset insets that axis ONLY
+        -- when the frame border is translucent (so the shield doesn't show through it);
+        -- it is 0 for an opaque/absent border. The PRIMARY axis keeps its sized extent.
+        local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
         if healthOrient == "HORIZONTAL" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(false)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
-            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
         elseif healthOrient == "HORIZONTAL_INV" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(true)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
         elseif healthOrient == "VERTICAL" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(false)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
         elseif healthOrient == "VERTICAL_INV" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(true)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
@@ -1019,33 +1020,34 @@ function DF:UpdateAbsorb(frame, testIndex)
         local barHeight = frame.healthBar:GetHeight() - (inset * 2)
         
         -- Use StatusBar API to handle proportional fill - no manual division needed.
-        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges (no
-        -- centering / no border inset on that axis) so the shield matches the fill
-        -- exactly with no 1px sliver/gap. Primary axis keeps its sized extent.
+        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges so the
+        -- shield matches the fill with no sliver/gap. edgeInset insets that axis ONLY
+        -- when the frame border is translucent (so the shield doesn't show through it).
+        local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
         if healthOrient == "HORIZONTAL" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(false)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
-            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
         elseif healthOrient == "HORIZONTAL_INV" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(true)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
         elseif healthOrient == "VERTICAL" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(false)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
         elseif healthOrient == "VERTICAL_INV" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(true)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
@@ -1514,33 +1516,34 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         
         -- Use StatusBar API to handle proportional fill - no manual division needed.
         -- Position: anchor to health fill edge, extend INWARD toward 0 health.
-        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges (no
-        -- centering / no border inset on that axis) so it matches the fill exactly
-        -- with no 1px sliver/gap. Primary axis keeps its sized extent.
+        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges so it
+        -- matches the fill with no sliver/gap. edgeInset insets that axis ONLY when
+        -- the frame border is translucent (so the shield doesn't show through it).
+        local edgeInset = DF:GetAbsorbEdgeInset(frame, db)
         if healthOrient == "HORIZONTAL" then
             bar:SetOrientation("HORIZONTAL")
             bar:SetReverseFill(true)  -- Fill toward 0 (left)
             bar:SetWidth(barWidth)
-            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
-            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, -edgeInset)
+            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, edgeInset)
         elseif healthOrient == "HORIZONTAL_INV" then
             bar:SetOrientation("HORIZONTAL")
             bar:SetReverseFill(false)  -- Fill toward 0 (right)
             bar:SetWidth(barWidth)
-            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, -edgeInset)
+            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, edgeInset)
         elseif healthOrient == "VERTICAL" then
             bar:SetOrientation("VERTICAL")
             bar:SetReverseFill(true)  -- Fill toward 0 (down)
             bar:SetHeight(barHeight)
-            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
-            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", edgeInset, 0)
+            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", -edgeInset, 0)
         elseif healthOrient == "VERTICAL_INV" then
             bar:SetOrientation("VERTICAL")
             bar:SetReverseFill(false)  -- Fill toward 0 (up)
             bar:SetHeight(barHeight)
-            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
-            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
+            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", edgeInset, 0)
+            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", -edgeInset, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
