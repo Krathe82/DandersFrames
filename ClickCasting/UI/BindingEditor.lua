@@ -94,7 +94,7 @@ function CC:ShowAddBindingDialog(onComplete, existingBinding, existingIndex)
         macroText = nil,
         loadSpec = nil,
         loadCombat = nil,
-        priority = 5,  -- Default priority (1=highest, 10=lowest)
+        priority = 5,  -- Default priority (10=highest, 1=lowest)
     }
     
     local yOffset = -45
@@ -1556,7 +1556,7 @@ function CC:ShowEditBindingPanel(spellData, existingBinding, existingIndex)
             actionType = spellData.actionType or self.ACTION_TYPES.SPELL,
             spellId = spellData.spellId,
             spellName = spellData.spellName or spellData.name,
-            priority = 5,  -- Default priority (1=highest, 10=lowest)
+            priority = 5,  -- Default priority (10=highest, 1=lowest)
         }
         
         if spellData.isMacro then
@@ -2063,7 +2063,7 @@ function CC:ProcessKeybind(bindType, key)
         modifiers = mods,
         scope = defaultScope,
         combat = defaultCombat,
-        priority = 5,  -- Default priority (1=highest, 10=lowest)
+        priority = 5,  -- Default priority (10=highest, 1=lowest)
         -- Default to all frames
         frames = {
             dandersFrames = true,

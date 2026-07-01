@@ -2568,7 +2568,7 @@ local function RefreshPreviewEffects()
     -- Frame-level effects all draw onto the SAME single preview elements (one
     -- healthFill / healthBg / nameText / etc.), so when more than one aura
     -- configures the same type they conflict. The runtime resolves this by
-    -- priority (lower number wins; first claim per type — see prioritySort and
+    -- priority (higher number wins; first claim per type — see prioritySort and
     -- Indicators:Apply's `if state.X then return end`). Mirror that here so the
     -- preview is deterministic instead of pairs()-order-dependent: iterate auras
     -- in ascending-priority order (tiebreak by name) and apply first-wins per type.
