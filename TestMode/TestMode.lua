@@ -2453,6 +2453,7 @@ function DF:UpdateTestAbsorb(frame, testData)
             if db.frameShowBorder ~= false then
                 inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
+            if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
             local barHeight = frame.healthBar:GetHeight() - (inset * 2)
@@ -2636,6 +2637,7 @@ function DF:UpdateTestAbsorb(frame, testData)
             if db.frameShowBorder ~= false then
                 inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
+            if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
             local barHeight = frame.healthBar:GetHeight() - (inset * 2)
@@ -2690,9 +2692,9 @@ function DF:UpdateTestAbsorb(frame, testData)
                     overflowTex:SetVertTile(false)
                 end
                 
-                -- Position like OVERLAY mode
-                overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-                overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+                -- Position like OVERLAY mode — flush to the health bar (no inset gap)
+                overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+                overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
                 
                 local maxHealth = testData.maxHealth or 100000
                 overflowBar:SetMinMaxValues(0, maxHealth)
@@ -2818,13 +2820,9 @@ function DF:UpdateTestAbsorb(frame, testData)
             local healthLevel = frame.healthBar:GetFrameLevel()
             customBar:SetFrameLevel(healthLevel + 2)
             
-            -- Inset by border size if frame border is enabled to avoid overlap
-            local inset = 0
-            if db.frameShowBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
-            end
-            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+            -- Flush to the health bar (no inset): the overlay covers the health fill exactly.
+            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
             if customBar.bg then customBar.bg:Hide() end
             
             local healthOrient = db.healthOrientation or "HORIZONTAL"
@@ -2993,6 +2991,7 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             if db.frameShowBorder ~= false then
                 inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
+            if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
             local barHeight = frame.healthBar:GetHeight() - (inset * 2)
@@ -3114,13 +3113,9 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             local healthLevel = frame.healthBar:GetFrameLevel()
             customBar:SetFrameLevel(healthLevel + 2)
             
-            -- Inset by border size if frame border is enabled to avoid overlap
-            local inset = 0
-            if db.frameShowBorder ~= false then
-                inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
-            end
-            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+            -- Flush to the health bar (no inset): the overlay covers the health fill exactly.
+            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
             if customBar.bg then customBar.bg:Hide() end
             
             -- Match real code logic exactly - heal absorbs fill from low HP side
@@ -3279,6 +3274,7 @@ function DF:UpdateTestHealPrediction(frame, testData)
             if db.frameShowBorder ~= false then
                 inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
             end
+            if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
             
             local barWidth = frame.healthBar:GetWidth() - (inset * 2)
             local barHeight = frame.healthBar:GetHeight() - (inset * 2)

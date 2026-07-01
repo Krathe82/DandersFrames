@@ -28,10 +28,13 @@ A top-to-bottom rework of the configuration UI so every panel shares one consist
 * (Pinned Frames) Each set's **Horizontal/Vertical Spacing** now inherits from the based-on mode, overridable per set. (by Krathe)
 * (Options / Click Casting) Inline "Note:" labels are now consistent and no longer show a stray "?". (by Krathe)
 * (Click Casting) The binding **Priority** slider now reads left-to-right as High → Low and shows the priority number directly. The stored priority is unchanged — only the slider's display orientation changed. (by Krathe)
+* (Pixel Perfect) The Display page now shows the **UI Scale** that gives exact 1:1 pixel rendering at your resolution (or confirms you're already there) — purely informational, it never changes your scale. (by Krathe)
 
 ### Bug Fixes
 
 * (Borders) **Border Inset** is now honoured by texture-style borders, and updates live. (by Krathe)
+* (Shields) Absorb and heal-absorb overlays now sit **flush with the health bar** in every display mode, removing the border-width gap that could appear between the shield and the frame edge. (by Krathe)
+* (Pixel Perfect) **Center-aligned** party/raid frames now snap to the physical pixel grid, so borders stay crisp instead of doubling or dropping a side; the overshield line indicator and the solid highlight border snap to whole pixels too. (by Krathe)
 * (Text) Fixed a stray health value (often a "%") appearing for users who never turned health text on. (by Krathe)
 * (Nicknames) Fixed an error matching nicknames against boss/NPC names on pinned frames in encounters.
 * (Localization) Test Mode, position, grid, Text/Aura Designer and auto-profile labels now translate properly.

@@ -3275,7 +3275,11 @@ function SecureSort:PositionFrameToSlot(frame, slotIndex, frameCount, layoutPara
     
     frame:ClearAllPoints()
     frame:SetPoint(anchor, container, relativeAnchor, x, y)
-    
+    -- Pixel-perfect: land the frame's edges on the physical grid. The CENTER growth
+    -- anchor computes offsets via /2, which can fall on a half-pixel and make a 1px
+    -- border straddle two physical rows; this nudges it back on-grid (bounded ≤0.5px).
+    DF:SnapPointToPixelGrid(frame, (DF:GetFrameDB(frame) or {}).pixelPerfect)
+
     DebugPrint("Positioned frame to slot " .. slotIndex .. " at (" .. x .. ", " .. y .. ")")
     return true
 end
@@ -3332,7 +3336,11 @@ function SecureSort:PositionRaidFrameToSlot(frame, slotIndex, frameCount, layout
     
     frame:ClearAllPoints()
     frame:SetPoint(anchor, container, relativeAnchor, x, y)
-    
+    -- Pixel-perfect: land the frame's edges on the physical grid. The CENTER grid
+    -- anchor computes offsets via /2, which can fall on a half-pixel and make a 1px
+    -- border straddle two physical rows; this nudges it back on-grid (bounded ≤0.5px).
+    DF:SnapPointToPixelGrid(frame, (DF:GetFrameDB(frame) or {}).pixelPerfect)
+
     return true
 end
 
@@ -3878,6 +3886,10 @@ function SecureSort:PositionRaidFrameToGroupSlot(frame, groupNum, posInGroup, pl
 
     frame:ClearAllPoints()
     frame:SetPoint("TOPLEFT", container, "TOPLEFT", x, y)
+    -- Pixel-perfect: land the frame's edges on the physical grid (no-op for the
+    -- TOPLEFT stride math, but keeps grouped test frames consistent with party/flat
+    -- and covers any CENTER growth-anchor offset that lands on a half-pixel).
+    DF:SnapPointToPixelGrid(frame, (DF:GetFrameDB(frame) or {}).pixelPerfect)
 
     return true
 end

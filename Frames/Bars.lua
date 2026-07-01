@@ -790,7 +790,7 @@ function DF:UpdateAbsorb(frame, testIndex)
                         glow:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
                         glow:SetPoint("BOTTOMLEFT", frame.healthBar, "BOTTOMLEFT", 0, 0)
                     end
-                    glow:SetWidth(2)
+                    glow:SetWidth(db.pixelPerfect and DF:PixelPerfect(2) or 2)
                 else
                     if atEnd then
                         glow:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
@@ -799,7 +799,7 @@ function DF:UpdateAbsorb(frame, testIndex)
                         glow:SetPoint("BOTTOMLEFT", frame.healthBar, "BOTTOMLEFT", 0, 0)
                         glow:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
                     end
-                    glow:SetHeight(2)
+                    glow:SetHeight(db.pixelPerfect and DF:PixelPerfect(2) or 2)
                 end
                 
             elseif glowStyle == "GRADIENT" then
@@ -892,36 +892,40 @@ function DF:UpdateAbsorb(frame, testIndex)
         if db.frameShowBorder ~= false then
             inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
+        if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
         local barHeight = frame.healthBar:GetHeight() - (inset * 2)
         
-        -- Use StatusBar API to handle proportional fill - no manual division needed
-        -- Set bar to full size and let SetMinMaxValues/SetValue calculate the fill
+        -- Use StatusBar API to handle proportional fill - no manual division needed.
+        -- Pixel-perfect: pin the CROSS axis directly to the health fill's two edges
+        -- (no mid-edge centering, no border inset on that axis) so the shield matches
+        -- the health fill exactly with no 1px sliver/gap, independent of size parity.
+        -- The PRIMARY axis keeps its sized extent for proportional fill.
         if healthOrient == "HORIZONTAL" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(false)
-            customBar:SetHeight(barHeight)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("LEFT", healthFillTexture, "RIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         elseif healthOrient == "HORIZONTAL_INV" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(true)
-            customBar:SetHeight(barHeight)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("RIGHT", healthFillTexture, "LEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
         elseif healthOrient == "VERTICAL" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(false)
-            customBar:SetWidth(barWidth)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("BOTTOM", healthFillTexture, "TOP", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
         elseif healthOrient == "VERTICAL_INV" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(true)
-            customBar:SetWidth(barWidth)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("TOP", healthFillTexture, "BOTTOM", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
@@ -992,35 +996,39 @@ function DF:UpdateAbsorb(frame, testIndex)
         if db.frameShowBorder ~= false then
             inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
+        if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
         local barHeight = frame.healthBar:GetHeight() - (inset * 2)
         
-        -- Use StatusBar API to handle proportional fill - no manual division needed
+        -- Use StatusBar API to handle proportional fill - no manual division needed.
+        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges (no
+        -- centering / no border inset on that axis) so the shield matches the fill
+        -- exactly with no 1px sliver/gap. Primary axis keeps its sized extent.
         if healthOrient == "HORIZONTAL" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(false)
-            customBar:SetHeight(barHeight)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("LEFT", healthFillTexture, "RIGHT", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "TOPRIGHT", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         elseif healthOrient == "HORIZONTAL_INV" then
             customBar:SetOrientation("HORIZONTAL")
             customBar:SetReverseFill(true)
-            customBar:SetHeight(barHeight)
             customBar:SetWidth(barWidth)
-            customBar:SetPoint("RIGHT", healthFillTexture, "LEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMLEFT", 0, 0)
         elseif healthOrient == "VERTICAL" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(false)
-            customBar:SetWidth(barWidth)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("BOTTOM", healthFillTexture, "TOP", 0, 0)
+            customBar:SetPoint("BOTTOMLEFT", healthFillTexture, "TOPLEFT", 0, 0)
+            customBar:SetPoint("BOTTOMRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
         elseif healthOrient == "VERTICAL_INV" then
             customBar:SetOrientation("VERTICAL")
             customBar:SetReverseFill(true)
-            customBar:SetWidth(barWidth)
             customBar:SetHeight(barHeight)
-            customBar:SetPoint("TOP", healthFillTexture, "BOTTOM", 0, 0)
+            customBar:SetPoint("TOPLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            customBar:SetPoint("TOPRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
@@ -1077,9 +1085,9 @@ function DF:UpdateAbsorb(frame, testIndex)
             overflowTex:SetVertTile(false)
         end
         
-        -- Position like OVERLAY mode
-        overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-        overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+        -- Position like OVERLAY mode — flush to the health bar (no inset gap)
+        overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+        overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
         overflowBar:SetMinMaxValues(0, maxHealth)
         
         -- Match health bar orientation for overlay
@@ -1142,14 +1150,11 @@ function DF:UpdateAbsorb(frame, testIndex)
         
         if customBar.bg then customBar.bg:Hide() end
         
-        -- Use explicit points instead of SetAllPoints to ensure proper clipping
-        -- Inset by border size if frame border is enabled to avoid overlap
-        local inset = 0
-        if db.frameShowBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
-        end
-        customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-        customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+        -- Flush to the health bar (no inset): the absorb overlay covers exactly the
+        -- same area as the health fill, with no gap on any edge. The frame border is
+        -- drawn outside the health bar, so a flush overlay never overlaps it.
+        customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+        customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
         customBar:SetMinMaxValues(0, maxHealth)
         
         -- Match health bar orientation
@@ -1483,36 +1488,40 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         if db.frameShowBorder ~= false then
             inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
+        if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
         
         local barWidth = frame.healthBar:GetWidth() - (inset * 2)
         local barHeight = frame.healthBar:GetHeight() - (inset * 2)
         
-        -- Use StatusBar API to handle proportional fill - no manual division needed
-        -- Position: anchor to health fill edge, extend INWARD toward 0 health
+        -- Use StatusBar API to handle proportional fill - no manual division needed.
+        -- Position: anchor to health fill edge, extend INWARD toward 0 health.
+        -- Pixel-perfect: pin the CROSS axis to the health fill's two edges (no
+        -- centering / no border inset on that axis) so it matches the fill exactly
+        -- with no 1px sliver/gap. Primary axis keeps its sized extent.
         if healthOrient == "HORIZONTAL" then
             bar:SetOrientation("HORIZONTAL")
             bar:SetReverseFill(true)  -- Fill toward 0 (left)
-            bar:SetHeight(barHeight)
             bar:SetWidth(barWidth)
-            bar:SetPoint("RIGHT", healthFillTexture, "RIGHT", 0, 0)
+            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
+            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         elseif healthOrient == "HORIZONTAL_INV" then
             bar:SetOrientation("HORIZONTAL")
             bar:SetReverseFill(false)  -- Fill toward 0 (right)
-            bar:SetHeight(barHeight)
             bar:SetWidth(barWidth)
-            bar:SetPoint("LEFT", healthFillTexture, "LEFT", 0, 0)
+            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
+            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
         elseif healthOrient == "VERTICAL" then
             bar:SetOrientation("VERTICAL")
             bar:SetReverseFill(true)  -- Fill toward 0 (down)
-            bar:SetWidth(barWidth)
             bar:SetHeight(barHeight)
-            bar:SetPoint("TOP", healthFillTexture, "TOP", 0, 0)
+            bar:SetPoint("TOPLEFT", healthFillTexture, "TOPLEFT", 0, 0)
+            bar:SetPoint("TOPRIGHT", healthFillTexture, "TOPRIGHT", 0, 0)
         elseif healthOrient == "VERTICAL_INV" then
             bar:SetOrientation("VERTICAL")
             bar:SetReverseFill(false)  -- Fill toward 0 (up)
-            bar:SetWidth(barWidth)
             bar:SetHeight(barHeight)
-            bar:SetPoint("BOTTOM", healthFillTexture, "BOTTOM", 0, 0)
+            bar:SetPoint("BOTTOMLEFT", healthFillTexture, "BOTTOMLEFT", 0, 0)
+            bar:SetPoint("BOTTOMRIGHT", healthFillTexture, "BOTTOMRIGHT", 0, 0)
         end
         
         -- Let WoW's StatusBar handle the percentage calculation internally
@@ -1534,15 +1543,11 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         
         if bar.bg then bar.bg:Hide() end
         
-        -- Use explicit points instead of SetAllPoints to ensure proper clipping
-        -- Inset by border size if frame border is enabled to avoid overlap
-        local inset = 0
-        if db.frameShowBorder ~= false then
-            inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
-        end
+        -- Flush to the health bar (no inset): the heal-absorb overlay covers exactly
+        -- the same area as the health fill, with no gap on any edge.
         bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", inset, -inset)
-        bar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -inset, inset)
+        bar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
+        bar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
         
         -- Match health bar orientation
         -- Heal absorbs fill from low HP side (opposite of regular absorbs)
@@ -1969,6 +1974,7 @@ function DF:UpdateHealPrediction(frame, testIndex)
         if db.frameShowBorder ~= false then
             inset = frame.dfReducedMaxHealthClipping and 0 or (db.frameBorderSize or 1)  -- 0 when clipped: the clip edge is internal, no frame border there
         end
+        if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
         
         -- For test mode, we can use calculated positions
         -- For live mode, we anchor to the health fill texture
