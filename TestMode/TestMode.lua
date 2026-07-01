@@ -2692,9 +2692,10 @@ function DF:UpdateTestAbsorb(frame, testData)
                     overflowTex:SetVertTile(false)
                 end
                 
-                -- Position like OVERLAY mode — flush to the health bar (no inset gap)
-                overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-                overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+                -- Position like OVERLAY mode — flush when opaque/off, inset when translucent
+                local overflowInset = DF:GetAbsorbEdgeInset(frame, db)
+                overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overflowInset, -overflowInset)
+                overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overflowInset, overflowInset)
                 
                 local maxHealth = testData.maxHealth or 100000
                 overflowBar:SetMinMaxValues(0, maxHealth)
@@ -2820,9 +2821,10 @@ function DF:UpdateTestAbsorb(frame, testData)
             local healthLevel = frame.healthBar:GetFrameLevel()
             customBar:SetFrameLevel(healthLevel + 2)
             
-            -- Flush to the health bar (no inset): the overlay covers the health fill exactly.
-            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+            -- Cover the health fill: flush when opaque/off, inset when translucent.
+            local overlayInset = DF:GetAbsorbEdgeInset(frame, db)
+            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overlayInset, -overlayInset)
+            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overlayInset, overlayInset)
             if customBar.bg then customBar.bg:Hide() end
             
             local healthOrient = db.healthOrientation or "HORIZONTAL"
@@ -3113,9 +3115,10 @@ function DF:UpdateTestHealAbsorb(frame, testData)
             local healthLevel = frame.healthBar:GetFrameLevel()
             customBar:SetFrameLevel(healthLevel + 2)
             
-            -- Flush to the health bar (no inset): the overlay covers the health fill exactly.
-            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+            -- Cover the health fill: flush when opaque/off, inset when translucent.
+            local overlayInset = DF:GetAbsorbEdgeInset(frame, db)
+            customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overlayInset, -overlayInset)
+            customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overlayInset, overlayInset)
             if customBar.bg then customBar.bg:Hide() end
             
             -- Match real code logic exactly - heal absorbs fill from low HP side

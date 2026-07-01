@@ -384,6 +384,23 @@ function DF:InvalidateAbsorbLayout(frame)
     if frame then frame.dfAbsorbState = nil end
 end
 
+-- Edge inset for absorb / heal-absorb overlays. Returns 0 (flush to the health
+-- bar) when the frame border is off or fully OPAQUE — the border frame level is
+-- well above the absorb bar, so an opaque border draws over a flush overlay and
+-- the shield covers the health fill exactly with nothing showing through. Returns
+-- the pixel-snapped border size when the border is TRANSLUCENT, so the shield
+-- doesn't bleed through the border's edge band. dfReducedMaxHealthClipping => 0
+-- (the clip edge is internal, no border there).
+function DF:GetAbsorbEdgeInset(frame, db)
+    if not db or db.frameShowBorder == false then return 0 end
+    local bc = db.frameBorderColor
+    local alpha = (bc and (bc.a or bc[4])) or 1
+    if alpha >= 1 then return 0 end
+    local inset = (frame and frame.dfReducedMaxHealthClipping) and 0 or (db.frameBorderSize or 1)
+    if db.pixelPerfect and DF.PixelPerfect then inset = DF:PixelPerfect(inset) end
+    return inset
+end
+
 function DF:UpdateAbsorb(frame, testIndex)
     if not frame then return end
     if not frame.healthBar then return end
@@ -1085,9 +1102,10 @@ function DF:UpdateAbsorb(frame, testIndex)
             overflowTex:SetVertTile(false)
         end
         
-        -- Position like OVERLAY mode — flush to the health bar (no inset gap)
-        overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-        overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+        -- Position like OVERLAY mode — flush when opaque/off, inset when translucent
+        local overflowInset = DF:GetAbsorbEdgeInset(frame, db)
+        overflowBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overflowInset, -overflowInset)
+        overflowBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overflowInset, overflowInset)
         overflowBar:SetMinMaxValues(0, maxHealth)
         
         -- Match health bar orientation for overlay
@@ -1150,11 +1168,12 @@ function DF:UpdateAbsorb(frame, testIndex)
         
         if customBar.bg then customBar.bg:Hide() end
         
-        -- Flush to the health bar (no inset): the absorb overlay covers exactly the
-        -- same area as the health fill, with no gap on any edge. The frame border is
-        -- drawn outside the health bar, so a flush overlay never overlaps it.
-        customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-        customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+        -- Cover the health fill: flush when the border is opaque/off, inset by the
+        -- (snapped) border size when the border is translucent so the shield doesn't
+        -- bleed through the border's edge band.
+        local overlayInset = DF:GetAbsorbEdgeInset(frame, db)
+        customBar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overlayInset, -overlayInset)
+        customBar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overlayInset, overlayInset)
         customBar:SetMinMaxValues(0, maxHealth)
         
         -- Match health bar orientation
@@ -1543,11 +1562,12 @@ function DF:UpdateHealAbsorb(frame, testIndex)
         
         if bar.bg then bar.bg:Hide() end
         
-        -- Flush to the health bar (no inset): the heal-absorb overlay covers exactly
-        -- the same area as the health fill, with no gap on any edge.
+        -- Cover the health fill: flush when the border is opaque/off, inset when the
+        -- border is translucent so the shield doesn't bleed through the border edge.
+        local overlayInset = DF:GetAbsorbEdgeInset(frame, db)
         bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", 0, 0)
-        bar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", 0, 0)
+        bar:SetPoint("TOPLEFT", frame.healthBar, "TOPLEFT", overlayInset, -overlayInset)
+        bar:SetPoint("BOTTOMRIGHT", frame.healthBar, "BOTTOMRIGHT", -overlayInset, overlayInset)
         
         -- Match health bar orientation
         -- Heal absorbs fill from low HP side (opposite of regular absorbs)
