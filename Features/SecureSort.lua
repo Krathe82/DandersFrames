@@ -3329,7 +3329,7 @@ function SecureSort:PositionRaidFrameToSlot(frame, slotIndex, frameCount, layout
     local currentAnchor, currentRelTo, currentRelAnchor, currentX, currentY = frame:GetPoint(1)
     if currentAnchor == anchor and currentRelAnchor == relativeAnchor 
        and currentX and currentY
-       and math.abs(currentX - x) < 0.5 and math.abs(currentY - y) < 0.5 then
+       and math.abs(currentX - x) <= 0.5 and math.abs(currentY - y) <= 0.5 then
         -- Frame is already in position, skip
         return false
     end
@@ -3880,7 +3880,7 @@ function SecureSort:PositionRaidFrameToGroupSlot(frame, groupNum, posInGroup, pl
     local currentAnchor, _, currentRelAnchor, currentX, currentY = frame:GetPoint(1)
     if currentAnchor == "TOPLEFT" and currentRelAnchor == "TOPLEFT"
        and currentX and currentY
-       and math.abs(currentX - x) < 0.5 and math.abs(currentY - y) < 0.5 then
+       and math.abs(currentX - x) <= 0.5 and math.abs(currentY - y) <= 0.5 then
         return false
     end
 
